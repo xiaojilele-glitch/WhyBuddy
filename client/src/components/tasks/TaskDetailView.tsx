@@ -630,6 +630,7 @@ export function TaskDetailView({
   onDecisionSubmitted,
   variant = "default",
   autoHeight = false,
+  deferRuntimeEvidence = false,
   className,
 }: {
   detail: MissionTaskDetail | null;
@@ -645,6 +646,7 @@ export function TaskDetailView({
   onDecisionSubmitted?: () => void;
   variant?: TaskDetailViewVariant;
   autoHeight?: boolean;
+  deferRuntimeEvidence?: boolean;
   className?: string;
 }) {
   const { locale, copy } = useI18n();
@@ -1417,14 +1419,22 @@ export function TaskDetailView({
           {showCockpitDecisionSection ? decisionsWorkspace : null}
           <TaskPlanetInterior detail={detail} compact />
           {sourceDirectivePanel}
-          {runtimePreviewRows.length > 0 ? runtimeSnapshotPanel : null}
+          {!deferRuntimeEvidence && runtimePreviewRows.length > 0
+            ? runtimeSnapshotPanel
+            : null}
           {securitySummaryPanel}
-          {executorStatusPanel}
-          {detail.status === "failed" ? executorTerminalPanel : null}
+          {!deferRuntimeEvidence ? executorStatusPanel : null}
+          {!deferRuntimeEvidence && detail.status === "failed"
+            ? executorTerminalPanel
+            : null}
           {detail.tasks.length > 0 ? workPackagesPanel : null}
-          {detail.timeline.length > 0 ? timelinePanel : null}
-          {detail.artifacts.length > 0 || artifactError ? artifactsPanel : null}
-          {failurePanel}
+          {!deferRuntimeEvidence && detail.timeline.length > 0
+            ? timelinePanel
+            : null}
+          {!deferRuntimeEvidence && (detail.artifacts.length > 0 || artifactError)
+            ? artifactsPanel
+            : null}
+          {!deferRuntimeEvidence ? failurePanel : null}
         </DetailTabViewport>
         <ArtifactPreviewDialog
           missionId={detail.id}

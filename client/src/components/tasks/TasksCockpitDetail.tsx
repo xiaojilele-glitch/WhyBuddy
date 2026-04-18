@@ -618,18 +618,18 @@ export function TasksCockpitDetail({
                 <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-stone-600">
                   {t(
                     locale,
-                    "低频细节、交付物和完整执行面都保留，只是后置到折叠区。",
-                    "Low-frequency detail, artifacts, and the full execution surface remain here in a deeper layer."
+                    "这里保留决策、工作包、成本和安全等深层详情，运行证据统一去底部折叠区。",
+                    "This layer keeps decisions, work packages, cost, and security detail, while runtime evidence moves to the folded dock."
                   )}
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-1 text-[9px] text-stone-500">
                 <span className="rounded-full border border-stone-200/80 bg-stone-50/80 px-1 py-0.5 font-medium">
-                  {detail.artifacts.length} {t(locale, "交付物", "artifacts")}
+                  {detail.tasks.length} {t(locale, "工作包", "packages")}
                 </span>
                 <span className="rounded-full border border-stone-200/80 bg-stone-50/80 px-1 py-0.5 font-medium">
-                  {detail.timeline.length} {t(locale, "事件", "events")}
+                  {detail.decisionHistory.length} {t(locale, "决策", "decisions")}
                 </span>
               </div>
             </div>
@@ -739,8 +739,8 @@ export function TasksCockpitDetail({
                 title={t(locale, "完整详情工作区", "Full detail workspace")}
                 description={t(
                   locale,
-                  "这里保留原有执行、决策、交付物和成本细节，不删能力，只后置层级。",
-                  "Keep the original execution, decision, artifact, and cost detail here without removing capability."
+                  "这里保留原有决策、工作包、成本和安全细节，不删能力，只把运行证据后置到折叠区。",
+                  "Keep the original decision, work-package, cost, and security detail here while runtime evidence is deferred to the folded dock."
                 )}
                 meta={t(locale, "完整保留", "Preserved")}
               >
@@ -755,6 +755,7 @@ export function TasksCockpitDetail({
                   onDecisionSubmitted={onDecisionSubmitted}
                   variant="cockpit"
                   autoHeight
+                  deferRuntimeEvidence
                   className="pt-1"
                 />
               </ProgressiveItem>

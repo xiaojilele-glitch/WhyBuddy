@@ -9,27 +9,36 @@
 } from "react";
 import {
   Activity,
+  Bot,
   ChevronDown,
   Copy,
   Ellipsis,
+  FileText,
   Monitor,
   Plus,
   RefreshCw,
   Server,
   Settings2,
+  Terminal,
 } from "lucide-react";
 import { Splitter } from "antd";
 import { toast } from "sonner";
 
+import { ExecutorStatusPanel } from "@/components/ExecutorStatusPanel";
+import { ExecutorTerminalPanel } from "@/components/ExecutorTerminalPanel";
 import { UnifiedLaunchComposer } from "@/components/launch/UnifiedLaunchComposer";
 import { ClarificationPanel } from "@/components/nl-command/ClarificationPanel";
+import { ArtifactListBlock } from "@/components/tasks/ArtifactListBlock";
+import { ArtifactPreviewDialog } from "@/components/tasks/ArtifactPreviewDialog";
 import { CreateMissionDialog } from "@/components/tasks/CreateMissionDialog";
 import { TasksCockpitDetail } from "@/components/tasks/TasksCockpitDetail";
 import { TasksQueueRail } from "@/components/tasks/TasksQueueRail";
 import {
   compactText,
-  missionOperatorStateLabel,
-  missionOperatorStateTone,
+  deriveCurrentOwner,
+  deriveNextStep,
+  deriveTaskBlocker,
+  downloadAttachmentArtifact,
   missionStatusLabel,
 } from "@/components/tasks/task-helpers";
 import { Button } from "@/components/ui/button";
@@ -48,7 +57,7 @@ import { useNLCommandStore } from "@/lib/nl-command-store";
 import type { TaskHubCommandSubmissionResult } from "@/lib/nl-command-store";
 import { useAppStore } from "@/lib/store";
 import { useTelemetryStore } from "@/lib/telemetry-store";
-import { useTasksStore } from "@/lib/tasks-store";
+import { useTasksStore, type TaskArtifact } from "@/lib/tasks-store";
 import { cn } from "@/lib/utils";
 import { submitUnifiedClarification } from "@/lib/unified-launch-coordinator";
 import { useWorkflowStore } from "@/lib/workflow-store";
@@ -96,6 +105,34 @@ function CockpitContextShell({
       <div className="min-h-0 flex-1 overflow-hidden px-1.5 pb-1.5 pt-1">
         {children}
       </div>
+    </div>
+  );
+}
+
+function RuntimeSignalCard({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "info" | "success" | "warning" | "danger";
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-[12px] border px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]",
+        tone === "info" && "border-sky-200/80 bg-sky-50/72",
+        tone === "success" && "border-emerald-200/80 bg-emerald-50/72",
+        tone === "warning" && "border-amber-200/80 bg-amber-50/78",
+        tone === "danger" && "border-rose-200/80 bg-rose-50/78",
+        tone === "neutral" && "border-white/60 bg-white/72"
+      )}
+    >
+      <div className="text-[8px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+        {label}
+      </div>
+      <div className="mt-1 text-[10px] leading-4 text-stone-800">{value}</div>
     </div>
   );
 }
@@ -160,6 +197,24 @@ export function OfficeTaskCockpit({
   const [pendingLaunch, setPendingLaunch] =
     useState<OfficeLaunchResolution | null>(null);
   const [clarificationExpanded, setClarificationExpanded] = useState(true);
+  const [launcherContextExpanded, setLauncherContextExpanded] = useState(false);
+  const [runtimeDockTab, setRuntimeDockTab] = useState<
+    "support" | "logs" | "artifacts" | "runtime"
+  >("support");
+  const [downloadingArtifactId, setDownloadingArtifactId] = useState<
+    string | null
+  >(null);
+  const [previewArtifactIndex, setPreviewArtifactIndex] = useState<
+    number | null
+  >(null);
+  const [previewArtifactName, setPreviewArtifactName] = useState("");
+  const [previewArtifactFormat, setPreviewArtifactFormat] = useState<
+    string | undefined
+  >(undefined);
+  const [artifactError, setArtifactError] = useState<{
+    artifact: TaskArtifact;
+    message: string;
+  } | null>(null);
   const previousSelectedPetRef = useRef<string | null>(selectedPet);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const currentDialog = useNLCommandStore(state => state.currentDialog);
@@ -208,6 +263,14 @@ export function OfficeTaskCockpit({
   const selectedTaskSummary =
     tasks.find(task => task.id === activeTaskId) || null;
   const decisionNote = activeTaskId ? decisionNotes[activeTaskId] || "" : "";
+
+  useEffect(() => {
+    setRuntimeDockTab("support");
+    setPreviewArtifactIndex(null);
+    setPreviewArtifactName("");
+    setPreviewArtifactFormat(undefined);
+    setArtifactError(null);
+  }, [selectedDetail?.id]);
 
   const pendingWorkflow =
     (pendingLaunch
@@ -493,16 +556,6 @@ export function OfficeTaskCockpit({
         : selectedDetail
           ? "info"
           : "neutral";
-  const focusStatusLabel = selectedDetail
-    ? missionStatusLabel(selectedDetail.status, locale)
-    : pendingLaunch
-      ? t(locale, "团队准备中", "Team preparing")
-      : t(locale, "场景待命", "Scene ready");
-  const focusOperatorLabel = selectedDetail
-    ? missionOperatorStateLabel(selectedDetail.operatorState, locale)
-    : selectedPet
-      ? t(locale, "Agent 已联动", "Agent linked")
-      : t(locale, "等待联动", "Waiting for link");
   const focusProgress =
     selectedDetail?.progress ?? selectedTaskSummary?.progress ?? 0;
   const focusTitle =
@@ -535,6 +588,51 @@ export function OfficeTaskCockpit({
   const sideShellClass = resizeActive
     ? "border-stone-200/85 bg-[#fff9f2]/96 shadow-[0_14px_30px_rgba(99,73,45,0.08)]"
     : "border-white/35 bg-[linear-gradient(180deg,rgba(255,252,248,0.48),rgba(244,236,227,0.32))] shadow-[0_22px_48px_rgba(99,73,45,0.12)] backdrop-blur-md transition-all hover:bg-[linear-gradient(180deg,rgba(255,252,248,0.7),rgba(246,238,229,0.5))]";
+  const currentOwnerInsight = selectedDetail
+    ? deriveCurrentOwner(selectedDetail, locale)
+    : null;
+  const blockerInsight = selectedDetail
+    ? deriveTaskBlocker(selectedDetail, locale)
+    : null;
+  const nextStepInsight = selectedDetail
+    ? deriveNextStep(selectedDetail, locale)
+    : null;
+  const shouldAutoExpandLauncherContext =
+    hasActiveClarification ||
+    Boolean(pendingLaunch) ||
+    selectedDetail?.status === "waiting" ||
+    selectedDetail?.status === "failed" ||
+    selectedDetail?.operatorState === "blocked";
+  const showLauncherContextDock = !hasActiveClarification;
+  const launcherDockFrameHeight = hasActiveClarification
+    ? "clamp(200px, 24vh, 250px)"
+    : "clamp(210px, 26vh, 270px)";
+  const launcherStageFrameHeight = launcherDockFrameHeight;
+  const launcherContextDockMaxHeight = "clamp(240px, 32vh, 420px)";
+  const runtimeRecentSignals = selectedDetail
+    ? [
+        ...(selectedDetail.logSummary ?? []),
+        ...(selectedDetail.instanceInfo ?? []),
+      ].slice(0, 4)
+    : [];
+
+  useEffect(() => {
+    if (hasActiveClarification) {
+      setLauncherContextExpanded(false);
+      return;
+    }
+    if (shouldAutoExpandLauncherContext) {
+      setLauncherContextExpanded(true);
+    }
+  }, [
+    hasActiveClarification,
+    currentCommand?.commandId,
+    pendingLaunch?.workflowId,
+    selectedDetail?.id,
+    selectedDetail?.operatorState,
+    selectedDetail?.status,
+    shouldAutoExpandLauncherContext,
+  ]);
 
   async function handleCopyFocusSummary() {
     const summary = [
@@ -564,11 +662,83 @@ export function OfficeTaskCockpit({
     }
   }
 
+  async function handleArtifactDownload(artifact: TaskArtifact) {
+    if (!selectedDetail) return;
+    setArtifactError(null);
+
+    if (artifact.downloadKind === "external") {
+      if (artifact.href && typeof window !== "undefined") {
+        window.open(artifact.href, "_blank", "noopener,noreferrer");
+      }
+      return;
+    }
+
+    if (artifact.downloadKind === "attachment") {
+      if (!downloadAttachmentArtifact(artifact)) {
+        setArtifactError({
+          artifact,
+          message: t(locale, "产物下载失败。", "Artifact download failed."),
+        });
+      }
+      return;
+    }
+
+    const downloadUrl = artifact.downloadUrl || artifact.href;
+    if (!downloadUrl) {
+      setArtifactError({
+        artifact,
+        message: t(locale, "产物下载失败。", "Artifact download failed."),
+      });
+      return;
+    }
+
+    setDownloadingArtifactId(artifact.id);
+    try {
+      const response = await fetch(downloadUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition");
+      const filenameMatch = disposition?.match(/filename="?([^"]+)"?/i);
+      const filename =
+        filenameMatch?.[1] ||
+        artifact.filename ||
+        (artifact.format
+          ? `${artifact.title}.${artifact.format}`
+          : artifact.title);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (downloadError) {
+      const message =
+        downloadError instanceof Error && downloadError.message
+          ? downloadError.message
+          : t(locale, "产物下载失败。", "Artifact download failed.");
+      setArtifactError({
+        artifact,
+        message,
+      });
+    } finally {
+      setDownloadingArtifactId(null);
+    }
+  }
+
+  function handleArtifactPreview(artifact: TaskArtifact, index: number) {
+    setPreviewArtifactIndex(index);
+    setPreviewArtifactName(artifact.title);
+    setPreviewArtifactFormat(artifact.format);
+  }
+
   const launcherDock = (
     <div
       className={cn(
-        "pointer-events-auto mx-auto flex w-full max-w-[700px] min-h-0 flex-col overflow-hidden rounded-[14px] border",
-        hasActiveClarification ? "shrink-0" : "max-h-[32%]",
+        "pointer-events-auto mx-auto flex h-full w-full max-w-[700px] min-h-0 flex-col overflow-hidden rounded-[14px] border",
         floatingGlassClass
       )}
     >
@@ -644,7 +814,11 @@ export function OfficeTaskCockpit({
                   <ChevronDown className="size-3.5 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent
+                align="end"
+                sideOffset={8}
+                className="z-[80] w-56"
+              >
                 <div className="px-2 py-1.5 text-[11px] leading-5 text-stone-500">
                   {runtimeModeHint}
                 </div>
@@ -677,7 +851,11 @@ export function OfficeTaskCockpit({
                   <Ellipsis className="size-3.5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent
+                align="end"
+                sideOffset={8}
+                className="z-[80] w-48"
+              >
                 <DropdownMenuItem
                   onSelect={event => {
                     event.preventDefault();
@@ -712,91 +890,42 @@ export function OfficeTaskCockpit({
           </div>
         </div>
 
-        <div className="mt-1 flex min-w-0 flex-col gap-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="shrink-0 rounded-full border border-stone-200/80 bg-white/72 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-              {t(locale, "焦点", "Focus")}
-            </span>
-            <div className="min-w-0 flex-1 truncate text-[12px] font-semibold tracking-tight text-stone-900">
-              {focusTitle}
-            </div>
-            <div className="hidden max-w-[220px] shrink text-right text-[9px] leading-4 text-stone-600 xl:block">
-              {compactText(focusSignal, 56)}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-0.5">
-            <span
-              className={cn(
-                "workspace-status !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold",
-                `workspace-tone-${focusTone}`
-              )}
-            >
-              {focusStatusLabel}
-            </span>
-            <span
-              className={cn(
-                "workspace-status !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold",
-                selectedDetail
-                  ? missionOperatorStateTone(selectedDetail.operatorState)
-                  : "workspace-tone-neutral"
-              )}
-            >
-              {focusOperatorLabel}
-            </span>
-            <span className="workspace-status workspace-tone-info !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold">
-              {focusStage}
-            </span>
-            <span className="workspace-status workspace-tone-neutral !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold">
-              {t(
-                locale,
-                `进度 ${focusProgress}%`,
-                `Progress ${focusProgress}%`
-              )}
-            </span>
-            <span
-              className={cn(
-                "workspace-status !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold",
-                runningCount > 0
-                  ? "workspace-tone-warning"
-                  : "workspace-tone-neutral"
-              )}
-            >
-              {t(
-                locale,
-                `队列 ${queuedCount} / 运行 ${runningCount}`,
-                `Queue ${queuedCount} / running ${runningCount}`
-              )}
-            </span>
-            <span
-              className={cn(
-                "workspace-status !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold",
-                warningCount > 0
-                  ? "workspace-tone-warning"
-                  : "workspace-tone-info"
-              )}
-            >
-              {t(
-                locale,
-                `等待 ${waitingCount} / 关注 ${warningCount}`,
-                `Waiting ${waitingCount} / warnings ${warningCount}`
-              )}
-            </span>
-            <span
-              className={cn(
-                "workspace-status !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold",
-                agents.length > 0
-                  ? "workspace-tone-success"
-                  : "workspace-tone-neutral"
-              )}
-            >
-              {t(locale, `Agent ${agents.length}`, `Agents ${agents.length}`)}
-            </span>
-          </div>
+        <div className="mt-1 flex flex-wrap gap-0.5">
+          <span
+            className={cn(
+              "workspace-status !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold",
+              `workspace-tone-${focusTone}`
+            )}
+          >
+            {selectedDetail
+              ? missionStatusLabel(selectedDetail.status, locale)
+              : pendingLaunch
+                ? t(locale, "团队准备中", "Team preparing")
+                : t(locale, "场景待命", "Scene ready")}
+          </span>
+          <span className="workspace-status workspace-tone-neutral !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold">
+            {t(locale, `队列 ${queuedCount}`, `Queue ${queuedCount}`)}
+          </span>
+          <span className="workspace-status workspace-tone-warning !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold">
+            {t(locale, `运行 ${runningCount}`, `Running ${runningCount}`)}
+          </span>
+          <span className="workspace-status workspace-tone-info !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold">
+            {t(locale, `等待 ${waitingCount}`, `Waiting ${waitingCount}`)}
+          </span>
+          <span
+            className={cn(
+              "workspace-status !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold",
+              warningCount > 0
+                ? "workspace-tone-warning"
+                : "workspace-tone-neutral"
+            )}
+          >
+            {t(locale, `关注 ${warningCount}`, `Warnings ${warningCount}`)}
+          </span>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden p-2">
+      <div className="min-h-0 flex-1 overflow-hidden px-1 pb-1 pt-1">
         <UnifiedLaunchComposer
           createMission={createMission}
           activeTaskTitle={selectedTaskSummary?.title}
@@ -830,6 +959,348 @@ export function OfficeTaskCockpit({
     </div>
   );
 
+  const launcherContextDock = (
+    <div className="pointer-events-auto mx-auto w-full max-w-[700px] overflow-hidden rounded-[16px] border border-white/34 bg-[linear-gradient(180deg,rgba(255,252,248,0.62),rgba(246,238,229,0.5))] shadow-[0_16px_36px_rgba(98,73,48,0.12)] backdrop-blur-md">
+      <Tabs
+        value={runtimeDockTab}
+        onValueChange={value =>
+          setRuntimeDockTab(
+            value as "support" | "logs" | "artifacts" | "runtime"
+          )
+        }
+        className="flex h-full min-h-0 flex-col"
+      >
+        <div className="border-b border-stone-200/55 px-3 py-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[8px] font-semibold uppercase tracking-[0.16em] text-stone-500">
+                {t(locale, "辅助判断与运行证据", "Decision and runtime")}
+              </div>
+              <div className="mt-0.5 text-[10px] leading-4 text-stone-600">
+                {t(
+                  locale,
+                  "辅助判断信息和 Logs / Artifacts / Runtime 统一归口在同一个折叠区域。",
+                  "Supporting context and runtime evidence now share one folded tabbed surface."
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap gap-1">
+                {pendingLaunch ? (
+                  <span className="workspace-status workspace-tone-warning !px-1.5 !py-0.5 !text-[8px] font-semibold">
+                    {t(locale, "团队准备中", "Team preparing")}
+                  </span>
+                ) : null}
+                {hasActiveClarification ? (
+                  <span className="workspace-status workspace-tone-warning !px-1.5 !py-0.5 !text-[8px] font-semibold">
+                    {t(locale, "补问进行中", "Clarification active")}
+                  </span>
+                ) : null}
+              </div>
+              <TabsList className="grid h-auto grid-cols-4 rounded-[12px] bg-white/82 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]">
+                <TabsTrigger
+                  value="support"
+                  className="min-h-[28px] rounded-[10px] px-2 py-0.5 text-[10px] font-semibold"
+                >
+                  {t(locale, "辅助", "Support")}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="logs"
+                  className="min-h-[28px] rounded-[10px] px-2 py-0.5 text-[10px] font-semibold"
+                  disabled={!selectedDetail}
+                >
+                  <Terminal className="mr-1 size-3" />
+                  Logs
+                </TabsTrigger>
+                <TabsTrigger
+                  value="artifacts"
+                  className="min-h-[28px] rounded-[10px] px-2 py-0.5 text-[10px] font-semibold"
+                  disabled={!selectedDetail}
+                >
+                  <FileText className="mr-1 size-3" />
+                  Artifacts
+                </TabsTrigger>
+                <TabsTrigger
+                  value="runtime"
+                  className="min-h-[28px] rounded-[10px] px-2 py-0.5 text-[10px] font-semibold"
+                  disabled={!selectedDetail}
+                >
+                  <Bot className="mr-1 size-3" />
+                  Runtime
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          </div>
+        </div>
+
+        <TabsContent
+          value="support"
+          className="mt-0 min-h-0 flex-1 overflow-hidden p-3 data-[state=active]:block"
+        >
+          <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="rounded-[12px] border border-white/60 bg-white/64 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
+              <div className="text-[8px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+                {blockerInsight?.label || t(locale, "阻塞", "Blocker")}
+              </div>
+              <div className="mt-1 text-[10px] font-semibold text-stone-900">
+                {blockerInsight?.title || t(locale, "当前无阻塞", "No blocker")}
+              </div>
+              <div className="mt-1 text-[9px] leading-4 text-stone-600">
+                {compactText(
+                  blockerInsight?.detail ||
+                    t(
+                      locale,
+                      "当前没有新的等待项。",
+                      "No blocking item is active right now."
+                    ),
+                  140
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[12px] border border-white/60 bg-white/64 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
+              <div className="text-[8px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+                {nextStepInsight?.label || t(locale, "下一步", "Next step")}
+              </div>
+              <div className="mt-1 text-[10px] font-semibold text-stone-900">
+                {nextStepInsight?.title ||
+                  t(locale, "等待继续推进", "Ready to continue")}
+              </div>
+              <div className="mt-1 text-[9px] leading-4 text-stone-600">
+                {compactText(
+                  nextStepInsight?.detail ||
+                    t(
+                      locale,
+                      "继续沿着当前主线推进即可。",
+                      "Continue along the active mainline."
+                    ),
+                  140
+                )}
+              </div>
+            </div>
+
+            {currentOwnerInsight ? (
+              <div className="rounded-[12px] border border-white/60 bg-white/64 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] lg:col-span-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[8px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+                    {currentOwnerInsight.label}
+                  </span>
+                  <span
+                    className={cn(
+                      "workspace-status !gap-0.5 !px-1 !py-0.5 !text-[8px] font-semibold",
+                      `workspace-tone-${currentOwnerInsight.tone || "neutral"}`
+                    )}
+                  >
+                    {currentOwnerInsight.title}
+                  </span>
+                  {currentOwnerInsight.meta ? (
+                    <span className="truncate text-[8px] text-stone-500">
+                      {currentOwnerInsight.meta}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-1 text-[9px] leading-4 text-stone-600">
+                  {compactText(currentOwnerInsight.detail, 180)}
+                </div>
+              </div>
+            ) : null}
+
+            {pendingLaunch ? (
+              <div className="rounded-[12px] border border-amber-200/70 bg-amber-50/78 px-3 py-2 text-[9px] leading-4 text-stone-700 lg:col-span-2">
+                <div className="text-[8px] font-semibold uppercase tracking-[0.14em] text-amber-700">
+                  {t(locale, "待启动团队", "Pending launch")}
+                </div>
+                <div className="mt-1 text-[10px] font-semibold text-stone-900">
+                  {compactText(
+                    pendingLaunch.directive ||
+                      t(
+                        locale,
+                        "团队正在准备，稍后会自动切回任务视图。",
+                        "The team is preparing and will return to the task view soon."
+                      ),
+                    90
+                  )}
+                </div>
+                <div className="mt-1 text-[9px] leading-4 text-stone-600">
+                  {t(
+                    locale,
+                    `已挂载 ${pendingLaunch.attachmentCount} 个附件，等待 workflow 接线完成。`,
+                    `${pendingLaunch.attachmentCount} attachments are already queued while the workflow connection is completing.`
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {hasActiveClarification && currentCommand ? (
+              <div className="rounded-[12px] border border-amber-200/70 bg-amber-50/78 px-3 py-2 text-[9px] leading-4 text-stone-700 lg:col-span-2">
+                <div className="text-[8px] font-semibold uppercase tracking-[0.14em] text-amber-700">
+                  {t(locale, "补问信息", "Clarification context")}
+                </div>
+                <div className="mt-1">
+                  {compactText(
+                    currentCommand.commandText ||
+                      t(
+                        locale,
+                        "当前补问没有额外上下文。",
+                        "No extra clarification context is available."
+                      ),
+                    180
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </TabsContent>
+
+        <TabsContent
+          value="logs"
+          className="mt-0 min-h-0 flex-1 overflow-hidden p-3 data-[state=active]:flex data-[state=active]:flex-col"
+        >
+          {selectedDetail ? (
+            <ExecutorTerminalPanel
+              missionId={selectedDetail.id}
+              missionStatus={selectedDetail.status}
+              executorStatus={selectedDetail.executor?.status}
+            />
+          ) : null}
+        </TabsContent>
+
+        <TabsContent
+          value="artifacts"
+          className="mt-0 min-h-0 flex-1 overflow-hidden p-3 data-[state=active]:block"
+        >
+          {selectedDetail ? (
+            <div
+              className="min-h-0 overflow-y-auto rounded-[16px] border border-white/50 bg-[rgba(255,255,255,0.48)] p-2"
+              style={{ maxHeight: "clamp(170px, 22vh, 220px)" }}
+            >
+              {artifactError ? (
+                <div className="mb-2 rounded-[12px] border border-rose-200/70 bg-rose-50/78 px-3 py-2 text-[10px] leading-4 text-rose-700">
+                  {artifactError.message}
+                </div>
+              ) : null}
+              <ArtifactListBlock
+                missionId={selectedDetail.id}
+                artifacts={selectedDetail.artifacts}
+                missionStatus={selectedDetail.status}
+                variant="compact"
+                downloadingArtifactId={downloadingArtifactId}
+                onDownload={handleArtifactDownload}
+                onPreview={handleArtifactPreview}
+                showEmptyState
+              />
+            </div>
+          ) : null}
+        </TabsContent>
+
+        <TabsContent
+          value="runtime"
+          className="mt-0 min-h-0 flex-1 overflow-hidden p-3 data-[state=active]:block"
+        >
+          {selectedDetail ? (
+            <div
+              className="min-h-0 overflow-y-auto rounded-[16px] border border-white/50 bg-[rgba(255,255,255,0.48)] p-2"
+              style={{ maxHeight: "clamp(170px, 22vh, 220px)" }}
+            >
+              <div className="grid gap-2 lg:grid-cols-2">
+                {runtimeRecentSignals.map(signal => (
+                  <RuntimeSignalCard
+                    key={`${signal.label}-${signal.value}`}
+                    label={signal.label}
+                    value={signal.value}
+                    tone="neutral"
+                  />
+                ))}
+                {selectedDetail.failureReasons[0] ? (
+                  <RuntimeSignalCard
+                    label={t(locale, "最近失败原因", "Recent failure")}
+                    value={selectedDetail.failureReasons[0]}
+                    tone="danger"
+                  />
+                ) : null}
+                {selectedDetail.lastSignal ? (
+                  <RuntimeSignalCard
+                    label={t(locale, "最近动作", "Recent action")}
+                    value={selectedDetail.lastSignal}
+                    tone="info"
+                  />
+                ) : null}
+              </div>
+              {selectedDetail.executor ? (
+                <div className="mt-2 rounded-[16px] border border-white/60 bg-white/78 p-3">
+                  <ExecutorStatusPanel
+                    executor={selectedDetail.executor}
+                    instance={selectedDetail.instance}
+                    artifacts={selectedDetail.missionArtifacts}
+                    missionStatus={selectedDetail.status}
+                  />
+                </div>
+              ) : (
+                <div className="rounded-[16px] border border-dashed border-stone-300/80 bg-white/72 px-3 py-4 text-[11px] leading-5 text-stone-500">
+                  {t(
+                    locale,
+                    "当前任务还没有 executor 运行时上下文。",
+                    "This mission does not have executor runtime context yet."
+                  )}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+
+  const launcherFloatingStack = (
+    <div
+      className="pointer-events-none mx-auto flex w-full max-w-[720px] flex-col justify-end overflow-visible"
+      style={{ height: launcherStageFrameHeight }}
+    >
+      <div
+        className="pointer-events-none relative z-10 w-full pt-2"
+        style={{ height: launcherDockFrameHeight }}
+      >
+        {showLauncherContextDock && launcherContextExpanded ? (
+          <div
+            className="pointer-events-none absolute left-0 right-0 z-20"
+            style={{ bottom: "calc(100% + 14px)" }}
+          >
+            <div
+              className="pointer-events-auto overflow-y-auto"
+              style={{ maxHeight: launcherContextDockMaxHeight }}
+            >
+              {launcherContextDock}
+            </div>
+          </div>
+        ) : null}
+
+        {showLauncherContextDock ? (
+          <div className="pointer-events-auto absolute left-1/2 top-[-9px] z-30 -translate-x-1/2">
+            <button
+              type="button"
+              className="inline-flex h-7 w-12 items-center justify-center rounded-full border border-stone-200/80 bg-white/94 text-[#9c6b47] shadow-[0_10px_24px_rgba(88,61,39,0.14)] backdrop-blur-md transition hover:bg-[#fff8f1] hover:text-[#5e8b72]"
+              aria-label={
+                launcherContextExpanded
+                  ? t(locale, "收起辅助信息", "Collapse supporting context")
+                  : t(locale, "展开辅助信息", "Expand supporting context")
+              }
+              onClick={() => setLauncherContextExpanded(current => !current)}
+            >
+              <ChevronDown
+                className={cn(
+                  "size-4 transition-transform",
+                  launcherContextExpanded && "rotate-180"
+                )}
+              />
+            </button>
+          </div>
+        ) : null}
+
+        {launcherDock}
+      </div>
+    </div>
+  );
+
   const launchStage =
     hasActiveClarification && currentDialog ? (
       <div className="pointer-events-none flex w-full items-end justify-center">
@@ -837,7 +1308,7 @@ export function OfficeTaskCockpit({
           <div
             className={cn(
               "pointer-events-none relative w-full min-h-0",
-              clarificationExpanded ? "flex-1 pb-10" : "h-10 shrink-0",
+              clarificationExpanded ? "flex-1 pb-10" : "h-10 shrink-0"
             )}
           >
             {clarificationExpanded ? (
@@ -851,7 +1322,7 @@ export function OfficeTaskCockpit({
                       {t(
                         locale,
                         "先补齐上下文，系统再继续创建任务。",
-                        "Fill in the missing context and the system will continue creating the task.",
+                        "Fill in the missing context and the system will continue creating the task."
                       )}
                     </span>
                   </div>
@@ -888,23 +1359,27 @@ export function OfficeTaskCockpit({
             </div>
           </div>
 
-          <div className="pointer-events-none flex w-full shrink-0 justify-center pt-2">
-            {launcherDock}
+          <div className="pointer-events-none flex w-full shrink-0 justify-center pt-3">
+            {launcherFloatingStack}
           </div>
         </div>
       </div>
     ) : (
-      launcherDock
+      <div className="pointer-events-none flex h-full min-h-0 w-full items-end justify-center">
+        <div className="pointer-events-none flex w-full max-w-[860px] flex-col justify-end">
+          {launcherFloatingStack}
+        </div>
+      </div>
     );
 
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-x-3 bottom-[24px] top-[76px] z-[52] flex min-h-0 flex-col gap-2.5 2xl:bottom-[28px]",
+        "pointer-events-none absolute inset-x-3 bottom-[24px] top-[76px] z-[52] min-h-0 2xl:bottom-[28px]",
         className
       )}
     >
-      <Splitter className="office-cockpit-splitter pointer-events-auto min-h-0 flex-1">
+      <Splitter className="office-cockpit-splitter pointer-events-auto relative z-10 h-full min-h-0">
         <Splitter.Panel
           defaultSize={0}
           min={320}
@@ -941,9 +1416,7 @@ export function OfficeTaskCockpit({
           min="28%"
           style={{ overflow: "visible" }}
         >
-          <section className="pointer-events-none flex h-full min-h-0 flex-col justify-end px-2">
-            {launchStage}
-          </section>
+          <div className="h-full min-h-0" />
         </Splitter.Panel>
 
         <Splitter.Panel
@@ -1124,11 +1597,31 @@ export function OfficeTaskCockpit({
         </Splitter.Panel>
       </Splitter>
 
+      <div className="pointer-events-none absolute inset-0 z-20">
+        <section className="pointer-events-none flex h-full min-h-0 flex-col justify-end px-2">
+          {launchStage}
+        </section>
+      </div>
+
       <CreateMissionDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         onCreate={handleCreateMission}
       />
+      {selectedDetail ? (
+        <ArtifactPreviewDialog
+          missionId={selectedDetail.id}
+          artifactIndex={previewArtifactIndex}
+          artifactName={previewArtifactName}
+          format={previewArtifactFormat}
+          open={previewArtifactIndex !== null}
+          onOpenChange={open => {
+            if (!open) {
+              setPreviewArtifactIndex(null);
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }

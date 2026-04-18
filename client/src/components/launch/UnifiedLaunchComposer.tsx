@@ -457,7 +457,7 @@ export function UnifiedLaunchComposer({
       className={cn(
         !isBare &&
           "rounded-[24px] border border-stone-200/70 bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,240,233,0.88))] shadow-[0_18px_40px_rgba(98,73,48,0.08)]",
-        isDense ? "p-3" : "p-4",
+        isBare ? "p-1" : isDense ? "p-3" : "p-4",
         className
       )}
     >
@@ -511,7 +511,10 @@ export function UnifiedLaunchComposer({
       ) : null}
 
       <div
-        className={cn(hideHeader ? "" : isDense ? "mt-3" : "mt-4", "space-y-3")}
+        className={cn(
+          hideHeader ? "" : isDense ? "mt-3" : "mt-4",
+          isBare ? "space-y-2" : "space-y-3"
+        )}
       >
         <LaunchAttachmentSection
           attachments={attachments}
