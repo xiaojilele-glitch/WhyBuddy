@@ -259,4 +259,44 @@ describe("tasks-store planet hydration via public store behavior", () => {
     expect(mockGetPlanetInterior).toHaveBeenCalledTimes(1);
     expect(mockGetPlanetInterior).toHaveBeenCalledWith("m2");
   });
+
+  it("restores the persisted task focus when store selection is empty", async () => {
+    const olderPlanet = makePlanet("m1", { updatedAt: now - 5_000 });
+    const newerPlanet = makePlanet("m2", { updatedAt: now });
+    const olderMission = makeMission("m1", { updatedAt: now - 5_000 });
+    const newerMission = makeMission("m2", { updatedAt: now });
+    const getItemSpy =
+      typeof window !== "undefined"
+        ? vi
+            .spyOn(window.sessionStorage, "getItem")
+            .mockImplementation(key =>
+              key === "cube-office:selected-task-id" ? "m2" : null
+            )
+        : null;
+
+    mockListPlanets.mockResolvedValue({
+      ok: true,
+      planets: [olderPlanet, newerPlanet],
+      edges: [],
+    });
+    mockListMissions.mockResolvedValue({
+      ok: true,
+      tasks: [olderMission, newerMission],
+    });
+    mockGetPlanetInterior.mockResolvedValue({
+      ok: true,
+      planet: newerPlanet,
+      interior: makeInterior(),
+    });
+
+    try {
+      await useTasksStore.getState().refresh();
+    } finally {
+      getItemSpy?.mockRestore();
+    }
+
+    const state = useTasksStore.getState();
+    expect(state.selectedTaskId).toBe("m2");
+    expect(mockGetPlanetInterior).toHaveBeenCalledWith("m2");
+  });
 });

@@ -17,7 +17,7 @@
 
 ## 当前状态快照（2026-04-20，已按当前代码与测试复核）
 
-- 总体状态：进行中，约 96%
+- 总体状态：进行中，约 98%
 - 已有落地：
   - 首页中央浮层已完成第一轮信息归位，顶部辅助区只保留 `blocker detail / next step / current owner / pending launch / clarification context`
   - 首页中央浮层已移除一批与墙上中心重复的焦点摘要、阶段摘要、重复状态信息
@@ -43,12 +43,14 @@
   - [`MissionDetailOverlay.tsx`](../../../client/src/components/tasks/MissionDetailOverlay.tsx) 本轮已把首页提示文案收口为“首页运行证据统一留在共享运行证据容器”，不再保留“任务详情页 + 首页底部运行区”的双归口提示
   - [`WorkflowPanel.tsx`](../../../client/src/components/WorkflowPanel.tsx) 已把 workflow 抽屉里的 compact artifact 列表、角色展开层与评审卡中的 deliverable 正文统一降级为“共享运行证据容器” handoff 提示，首页 workflow 视图不再平级挂出第二套产物正文入口；组织摘要中的 `Replay log` 裸路径也已收回，不再在首页暴露日志侧门
   - [`WorkflowPanel.tsx`](../../../client/src/components/WorkflowPanel.tsx) 与 [`OfficeTaskCockpit.tsx`](../../../client/src/components/office/OfficeTaskCockpit.tsx) 本轮已通过 `office-runtime-evidence` 事件接通 handoff，workflow 角色摘要、展开层与评审卡中的 deliverable 提示现在可以直接切到首页共享运行证据容器的 `Artifacts`
+  - [`navigation-events.ts`](../../../client/src/lib/navigation-events.ts) 本轮已抽出共享 `office-runtime-evidence` helper，并新增 [`navigation-events.test.ts`](../../../client/src/lib/navigation-events.test.ts) 锁定 `Logs / Artifacts / Runtime` 事件派发语义，避免各入口各自拼装 shared dock 事件
   - [`TaskDetailView.tsx`](../../../client/src/components/tasks/TaskDetailView.tsx) 已把独立详情页工作包中的 deliverable 预览降级为归口提示卡；独立详情页默认不再保留完整 `Artifacts` 主 tab，运行证据继续统一回到办公室首页共享运行证据容器
   - [`TasksCockpitDetail.tsx`](../../../client/src/components/tasks/TasksCockpitDetail.tsx) 顶部 `updated` 仪表提示已从“等待下一条执行信号”改为中性的工作区同步文案，减少任务详情顶部对日志 / runtime 信号的抢位
   - [`task-helpers.ts`](../../../client/src/components/tasks/task-helpers.ts) 已把 `current owner / blocker / next step` 三张洞察卡从默认 `lastSignal` 文案中解耦，运行中场景回到阶段推进、阻塞判断与协作语义，减少详情首屏与 runtime tab 的旁路重复
   - [`OfficeTaskCockpit.tsx`](../../../client/src/components/office/OfficeTaskCockpit.tsx) 本轮已把“复制当前焦点”收口为步骤流摘要，不再夹带 `stepFocus.signal` 形成 runtime 旁路复制入口
   - `tasks-store` 已补入 `runtimeChannels.socket / runtimeChannels.callback` 轻量结构，并接入 mission socket 在线状态派生
-  - `tasks-store` 本轮已开始消费 `mission.executor.event`，把 callback / relay 的最近事件类型、等待态、异常态和摘要说明回填到 `runtimeChannels.callback`
+  - `tasks-store` 本轮已进一步细化 `mission.executor.event` 的 callback / relay 事件摘要，把 accepted / progress / waiting / completed / failed / cancelled / screenshot / log-stream 等事件映射为更可读的 `Runtime` 文案，而不是只停留在粗粒度 `Relay job.*`
+  - `tasks-store` 已让 mission socket 的 connect / disconnect 事件直接回写已有 detail 的 `runtimeChannels.socket`，`Runtime` tab 不再需要等下一次整轮 refresh 才同步在线状态
   - [`task-helpers.ts`](../../../client/src/components/tasks/task-helpers.ts) 本轮补齐了 completed / timeout / cancelled 三类步骤流映射，避免取消任务继续被墙屏误判为 active 步骤
   - 本轮已修复 [`ArtifactPreviewDialog.tsx`](../../../client/src/components/tasks/ArtifactPreviewDialog.tsx)、[`TasksCockpitDetail.tsx`](../../../client/src/components/tasks/TasksCockpitDetail.tsx)、[`MissionWallTaskPanel.tsx`](../../../client/src/components/three/MissionWallTaskPanel.tsx) 的残留乱码与预览组件类型问题
   - 已新增共享 `MissionStepFocus / MissionStepFlow` 派生层，[`task-helpers.ts`](../../../client/src/components/tasks/task-helpers.ts) 中的 `deriveMissionStepFocus(...)` / `deriveMissionStepFlow(...)` 开始统一首页与墙屏的步骤焦点和步骤流来源
@@ -72,12 +74,13 @@
   - `npx vitest run client/src/components/tasks/__tests__/TaskDetailView.runtime-evidence.test.tsx` 已通过，cockpit 内嵌详情的运行证据去重已有回归保护
   - `npx vitest run client/src/components/tasks/__tests__/TasksCockpitDetail.runtime-defer.test.tsx` 已通过，cockpit 深层详情继续把运行证据主入口后置到共享 dock 的文案与 handoff 已有回归保护
   - `npx vitest run client/src/components/tasks/__tests__/TaskDetailView.runtime-evidence.test.tsx client/src/components/three/__tests__/MissionWallTaskPanel.test.tsx client/src/components/__tests__/ExecutorTerminalPanel.test.tsx client/src/i18n/messages.execution-language-refresh.test.ts client/src/components/tasks/__tests__/TasksCockpitDetail.runtime-defer.test.tsx client/src/components/tasks/__tests__/TaskOperationsHero.test.tsx` 已通过
+  - `npx vitest run client/src/lib/navigation-events.test.ts client/src/components/tasks/__tests__/TasksCockpitDetail.runtime-defer.test.tsx client/src/lib/tasks-store.runtime-channels.test.ts` 已通过，shared runtime evidence 事件语义与 handoff 回归已补齐
   - `npx vitest run client/src/components/tasks/__tests__/task-operations-helpers.test.ts client/src/components/three/__tests__/MissionWallTaskPanel.test.tsx client/src/components/tasks/__tests__/TaskDetailView.runtime-evidence.test.tsx` 已通过，success / timeout / cancel 的步骤流回归已补齐
   - `npx vitest run client/src/components/tasks/__tests__/mission-detail-overlay.test.ts client/src/components/tasks/__tests__/TaskDetailView.runtime-evidence.test.tsx client/src/components/three/__tests__/MissionWallTaskPanel.test.tsx` 已通过，首页 overlay 单归口文案、详情页 deliverable handoff 与墙上 / 详情 runtime 归位未被本轮收尾破坏
   - `npx vitest run client/src/components/three/__tests__/MissionWallTaskPanel.test.tsx client/src/components/tasks/__tests__/TaskDetailView.runtime-evidence.test.tsx client/src/components/tasks/__tests__/mission-detail-overlay.test.ts client/src/components/tasks/__tests__/task-operations-helpers.test.ts client/src/components/tasks/__tests__/TaskOperationsHero.test.tsx` 已通过，墙上步骤流最小集合与日志 / runtime 归口边界继续保持稳定
   - 相关代码主落点：[`OfficeTaskCockpit.tsx`](../../../client/src/components/office/OfficeTaskCockpit.tsx)
 - 当前仍未完成：
-  - `socket / callback` 当前还是前端派生轻量摘要，尚未细化到完整 relay / callback 事件粒度
+  - `socket / callback` 仍然是前端派生轻量摘要，但已细化到可读的 relay / callback 事件分类与连接态同步；本 spec 不再继续把它扩成第二套 runtime 真相源
   - 若后续仍需继续整理墙面 `Browser Live` 与截图放大路径的一致性，建议转入 [`office-wall-display-redesign-v2`](../office-wall-display-redesign-v2/tasks.md) 继续处理，不再作为本 spec 的重复入口阻塞项
 
 ## 分项状态
@@ -132,7 +135,7 @@
   - 状态：进行中
   - 当前说明：
     - `Runtime` tab 已接入 executor 摘要，以及 recent failure / recent action 展示
-    - `Runtime` tab 已接入 `socket / callback` 轻量状态；socket 状态来自 mission socket 在线状态，callback 状态开始消费 executor 最近 relay / callback 事件
+    - `Runtime` tab 已接入 `socket / callback` 轻量状态；socket 状态来自 mission socket 在线状态并会随 connect / disconnect 即时同步，callback 状态已消费 executor 最近 relay / callback 事件并映射为可读摘要
     - 右侧 `Deep workspace` 的内嵌完整详情已不再重复渲染 runtime snapshot / executor / terminal / failure 等面板；本轮连同 timeline / artifacts 也已从 cockpit 内嵌详情里彻底后置
     - 右栏外层 runtime 摘要面板已大幅收口，但独立详情页与首页仍需继续统一主入口语义
     - 独立任务详情页 `TaskOperationsHero` 已移除 executor 状态 pill 与 `执行阶段 / 运行态` 摘要卡，executor 主入口继续回收到 `Runtime` tab
@@ -220,7 +223,7 @@
   - [x] 5.2 汇总 socket / callback 状态
     - [x] `tasks-store` 新增 `runtimeChannels.socket / runtimeChannels.callback`
     - [x] `Runtime` tab 接入 `socket / callback` 轻量摘要和明细
-    - [x] 已开始补全 callback / relay / 事件链粒度映射
+    - [x] 已补全 callback / relay / 事件链粒度映射到可读摘要级别，并新增 store 级回归保护
   - [x] 5.3 显示最近失败原因和最近动作
   - [x] 5.4 移除 executor / socket 状态在首页多面板并列展示
     - [x] 墙上中心不再承担 executor 细项
@@ -258,6 +261,10 @@
     - [x] 同一条 blocker / next step 不会在墙上中心和 `Splitter` 折叠区各出现一次
     - [x] 同一组 executor / socket / recent failure 不会在右侧控制区和 runtime dock 各出现一次
     - [x] 同一组 artifact 入口不会在详情页顶部和 runtime dock 各保留一套主入口
+  - [x] 7.6 验证 `tasks-store` 的 callback / socket 摘要派生与连接态同步
+    - [x] `client/src/lib/tasks-store.runtime-channels.test.ts` 已覆盖 mission executor 初始 waiting 摘要
+    - [x] `client/src/lib/tasks-store.runtime-channels.test.ts` 已覆盖 executor socket relay 对 callback 摘要的回填
+    - [x] `client/src/lib/tasks-store.runtime-channels.test.ts` 已覆盖 mission socket connect / disconnect 对 runtime channel 的即时同步
 
 ## 重复项移除清单
 

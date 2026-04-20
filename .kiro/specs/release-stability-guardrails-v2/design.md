@@ -62,13 +62,20 @@ README 至少具备：
 
 - checkout
 - setup-node
+- setup-pnpm
 - install
 - lint
 - typecheck
 - test
 - build
 
-不在本轮引入复杂矩阵。
+执行口径：
+
+- 依赖安装使用 `pnpm install --frozen-lockfile`
+- CI 主门禁执行 `pnpm run lint`、`pnpm run typecheck`、`pnpm run test`、`pnpm run build`
+- Pages 工作流同样对齐 `pnpm`，避免文档、锁文件与缓存策略分裂
+
+不在本轮引入复杂矩阵，也不把 smoke 测试强行塞进每个 PR 的最小门禁。
 
 ## 代码落点
 

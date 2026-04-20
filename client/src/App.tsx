@@ -16,6 +16,7 @@ import { ReplayPage } from "./components/replay/ReplayPage";
 import LegacyCommandCenterPage from "@/pages/nl-command/LegacyCommandCenterPage";
 import LineagePage from "@/pages/lineage/LineagePage";
 import DebugPage from "@/pages/debug/DebugPage";
+import { REPLAY_PATH_PREFIX } from "@/components/navigation-config";
 
 const routerBase =
   import.meta.env.BASE_URL === "/"
@@ -30,7 +31,7 @@ function Router() {
       <Route path={"/tasks/:taskId"}>
         {params => <TaskDetailRoute taskId={params.taskId} />}
       </Route>
-      <Route path={"/replay/:missionId"}>
+      <Route path={`${REPLAY_PATH_PREFIX}/:missionId`}>
         {params => <ReplayPage missionId={params.missionId || ""} />}
       </Route>
       <Route path={"/debug"} component={DebugPage} />

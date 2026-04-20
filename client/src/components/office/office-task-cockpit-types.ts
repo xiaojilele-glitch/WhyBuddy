@@ -1,4 +1,10 @@
-export type OfficeCockpitTab = "task" | "flow" | "agent" | "memory" | "history";
+export type OfficeCockpitTab =
+  | "launch"
+  | "task"
+  | "flow"
+  | "agent"
+  | "memory"
+  | "history";
 
 export type OfficeLaunchMode = "mission" | "workflow";
 

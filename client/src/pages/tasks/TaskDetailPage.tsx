@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 
 import { TaskDetailView } from "@/components/tasks/TaskDetailView";
+import { getReplayPath } from "@/components/navigation-config";
 import { RetryInlineNotice } from "@/components/tasks/RetryInlineNotice";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
@@ -116,7 +117,7 @@ export default function TaskDetailPage({
                 type="button"
                 variant="outline"
                 className="rounded-full border-stone-200 bg-white/80"
-                onClick={() => setLocation(`/replay/${activeTaskId}`)}
+                onClick={() => setLocation(getReplayPath(activeTaskId))}
               >
                 <Play className="size-4" />
                 {copy.tasks.detailPage.replay}

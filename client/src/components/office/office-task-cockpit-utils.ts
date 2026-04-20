@@ -4,6 +4,7 @@ import type { AgentInfo, WorkflowInfo } from "@/lib/workflow-store";
 import type { OfficeCockpitTab } from "./office-task-cockpit-types";
 
 export interface OfficeCockpitAvailability {
+  launch: boolean;
   task: boolean;
   flow: boolean;
   agent: boolean;
@@ -20,6 +21,7 @@ export function buildOfficeCockpitAvailability(input: {
   const { detail, workflow, agents, workflows } = input;
 
   return {
+    launch: true,
     task: true,
     flow: workflow !== null,
     agent: agents.length > 0,
@@ -38,6 +40,10 @@ export function resolveOfficeCockpitTab(
 
   if (availability.task) {
     return "task";
+  }
+
+  if (availability.launch) {
+    return "launch";
   }
 
   if (availability.flow) {

@@ -33,16 +33,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
       - name: Install Dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build Pages Bundle
-        run: npm run build:pages
+        run: pnpm run build:pages
 
       - name: Disable Jekyll
         run: touch dist/public/.nojekyll

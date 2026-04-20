@@ -395,6 +395,12 @@ export function OfficeTaskCockpit({
     setActiveTab(current => resolveOfficeCockpitTab(current, availability));
   }, [availability]);
 
+  useEffect(() => {
+    if (hasActiveClarification) {
+      setActiveTab("launch");
+    }
+  }, [hasActiveClarification]);
+
   async function handleLaunchDecision(presetId: string) {
     if (!activeTaskId) return;
     setLaunchingPresetId(presetId);
@@ -1014,37 +1020,6 @@ export function OfficeTaskCockpit({
 
       </div>
 
-      <div className="overflow-hidden px-1 pb-1 pt-1">
-        <UnifiedLaunchComposer
-          createMission={createMission}
-          activeTaskTitle={selectedTaskSummary?.title}
-          activeTaskDetail={selectedDetail}
-          operatorActionLoading={
-            activeTaskId
-              ? (operatorActionLoadingByMissionId[activeTaskId] ?? {})
-              : {}
-          }
-          onSubmitOperatorAction={handleSubmitOperatorAction}
-          onTaskResolved={handleTaskHubResolved}
-          compact
-          bare
-          dense
-          hideHeader
-          hideInputLabel
-          hideClarificationPanel
-          className="w-full"
-          onWorkflowResolved={resolution => {
-            setPendingLaunch({
-              workflowId: resolution.workflowId,
-              directive: resolution.directive,
-              attachmentCount: resolution.attachmentCount,
-              requestedAt: resolution.requestedAt,
-              missionId: resolution.missionId,
-            });
-            setActiveTab("flow");
-          }}
-        />
-      </div>
     </div>
   );
 
@@ -1464,76 +1439,13 @@ export function OfficeTaskCockpit({
     </div>
   );
 
-  const launchStage =
-    hasActiveClarification && currentDialog ? (
-      <div className="pointer-events-none flex w-full items-end justify-center">
-        <div className="pointer-events-none flex h-[clamp(380px,60vh,780px)] w-full max-w-[860px] min-h-0 flex-col items-center justify-end">
-          <div
-            className={cn(
-              "pointer-events-none relative w-full min-h-0",
-              clarificationExpanded ? "flex-1 pb-10" : "h-10 shrink-0"
-            )}
-          >
-            {clarificationExpanded ? (
-              <div className="pointer-events-auto flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/36 bg-[linear-gradient(180deg,rgba(255,252,248,0.72),rgba(246,238,229,0.62))] shadow-[0_18px_40px_rgba(98,73,48,0.14)] backdrop-blur-md">
-                <div className="shrink-0 border-b border-stone-200/55 px-3 py-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="workspace-status workspace-tone-warning !px-2 !py-1 !text-[10px] font-semibold">
-                      {t(locale, "需要补充信息", "Clarification needed")}
-                    </span>
-                    <span className="text-[11px] text-stone-600">
-                      {t(
-                        locale,
-                        "先补齐上下文，系统再继续创建任务。",
-                        "Fill in the missing context and the system will continue creating the task."
-                      )}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 pt-3">
-                  <ClarificationPanel
-                    dialog={currentDialog}
-                    onAnswer={handleClarificationAnswer}
-                    className="h-full border-amber-200/80 bg-amber-50/70 shadow-none"
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            <div className="pointer-events-auto absolute bottom-0 left-1/2 z-10 -translate-x-1/2">
-              <button
-                type="button"
-                className="inline-flex h-7 w-12 items-center justify-center rounded-full border border-stone-200/80 bg-white/94 text-[#9c6b47] shadow-[0_10px_24px_rgba(88,61,39,0.14)] backdrop-blur-md transition hover:bg-[#fff8f1] hover:text-[#5e8b72]"
-                aria-label={
-                  clarificationExpanded
-                    ? t(locale, "收起补充信息", "Collapse clarification")
-                    : t(locale, "展开补充信息", "Expand clarification")
-                }
-                onClick={() => setClarificationExpanded(current => !current)}
-              >
-                <ChevronDown
-                  className={cn(
-                    "size-4 transition-transform",
-                    clarificationExpanded && "rotate-180"
-                  )}
-                />
-              </button>
-            </div>
-          </div>
-
-          <div className="pointer-events-none flex w-full shrink-0 justify-center pt-3">
-            {launcherFloatingStack}
-          </div>
-        </div>
+  const launchStage = (
+    <div className="pointer-events-none flex h-full min-h-0 w-full items-end justify-center">
+      <div className="pointer-events-none flex w-full max-w-[860px] flex-col justify-end">
+        {launcherFloatingStack}
       </div>
-    ) : (
-      <div className="pointer-events-none flex h-full min-h-0 w-full items-end justify-center">
-        <div className="pointer-events-none flex w-full max-w-[860px] flex-col justify-end">
-          {launcherFloatingStack}
-        </div>
-      </div>
-    );
+    </div>
+  );
 
   return (
     <div
@@ -1599,7 +1511,13 @@ export function OfficeTaskCockpit({
                 sideShellClass
               )}
             >
-              <TabsList className="grid h-auto w-full grid-cols-5 gap-1 overflow-hidden rounded-[14px] bg-white/82 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
+              <TabsList className="grid h-auto w-full grid-cols-6 gap-1 overflow-hidden rounded-[14px] bg-white/82 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
+                <TabsTrigger
+                  className="min-h-[30px] rounded-[10px] border border-transparent px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-stone-600 transition disabled:opacity-45 data-[state=active]:border-white/80 data-[state=active]:bg-[#fff8ef] data-[state=active]:text-stone-900 data-[state=active]:shadow-[0_10px_22px_rgba(184,111,69,0.14)]"
+                  value="launch"
+                >
+                  {t(locale, "发起", "Launch")}
+                </TabsTrigger>
                 <TabsTrigger
                   className="min-h-[30px] rounded-[10px] border border-transparent px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-stone-600 transition disabled:opacity-45 data-[state=active]:border-white/80 data-[state=active]:bg-[#fff8ef] data-[state=active]:text-stone-900 data-[state=active]:shadow-[0_10px_22px_rgba(184,111,69,0.14)]"
                   value="task"
@@ -1635,6 +1553,108 @@ export function OfficeTaskCockpit({
                   {t(locale, "历史", "History")}
                 </TabsTrigger>
               </TabsList>
+              <TabsContent
+                value="launch"
+                className="mt-2 h-full min-h-0 flex-1 overflow-hidden"
+              >
+                <CockpitContextShell
+                  title={t(locale, "统一发起", "Unified launch")}
+                  description={t(
+                    locale,
+                    "把任务输入、附件编排与补问链路并回右侧控制区，底部只保留轻量运行控制与证据 dock。",
+                    "Pull task launch, attachment orchestration, and clarification back into the right control column while the bottom rail stays focused on lightweight controls and runtime evidence."
+                  )}
+                >
+                  <div className="h-full overflow-y-auto pr-1">
+                    <div className="space-y-3">
+                      {hasActiveClarification && currentDialog ? (
+                        <div className="rounded-[18px] border border-amber-200/80 bg-amber-50/78 p-3 shadow-[0_10px_24px_rgba(184,111,69,0.08)]">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="workspace-status workspace-tone-warning !px-2 !py-1 !text-[10px] font-semibold">
+                              {t(locale, "需要补充信息", "Clarification needed")}
+                            </span>
+                            <span className="text-[11px] text-stone-600">
+                              {t(
+                                locale,
+                                "先补齐上下文，系统再继续创建任务。",
+                                "Fill in the missing context and the system will continue creating the task."
+                              )}
+                            </span>
+                          </div>
+
+                          {clarificationExpanded ? (
+                            <div className="mt-3">
+                              <ClarificationPanel
+                                dialog={currentDialog}
+                                onAnswer={handleClarificationAnswer}
+                                className="border-amber-200/80 bg-amber-50/70 shadow-none"
+                              />
+                            </div>
+                          ) : null}
+
+                          <div className="mt-3 flex justify-center">
+                            <button
+                              type="button"
+                              className="inline-flex h-7 w-12 items-center justify-center rounded-full border border-stone-200/80 bg-white/94 text-[#9c6b47] shadow-[0_10px_24px_rgba(88,61,39,0.14)] backdrop-blur-md transition hover:bg-[#fff8f1] hover:text-[#5e8b72]"
+                              aria-label={
+                                clarificationExpanded
+                                  ? t(
+                                      locale,
+                                      "收起补充信息",
+                                      "Collapse clarification"
+                                    )
+                                  : t(
+                                      locale,
+                                      "展开补充信息",
+                                      "Expand clarification"
+                                    )
+                              }
+                              onClick={() =>
+                                setClarificationExpanded(current => !current)
+                              }
+                            >
+                              <ChevronDown
+                                className={cn(
+                                  "size-4 transition-transform",
+                                  clarificationExpanded && "rotate-180"
+                                )}
+                              />
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <UnifiedLaunchComposer
+                        createMission={createMission}
+                        activeTaskTitle={selectedTaskSummary?.title}
+                        activeTaskDetail={selectedDetail}
+                        operatorActionLoading={
+                          activeTaskId
+                            ? (operatorActionLoadingByMissionId[activeTaskId] ??
+                              {})
+                            : {}
+                        }
+                        onSubmitOperatorAction={handleSubmitOperatorAction}
+                        onTaskResolved={handleTaskHubResolved}
+                        onWorkflowResolved={resolution => {
+                          setPendingLaunch({
+                            workflowId: resolution.workflowId,
+                            directive: resolution.directive,
+                            attachmentCount: resolution.attachmentCount,
+                            requestedAt: resolution.requestedAt,
+                            missionId: resolution.missionId,
+                          });
+                          setActiveTab("flow");
+                        }}
+                        compact
+                        dense
+                        hideClarificationPanel
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </CockpitContextShell>
+              </TabsContent>
               <TabsContent
                 value="task"
                 className="mt-2 h-full min-h-0 flex-1 overflow-hidden"

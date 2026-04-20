@@ -319,11 +319,34 @@ function formatDurationMs(value: number | null): string {
   return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 }
 
-function buildRuntimeChannels(
-  mission: MissionRecord,
-  missionSocketConnected: boolean
-): MissionTaskDetail["runtimeChannels"] {
-  const socket = missionSocketConnected
+const TASKS_SELECTED_TASK_STORAGE_KEY = "cube-office:selected-task-id";
+
+function readPersistedSelectedTaskId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage?.getItem(TASKS_SELECTED_TASK_STORAGE_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+function persistSelectedTaskId(taskId: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    const storage = window.sessionStorage;
+    if (!storage) return;
+    if (taskId) {
+      storage.setItem(TASKS_SELECTED_TASK_STORAGE_KEY, taskId);
+      return;
+    }
+    storage.removeItem(TASKS_SELECTED_TASK_STORAGE_KEY);
+  } catch {
+    // Ignore sessionStorage failures and keep the in-memory focus intact.
+  }
+}
+
+function buildSocketRuntimeChannel(missionSocketConnected: boolean) {
+  return missionSocketConnected
     ? {
         status: "connected" as const,
         label: "Socket connected",
@@ -334,7 +357,112 @@ function buildRuntimeChannels(
         label: "Socket disconnected",
         detail: "Mission socket is offline, so runtime updates may be delayed until refresh.",
       };
+}
 
+function formatExecutorEventLabel(eventType: string | null | undefined): string {
+  if (!eventType) {
+    return "Callback idle";
+  }
+
+  switch (eventType) {
+    case "job.accepted":
+      return "Relay accepted";
+    case "job.started":
+      return "Relay started";
+    case "job.progress":
+      return "Relay progress update";
+    case "job.waiting":
+      return "Callback waiting";
+    case "job.completed":
+      return "Callback completed";
+    case "job.failed":
+      return "Callback failed";
+    case "job.cancelled":
+      return "Callback cancelled";
+    case "job.log":
+      return "Relay log update";
+    case "job.heartbeat":
+      return "Relay heartbeat";
+    case "job.log_stream":
+      return "Relay log stream";
+    case "job.screenshot":
+      return "Relay screenshot update";
+    default:
+      return `${eventType.startsWith("job.") ? "Relay" : "Callback"} ${eventType}`;
+  }
+}
+
+function buildExecutorEventDetail(
+  eventType: string | null | undefined,
+  occurredAt: string,
+  jobId?: string,
+  requestId?: string,
+  summary?: string | null
+): string {
+  const parts = [
+    `${formatExecutorEventLabel(eventType)} recorded at ${occurredAt}.`,
+  ];
+
+  if (jobId) {
+    parts.push(`Job ${jobId}.`);
+  }
+
+  if (requestId) {
+    parts.push(`Request ${requestId}.`);
+  }
+
+  if (summary) {
+    parts.push(summary);
+  }
+
+  return parts.join(" ");
+}
+
+function resolveCallbackStatus(
+  eventType: string | null | undefined,
+  jobStatus: string | null | undefined,
+  missionStatus?: MissionTaskStatus
+): MissionTaskDetail["runtimeChannels"]["callback"]["status"] {
+  if (
+    eventType === "job.failed" ||
+    eventType === "job.cancelled" ||
+    jobStatus === "failed" ||
+    jobStatus === "cancelled" ||
+    missionStatus === "failed" ||
+    missionStatus === "cancelled"
+  ) {
+    return "error";
+  }
+
+  if (
+    eventType === "job.waiting" ||
+    jobStatus === "waiting" ||
+    missionStatus === "waiting"
+  ) {
+    return "waiting";
+  }
+
+  if (
+    eventType === "job.completed" ||
+    eventType === "job.started" ||
+    eventType === "job.progress" ||
+    eventType === "job.accepted" ||
+    eventType === "job.log" ||
+    eventType === "job.log_stream" ||
+    eventType === "job.heartbeat" ||
+    eventType === "job.screenshot" ||
+    jobStatus === "running" ||
+    jobStatus === "completed"
+  ) {
+    return "active";
+  }
+
+  return "idle";
+}
+
+function buildCallbackRuntimeChannel(
+  mission: Pick<MissionRecord, "status" | "executor" | "events">
+): MissionTaskDetail["runtimeChannels"]["callback"] {
   const lastExecutorEventType = mission.executor?.lastEventType || null;
   const lastExecutorEventMessage =
     trimText(
@@ -344,39 +472,69 @@ function buildRuntimeChannels(
         ?.message,
       140
     ) || null;
-  const isCallbackError =
-    lastExecutorEventType === "job.failed" || mission.status === "failed";
-  const isCallbackWaiting =
-    lastExecutorEventType === "job.waiting" || mission.status === "waiting";
-  const callbackStatus = mission.executor?.lastEventAt
-    ? isCallbackError
-      ? "error"
-      : isCallbackWaiting
-        ? "waiting"
-        : "active"
-    : mission.executor?.jobId
-      ? "waiting"
-      : "idle";
-  const callbackLabel = lastExecutorEventType
-    ? `${lastExecutorEventType.startsWith("job.") ? "Relay" : "Callback"} ${lastExecutorEventType}`
-    : mission.executor?.jobId
-      ? "Callback pending"
-      : "Callback idle";
-  const callbackDetail = mission.executor?.lastEventAt
-    ? `Last executor callback at ${formatShortDate(mission.executor.lastEventAt)}.${mission.executor?.jobId ? ` Job ${mission.executor.jobId}.` : ""}${mission.executor?.requestId ? ` Request ${mission.executor.requestId}.` : ""}${lastExecutorEventMessage ? ` ${lastExecutorEventMessage}` : ""}`
-    : mission.executor?.jobId
-      ? `Waiting for executor callback after dispatch.${mission.executor?.jobId ? ` Job ${mission.executor.jobId}.` : ""}${mission.executor?.requestId ? ` Request ${mission.executor.requestId}.` : ""}`
-      : "No executor callback has been recorded for this mission yet.";
 
-  return {
-    socket,
-    callback: {
-      status: callbackStatus,
-      label: callbackLabel,
-      detail: callbackDetail,
+  if (mission.executor?.lastEventAt) {
+    return {
+      status: resolveCallbackStatus(
+        lastExecutorEventType,
+        mission.executor?.status,
+        mission.status
+      ),
+      label: formatExecutorEventLabel(lastExecutorEventType),
+      detail: buildExecutorEventDetail(
+        lastExecutorEventType,
+        formatShortDate(mission.executor.lastEventAt),
+        mission.executor?.jobId,
+        mission.executor?.requestId,
+        lastExecutorEventMessage
+      ),
       eventType: lastExecutorEventType || undefined,
       eventSummary: lastExecutorEventMessage || undefined,
-    },
+    };
+  }
+
+  if (mission.executor?.jobId) {
+    return {
+      status: "waiting",
+      label: "Callback pending",
+      detail: buildExecutorEventDetail(
+        "job.waiting",
+        "dispatch",
+        mission.executor.jobId,
+        mission.executor.requestId,
+        "Waiting for the first executor callback after dispatch."
+      ),
+      eventType: lastExecutorEventType || undefined,
+      eventSummary: lastExecutorEventMessage || undefined,
+    };
+  }
+
+  return {
+    status: "idle",
+    label: "Callback idle",
+    detail: "No executor callback has been recorded for this mission yet.",
+    eventType: lastExecutorEventType || undefined,
+    eventSummary: lastExecutorEventMessage || undefined,
+  };
+}
+
+function applySocketConnectionToRuntimeChannels(
+  runtimeChannels: MissionTaskDetail["runtimeChannels"],
+  missionSocketConnected: boolean
+): MissionTaskDetail["runtimeChannels"] {
+  return {
+    ...runtimeChannels,
+    socket: buildSocketRuntimeChannel(missionSocketConnected),
+  };
+}
+
+function buildRuntimeChannels(
+  mission: MissionRecord,
+  missionSocketConnected: boolean
+): MissionTaskDetail["runtimeChannels"] {
+  return {
+    socket: buildSocketRuntimeChannel(missionSocketConnected),
+    callback: buildCallbackRuntimeChannel(mission),
   };
 }
 
@@ -389,19 +547,51 @@ function applyExecutorEventToRuntimeChannels(
     event.detail || event.summary || event.message || event.waitingFor,
     140
   );
-  const isError = event.status === "failed" || event.type === "job.failed";
-  const isWaiting = event.status === "waiting" || event.type === "job.waiting";
 
   return {
     ...runtimeChannels,
     callback: {
-      status: isError ? "error" : isWaiting ? "waiting" : "active",
-      label: `Relay ${event.type}`,
-      detail: `Last runtime relay at ${occurredAt}. Job ${event.jobId}.`,
+      status: resolveCallbackStatus(event.type, event.status),
+      label: formatExecutorEventLabel(event.type),
+      detail: buildExecutorEventDetail(
+        event.type,
+        occurredAt,
+        event.jobId,
+        undefined,
+        eventSummary
+      ),
       eventType: event.type,
       eventSummary: eventSummary || undefined,
     },
   };
+}
+
+function applyMissionSocketState(
+  runtimeChannels: MissionTaskDetail["runtimeChannels"],
+  missionSocketConnected: boolean
+): MissionTaskDetail["runtimeChannels"] {
+  return {
+    ...runtimeChannels,
+    socket: buildSocketRuntimeChannel(missionSocketConnected),
+  };
+}
+
+function updateDetailsSocketConnection(
+  detailsById: Record<string, MissionTaskDetail>,
+  missionSocketConnected: boolean
+): Record<string, MissionTaskDetail> {
+  return Object.fromEntries(
+    Object.entries(detailsById).map(([taskId, detail]) => [
+      taskId,
+      {
+        ...detail,
+        runtimeChannels: applyMissionSocketState(
+          detail.runtimeChannels,
+          missionSocketConnected
+        ),
+      },
+    ])
+  ) as Record<string, MissionTaskDetail>;
 }
 
 function clampPercentage(value: number | null | undefined, fallback = 0): number {
@@ -1299,13 +1489,21 @@ function resolveSelectedTaskId(
   currentSelectedTaskId: string | null,
   preferredTaskId?: string | null
 ): string | null {
-  const nextSelectedTaskId = preferredTaskId ?? currentSelectedTaskId ?? null;
-  if (
-    nextSelectedTaskId &&
-    summaries.some(summary => summary.id === nextSelectedTaskId)
-  ) {
-    return nextSelectedTaskId;
+  const candidateTaskIds = [
+    preferredTaskId,
+    currentSelectedTaskId,
+    readPersistedSelectedTaskId(),
+  ].filter(
+    (taskId, index, allTaskIds): taskId is string =>
+      Boolean(taskId) && allTaskIds.indexOf(taskId) === index
+  );
+
+  for (const taskId of candidateTaskIds) {
+    if (summaries.some(summary => summary.id === taskId)) {
+      return taskId;
+    }
   }
+
   return pickFallbackTaskId(summaries);
 }
 
@@ -1332,6 +1530,12 @@ export async function patchMissionRecordInStore(
   set(state => {
     const nextTasks = [...state.tasks.filter(task => task.id !== missionId), summary]
       .sort((left, right) => right.updatedAt - left.updatedAt);
+    const nextSelectedTaskId = resolveSelectedTaskId(
+      nextTasks,
+      state.selectedTaskId,
+      state.selectedTaskId === missionId ? missionId : undefined
+    );
+    persistSelectedTaskId(nextSelectedTaskId);
 
     return {
       ready: true,
@@ -1342,11 +1546,7 @@ export async function patchMissionRecordInStore(
         ...state.detailsById,
         [missionId]: detail,
       },
-      selectedTaskId: resolveSelectedTaskId(
-        nextTasks,
-        state.selectedTaskId,
-        state.selectedTaskId === missionId ? missionId : undefined
-      ),
+      selectedTaskId: nextSelectedTaskId,
     };
   });
 }
@@ -1380,7 +1580,13 @@ function ensureMissionSocket(
   useSandboxStore.getState().initSocket(missionSocket);
 
   missionSocket.on("connect", () => {
-    set({ missionSocketConnected: true });
+    set(state => ({
+      missionSocketConnected: true,
+      detailsById: updateDetailsSocketConnection(state.detailsById, true),
+    }));
+    queueTasksRefresh({
+      preferredTaskId: get().selectedTaskId,
+    });
   });
 
   missionSocket.on(MISSION_SOCKET_EVENT, (payload: MissionSocketPayload) => {
@@ -1470,7 +1676,10 @@ function ensureMissionSocket(
   });
 
   missionSocket.on("disconnect", () => {
-    set({ missionSocketConnected: false });
+    set(state => ({
+      missionSocketConnected: false,
+      detailsById: updateDetailsSocketConnection(state.detailsById, false),
+    }));
     if (useAppStore.getState().runtimeMode !== "advanced") {
       stopMissionSocket();
     }
@@ -1552,6 +1761,12 @@ async function hydrateTaskData(
   const summaries = enrichedMissions
     .map(mission => buildSummaryRecord(mission))
     .sort((left, right) => right.updatedAt - left.updatedAt);
+  const selectedTaskId = resolveSelectedTaskId(
+    summaries,
+    get().selectedTaskId,
+    options?.preferredTaskId
+  );
+  persistSelectedTaskId(selectedTaskId);
 
   const detailsById = Object.fromEntries(
     enrichedMissions.map(mission => [
@@ -1566,11 +1781,7 @@ async function hydrateTaskData(
     error: null,
     tasks: summaries,
     detailsById,
-    selectedTaskId: resolveSelectedTaskId(
-      summaries,
-      get().selectedTaskId,
-      options?.preferredTaskId
-    ),
+    selectedTaskId,
   });
 }
 
@@ -1607,6 +1818,7 @@ async function hydratePlanetTaskData(
     get().selectedTaskId,
     options?.preferredTaskId
   );
+  persistSelectedTaskId(selectedTaskId);
 
   const detailsById: Record<string, MissionTaskDetail> = {};
   for (const planet of planets) {
@@ -1725,6 +1937,7 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
   },
 
   selectTask: taskId => {
+    persistSelectedTaskId(taskId);
     set({ selectedTaskId: taskId });
   },
 
@@ -1772,6 +1985,12 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
           ...state.tasks.filter(task => task.id !== taskId),
           summary,
         ].sort((left, right) => right.updatedAt - left.updatedAt);
+        const nextSelectedTaskId = resolveSelectedTaskId(
+          nextTasks,
+          state.selectedTaskId,
+          taskId,
+        );
+        persistSelectedTaskId(nextSelectedTaskId);
 
         return {
           tasks: nextTasks,
@@ -1779,11 +1998,7 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
             ...state.detailsById,
             [taskId]: detail,
           },
-          selectedTaskId: resolveSelectedTaskId(
-            nextTasks,
-            state.selectedTaskId,
-            taskId,
-          ),
+          selectedTaskId: nextSelectedTaskId,
         };
       });
 
@@ -1835,6 +2050,12 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
           ...state.tasks.filter(task => task.id !== taskId),
           summary,
         ].sort((left, right) => right.updatedAt - left.updatedAt);
+        const nextSelectedTaskId = resolveSelectedTaskId(
+          nextTasks,
+          state.selectedTaskId,
+          taskId,
+        );
+        persistSelectedTaskId(nextSelectedTaskId);
 
         return {
           tasks: nextTasks,
@@ -1842,11 +2063,7 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
             ...state.detailsById,
             [taskId]: detail,
           },
-          selectedTaskId: resolveSelectedTaskId(
-            nextTasks,
-            state.selectedTaskId,
-            taskId,
-          ),
+          selectedTaskId: nextSelectedTaskId,
         };
       });
 

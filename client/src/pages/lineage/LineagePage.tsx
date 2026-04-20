@@ -1,12 +1,17 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 
+import {
+  DEBUG_LINEAGE_PATH,
+  getCompatibilityRedirect,
+} from "@/components/navigation-config";
+
 export default function LineagePage() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    setLocation("/debug/lineage");
-  }, [setLocation]);
+    setLocation(getCompatibilityRedirect(location) ?? DEBUG_LINEAGE_PATH);
+  }, [location, setLocation]);
 
   return null;
 }

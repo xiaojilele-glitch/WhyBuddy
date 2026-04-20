@@ -10,12 +10,14 @@
 - 最小恢复能力
 - 最小部署文档
 
-## 当前状态（2026-04-20）
+## 当前状态（2026-04-21）
 
-- 本 spec 当前完成度约 `40%`
-- 仓库已具备 `build`、`check`、`test:client`、`test:server`、`test:executor`、`test:release` 等基础命令
-- README 已补齐 Quick Start、环境变量样例、执行器启动方式和常用命令
-- 当前最主要缺口仍是统一 `lint / typecheck / test / build` 聚合入口与真正串联质量门禁的 CI
+- 本 spec 当前完成度约 `89%`
+- 仓库已具备统一 `lint`、`typecheck`、`test`、`build` 聚合入口，并保留 `check`、`test:client`、`test:server`、`test:executor` 等拆分命令兼容
+- README 已补齐 Quick Start、环境变量样例、执行器启动方式、package manager 口径、常用命令与 FAQ
+- `.github/workflows/release-guardrails.yml` 已串联最小质量门禁，并显式加入轻量 `test:guardrails`；`.github/workflows/deploy-pages.yml` 已对齐仓库声明的 `pnpm`
+- 仓库已新增显式 `decision` 回归入口、`test:guardrails` 轻量关键链路入口，并为 mission socket 重连补上“重连后主动刷新任务数据 + 保留当前任务焦点 + 当前内存焦点失效时回退到持久化焦点 + 已加载详情 socket 运行态即时回写 + SandboxMonitor 跟随任务焦点回挂 active mission 并重拉日志历史”的最小恢复逻辑
+- 当前最主要缺口收敛为：任务完整工作上下文 re-attach 的 spec 级验收闭环；`modify` 命名已对齐到当前决策模板与回归口径
 
 ## 范围
 
@@ -38,7 +40,7 @@
 ## 必须满足
 
 - 仓库必须有统一的 `lint`、`typecheck`、`test`、`build` 聚合入口
-- 当前仓库仅部分具备：`build` 已存在，`typecheck` 现阶段由 `check` 承接，`test` 仍以分拆脚本与 `test:release` 为主，`lint` 尚未建立
+- 当前仓库已具备统一聚合入口：`typecheck` 由 `check` 承接，`test` 汇总 `test:client`、`test:server`、`test:executor`，`lint` 先收口到发布护栏相关文件的格式校验
 - 聚合入口优先建立在现有脚本之上，不要求一次性替换所有历史拆分命令
 - 必须存在 CI 入口
 - 至少覆盖任务状态机、executor 调用、decision 流
@@ -57,11 +59,14 @@
 3. 目标门禁：`npm run test`
 4. 当前已具备的构建门禁：`npm run build`
 
-当前替代口径：
+当前收口口径：
 
-- 类型检查可先使用 `npm run check`
-- 测试可先使用 `npm run test:client`、`npm run test:server`、`npm run test:executor` 或 `npm run test:release`
-- 如仓库继续保留拆分测试入口，也必须最终补出统一别名汇总
+- 推荐主口径：`pnpm run lint`、`pnpm run typecheck`、`pnpm run test`、`pnpm run build`
+- 轻量关键链路回归：`pnpm run test:guardrails`
+- 决策显式回归：`pnpm run test:decision`
+- 发布前串联检查：`pnpm run test:release`
+- 若本机没有全局 `pnpm`，允许使用 `corepack pnpm ...`
+- 如需单独排查，仍可使用 `npm run check`、`npm run test:client`、`npm run test:server`、`npm run test:executor`
 
 ## 验收标准
 

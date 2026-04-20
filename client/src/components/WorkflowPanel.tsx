@@ -84,7 +84,7 @@ import { SessionHistoryTab } from "@/components/SessionHistoryTab";
 import { WorkflowPanelCompatibility } from "@/components/WorkflowPanelCompatibility";
 import { useAutonomyStore } from "@/lib/autonomy-store";
 import {
-  OFFICE_RUNTIME_EVIDENCE_EVENT,
+  dispatchOfficeRuntimeEvidenceEvent,
   type OfficeRuntimeEvidenceTab,
 } from "@/lib/navigation-events";
 import { useTasksStore } from "@/lib/tasks-store";
@@ -485,15 +485,7 @@ function dispatchOfficeRuntimeEvidence(
   tab: OfficeRuntimeEvidenceTab,
   missionId?: string | null
 ) {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(
-    new CustomEvent(OFFICE_RUNTIME_EVIDENCE_EVENT, {
-      detail: {
-        tab,
-        missionId: missionId ?? null,
-      },
-    })
-  );
+  dispatchOfficeRuntimeEvidenceEvent(tab, missionId);
 }
 
 function renderDeliverableDockHint(

@@ -321,5 +321,21 @@ describe('API endpoints', () => {
     expect(body.templates.map((t: { templateId: string }) => t.templateId)).toContain(
       'risk-confirmation'
     );
+
+    const approvalTemplate = body.templates.find(
+      (template: { templateId: string }) =>
+        template.templateId === 'execution-plan-approval'
+    );
+    expect(approvalTemplate).toBeDefined();
+    expect(
+      approvalTemplate.defaultOptions.map(
+        (option: { id: string; label: string }) => option.id
+      )
+    ).toContain('modify');
+    expect(
+      approvalTemplate.defaultOptions.map(
+        (option: { id: string; label: string }) => option.label
+      )
+    ).toContain('Modify');
   });
 });

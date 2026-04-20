@@ -15,7 +15,7 @@
   - `/command-center/legacy` 已从兼容说明页收口为纯兼容跳转壳，不再继续承载旧版工作台心智
 - 当前剩余：
   - 尚欠一轮覆盖 `/debug/*` 子路径的人工回归，确认低频入口迁移后无导航迷路
-  - 定向自动校验待更新到包含 `/debug/help` 的最新一轮
+  - `/debug/*` 子路径、`/debug/help`、`/debug/lineage`、兼容跳转与 replay 深链的定向自动校验已补齐，剩余主要是人工回归确认真实页面加载与点击流
 
 ## Tasks
 
@@ -51,3 +51,5 @@
   - [x] 5.3 验证主导航文案与页面文案已经统一
   - [x] 5.4 验证 `/tasks` 在路由、入口和页面文案上不再承担“发起”语义
   - [ ] 5.5 补一轮 `/debug/*` 子路径与兼容跳转的人工回归
+    - 收窄为真实访问 `/debug`、`/debug/config`、`/debug/permissions`、`/debug/audit`、`/debug/lineage`、`/debug/help`，确认对应分区可见、More 抽屉不会把用户带回高频主流程
+    - 收窄为真实访问 `/lineage`、`/command-center`、`/command-center/legacy`，确认兼容跳转生效且无明显闪烁或迷路

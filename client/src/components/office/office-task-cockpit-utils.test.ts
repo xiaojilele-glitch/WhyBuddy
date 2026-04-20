@@ -50,6 +50,7 @@ describe("office-task-cockpit-utils", () => {
         workflows: [WORKFLOW],
       })
     ).toEqual({
+      launch: true,
       task: true,
       flow: true,
       agent: true,
@@ -61,6 +62,7 @@ describe("office-task-cockpit-utils", () => {
   it("falls back to task tab when the current tab has no usable context", () => {
     expect(
       resolveOfficeCockpitTab("flow", {
+        launch: true,
         task: true,
         flow: false,
         agent: true,
@@ -68,6 +70,19 @@ describe("office-task-cockpit-utils", () => {
         history: true,
       })
     ).toBe("task");
+  });
+
+  it("keeps the launch tab available as a stable entry even without workflow or agent context", () => {
+    expect(
+      resolveOfficeCockpitTab("launch", {
+        launch: true,
+        task: true,
+        flow: false,
+        agent: false,
+        memory: false,
+        history: false,
+      })
+    ).toBe("launch");
   });
 
   it("keeps the current workflow when it already matches the selected mission", () => {

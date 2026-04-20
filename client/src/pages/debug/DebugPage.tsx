@@ -9,6 +9,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
 import { AuditPanel } from "@/components/AuditPanel";
+import {
+  getDebugPath,
+  resolveDebugTab,
+  type DebugTab,
+} from "@/components/navigation-config";
 import { LineageWorkspaceContent } from "@/components/lineage/LineageWorkspaceContent";
 import { PermissionPanel } from "@/components/permissions/PermissionPanel";
 import {
@@ -20,23 +25,6 @@ import { useAppStore } from "@/lib/store";
 
 function t(locale: string, zh: string, en: string) {
   return locale === "zh-CN" ? zh : en;
-}
-
-type DebugTab =
-  | "overview"
-  | "config"
-  | "permissions"
-  | "audit"
-  | "lineage"
-  | "help";
-
-function resolveDebugTab(path: string): DebugTab {
-  if (path.startsWith("/debug/config")) return "config";
-  if (path.startsWith("/debug/permissions")) return "permissions";
-  if (path.startsWith("/debug/audit")) return "audit";
-  if (path.startsWith("/debug/lineage")) return "lineage";
-  if (path.startsWith("/debug/help")) return "help";
-  return "overview";
 }
 
 export default function DebugPage() {
@@ -60,26 +48,7 @@ export default function DebugPage() {
 
   const handleTabChange = (nextTab: DebugTab) => {
     setActiveTab(nextTab);
-    switch (nextTab) {
-      case "config":
-        setLocation("/debug/config");
-        return;
-      case "permissions":
-        setLocation("/debug/permissions");
-        return;
-      case "audit":
-        setLocation("/debug/audit");
-        return;
-      case "lineage":
-        setLocation("/debug/lineage");
-        return;
-      case "help":
-        setLocation("/debug/help");
-        return;
-      default:
-        setLocation("/debug");
-        return;
-    }
+    setLocation(getDebugPath(nextTab));
   };
 
   return (

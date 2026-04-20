@@ -25,8 +25,8 @@ export const BUILTIN_DECISION_TEMPLATES: readonly DecisionTemplate[] = [
       { id: "approve", label: "Approve", action: "approve", severity: "info" },
       { id: "reject", label: "Reject", action: "reject", severity: "danger" },
       {
-        id: "request-changes",
-        label: "Request Changes",
+        id: "modify",
+        label: "Modify",
         action: "request-info",
         severity: "warn",
         requiresComment: true,
