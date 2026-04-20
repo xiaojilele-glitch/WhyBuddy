@@ -10,13 +10,13 @@
 - 最小恢复能力
 - 最小部署文档
 
-## 当前状态（2026-04-20）
+## 当前状态（2026-04-21）
 
-- 本 spec 当前完成度约 `88%`
+- 本 spec 当前完成度约 `89%`
 - 仓库已具备统一 `lint`、`typecheck`、`test`、`build` 聚合入口，并保留 `check`、`test:client`、`test:server`、`test:executor` 等拆分命令兼容
 - README 已补齐 Quick Start、环境变量样例、执行器启动方式、package manager 口径、常用命令与 FAQ
 - `.github/workflows/release-guardrails.yml` 已串联最小质量门禁，并显式加入轻量 `test:guardrails`；`.github/workflows/deploy-pages.yml` 已对齐仓库声明的 `pnpm`
-- 仓库已新增显式 `decision` 回归入口、`test:guardrails` 轻量关键链路入口，并为 mission socket 重连补上“重连后主动刷新任务数据 + 保留当前任务焦点 + 已加载详情 socket 运行态即时回写”的最小恢复逻辑
+- 仓库已新增显式 `decision` 回归入口、`test:guardrails` 轻量关键链路入口，并为 mission socket 重连补上“重连后主动刷新任务数据 + 保留当前任务焦点 + 已加载详情 socket 运行态即时回写 + SandboxMonitor 跟随任务焦点回挂 active mission 并重拉日志历史”的最小恢复逻辑
 - 当前最主要缺口收敛为：任务完整工作上下文 re-attach 的 spec 级验收闭环；`modify` 命名已对齐到当前决策模板与回归口径
 
 ## 范围

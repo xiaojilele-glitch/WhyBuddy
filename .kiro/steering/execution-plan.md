@@ -517,8 +517,8 @@ C01-C08 契约冻结 (已完成)
   - 优先做运行证据归口，不再造第二套真相源
   - 不并行
 - [ ] `release-stability-guardrails-v2`
-  - 当前状态：进行中，约 88%；统一 `lint / typecheck / test / build` 入口、最小 CI、README 回填与轻量关键链路入口已落地，最小任务焦点 re-attach 已补齐，完整工作上下文 re-attach 仍未收尾
-  - 已落地：`lint`、`typecheck`、`test`、`build`、`test:decision`、`test:guardrails`、`test:release`、Pages workflow、release guardrails workflow、mission socket 重连后主动刷新任务数据、当前任务焦点持久化回挂、已加载详情的 socket 运行态即时回写、restart smoke
+  - 当前状态：进行中，约 89%；统一 `lint / typecheck / test / build` 入口、最小 CI、README 回填与轻量关键链路入口已落地，最小任务焦点 re-attach 与 sandbox 回挂链路已补齐，完整工作上下文 re-attach 仍未收尾
+  - 已落地：`lint`、`typecheck`、`test`、`build`、`test:decision`、`test:guardrails`、`test:release`、Pages workflow、release guardrails workflow、mission socket 重连后主动刷新任务数据、当前任务焦点持久化回挂、已加载详情的 socket 运行态即时回写、SandboxMonitor 跟随恢复后的任务焦点回挂 active mission 并重拉日志历史、restart smoke
   - 剩余：任务完整工作上下文 re-attach 的实现与 spec 级验收闭环
   - 可与主线并行
   - 以补齐统一聚合入口、最小 CI、关键链路测试和恢复能力为主
@@ -541,7 +541,7 @@ C01-C08 契约冻结 (已完成)
   - 先收 `task-runtime-visibility-v1` 的 `socket / callback` 事件粒度和剩余边界说明
   - 再收 `office-shell-convergence-v1` 的 `/debug/*` 回归边界
   - 再做 `task-os-home-redesign-v1` 的右侧控制区归位和桌面断点 / 手测闭环
-- `release-stability-guardrails-v2` 当前约 `88%`，已具备最小门禁、README/CI/脚本对齐、轻量关键链路 spot-check 与最小任务焦点 re-attach，但仍不应误判为“已具备完整工作上下文 re-attach 闭环”
+- `release-stability-guardrails-v2` 当前约 `89%`，已具备最小门禁、README/CI/脚本对齐、轻量关键链路 spot-check、最小任务焦点 re-attach 与 sandbox 回挂链路，但仍不应误判为“已具备完整工作上下文 re-attach 闭环”
 - `replay-and-debug-surface-v1` 当前约 `88%`，建议继续保持“信息架构先行、最终接线后置”的节奏，不要早于主壳定稿强行完成全部 debug 迁移
 
 ### 剩余动作清单（建议顺序）
@@ -601,11 +601,12 @@ C01-C08 契约冻结 (已完成)
 - [x] 新增统一 `typecheck` 聚合入口
 - [x] 新增统一 `test` 聚合入口
 - [x] 对齐 `build`、`check`、分拆测试脚本与外部统一口径
-- [x] 建立最小 CI：install -> lint -> typecheck -> test:guardrails -> test -> build
-- [x] 补 decision approve / reject / modify 的关键链路回归
-- [x] 明确 websocket 恢复与任务 re-attach 的 spec 级验收口径
-- [x] 补当前任务焦点持久化回挂与已加载详情 socket 状态即时同步
-- 当前判断：统一门禁命令、CI / README / scripts 口径、轻量关键链路入口与最小任务焦点 re-attach 已对齐；完整工作上下文 re-attach 仍待实现闭环
+  - [x] 建立最小 CI：install -> lint -> typecheck -> test:guardrails -> test -> build
+  - [x] 补 decision approve / reject / modify 的关键链路回归
+  - [x] 明确 websocket 恢复与任务 re-attach 的 spec 级验收口径
+  - [x] 补当前任务焦点持久化回挂与已加载详情 socket 状态即时同步
+  - [x] 补 SandboxMonitor 跟随恢复后的任务焦点回挂 active mission 并重拉日志历史
+  - 当前判断：统一门禁命令、CI / README / scripts 口径、轻量关键链路入口、最小任务焦点 re-attach 与 sandbox 回挂链路已对齐；完整工作上下文 re-attach 仍待实现闭环
 
 #### 后置接线
 
