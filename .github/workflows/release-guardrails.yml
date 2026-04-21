@@ -73,7 +73,11 @@ jobs:
     name: test-server
     runs-on: ubuntu-latest
     env:
-      TEST_SERVER_BATCH_SIZE: 40
+      TEST_SERVER_BATCH_SIZE: 20
+      TEST_SERVER_SINGLE_FORK: "0"
+      TEST_SERVER_FILE_PARALLELISM: "0"
+      TEST_SERVER_BATCH_TIMEOUT_MS: 180000
+      TEST_SERVER_KILL_GRACE_MS: 10000
 
     steps:
       - name: Checkout
