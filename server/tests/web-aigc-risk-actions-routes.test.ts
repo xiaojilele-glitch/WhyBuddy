@@ -192,4 +192,170 @@ describe("Web-AIGC risk action routes", () => {
       expect(body.status).toBe("unavailable");
     });
   });
+
+  it("routes vector-update requests when the adapter is wired", async () => {
+    await withServer(async (baseUrl, executeMock) => {
+      executeMock.mockResolvedValueOnce({
+        ok: true,
+        action: "vector_update",
+        namespace: "tenant_alpha",
+        collection: "rag_tenant_alpha_proj-1",
+        selectionMode: "sourceId",
+        matchedRecords: 2,
+        updatedRecords: 2,
+        status: "completed",
+        governance: {
+          namespace: "tenant_alpha",
+          collection: "rag_tenant_alpha_proj-1",
+          resource: "tenant_alpha/rag_tenant_alpha_proj-1/vector_update",
+          riskLevel: "high",
+          permission: { allowed: true },
+          approval: { required: false, status: "not_required" },
+          audit: { logged: true, operation: "vector_update" },
+          rollback: {
+            supported: false,
+            mode: "metadata_patch_only",
+            reason: "metadata only",
+          },
+        },
+      });
+
+      const app = express();
+      app.use(express.json());
+      app.use(
+        "/api/rag/risk-actions",
+        createWebAigcRiskActionRouter({
+          vectorInsertAdapter: {
+            execute: vi.fn(),
+          } as any,
+          vectorUpdateAdapter: {
+            execute: executeMock,
+          } as any,
+        }),
+      );
+
+      const server = createServer(app);
+      await new Promise<void>((resolve, reject) => {
+        server.listen(0, "127.0.0.1", (error?: Error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+
+      const address = server.address() as AddressInfo;
+      const scopedBaseUrl = `http://127.0.0.1:${address.port}`;
+
+      try {
+        const response = await fetch(`${scopedBaseUrl}/api/rag/risk-actions/vector-update`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agentId: "agent-1",
+            token: "token-1",
+            namespace: "tenant_alpha",
+            projectId: "proj-1",
+            selection: {
+              sourceId: "doc-1",
+            },
+            metadataPatch: {
+              reviewStatus: "approved",
+            },
+          }),
+        });
+
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect(body.status).toBe("completed");
+      } finally {
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()));
+        });
+      }
+    });
+  });
+
+  it("routes vector-delete requests when the adapter is wired", async () => {
+    const insertMock = vi.fn();
+    const deleteMock = vi.fn().mockResolvedValue({
+      ok: true,
+      action: "vector_delete",
+      namespace: "tenant_alpha",
+      collection: "rag_tenant_alpha_proj-1",
+      status: "completed",
+      deletedIds: ["document:tenant_alpha:doc-1:0"],
+      governance: {
+        namespace: "tenant_alpha",
+        collection: "rag_tenant_alpha_proj-1",
+        resource: "tenant_alpha/rag_tenant_alpha_proj-1",
+        riskLevel: "medium",
+        permission: { allowed: true },
+        approval: { required: false, status: "not_required" },
+      },
+      impact: {
+        requestedDeleteCount: 1,
+        matchedChunkCount: 1,
+        deletedChunkCount: 1,
+        remainingChunkCount: 0,
+        matchedSourceIds: ["tenant_alpha:doc-1"],
+        affectedProjectIds: ["proj-1"],
+        affectedSourceTypes: ["document"],
+      },
+      confirmation: {
+        confirmed: true,
+        protected: false,
+      },
+    });
+
+    const app = express();
+    app.use(express.json());
+    app.use(
+      "/api/rag/risk-actions",
+      createWebAigcRiskActionRouter({
+        vectorInsertAdapter: {
+          execute: insertMock,
+        } as any,
+        vectorDeleteAdapter: {
+          execute: deleteMock,
+        } as any,
+      }),
+    );
+
+    const server = createServer(app);
+    await new Promise<void>((resolve, reject) => {
+      server.listen(0, "127.0.0.1", (error?: Error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+
+    const address = server.address() as AddressInfo;
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    try {
+      const response = await fetch(`${baseUrl}/api/rag/risk-actions/vector-delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId: "agent-1",
+          token: "token-1",
+          namespace: "tenant_alpha",
+          target: {
+            ids: ["document:tenant_alpha:doc-1:0"],
+          },
+          confirmation: {
+            confirmed: true,
+          },
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.status).toBe("completed");
+      expect(deleteMock).toHaveBeenCalledTimes(1);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
 });
