@@ -56,6 +56,14 @@
 - 带来的后果
 - 受影响的 API 与存储模型
 
+## Web-AIGC 主线 Steering 索引
+
+以下文档用于记录 Web-AIGC 从“主线入口接线完成”转入“下一批主线收敛工作”的中文 steering 口径。它们属于 steering / 批次文档，不是正式 ADR。
+
+- `.kiro/steering/web-aigc-phase-2-integration-plan.md`：第二阶段总口径，说明已完成基线与下一阶段五条工作线
+- `.kiro/steering/web-aigc-next-phase-mainline-plan-2026-04-22.md`：下一阶段主线计划与优先级
+- `.kiro/steering/web-aigc-mainline-enhancement-batch-2026-04-23.md`：当前批次收口纪要与下一批执行项
+
 ## 相关 spec
 
 - `.kiro/specs/web-aigc-platform-domain-model/design.md`

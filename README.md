@@ -79,6 +79,18 @@ The runtime architecture SVG is available here:
 
 ---
 
+## Web-AIGC Mainline
+
+The Web-AIGC spec delivery baseline is closed at `58 / 58` completed specs and `238 / 238` checked top-level tasks, spanning `52` node specs and `6` platform specs. At this point, the project has moved from spec-count tracking into mainline integration, runtime hardening, and governance closure.
+
+- The runtime mainline already includes built-in adapters, installed extra adapters, wait/resume control flow, and replay/audit observability.
+- The main server entry already mounts multiple Web-AIGC route families, including MCP, Office/content nodes, search and QA, `transaction_flow`, `orchestration_recognition_jump`, and vector update/delete endpoints.
+- Mainline runtime coverage already includes search/QA adapters, Office/content production nodes such as `ai_ppt`, `excel_read`, `dynamic_chart`, `file_slicing`, `file_generation`, and `file_translation`, plus governed execution paths such as `transaction_flow` and `orchestration_recognition_jump`.
+
+For dated status snapshots and integration planning, see the steering docs linked in the documentation section below.
+
+---
+
 ## Runtime Modes
 
 The repo currently has three practical runtime targets:
@@ -225,6 +237,10 @@ If you want to start from key entrypoints, read these first:
 - [docs/executor/lobster-executor.md](./docs/executor/lobster-executor.md)
 - [.kiro/steering/execution-plan.md](./.kiro/steering/execution-plan.md)
 - [.kiro/steering/spec-execution-roadmap.md](./.kiro/steering/spec-execution-roadmap.md)
+- [.kiro/steering/web-aigc-58-plan-progress-summary-2026-04-22.md](./.kiro/steering/web-aigc-58-plan-progress-summary-2026-04-22.md)
+- [.kiro/steering/web-aigc-runtime-mainline-checkpoints-2026-04-23.md](./.kiro/steering/web-aigc-runtime-mainline-checkpoints-2026-04-23.md)
+- [.kiro/steering/web-aigc-phase-2-integration-plan.md](./.kiro/steering/web-aigc-phase-2-integration-plan.md)
+- [.kiro/steering/web-aigc-next-phase-mainline-plan-2026-04-22.md](./.kiro/steering/web-aigc-next-phase-mainline-plan-2026-04-22.md)
 - [.kiro/specs/](./.kiro/specs/)
 
 `README.md` is kept as stable product documentation for GitHub. Rolling progress, active implementation details, and dated execution notes belong in `ROADMAP.md`, `.kiro/steering/`, and the spec archives.

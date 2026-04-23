@@ -34,6 +34,15 @@
 - 推荐并发度控制在 `8 - 12` 条工作流
 - 不建议按 `58` 个 spec 一起开工
 
+## 2026-04-23 主线接线校准
+
+需要明确：
+
+- `58 / 58` 份 `web-aigc` specs 与 `238 / 238` 个顶层任务已全部完成，这是已经封板的事实。
+- 本文保留的 L0-L5 分层、能力簇和波次，主要用于说明“后续主线增强如何分批并行收口”，不再表示 spec 完成度。
+- 2026-04-23 主线已确认新增接线：`server/index.ts` 已挂载 `robot-reply`、`open-page`、`mcp`、`open-dashboard`、`web-search`、`web-qa`、`get-location-info`、`get-device-info`、`vector-update`、`vector-delete` 等入口；`server/routes/workflows.ts` 已挂载 `open-report` 子路由，并承载 `/api/workflows/:id/runtime/run`、`/api/workflows/:id/runtime/retry`、`/api/workflows/:id/runtime/escalate` 的 workflow runtime governance 控制链路；RAG `vectorStore` 已通过 `ragDeps` 暴露给 `/api/rag`、向量治理与风险动作路由。
+- 因此，文中“优先实现”“延后”“空白项”等表述，都应理解为主线补线优先级，不等同于“未启动”或“spec 未完成”。
+
 ## 执行原则
 
 ### 原则 1：先平台，后节点
@@ -192,7 +201,7 @@
 
 ### L5：宿主壳与次优先节点层
 
-这一层可以继续保留 spec，但实现优先级较低。
+这一层可以继续保留 spec 视角作为归档，但当前更适合以主线接线补齐而不是 spec 完成度判断优先级，其中 `open_page / open_report / open_dashboard / get_*` 已有主线入口或工作流子路由接线。
 
 包含：
 
@@ -249,7 +258,7 @@
 - `start` 已经具备入口输入归一、初始快照、mission/projection 传递闭环，后续以事件语义细化为主。
 - `end` 已经具备 runtime 终点适配器、`final_report` 收敛与 `workflow_complete` 事件，不再属于首轮“从 0 到 1”节点。
 - `condition` 已具备 runtime 内置适配器与异常表达式测试，后续以 replay / observability 细化为主。
-- `loop` 仍只有边类型与 observability 目录预留，没有节点级执行闭环，应保留为流程控制组里最优先实现的空白项。
+- `loop` 仍缺节点级执行闭环，应继续保留为流程控制组里最优先的主线补线项；该表述仅用于控制流增强排序，不影响 `58 / 58` specs 已封板的事实。
 
 ### 能力簇 B：人工输入组
 
@@ -381,6 +390,27 @@
 
 - `1 - 2` 条工作流
 
+## 2026-04-23 主线接线补充
+
+### 已接入主服务入口的能力补全
+
+- 已补全并确认主入口挂载：`mcp`、`robot-reply`、`open-page`、`open-dashboard`
+- 已补全并确认检索 / 问答入口：`web-search`、`web-qa`
+- 已补全并确认环境 / 设备入口：`get-location-info`、`get-device-info`
+- 已补全并确认向量治理入口：`vector-update`、`vector-delete`
+- 与前序已接入入口一起，当前主服务入口已覆盖：`ai-ppt`、`audio-recognition`、`dynamic-chart`、`excel-read`、`file-generation`、`file-slicing`、`file-translation`、`format-output`、`graph-search`、`image-search`、`intent-recognition`、`long-text-extraction`、`ocr-recognition`、`similarity-match`、`static-webpage-read`、`transaction-flow`、`orchestration-recognition-jump` 等能力
+- `open-report` 已由 `server/routes/workflows.ts` 以 `/api/workflows/open-report` 子路由接入主线，不经过独立一级入口，但已属于可调用的宿主动作路由
+- workflow runtime governance 已通过 `/api/workflows/:id/runtime/run` 的 `runtimeGovernance` 入参与 `/api/workflows/:id/runtime/retry`、`/api/workflows/:id/runtime/escalate` 控制路由接入主线
+- RAG `vectorStore` 已通过 `ragDeps` 暴露给 `/api/rag`、`/api/vector-update`、`/api/vector-delete` 与 `/api/rag/risk-actions`；`/api/rag/admin/health` 会返回 `vectorStore.connected`、`vectorStore.backend` 与 collection 视图
+
+### 已接入 runtime extra adapters 的能力补全
+
+- 知识 / 问答 / 检索：`knowledge_qa`、`qa_search`、`web_search`、`web_qa`
+- 工具 / 环境：`mcp`、`get_location_info`、`get_device_info`
+- 多模态 / 内容理解：`audio_recognition`、`graph_search`、`static_webpage_read`、`intent_recognition`、`long_text_extraction`、`ocr_recognition`、`similarity_match`
+- Office / content nodes：`ai_ppt`、`excel_read`、`dynamic_chart`、`image_search`、`file_slicing`、`file_translation`、`file_generation`
+- 高风险 / 业务动作 nodes：`transaction_flow`、`orchestration_recognition_jump`
+
 ## 推荐执行波次
 
 ## 第一波：平台骨架与直接价值节点
@@ -416,7 +446,7 @@
 2026-04-22 校准说明：
 
 - 这一波里 `start / end / condition` 在主仓已具备最小闭环，更适合作为“口径收紧、测试补强、事件细化”项推进。
-- `loop` 仍是控制流节点里最明显的实现空白，应继续保留在第二波的优先实现位。
+- `loop` 仍是控制流节点里最明显的主线补线项，应继续保留在第二波的优先实现位；这只表示补线顺序，不表示 spec 未完成。
 
 建议包含：
 

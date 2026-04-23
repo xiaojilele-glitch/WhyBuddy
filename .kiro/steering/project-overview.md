@@ -10,18 +10,22 @@
 
 ## inclusion: auto
 
-## 2026-04-15 增补：当前运行时快照
+## 2026-04-23 增补：当前运行时与 Web-AIGC 主线快照
 
-本页以下旧内容保持不动。本次仅新增一条当前口径补充：
+本页已经同步到 2026-04-23 的主线口径，旧阶段性文档继续保留用于历史追溯。当前需要优先记住以下事实：
 
 - 本地 Docker 可用时，完整链路走 `real`
 - 本地 Docker 不可用时，完整链路回退到 `native`
 - GitHub Pages 只走 Browser Runtime，不属于 executor 模式
+- `web-aigc` 已完成 `58 / 58` specs 与 `238 / 238` 顶层任务封板
+- 主服务入口已接入 Web-AIGC routes、runtime extra adapters、workflow runtime governance 与 RAG 向量治理链路
 
 详见：
 
 - `.kiro/steering/2026-04-15-runtime-current-state.md`
-- `docs/architecture-runtime-2026-04-15.svg`
+- `.kiro/steering/web-aigc-58-plan-progress-summary-2026-04-22.md`
+- `.kiro/steering/web-aigc-runtime-mainline-checkpoints-2026-04-23.md`
+- `docs/architecture-runtime-2026-04-21.svg`
 
 # Cube Pets Office 项目总览
 
@@ -42,12 +46,13 @@
 ## 项目规模
 
 - 850+ 文件 / ~180,000 行 TypeScript
-- `.kiro/specs` 当前共 66 个 spec 目录；详细完成态与近端规划以下方“当前进度快照（Spec 视角）”为准，其中 `workflow-artifacts-display` 已完成功能开发、待最终检查点
-- 当前活跃增量：任务控制台补完主线（取消 / 操作动作 / 详情首屏 / 文案 / UI 打磨）；`workflow-artifacts-display` 进入最终验收收口；办公室桌面体验收口继续沿 `office-cockpit-first-screen-refresh` → `office-wall-display-redesign` 演进
+- `web-aigc` 当前形成 `58 / 58` specs 封板基线，其中包含 `52` 个节点 specs 与 `6` 个平台 specs
+- `web-aigc` 顶层任务已完成 `238 / 238`，后续不再以“继续补 specs”作为主线推进指标
+- 当前活跃增量已经从 spec 勾选切换到主线增强：类型债清理、runtime adapter result 统一、observability / lineage 深化、HITL / Office 面板闭环、tools-and-agents 治理字段统一
 - 14 个 shared/ 契约模块，主线能力已覆盖前端、服务端、执行器、审计与互操作层
 - 大量单元测试与属性测试已覆盖 Mission、执行器、RAG、审计、NL Command 等核心域
 
-> 说明：本页以仓库当前 `tasks.md` 勾选状态和工作区代码为准；旧的阶段性计划文档保留用于历史追溯。
+> 说明：本页以 2026-04-23 主线接线后状态为准；旧的阶段性计划文档保留用于历史追溯，具体 Web-AIGC 封板口径见 `.kiro/steering/web-aigc-58-plan-progress-summary-2026-04-22.md`。
 
 ## 系统架构
 
@@ -121,6 +126,8 @@
 | 人工审批流        | 通用审批 + 决策链                                 |
 | 知识图谱          | 实体/关系/推理 + 可视化                           |
 | 向量 DB + RAG     | 7 步 Pipeline                                     |
+| Web-AIGC 主线入口 | 58 份 specs 封板，主服务入口已挂载节点路由与 runtime extra adapters |
+| Web-AIGC Runtime  | built-in + extra adapters + wait/resume + replay/audit observability |
 | 自然语言指挥中心  | NL→结构化命令，智能路由                           |
 | 自评估 + 竞争执行 | Agent 自我评估，竞争择优                          |
 | 信誉评分          | 历史表现积累与衰减                                |
@@ -139,47 +146,38 @@
 | Guest Agent 市场  | 外部 Agent 沙箱接入 + TTL                         |
 | 全息 UI 升级      | 毛玻璃拟态 + HoloDock + GlowButton + 呼吸光晕     |
 
-### 📍 当前进度快照（Spec 视角，2026-04-14）
+### 📍 当前进度快照（Web-AIGC 视角，2026-04-23）
 
-| 状态            | 数量 | 说明                                                                                |
-| --------------- | ---- | ----------------------------------------------------------------------------------- |
-| 已完成          | 41   | 已合并或 `tasks.md` 已全勾选的主线/扩展 spec，覆盖 L01-L30 与多项近端工作台收口能力 |
-| 开发中 / 待回归 / 规划中 | 15   | 含 `office-task-cockpit`、`workflow-artifacts-display`、`office-cockpit-first-screen-refresh`、`office-wall-display-redesign` 及若干仅剩验证项的 spec |
-| 未开始          | 9    | 第四层 L31-L38 与 `i18n-cleanup`                                                    |
-| 待补任务清单    | 1    | `frontend-demo-mode` 目录已存在，但尚未形成 `tasks.md`                              |
+| 维度 | 当前状态 | 说明 |
+| ---- | -------- | ---- |
+| specs 封板 | `58 / 58` | `52` 个节点 specs + `6` 个平台 specs 已完成 |
+| 顶层任务 | `238 / 238` | 仅统计 `web-aigc-* / tasks.md` 顶层 checklist |
+| 主服务入口 | 已接线 | `server/index.ts` 已挂载 Web-AIGC route 面与 runtime extra adapters 注册面 |
+| runtime 主线 | 已具备最小平台执行主干 | built-in adapters、extra adapters、wait/resume、audit/replay observability 已形成主线基线 |
+| RAG 与向量治理 | 已补线 | `metadataStore / vectorStore` 可被向量更新、删除与 risk-actions 复用 |
+| workflow 治理入口 | 已补线 | runtime governance 入参与 `open-report` 子路由已进入 `/api/workflows` |
 
-- `workflow-artifacts-display` 已完成 Artifact API、`tasks-store` 扩展、ArtifactListBlock / ArtifactPreviewDialog、页面集成与 Socket 联动；当前仅剩 `tasks.md` 的最终检查点未勾选。
-- `office-task-cockpit` 已进入开发中，桌面端办公室主壳、三栏驾驶舱、右侧上下文 tab 与统一双通道发起基础已落地；剩余回归、补测与桌面手测。
-- `office-cockpit-first-screen-refresh` 已进入近端规划，作为 `office-task-cockpit` 的桌面首屏体验收口项，聚焦“克制驾驶舱 + 主次分层 + 右侧渐进详情”。
-- `office-wall-display-redesign` 已完成 spec 建档，作为 `scene-mission-fusion`、`sandbox-live-preview` 与 `office-task-cockpit` 的后续场景化改造项，聚焦把后墙升级为“终端 / 任务 / 浏览器”三分区监控屏。
-- `/tasks` 继续保留为全屏工作台与深链页；当前任务真相源仍为 `tasks-store`，不改变 Mission 数据流。
-- `mission-runtime`、`multi-modal-vision`、`nl-command-center` 与 `state-persistence-recovery` 的剩余勾选项主要是历史尾项或补测任务，不代表主线能力缺失。
-- `state-persistence-recovery` 的未完成项主要集中在标记 `*` 的可选属性测试。
+- `web-aigc` spec 完成度已经封板，后续 steering 不再用“新增多少 specs / checklist”衡量主线进度。
+- 主服务入口已覆盖 MCP、搜索问答、Office / 内容生产、多模态识别、高风险动作、宿主打开动作、向量更新 / 删除等节点族。
+- runtime 主线已经形成 built-in、extra adapters、wait/resume、audit/replay 四个最小执行与治理层。
+- 当前后续重点是内部收敛：类型债、runtime adapter result、observability / lineage、HITL / Office 前端闭环、tools-and-agents 治理字段。
 
-### 📋 待收尾 / 待启动 / 待环境就绪
+### 📋 待收尾 / 待深化 / 待环境就绪
 
-| 模块                         | 依赖 / 备注                                                       |
-| ---------------------------- | ----------------------------------------------------------------- |
-| P0 `office-task-cockpit`     | 桌面端办公室主壳 + 三栏驾驶舱已落地，待补测试、兼容回归与桌面手测 |
-| P1 `office-cockpit-first-screen-refresh` | `office-task-cockpit` 的后续桌面首屏收口，聚焦主次关系、Scene HUD 与统一驾驶台 |
-| P1 `office-wall-display-redesign` | `scene-mission-fusion` + `sandbox-live-preview` + `office-task-cockpit` 的后续场景化显示改造 |
-| `workflow-artifacts-display` | 仅剩 `tasks.md` 最终检查点与验收收尾                              |
-| i18n-cleanup                 | 前端文案 / 国际化收口，独立排期                                   |
-| frontend-demo-mode           | 需先补 `tasks.md`，再确认依赖与范围                               |
-| L31 Docker Compose 生产部署  | L22                                                               |
-| L32 多人实时协作             | 无                                                                |
-| L33 多租户隔离               | L25 + L31                                                         |
-| L34 Agent 交易市场平台       | L30 + L19                                                         |
-| L35 K8s Agent Operator       | L31                                                               |
-| L36 边缘部署                 | L31                                                               |
-| L37 多区域灾备               | L31 + L35                                                         |
-| L38 VR 沉浸式扩展            | L03                                                               |
+| 模块 | 当前口径 |
+| ---- | -------- |
+| 类型债清理 | `node --run check` 仍有历史类型债，需按共享契约、runtime adapter、route contract 分批收口 |
+| runtime adapter result 统一 | 需要统一 `success / blocked / needs_approval / failed` 与 `output / audit / lineage / error` 结果壳 |
+| observability / lineage 深化 | 需要把节点执行、工具调用、向量写路径、`open-report` 与 audit trail 串成统一证据链 |
+| HITL / Office 面板闭环 | 需要对齐 `DecisionPanel / DecisionHistory / tasks-store / mission-client` 与主线 runtime 投影 |
+| tools-and-agents 治理字段统一 | 需要对账 `a2a / auto-agent / internal_api / guest-agents / skills / mcp` 的 actor、source、policy、approval、audit、lineage 字段 |
+| 发布与部署扩展 | Docker Compose、多人协作、多租户、K8s Operator、边缘部署、多区域灾备、VR 等仍属于后续扩展层 |
 
 ## 工程健康快照
 
-- 当前近端增量集中在 `office-task-cockpit` 的回归/补测与 `workflow-artifacts-display` 的最终检查点验收。
-- `npm run check` 当前仍有 30 个 TypeScript 错误，主要分布在 lineage 可视化、NL Command、workflow-engine 桥接与 `server/index.ts` 等历史模块。
-- 后续增量工作建议以“不扩大现有 TypeScript 基线错误数”为最低要求，并单独安排一轮编译清债。
+- 当前近端增量集中在 Web-AIGC 主线接线后的内部收敛，不再集中在 spec 数量增长。
+- `node --run check` 当前仍有历史 TypeScript 类型债，主要分布在 HITL 附件类型、runtime extra adapter result、guest-agents、NL Command、command-list / recommended-commands node adapter、risk-actions 和 MCP tool adapter 等区域。
+- 后续增量工作建议以“不扩大现有 TypeScript 基线错误数”为最低要求，并单独安排一轮类型清债。
 
 ## 核心数据流
 
@@ -406,7 +404,7 @@ cube-pets-office/
     ├── steering/                    # 引导文件
     │   ├── project-overview.md      # 本文件
     │   └── execution-plan.md        # 执行计划与依赖分析
-    └── specs/                       # 50 个模块 Spec 归档
+    └── specs/                       # Spec 归档；Web-AIGC 58 份 specs 已封板
 ```
 
 ## REST API 总览
@@ -470,6 +468,18 @@ cube-pets-office/
 | GET  | /api/cost/\*       | 成本数据查询    |
 | GET  | /api/reputation/\* | 信誉评分查询    |
 
+### Web-AIGC 主线入口
+
+| 能力组 | 主要路径 | 说明 |
+| ------ | -------- | ---- |
+| 对话与回复 | `/api/chat`、`/api/robot-reply` | 对话节点、机器人回复与 runtime `documentSearch` 注入入口 |
+| MCP 与工具 | `/api/mcp` | MCP 节点执行入口，复用 `McpChecker`、`McpToolAdapter` 与 `InternalMcpToolInvoker` |
+| 搜索与问答 | `/api/web-search`、`/api/web-qa`、`/api/graph-search` | Web 搜索、网页问答、图谱检索与知识问答相关接线 |
+| Office / 内容生产 | `/api/ai-ppt`、`/api/dynamic-chart`、`/api/excel-read`、`/api/file-generation`、`/api/file-slicing`、`/api/file-translation`、`/api/format-output` | PPT、图表、Excel、文件生成 / 切片 / 翻译与格式化输出 |
+| 多模态与内容理解 | `/api/audio-recognition`、`/api/image-search`、`/api/intent-recognition`、`/api/long-text-extraction`、`/api/ocr-recognition`、`/api/similarity-match`、`/api/static-webpage-read` | 语音、图像、意图、长文本、OCR、相似度与静态网页读取 |
+| 高风险与控制动作 | `/api/transaction-flow`、`/api/orchestration-recognition-jump`、`/api/vector-update`、`/api/vector-delete`、`/api/rag/risk-actions` | 事务流、编排识别跳转、向量更新 / 删除与 RAG 风险动作 |
+| 宿主动作与环境信息 | `/api/open-page`、`/api/open-dashboard`、`/api/get-location-info`、`/api/get-device-info`、`/api/workflows/open-report` | 打开页面、仪表盘、位置 / 设备信息与开放报告 |
+
 ### 飞书
 
 | 方法 | 路径                | 说明                |
@@ -479,7 +489,7 @@ cube-pets-office/
 
 ## 开发规范
 
-- TypeScript 严格模式，`npm run check` 必须通过
+- TypeScript 严格模式仍是目标；当前 `node --run check` 仍有历史类型债，新增改动应避免扩大错误面，并优先补定向测试
 - 智能体工作空间隔离：`server/core/access-guard.ts` 强制路径校验，拒绝 `..` 遍历
 - 消息总线层级约束：CEO ↔ Manager ↔ Worker 不允许越级，规则在 `shared/message-bus-rules.ts`
 - `.env` 为唯一配置真源，前端配置面板只读
@@ -507,9 +517,9 @@ cube-pets-office/
 ## 常用命令
 
 ```bash
-npm run dev:frontend   # 只启动前端（纯体验，不需要 .env）
-npm run dev:all        # 启动前端 + 服务端（完整模式）
-npm run dev:stop       # 停止本地开发进程
-npm run build:pages    # 构建 GitHub Pages 静态产物
-npm run check          # TypeScript 类型检查
+pnpm run dev:frontend   # 只启动前端（纯体验，不需要 .env）
+pnpm run dev:all        # 启动前端 + 服务端（完整模式）
+pnpm run dev:stop       # 停止本地开发进程
+pnpm run build:pages    # 构建 GitHub Pages 静态产物
+node --run check        # TypeScript 类型检查；当前仍有历史类型债
 ```

@@ -2,178 +2,105 @@
 
 更新时间：2026-04-23
 
-## 主线基线声明
+## 主线状态声明
 
-进入本阶段前，先明确一个统一口径：
+当前主线已经完成入口级接线，下一阶段直接进入主线收敛。
+
+以下内容统一作为已完成基线，不再列为下一阶段待办：
 
 - `58 / 58` 份 `web-aigc` specs 已全部完成
 - `238 / 238` 个顶层任务已全部勾选完成
-- spec 完成度已经封板，后续不再把“再完成多少份 spec”作为主线目标
+- `workflow runtime governance routes` 已进入主仓路由层
+- `open-report` route 已进入主仓服务端入口
+- main server 的 Web-AIGC route mounting 已完成
+- RAG `vectorStore` exposure 已完成
+- chat 运行时 `documentSearch` injection 已完成
+- MCP checker、tool adapter 与 mainline runtime registration 已完成
+- vector update / delete 的 risk action wiring 已完成
 
-因此，这份计划不是新的 spec 计划，而是基于既有 specs 基线继续推进主仓增强的主线计划。
+这意味着下一阶段不再解决“入口有没有接上”，而是解决“主线内部口径有没有收拢”。
 
-## 当前收口结果
+## 下一阶段优先级
 
-当前主线已经完成以下动作，并可作为下一阶段起点：
+### P0：类型边界与结果类型收敛
 
-- 把 `risk-actions` 的命名空间 collection、`sourceId` 作用域、路由状态码和测试补齐到本地 `main`
-- 把 `platform-b` 的 `mission / workflow / session / projection` 补线收回到本地 `main`
-- 把 `dialogue-qa` 的 `chat / knowledge` 节点执行入口补齐到本地 `main`
-- 把 `hitl-session` 的 metadata 契约、服务端决策链路和测试补齐到本地 `main`
-- 把 `dialogue` runtime 的 injected `documentSearch` 接线补进主线运行时，`dialogue` 内建 adapter 可直接消费 runtime 注入的检索执行器
-- 把 `mcp` runtime 的 global registration 补进共享 `web-aigc` 运行时注册表，`mcp` 节点可直接进入主线 `webAigcRuntimeEngine`
-- 完成定向 `vitest` 验证与 `node --run check`
-- 清理上一轮 `web-aigc` worktree，并保留必要残差备份以便追溯
+- 清理 `server / shared / runtime / route contract` 之间的类型债
+- 统一 runtime adapter result 的状态、输出、错误和治理字段
+- 优先消除 `any`、宽松 union 和重复结果结构
 
-## 本轮新增的主线增强
+本阶段完成信号：
 
-除上面的既有收口项外，本轮新增并已确认的两条主线增强如下：
+- 主线关键入口的类型边界稳定
+- route、runtime、监控、面板看到的是同一套结果类型
 
-1. `dialogue runtime injected documentSearch`
-   - 运行时内建 `dialogue` adapter 已支持从 runtime 注入 `documentSearch` 执行器
-   - `dialogue` 节点可在主线 workflow runtime 中直接发起检索增强，而不是只依赖路由层外部注入
-   - 定向证据：
-     - `server/core/workflow-runtime-engine.ts`
-     - `server/tests/workflow-runtime-engine.test.ts`
-     - 用例：`lets the runtime built-in dialogue adapter use an injected documentSearch executor`
+### P1：`observability / lineage` 深化
 
-2. `mcp runtime global registration`
-   - `mcp` 已进入共享 `web-aigc` runtime extra adapters 注册表
-   - 通过 `registerWebAigcRuntimeExtraAdapters({ executeMcp })` 可把 `mcp` 节点接入 `webAigcRuntimeEngine`
-   - 定向证据：
-     - `server/core/web-aigc-runtime-extra-adapters.ts`
-     - `server/index.ts`
-     - `server/tests/workflow-runtime-engine.test.ts`
-     - 用例：`can register mcp runtime execution through the shared global adapter registry`
+- 打通 execution record、audit trail、runtime trace 与 `open-report`
+- 让节点执行、工具调用、向量更新 / 删除拥有统一谱系字段
+- 把报告、治理判断与执行轨迹串成一条可追溯链
 
-## 下一阶段目标
+本阶段完成信号：
 
-下一阶段统一转入“主仓主线增强模式”：
+- 任一条主线执行都能回溯到 route、adapter、checker、report
+- 向量写路径不再脱离主线观测面
 
-1. 以 `main` 为唯一集成主线，减少多分支和多 worktree 残差继续累积
-2. 对尚未完全收口的 `platform-c / tools-and-agents / risk-actions / controlflow / platform-a` 热区做对账式补差
-3. 把已经进入主仓的 `workflow runtime / mission projection / audit governance / node adapters` 打通为更稳定的主线闭环
-4. 逐步把前端 HITL、监控面板、Office 上下文面板和任务面板统一到同一套 runtime 语义
+### P2：HITL / Office 面板闭环
 
-这里的“下一阶段目标”强调的是主线能力增强，而不是 spec 数量继续增长。
+- 统一 HITL 决策、恢复执行、状态刷新与 Office 面板的数据来源
+- 对齐 `DecisionPanel / DecisionHistory / tasks-store / mission-client`
+- 让 Office、监控面板、任务面板共用一套 `session / projection / report` 语义
 
-并且从当前基线开始，`dialogue` 的检索增强接线与 `mcp` 的 runtime 全局注册都已经算作已完成的主线前置能力，后续关注点转为稳定性、治理一致性与更大范围对账。
+本阶段完成信号：
 
-## 优先级顺序
+- 人工确认、回写、恢复执行形成完整闭环
+- Office 面板不再依赖临时兼容字段
 
-### P0：主仓稳定性与治理补线
+### P3：`tools-and-agents` 治理字段统一
 
-- 收口 `platform-c`：权限治理、审计事件、策略门禁
-- 收口 `tools-and-agents`：`a2a / auto_agent / internal_api / guest-agents / skills`
-- 收口 `risk-actions`：继续和 `server/index.ts`、RAG 初始化、治理钩子对账
+- 对账 `a2a / auto-agent / internal_api / guest-agents / skills / mcp`
+- 统一 `actor`、`source`、`approval`、`policy`、`timeout`、`audit`、`lineage` 字段
+- 让 checker、tool adapter、route 与 runtime 使用同一套治理命名
 
-### P1：图运行时与控制流主干
+本阶段完成信号：
 
-- 继续对齐 `platform-a` 与 `controlflow`
-- 统一 `workflow-runtime-engine / workflow-graph-projection / workflow-domain`
-- 补齐 runtime state、checkpoint、resume 的端到端回归
+- 工具与代理链路可以跨入口并排对账
+- 不再因为入口不同而产生不同治理字段
 
-### P2：交互链路与前端闭环
+## 推荐批次
 
-- 收口 `hitl-session` 前端差异
-- 回收 `DecisionPanel / DecisionHistory / tasks-store / mission-client`
-- 把 Office 面板和 Web-AIGC 面板统一到同一套 session / projection 来源
+建议按下面顺序推进：
 
-### P3：整体验证与发布准备
+1. 先做类型债清理。
+2. 再统一 runtime adapter result。
+3. 随后补深 `observability / lineage`。
+4. 然后完成 HITL / Office 面板闭环。
+5. 最后统一 `tools-and-agents` 治理字段。
 
-- 跑更完整的服务端回归
-- 检查客户端兼容面板回归
-- 持续整理中文 steering 文档
-- 视情况推送远端并准备下一轮主线合并
+## 执行约束
 
-## 下一阶段执行批次
+- 以 `main` 为唯一集成主线
+- 不再把 spec 增量写入计划目标
+- 不再把新一轮 route mounting 当作下一阶段核心成果
+- 每一批必须留下可复核产物：实现、定向验证、中文 steering 更新
 
-为避免再次进入“开很多 worktree 但主仓迟迟不收口”的状态，下一阶段继续采用 `main` 主线批次推进，按下面 4 个批次执行：
+## 非目标
 
-### 批次 A：治理与门禁补齐
+下一阶段明确不包含下面内容：
 
-目标是先把高风险能力依赖的审计、权限、回放门禁补完整，再放开后续热区接入。
-
-- 补齐 `platform-c` 中 `audit / permissions / lineage / replay` 的主仓实现与测试
-- 对齐 `server/routes/*` 中与治理能力相关的挂载入口
-- 统一高风险动作的事件命名、审计字段和拒绝原因结构
-
-完成标准：
-
-- 高风险节点接入前，已有统一 permission check 和 audit trail
-
-### 批次 B：工具与外部调用主干
-
-目标是把 `tools-and-agents` 这条主干先收拢成可控接口，而不是继续分散在不同适配层中。
-
-- 对账 `a2a / auto_agent / internal_api / guest-agents / skills`
-- 明确工具调用的输入输出契约、错误结构和宿主能力边界
-- 统一消息通知、内部 API、外部代理调用的治理钩子
-
-完成标准：
-
-- 工具调用链路全部能挂到统一 runtime 和治理链路下
-
-### 批次 C：运行时与控制流归并
-
-目标是把 `platform-a` 与 `controlflow` 热区收回到统一 runtime 语义中，减少后续节点接入时反复改内核。
-
-- 统一 `workflow-runtime-engine / workflow-graph-projection / workflow-domain`
-- 补齐 `checkpoint / resume / transition / branch / loop` 的主仓回归
-- 对齐控制流节点在 graph execution record 中的状态表达
-
-完成标准：
-
-- 至少一条带条件分支和恢复能力的图链路可稳定回放
-
-### 批次 D：HITL 与 Office 面板闭环
-
-目标是把前端交互层和主仓 runtime 投影打通，形成可演示闭环，而不是只有服务端接口到位。
-
-- 回收 `DecisionPanel / DecisionHistory / tasks-store / mission-client` 差异
-- 统一 Office 面板、监控面板、任务面板的 session / projection 来源
-- 校验人工确认、恢复执行、状态刷新在前端链路中的一致性
-
-完成标准：
-
-- HITL 决策链路可从界面发起、回写、恢复，并在监控面板中看到
-
-## 批次执行顺序
-
-建议按 `A -> B -> C -> D` 推进，其中：
-
-- `A` 是 `B` 和高风险节点继续推进的前置条件
-- `B` 和 `C` 可以局部交错推进，但最终都要落回统一 runtime 契约
-- `D` 放在后面，是为了避免前端先固化一套和主仓不一致的语义
-
-## 主仓推进规则
-
-从这一阶段开始，默认采用以下规则：
-
-- 不再为单个 spec 长时间保留独立 worktree
-- 不再把“新增 spec 数量”作为主线进度指标
-- 新改动优先直接在 `main` 上按小批次收口
-- 每个批次先补测试，再改热文件
-- 每个批次结束都要留下可复核的通过项：测试、中文文档、主仓提交、闭环能力说明
-- 已经进入主线基线的增强项，需要在 steering 中明确写明“能力名称 + 接线位置 + 定向测试证据”
-- 进度统计不再看“还有多少 worktree”，而看 `main` 上已经通过验证的提交与能力闭环
+- 再新增多少份 spec
+- 再新增多少份 checklist
+- 再开多少 worktree 来承载入口接线
 
 ## 验收口径
 
-下一阶段是否推进成功，统一按下面标准判断：
+下一阶段是否推进成功，统一按以下标准判断：
 
-- 是否新增了主仓可验证的能力闭环
-- 是否减少了 runtime、治理和工具调用上的双轨语义
-- 是否补齐了高风险动作依赖的权限、审计、回放链路
-- 是否让 HITL、监控面板、Office 面板逐步使用同一套主线数据来源
+- 类型债是否明显下降
+- runtime adapter result 是否完成统一
+- `observability / lineage` 是否能覆盖节点、工具与向量写路径
+- HITL / Office 是否形成真实闭环
+- `tools-and-agents` 是否完成治理字段统一
 
-明确不再采用下面这些口径作为主要判断标准：
+## 结论
 
-- 又新增了多少份 spec
-- 又新增了多少份任务清单
-- 还保留了多少个 worktree
-
-## 备注
-
-- 上一轮清理前，所有 `web-aigc` worktree 的脏内容都已单独备份到本地目录，便于后续追溯
-- 下一阶段默认不再依赖“看 worktree 是否还在”来判断进度，而以 `main` 分支中的已验证提交为准
+下一阶段计划的核心不是“继续补文档”，而是“把已经接上的主线能力收成同一套可维护、可观测、可闭环的内部口径”。
