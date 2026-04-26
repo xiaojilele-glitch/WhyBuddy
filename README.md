@@ -11,7 +11,7 @@
 
 <p align="center">
   <strong>Task Autopilot / 任务自动驾驶平台 for AI agents</strong><br/>
-  Enter a destination, inspect the route, let the system execute what is safe, and take over when human judgment is required.
+  Cube Pets Office is a Task Autopilot platform for complex work: enter a destination, inspect the route, let the system execute what is safe, and take over when human judgment is required.
 </p>
 
 <p align="center">
@@ -34,7 +34,7 @@
 
 Cube Pets Office is evolving from a mission-first task operating system into a Task Autopilot platform.
 
-It is not a chat playground where the main artifact is an answer. It is not only a workflow builder where users must manually draw every node. The product direction is to let a user state a goal, then make the task lifecycle visible and controllable:
+It is not a chat playground where the main artifact is an answer. It is not only a workflow builder where users must manually draw every node. It is also not an agent platform whose main value is browsing agent, tool, or plugin catalogs. The product direction is to let a user state a goal, then make the task lifecycle visible and controllable:
 
 - understand the intended destination and missing context
 - recommend an executable route instead of exposing every low-level node first

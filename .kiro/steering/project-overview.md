@@ -36,6 +36,8 @@
 
 ## 项目定位
 
+一句话定义：`Cube Pets Office` 是一个面向复杂任务的任务自动驾驶平台：用户输入目标、查看路线，让系统执行安全部分，并在人类判断必需时接管。
+
 Cube Pets Office 当前对内定义为：建立在 `mission-first` 底座上的 `task autopilot` 任务自动驾驶平台。
 
 `mission-first` 任务操作系统是当前已经落地的工程底座：用户不是触发零散工具调用，而是在创建和推进一个 Mission；系统不是返回单轮答案，而是围绕 Mission 组织 Workflow、Runtime、Agent、HITL、Review、Replay、Audit、Lineage 与交付物。任务工作台、`tasks-store`、Mission Runtime、十阶段工作流、Docker executor、浏览器运行时、审计链与回放能力共同构成这层底座。
@@ -43,6 +45,7 @@ Cube Pets Office 当前对内定义为：建立在 `mission-first` 底座上的 
 `task autopilot` 任务自动驾驶平台是在此基础上的产品升级方向：用户输入的是“目的地”而不是单次 prompt；系统生成的是“路线”而不是只给工程侧看的 workflow；Agent / 节点 / 工具被组织成可解释的“车队”；运行过程被呈现为“驾驶状态”；人工确认、澄清、审批和异常处理被统一表达为“接管点”。这不是推翻现有实现，也不是把底层对象立即改名，而是在现有主干之上增加一层面向用户、协作者和后续产品化的稳定语义。
 
 这样定义的原因是：当前仓库已经具备 Mission Runtime、workflow runtime、wait/resume、HITL、replay、audit、lineage、Web-AIGC 节点接线、RAG 治理和真实 / 浏览器双运行时等基础能力，继续称为“多智能体可视化平台”会低估主线；但直接承诺开放域全自动又会掩盖治理、接管和证据链的重要性。因此本项目应表达为“任务自动驾驶”：默认自动规划和执行，但必须可解释、可回放、可审计、可接管。
+同样，它也不应被收缩成“Agent Platform / 能力市场”的口径：Agent、工具与节点是完成任务的车队编组资源，而不是对外主卖点；对外主价值仍是任务送达、过程治理与结果可信。
 
 ## 技术栈
 
