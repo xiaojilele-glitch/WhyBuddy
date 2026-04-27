@@ -96,6 +96,8 @@ const DETAIL_INSET_SOFT_CLASS =
   "workspace-panel-inset rounded-[10px] border border-[var(--workspace-panel-border)] bg-[rgba(255,255,255,0.62)]";
 const DETAIL_TEXTAREA_CLASS =
   "border-[var(--workspace-panel-border)] bg-[rgba(255,255,255,0.68)] text-[11px] text-stone-700 min-h-[60px]";
+const DETAIL_STATUS_CHIP_CLASS =
+  "min-w-0 max-w-full whitespace-normal break-words leading-4";
 
 function workPackageProgress(status: string): number {
   return WORK_PACKAGE_PROGRESS[status] || 12;
@@ -786,20 +788,42 @@ export function TaskDetailView({
               <div key={task.id} className={cn(DETAIL_INSET_CLASS, "p-3.5")}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap gap-2">
-                      <span className="workspace-status workspace-tone-neutral bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-stone-700">
+                    <div
+                      className="flex min-w-0 flex-wrap gap-2"
+                      data-overflow-guard="work-package-status-chip-wrap"
+                      data-testid="task-detail-work-package-status-chips"
+                    >
+                      <span
+                        className={cn(
+                          DETAIL_STATUS_CHIP_CLASS,
+                          "workspace-status workspace-tone-neutral bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-stone-700"
+                        )}
+                      >
                         #{task.id}
                       </span>
-                      <span className="workspace-status workspace-tone-neutral bg-white/80 px-2.5 py-1 text-[11px] text-stone-600">
+                      <span
+                        className={cn(
+                          DETAIL_STATUS_CHIP_CLASS,
+                          "workspace-status workspace-tone-neutral bg-white/80 px-2.5 py-1 text-[11px] text-stone-600"
+                        )}
+                      >
                         {task.department}
                       </span>
-                      <span className="workspace-status workspace-tone-neutral bg-white/80 px-2.5 py-1 text-[11px] text-stone-600">
+                      <span
+                        className={cn(
+                          DETAIL_STATUS_CHIP_CLASS,
+                          "workspace-status workspace-tone-neutral bg-white/80 px-2.5 py-1 text-[11px] text-stone-600"
+                        )}
+                      >
                         v{task.version}
                       </span>
                       <span
                         className={workspaceStatusClass(
                           workPackageTone(task.status),
-                          "px-2.5 py-1 text-[11px] font-medium"
+                          cn(
+                            DETAIL_STATUS_CHIP_CLASS,
+                            "px-2.5 py-1 text-[11px] font-medium"
+                          )
                         )}
                       >
                         {localizedTaskStatus(copy, task.status)}
@@ -811,19 +835,36 @@ export function TaskDetailView({
                         118
                       )}
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div
+                      className="mt-2 flex min-w-0 flex-wrap gap-2"
+                      data-overflow-guard="work-package-metric-chip-wrap"
+                      data-testid="task-detail-work-package-metric-chips"
+                    >
                       <span
                         className={workspaceStatusClass(
                           "info",
-                          "px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                          cn(
+                            DETAIL_STATUS_CHIP_CLASS,
+                            "px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                          )
                         )}
                       >
                         {copy.tasks.detailView.progressLabel(progressValue)}
                       </span>
-                      <span className="workspace-status workspace-tone-neutral bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+                      <span
+                        className={cn(
+                          DETAIL_STATUS_CHIP_CLASS,
+                          "workspace-status workspace-tone-neutral bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600"
+                        )}
+                      >
                         {copy.tasks.detailView.scoreLabel} {scoreValue}
                       </span>
-                      <span className="workspace-status workspace-tone-neutral bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+                      <span
+                        className={cn(
+                          DETAIL_STATUS_CHIP_CLASS,
+                          "workspace-status workspace-tone-neutral bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600"
+                        )}
+                      >
                         {reviewState}
                       </span>
                     </div>
@@ -1106,7 +1147,9 @@ export function TaskDetailView({
         <DetailTabViewport isDesktop={isDesktop} autoHeight={autoHeight}>
           {showCockpitDecisionSection ? decisionsWorkspace : null}
           <TaskPlanetInterior detail={detail} compact />
-          <TaskAutopilotPanel detail={detail} />
+          <section data-testid="task-detail-cockpit-autopilot-three-column">
+            <TaskAutopilotPanel detail={detail} />
+          </section>
           {sourceDirectivePanel}
           {securitySummaryPanel}
           {detail.tasks.length > 0 ? workPackagesPanel : null}

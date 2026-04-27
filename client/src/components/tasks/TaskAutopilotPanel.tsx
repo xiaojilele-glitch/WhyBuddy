@@ -1,4 +1,5 @@
 import { Sparkles } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { useI18n } from "@/i18n";
 import type { MissionTaskDetail } from "@/lib/tasks-store";
@@ -10,6 +11,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { AutopilotCockpitLayout } from "./AutopilotCockpitLayout";
+import {
+  AutopilotFleetLiveView,
+  type AutopilotFleetRole,
+  type AutopilotFleetRoleCard,
+  type AutopilotFleetRoleStatus,
+} from "./AutopilotFleetLiveView";
+import {
+  AutopilotTakeoverControlPanel,
+  type AutopilotTakeoverItem,
+} from "./AutopilotTakeoverControlPanel";
 
 const PANEL_CLASS = "workspace-panel rounded-[16px]";
 const BLOCK_CLASS =
@@ -29,18 +41,22 @@ type ParsedAutopilotSummary = {
   execution?: AutopilotBlock | null;
   driveState?: AutopilotBlock | null;
   fleet?: AutopilotBlock | null;
+  fleetRoles?: AutopilotFleetRoleCard[];
+  fleetLegacyText?: string | null;
   blockers?: AutopilotBlock | null;
   recovery?: AutopilotBlock | null;
   outputs?: AutopilotBlock | null;
   evidence?: AutopilotBlock | null;
   explanation?: AutopilotBlock | null;
   takeover?: AutopilotBlock | null;
+  takeoverItems?: AutopilotTakeoverItem[];
+  decision?: AutopilotBlock | null;
+  costRisk?: AutopilotBlock | null;
 };
 
 function isZhLocale(locale: string): boolean {
   return locale.toLowerCase().startsWith("zh");
 }
-
 function t(locale: string, zh: string, en: string): string {
   return isZhLocale(locale) ? zh : en;
 }
@@ -170,6 +186,11 @@ function textListFromValue(value: unknown): string[] {
             "title",
             "name",
             "summary",
+            "value",
+            "item",
+            "text",
+            "question",
+            "objective",
             "detail",
             "filename",
             "fileName",
@@ -250,7 +271,7 @@ function formatCountSummary(
 ): string {
   return t(
     locale,
-    `${count} 个${zhUnit}`,
+    `${count} ${zhUnit}`,
     `${count} ${count === 1 ? enSingular : enPlural}`
   );
 }
@@ -290,15 +311,15 @@ function localizeRouteStatus(locale: string, value: string): string {
 function localizeRouteSelectionStatus(locale: string, value: string): string {
   switch (value.trim().toLowerCase()) {
     case "recommended":
-      return t(locale, "系统推荐", "Recommended");
+      return t(locale, "Recommended", "Recommended");
     case "alternatives-available":
-      return t(locale, "可切换候选路线", "Alternatives Available");
+      return t(locale, "Alternatives Available", "Alternatives Available");
     case "user-selected":
-      return t(locale, "人工已选择", "User Selected");
+      return t(locale, "User Selected", "User Selected");
     case "locked":
-      return t(locale, "已锁定", "Locked");
+      return t(locale, "Locked", "Locked");
     case "replanned":
-      return t(locale, "已重规划", "Replanned");
+      return t(locale, "Replanned", "Replanned");
     default:
       return formatKeyLabel(value);
   }
@@ -307,13 +328,13 @@ function localizeRouteSelectionStatus(locale: string, value: string): string {
 function localizeRouteSelectionMode(locale: string, value: string): string {
   switch (value.trim().toLowerCase()) {
     case "planner_default":
-      return t(locale, "规划器默认", "Planner Default");
+      return t(locale, "Planner Default", "Planner Default");
     case "user_selected":
-      return t(locale, "人工指定", "User Selected");
+      return t(locale, "User Selected", "User Selected");
     case "runtime_replanned":
-      return t(locale, "运行时重规划", "Runtime Replanned");
+      return t(locale, "Runtime Replanned", "Runtime Replanned");
     case "system_downgraded":
-      return t(locale, "系统降级切线", "System Downgraded");
+      return t(locale, "System Downgraded", "System Downgraded");
     default:
       return formatKeyLabel(value);
   }
@@ -322,13 +343,13 @@ function localizeRouteSelectionMode(locale: string, value: string): string {
 function localizeRouteChangeActor(locale: string, value: string): string {
   switch (value.trim().toLowerCase()) {
     case "planner":
-      return t(locale, "规划器", "Planner");
+      return t(locale, "Planner", "Planner");
     case "user":
-      return t(locale, "用户", "User");
+      return t(locale, "User", "User");
     case "runtime":
-      return t(locale, "运行时", "Runtime");
+      return t(locale, "Runtime", "Runtime");
     case "operator":
-      return t(locale, "操作员", "Operator");
+      return t(locale, "Operator", "Operator");
     default:
       return formatKeyLabel(value);
   }
@@ -337,21 +358,46 @@ function localizeRouteChangeActor(locale: string, value: string): string {
 function localizeDestinationTaskType(locale: string, value: string): string {
   switch (value.trim().toLowerCase()) {
     case "analysis":
-      return t(locale, "分析型", "Analysis");
+      return t(locale, "Analysis", "Analysis");
     case "research":
-      return t(locale, "研究型", "Research");
+      return t(locale, "Research", "Research");
     case "generation":
-      return t(locale, "生成型", "Generation");
+      return t(locale, "Generation", "Generation");
     case "transformation":
-      return t(locale, "改造型", "Transformation");
+      return t(locale, "Transformation", "Transformation");
     case "implementation":
-      return t(locale, "实现型", "Implementation");
+      return t(locale, "Implementation", "Implementation");
     case "coordination":
-      return t(locale, "协作审批型", "Coordination");
+      return t(locale, "Coordination", "Coordination");
     case "mixed":
-      return t(locale, "复合型", "Mixed");
+      return t(locale, "Mixed", "Mixed");
     case "unknown":
-      return t(locale, "未定型", "Unknown");
+      return t(locale, "Unknown", "Unknown");
+    default:
+      return formatKeyLabel(value);
+  }
+}
+
+function localizeDestinationLockState(locale: string, value: string): string {
+  switch (value.trim().toLowerCase().replace(/[\s_]+/g, "-")) {
+    case "locked":
+    case "confirmed":
+    case "goal-locked":
+      return t(locale, "Goal Locked", "Goal Locked");
+    case "modified":
+    case "changed":
+    case "updated":
+      return t(locale, "Goal Modified", "Goal Modified");
+    case "needs-reconfirm":
+    case "needs-reconfirmation":
+    case "needs-clarification":
+    case "requires-confirmation":
+    case "missing-info":
+      return t(locale, "Needs Reconfirmation", "Needs Reconfirmation");
+    case "unconfirmed":
+    case "draft":
+    case "pending":
+      return t(locale, "Awaiting Lock", "Awaiting Lock");
     default:
       return formatKeyLabel(value);
   }
@@ -360,13 +406,13 @@ function localizeDestinationTaskType(locale: string, value: string): string {
 function localizeRouteEvidenceEventType(locale: string, value: string): string {
   switch (value.trim().toLowerCase()) {
     case "route.recommended":
-      return t(locale, "已生成推荐路线", "Route Recommended");
+      return t(locale, "Route Recommended", "Route Recommended");
     case "route.selected":
-      return t(locale, "已选择路线", "Route Selected");
+      return t(locale, "Route Selected", "Route Selected");
     case "route.locked":
-      return t(locale, "路线已锁定", "Route Locked");
+      return t(locale, "Route Locked", "Route Locked");
     case "route.replanned":
-      return t(locale, "路线已重规划", "Route Replanned");
+      return t(locale, "Route Replanned", "Route Replanned");
     default:
       return formatKeyLabel(value);
   }
@@ -503,13 +549,13 @@ function localizeRecoveryState(locale: string, value: string): string {
     case "healthy":
       return t(locale, "健康", "Healthy");
     case "watching":
-      return t(locale, "监测中", "Watching");
+      return t(locale, "Watching", "Watching");
     case "recovering":
-      return t(locale, "恢复中", "Recovering");
+      return t(locale, "Recovering", "Recovering");
     case "takeover-required":
-      return t(locale, "需要接管", "Takeover Required");
+      return t(locale, "Takeover Required", "Takeover Required");
     case "escalated":
-      return t(locale, "已升级", "Escalated");
+      return t(locale, "Escalated", "Escalated");
     default:
       return formatKeyLabel(value);
   }
@@ -530,7 +576,7 @@ function localizeDeviationCategory(locale: string, value: string): string {
     case "dependency-failure":
       return t(locale, "依赖失败", "Dependency Failure");
     case "state-block":
-      return t(locale, "状态阻塞", "State Block");
+      return t(locale, "State Block", "State Block");
     case "recovery-exhausted":
       return t(locale, "恢复耗尽", "Recovery Exhausted");
     default:
@@ -541,13 +587,13 @@ function localizeDeviationCategory(locale: string, value: string): string {
 function localizeEvidenceTrust(locale: string, value: string): string {
   switch (value.trim().toLowerCase()) {
     case "verified":
-      return t(locale, "已验证", "Verified");
+      return t(locale, "Verified", "Verified");
     case "partial":
       return t(locale, "部分验证", "Partial");
     case "unverified":
-      return t(locale, "未验证", "Unverified");
+      return t(locale, "Unverified", "Unverified");
     case "redacted":
-      return t(locale, "已脱敏", "Redacted");
+      return t(locale, "Redacted", "Redacted");
     default:
       return formatKeyLabel(value);
   }
@@ -556,21 +602,21 @@ function localizeEvidenceTrust(locale: string, value: string): string {
 function localizeTimelineEventType(locale: string, value: string): string {
   switch (value.trim().toLowerCase()) {
     case "drive_state_change":
-      return t(locale, "驾驶状态", "Drive State");
+      return t(locale, "Drive State", "Drive State");
     case "decision":
-      return t(locale, "决策", "Decision");
+      return t(locale, "Decision", "Decision");
     case "route_change":
-      return t(locale, "路线变更", "Route Change");
+      return t(locale, "Route Change", "Route Change");
     case "takeover":
-      return t(locale, "接管", "Takeover");
+      return t(locale, "Takeover", "Takeover");
     case "tool_call":
-      return t(locale, "工具调用", "Tool Call");
+      return t(locale, "Tool Call", "Tool Call");
     case "result":
-      return t(locale, "结果", "Result");
+      return t(locale, "Result", "Result");
     case "operator_action":
-      return t(locale, "人工操作", "Operator Action");
+      return t(locale, "Operator Action", "Operator Action");
     case "system":
-      return t(locale, "系统", "System");
+      return t(locale, "System", "System");
     default:
       return formatKeyLabel(value);
   }
@@ -581,13 +627,13 @@ function localizeTimelineStatus(locale: string, value: string): string {
     case "info":
       return t(locale, "信息", "Info");
     case "running":
-      return t(locale, "进行中", "Running");
+      return t(locale, "Running", "Running");
     case "waiting":
-      return t(locale, "等待中", "Waiting");
+      return t(locale, "Waiting", "Waiting");
     case "blocked":
-      return t(locale, "已阻塞", "Blocked");
+      return t(locale, "Blocked", "Blocked");
     case "done":
-      return t(locale, "已完成", "Done");
+      return t(locale, "Done", "Done");
     case "failed":
       return t(locale, "失败", "Failed");
     default:
@@ -595,22 +641,35 @@ function localizeTimelineStatus(locale: string, value: string): string {
   }
 }
 
+function projectionSource(source: unknown): unknown {
+  const directProjection = getPath(source, "takeover.projection");
+  if (isRecord(directProjection)) return directProjection;
+
+  const submittedProjection = getPath(source, "takeover.submittedProjection");
+  if (isRecord(submittedProjection)) return submittedProjection;
+
+  const postSubmitProjection = getPath(source, "takeover.postSubmitProjection");
+  if (isRecord(postSubmitProjection)) return postSubmitProjection;
+
+  return null;
+}
+
 function localizeControlAction(locale: string, value: string): string {
   switch (value.trim().toLowerCase()) {
     case "run":
-      return t(locale, "执行", "Run");
+      return t(locale, "Run", "Run");
     case "wait":
-      return t(locale, "等待", "Wait");
+      return t(locale, "Wait", "Wait");
     case "resume":
-      return t(locale, "继续", "Resume");
+      return t(locale, "Resume", "Resume");
     case "retry":
-      return t(locale, "重试", "Retry");
+      return t(locale, "Retry", "Retry");
     case "escalate":
-      return t(locale, "升级", "Escalate");
+      return t(locale, "Escalate", "Escalate");
     case "terminate":
-      return t(locale, "终止", "Terminate");
+      return t(locale, "Terminate", "Terminate");
     case "replan":
-      return t(locale, "重规划", "Replan");
+      return t(locale, "Replan", "Replan");
     default:
       return formatKeyLabel(value);
   }
@@ -693,6 +752,115 @@ function boundEntityLabelsFromSummary(source: unknown): string[] {
       ...textListFromValue(getPath(item, "boundExecutors")),
     ])
   ).slice(0, 3);
+}
+
+function readFleetRoleType(value: string | null): AutopilotFleetRole {
+  switch (value?.trim().toLowerCase()) {
+    case "clarifier":
+      return "clarifier";
+    case "researcher":
+      return "researcher";
+    case "generator":
+      return "generator";
+    case "reviewer":
+      return "reviewer";
+    case "auditor":
+      return "auditor";
+    case "operator":
+    case "executor":
+      return "operator";
+    case "planner":
+    default:
+      return "planner";
+  }
+}
+
+function inferFleetRoleType(item: UnknownRecord): AutopilotFleetRole {
+  return readFleetRoleType(
+    pickText(item, ["roleType", "type", "role", "title", "label", "name"])
+  );
+}
+
+function readFleetRoleStatus(value: string | null): AutopilotFleetRoleStatus {
+  switch (value?.trim().toLowerCase()) {
+    case "running":
+    case "working":
+      return "running";
+    case "waiting":
+      return "waiting";
+    case "blocked":
+      return "blocked";
+    case "failed":
+    case "error":
+      return "failed";
+    case "done":
+    case "completed":
+      return "done";
+    case "idle":
+    default:
+      return "idle";
+  }
+}
+
+function buildFleetRoleCardsFromSummary(source: unknown): AutopilotFleetRoleCard[] {
+  return roleRecordsFromSummary(source).map((item, index) => {
+    const role = inferFleetRoleType(item);
+    const status = readFleetRoleStatus(pickText(item, ["status", "state"]));
+    const id =
+      pickText(item, ["id", "roleId", "key"]) ??
+      `${role}-${index + 1}`;
+    const currentFocus = pickText(item, [
+      "currentFocus",
+      "focus",
+      "currentAction",
+      "responsibility",
+    ]);
+
+    return {
+      id,
+      role,
+      title: pickText(item, ["title", "label", "name"]) ?? undefined,
+      status,
+      currentFocus,
+      currentAction: pickText(item, ["currentAction", "action"]),
+      waitingReason: pickText(item, ["waitingReason", "waitingFor", "reason"]),
+      latestArtifact: pickText(item, [
+        "latestArtifact",
+        "latestDeliverable",
+        "artifact",
+      ]),
+      boundAgents: uniqueStrings([
+        ...textListFromValue(getPath(item, "boundAgents")),
+        ...textListFromValue(getPath(item, "boundExecutors")),
+      ]),
+      laneId: pickText(item, ["laneId", "lane"]),
+      laneLabel: pickText(item, ["laneLabel", "laneName"]),
+      takeoverAnchorId: pickText(item, [
+        "takeoverAnchorId",
+        "takeoverId",
+        "decisionId",
+      ]),
+    };
+  });
+}
+
+function buildFleetLegacyText(source: unknown, locale: string): string | null {
+  const roleTitles = roleTitlesFromSummary(source, locale);
+  const activeRoles = roleHighlightsFromSummary(source, locale, [
+    "running",
+    "waiting",
+  ]);
+  const blockedRoles = roleHighlightsFromSummary(source, locale, [
+    "blocked",
+    "failed",
+  ]);
+
+  return joinSegments([
+    roleTitles.length > 0 ? roleTitles.join(" / ") : null,
+    buildFleetCountText(source, locale),
+    prefixedSegment(t(locale, "\u5728\u7ebf", "Live"), activeRoles),
+    prefixedSegment(t(locale, "\u963b\u585e", "Blocked"), blockedRoles),
+  ]);
 }
 
 function executionActionLabelsFromSummary(
@@ -954,7 +1122,7 @@ function formatRouteCandidate(item: UnknownRecord, locale: string): string | nul
       ? `${t(locale, "时长", "ETA")}: ${estimatedDuration}`
       : null,
     estimatedCost ? `${t(locale, "成本", "Cost")}: ${estimatedCost}` : null,
-    locked ? t(locale, "已锁定", "Locked") : null,
+    locked ? t(locale, "Locked", "Locked") : null,
   ]);
 
   const base = label || summary;
@@ -1039,11 +1207,7 @@ function summarizeRouteMetric(
 
   const range = buildComparableRange(uniqueValues, parser);
   if (selectedValue && range && range !== selectedValue) {
-      return t(
-        locale,
-        `${labelZh}汇总: 已选 ${selectedValue}（范围 ${range}）`,
-        `${labelEn} Summary: ${selectedValue} selected (${range} range)`
-      );
+    return `${labelEn} Summary: Selected ${selectedValue} (${range} range)`;
   }
 
   if (range) {
@@ -1098,33 +1262,33 @@ function summarizeRouteDifferences(
 
   const differences = uniqueStrings([
     selectedMode && recommendedMode && selectedMode !== recommendedMode
-      ? `${t(locale, "模式", "Mode")}: ${localizeRouteMode(
+      ? `${t(locale, "Mode", "Mode")}: ${localizeRouteMode(
           locale,
           selectedMode
         )} -> ${localizeRouteMode(locale, recommendedMode)}`
       : null,
     selectedRisk && recommendedRisk && selectedRisk !== recommendedRisk
-      ? `${t(locale, "风险", "Risk")}: ${localizeScale(
+      ? `${t(locale, "Risk", "Risk")}: ${localizeScale(
           locale,
           selectedRisk
         )} -> ${localizeScale(locale, recommendedRisk)}`
       : null,
     selectedLoad && recommendedLoad && selectedLoad !== recommendedLoad
-      ? `${t(locale, "负担", "Load")}: ${localizeScale(
+      ? `${t(locale, "Load", "Load")}: ${localizeScale(
           locale,
           selectedLoad
         )} -> ${localizeScale(locale, recommendedLoad)}`
       : null,
     selectedEta && recommendedEta && selectedEta !== recommendedEta
-      ? `${t(locale, "时长", "ETA")}: ${selectedEta} -> ${recommendedEta}`
+      ? `${t(locale, "ETA", "ETA")}: ${selectedEta} -> ${recommendedEta}`
       : null,
     selectedCost && recommendedCost && selectedCost !== recommendedCost
-      ? `${t(locale, "成本", "Cost")}: ${selectedCost} -> ${recommendedCost}`
+      ? `${t(locale, "Cost", "Cost")}: ${selectedCost} -> ${recommendedCost}`
       : null,
   ]);
 
   if (differences.length === 0) return null;
-  return `${t(locale, "路线差异", "Route Diff")}: ${differences.join("; ")}`;
+  return `${t(locale, "Route Diff", "Route Diff")}: ${differences.join("; ")}`;
 }
 
 function takeoverOptionLabels(source: unknown): string[] {
@@ -1241,15 +1405,15 @@ function routeRemainingStepsSummary(source: unknown, locale: string): string | n
     remainingCount > 0
       ? t(
           locale,
-          `剩余 ${remainingCount} 步`,
+          `${remainingCount} steps left`,
           `${remainingCount} ${remainingCount === 1 ? "step" : "steps"} left`
         )
       : null,
-    prefixedSegment(t(locale, "剩余步骤", "Remaining"), remainingLabels),
+    prefixedSegment(t(locale, "Remaining Steps", "Remaining Steps"), remainingLabels),
     parallelBranchCount !== null && parallelBranchCount > 0
       ? t(
           locale,
-          `还有 ${parallelBranchCount} 个并行分支`,
+          `${parallelBranchCount} parallel branches remain`,
           `${parallelBranchCount} parallel ${
             parallelBranchCount === 1 ? "branch" : "branches"
           } remain`
@@ -1302,6 +1466,13 @@ function createBlock(input: {
 }
 
 function parseDestination(source: unknown, locale: string): AutopilotBlock | null {
+  const missingInfoDetailRecords = recordListFromPaths(source, [
+    "destination.missingInfoDetails",
+    "destination.missing_info_details",
+    "destination.missingDetails",
+    "destination.clarificationDetails",
+    "destination.clarification_details",
+  ]);
   const value = pickText(source, [
     "destination.goal",
     "destination.summary",
@@ -1333,33 +1504,92 @@ function parseDestination(source: unknown, locale: string): AutopilotBlock | nul
     "destination.confidenceSignals",
   ]);
   const taskType = pickText(source, ["destination.taskType"]);
+  const lockState = pickText(source, [
+    "destination.lockState",
+    "destination.lock_state",
+    "destination.goalLockState",
+    "destination.goal_lock_state",
+    "destination.lock.state",
+    "destination.status",
+  ]);
+  const confirmedAt = formatTimestamp(
+    locale,
+    pickText(source, [
+      "destination.confirmedAt",
+      "destination.confirmed_at",
+      "destination.lockedAt",
+      "destination.locked_at",
+      "destination.lock.confirmedAt",
+      "destination.lock.confirmed_at",
+      "destination.lock.lockedAt",
+      "destination.lock.locked_at",
+    ])
+  );
+  const modifiedAt = formatTimestamp(
+    locale,
+    pickText(source, [
+      "destination.modifiedAt",
+      "destination.modified_at",
+      "destination.updatedAt",
+      "destination.updated_at",
+      "destination.changedAt",
+      "destination.changed_at",
+      "destination.lock.modifiedAt",
+      "destination.lock.modified_at",
+    ])
+  );
   const auxiliaryTaskTypes = collectTexts(source, [
     "destination.auxiliaryTaskTypes",
   ]).map(value => localizeDestinationTaskType(locale, value));
-  const missingInfoDetails = recordListFromPaths(source, [
-    "destination.missingInfoDetails",
-  ]).map(item => ({
-    entry: pickText(item, ["item"]),
-    impact: pickText(item, ["impact"]),
+  const missingInfoDetails = missingInfoDetailRecords.map(item => ({
+    entry: pickText(item, [
+      "item",
+      "label",
+      "question",
+      "prompt",
+      "missingInfo",
+      "missing_info",
+    ]),
+    impact: pickText(item, ["impact", "impactSummary", "impact_summary"]),
     blocking: pickBoolean(item, ["blocking"]),
-    clarification: pickText(item, ["clarification", "question", "prompt"]),
+    clarification: pickText(item, [
+      "clarification",
+      "suggestedClarification",
+      "suggested_clarification",
+      "question",
+      "prompt",
+    ]),
   }));
   const missingInfo = uniqueStrings([
-    ...collectTexts(source, ["destination.missingInfo"]),
+    ...collectTexts(source, [
+      "destination.missingInfo",
+      "destination.missingInformation",
+      "destination.missing_info",
+      "destination.missing_information",
+      "destination.openQuestions",
+      "destination.open_questions",
+    ]),
     ...missingInfoDetails
       .map(item => item.entry)
       .filter((item): item is string => Boolean(item)),
   ]);
   const structuredMissingInfo = uniqueStrings(
-    recordListFromPaths(source, ["destination.missingInfoDetails"]).map(item => {
-      const entry = pickText(item, ["item"]);
-      const impact = pickText(item, ["impact"]);
+    missingInfoDetailRecords.map(item => {
+      const entry = pickText(item, [
+        "item",
+        "label",
+        "question",
+        "prompt",
+        "missingInfo",
+        "missing_info",
+      ]);
+      const impact = pickText(item, ["impact", "impactSummary", "impact_summary"]);
       const blocking = pickBoolean(item, ["blocking"]);
 
       return joinSegments([
         entry,
-        impact ? `${t(locale, "影响", "Impact")}: ${impact}` : null,
-        blocking === true ? t(locale, "阻塞", "Blocking") : null,
+        impact ? `${t(locale, "Impact", "Impact")}: ${impact}` : null,
+        blocking === true ? t(locale, "Blocking", "Blocking") : null,
       ]);
     })
   );
@@ -1370,6 +1600,9 @@ function parseDestination(source: unknown, locale: string): AutopilotBlock | nul
       "destination.clarificationQuestions",
       "destination.missingInfoClarifications",
       "destination.missingInfoQuestions",
+      "destination.suggested_clarifications",
+      "destination.clarification_questions",
+      "destination.questions",
     ]),
     ...missingInfoDetails
       .map(item => item.clarification)
@@ -1380,23 +1613,51 @@ function parseDestination(source: unknown, locale: string): AutopilotBlock | nul
     "destination.subgoals",
     "destination.sub_goals",
     "destination.objectives",
+    "destination.goals",
   ]);
   const constraints = collectTexts(source, [
     "destination.constraints",
+    "destination.constraintList",
+    "destination.constraint_list",
+    "destination.requirements",
+    "destination.guardrails",
     "destination.limitations",
     "destination.requirements.constraints",
+    "destination.parser.constraints",
+    "mappedMissionContext.reviewInput.constraints",
+    "mappedWorkflowInput.plannerInput.constraints",
   ]);
   const successCriteria = collectTexts(source, [
     "destination.successCriteria",
+    "destination.success_criteria",
     "destination.acceptanceCriteria",
+    "destination.acceptance_criteria",
     "destination.doneCriteria",
+    "destination.done_criteria",
     "destination.requirements.successCriteria",
+    "destination.parser.successCriteria",
+    "mappedMissionContext.reviewInput.successCriteria",
+    "mappedWorkflowInput.plannerInput.successCriteria",
+  ]);
+  const deliverables = collectTexts(source, [
+    "destination.deliverables",
+    "destination.outputs",
+    "destination.artifacts",
+    "destination.parser.deliverables",
+    "normalizedGoal.expectedDeliverables",
+    "outputs.deliverables",
   ]);
   const blockingReason = pickText(source, [
     "blockingReason",
     "destination.blockingReason",
+    "destination.blocking_reason",
+    "destination.blocker",
+    "destination.blockedReason",
+    "destination.blocked_reason",
     "destination.blockedBy",
     "destination.impact",
+    "destination.impactSummary",
+    "destination.impact_summary",
   ]);
   const structuredMissingInfoImpact =
     missingInfoDetails.find(item => item.blocking === true && item.impact)?.impact ||
@@ -1408,40 +1669,45 @@ function parseDestination(source: unknown, locale: string): AutopilotBlock | nul
     (missingInfo.length > 0
       ? t(
           locale,
-          "关键信息未补齐，后续路线与执行可能继续等待人工澄清。",
+          "Missing destination info may keep route selection and execution waiting on human clarification.",
           "Missing destination info may keep route selection and execution waiting on human clarification."
         )
       : null);
 
   const detail = joinSegments([
     request && request !== value ? request : null,
-    prefixedSegment(t(locale, "子目标", "Sub-goals"), subGoals, 3),
+    prefixedSegment(t(locale, "Sub-goals", "Sub-goals"), subGoals, 3),
     confidence
-      ? `${t(locale, "把握度", "Confidence")}: ${localizeScale(locale, confidence)}`
+      ? `${t(locale, "Confidence", "Confidence")}: ${localizeScale(locale, confidence)}`
       : null,
     confidenceReason
-      ? `${t(locale, "依据", "Reason")}: ${confidenceReason}`
+      ? `${t(locale, "Reason", "Reason")}: ${confidenceReason}`
       : null,
     taskType
-      ? `${t(locale, "任务类型", "Task Type")}: ${localizeDestinationTaskType(locale, taskType)}`
+      ? `${t(locale, "Task Type", "Task Type")}: ${localizeDestinationTaskType(locale, taskType)}`
       : null,
+    lockState
+      ? `${t(locale, "Lock State", "Lock State")}: ${localizeDestinationLockState(locale, lockState)}`
+      : null,
+    confirmedAt ? `${t(locale, "Confirmed", "Confirmed")}: ${confirmedAt}` : null,
+    modifiedAt ? `${t(locale, "Modified", "Modified")}: ${modifiedAt}` : null,
     auxiliaryTaskTypes.length > 0
-      ? `${t(locale, "辅助类型", "Aux Types")}: ${summarizeList(auxiliaryTaskTypes, 3) ?? ""}`
+      ? `${t(locale, "Aux Types", "Aux Types")}: ${summarizeList(auxiliaryTaskTypes, 3) ?? ""}`
       : null,
-    prefixedSegment(t(locale, "信号", "Signals"), confidenceSignals),
+    prefixedSegment(t(locale, "Signals", "Signals"), confidenceSignals),
     prefixedSegment(
       t(locale, "\u7ea6\u675f", "Constraints"),
-      collectTexts(source, ["destination.constraints"]),
+      constraints,
       3
     ),
     prefixedSegment(
       t(locale, "\u9a8c\u6536", "Success"),
-      collectTexts(source, ["destination.successCriteria"]),
+      successCriteria,
       3
     ),
     prefixedSegment(
       t(locale, "\u4ea4\u4ed8\u7269", "Deliverables"),
-      collectTexts(source, ["destination.deliverables"])
+      deliverables
     ),
     prefixedSegment(
       t(locale, "澄清建议", "Clarifications"),
@@ -1459,7 +1725,7 @@ function parseDestination(source: unknown, locale: string): AutopilotBlock | nul
   return createBlock({
     value,
     detail,
-    badge: missingInfo.length > 0 ? t(locale, "待澄清", "Needs Info") : null,
+    badge: missingInfo.length > 0 ? t(locale, "Needs Info", "Needs Info") : null,
   });
 }
 
@@ -1668,16 +1934,36 @@ function parseRoute(source: unknown, locale: string): AutopilotBlock | null {
     parseCostToNumber
   );
   const remainingStepsSummary = routeRemainingStepsSummary(source, locale);
+  const projection = projectionSource(source);
+  const projectedRoute = pickText(projection, [
+    "route.label",
+    "route.title",
+    "route.summary",
+    "route.selectedRouteId",
+    "route.id",
+    "selectedRouteId",
+    "routeId",
+  ]);
+  const projectedRouteStatus = pickText(projection, [
+    "route.status",
+    "route.selectionStatus",
+    "routeSelectionStatus",
+  ]);
+  const projectedRouteEvidence = pickText(projection, [
+    "route.evidenceEventId",
+    "route.eventId",
+    "evidenceEventId",
+  ]);
 
   const detail = joinSegments([
     explicitDetail,
     selectedRouteDetail
-      ? `${t(locale, "已选", "Selected")}: ${selectedRouteDetail}`
+      ? `${t(locale, "Selected", "Selected")}: ${selectedRouteDetail}`
       : null,
     recommendedRouteDetail
-      ? `${t(locale, "推荐", "Recommended")}: ${recommendedRouteDetail}`
+      ? `${t(locale, "Recommended", "Recommended")}: ${recommendedRouteDetail}`
       : null,
-    prefixedSegment(t(locale, "备选", "Alternatives"), alternativeRouteDetails),
+    prefixedSegment(t(locale, "Alternatives", "Alternatives"), alternativeRouteDetails),
     routeDiffSummary,
     joinSegments([
       routeEtaSummary,
@@ -1685,59 +1971,73 @@ function parseRoute(source: unknown, locale: string): AutopilotBlock | null {
     ]),
     joinSegments([
       riskPointCount > 0
-        ? formatCountSummary(locale, riskPointCount, "风险点", "risk point")
+        ? formatCountSummary(locale, riskPointCount, "risk point", "risk point")
         : null,
       takeoverPointCount > 0
         ? formatCountSummary(
             locale,
             takeoverPointCount,
-            "接管点",
+            "takeover point",
             "takeover point"
           )
         : null,
     ]),
     remainingStepsSummary,
+    projectedRoute
+      ? joinSegments([
+          `${t(locale, "Takeover projection", "Takeover projection")}: ${projectedRoute}`,
+          projectedRouteStatus
+            ? `${t(locale, "Status", "Status")}: ${localizeRouteStatus(
+                locale,
+                projectedRouteStatus
+              )}`
+            : null,
+          projectedRouteEvidence
+            ? `${t(locale, "Evidence", "Evidence")}: ${projectedRouteEvidence}`
+            : null,
+        ])
+      : null,
     selectionStatus
-      ? `${t(locale, "选择状态", "Selection")}: ${localizeRouteSelectionStatus(
+      ? `${t(locale, "Selection", "Selection")}: ${localizeRouteSelectionStatus(
           locale,
           selectionStatus
         )}`
       : null,
     selectionMode
-      ? `${t(locale, "选择模式", "Selection Mode")}: ${localizeRouteSelectionMode(
+      ? `${t(locale, "Selection Mode", "Selection Mode")}: ${localizeRouteSelectionMode(
           locale,
           selectionMode
         )}`
       : null,
     selectionChangedBy
-      ? `${t(locale, "变更方", "Changed By")}: ${localizeRouteChangeActor(
+      ? `${t(locale, "Changed By", "Changed By")}: ${localizeRouteChangeActor(
           locale,
           selectionChangedBy
         )}`
       : null,
     selectionChangedAt
-      ? `${t(locale, "变更时间", "Changed")}: ${selectionChangedAt}`
+      ? `${t(locale, "Changed", "Changed")}: ${selectionChangedAt}`
       : null,
     switchRequiresConfirmation === true
-      ? t(locale, "切换需确认", "Switch requires confirmation")
+      ? t(locale, "Switch requires confirmation", "Switch requires confirmation")
       : null,
     selectionChangedReason
-      ? `${t(locale, "切换原因", "Selection Reason")}: ${selectionChangedReason}`
+      ? `${t(locale, "Selection Reason", "Selection Reason")}: ${selectionChangedReason}`
       : null,
     replanActive
       ? joinSegments([
-          t(locale, "重规划已激活", "Replan active"),
+          t(locale, "Replan active", "Replan active"),
           replanReason
-            ? `${t(locale, "原因", "Reason")}: ${replanReason}`
+            ? `${t(locale, "Reason", "Reason")}: ${replanReason}`
             : null,
           replanTriggeredBy
-            ? `${t(locale, "触发方", "Triggered By")}: ${localizeRouteChangeActor(
+            ? `${t(locale, "Triggered By", "Triggered By")}: ${localizeRouteChangeActor(
                 locale,
                 replanTriggeredBy
               )}`
             : null,
           replanFromRouteId
-            ? `${t(locale, "来源路线", "From")}: ${replanFromRouteId}`
+            ? `${t(locale, "From", "From")}: ${replanFromRouteId}`
             : null,
           replanToRouteId
             ? `${t(locale, "目标路线", "To")}: ${replanToRouteId}`
@@ -1746,7 +2046,7 @@ function parseRoute(source: unknown, locale: string): AutopilotBlock | null {
       : null,
     routeEvidenceLastEventType
       ? joinSegments([
-          `${t(locale, "路线证据", "Route Evidence")}: ${localizeRouteEvidenceEventType(
+          `${t(locale, "Route Evidence", "Route Evidence")}: ${localizeRouteEvidenceEventType(
             locale,
             routeEvidenceLastEventType
           )}`,
@@ -1762,7 +2062,7 @@ function parseRoute(source: unknown, locale: string): AutopilotBlock | null {
     progress !== null
       ? t(locale, `\u8fdb\u5ea6 ${progress}%`, `${progress}% complete`)
       : null,
-    routeLocked ? t(locale, "路线已锁定", "Route locked") : null,
+    routeLocked ? t(locale, "Route locked", "Route locked") : null,
     routeStatus
       ? `${t(locale, "\u72b6\u6001", "Status")}: ${localizeRouteStatus(locale, routeStatus)}`
       : null,
@@ -1937,6 +2237,24 @@ function parseDriveState(source: unknown, locale: string): AutopilotBlock | null
     "driveState.confidence",
     "currentDriveState.confidence",
   ]);
+  const projection = projectionSource(source);
+  const projectedDriveState = pickText(projection, [
+    "driveState.label",
+    "driveState.state",
+    "driveState.key",
+    "state",
+  ]);
+  const projectedDriveReason = pickText(projection, [
+    "driveState.reason",
+    "driveState.detail",
+    "driveState.summary",
+    "reason",
+  ]);
+  const projectedDriveEvidence = pickText(projection, [
+    "driveState.evidenceEventId",
+    "driveState.eventId",
+    "evidenceEventId",
+  ]);
 
   const detail = joinSegments([
     pickText(source, [
@@ -1967,6 +2285,18 @@ function parseDriveState(source: unknown, locale: string): AutopilotBlock | null
           locale,
           confidence
         )}`
+      : null,
+    projectedDriveState
+      ? joinSegments([
+          `${t(locale, "Takeover projection", "Takeover projection")}: ${localizeDriveState(
+            locale,
+            projectedDriveState
+          )}`,
+          projectedDriveReason,
+          projectedDriveEvidence
+            ? `${t(locale, "Evidence", "Evidence")}: ${projectedDriveEvidence}`
+            : null,
+        ])
       : null,
   ]);
 
@@ -2087,21 +2417,21 @@ function parseRecovery(source: unknown, locale: string): AutopilotBlock | null {
     detail: joinSegments([
       reason,
       prefixedSegment(
-        t(locale, "已尝试", "Attempted"),
+        t(locale, "Attempted", "Attempted"),
         attemptedActions
       ),
       prefixedSegment(
-        t(locale, "建议", "Suggested"),
+        t(locale, "Suggested", "Suggested"),
         suggestedActions
       ),
       needsHuman
-        ? t(locale, "需要人工接手", "Human handoff required")
+        ? t(locale, "Human handoff required", "Human handoff required")
         : null,
       canAutoRecover === true
-        ? t(locale, "可自动恢复", "Auto recovery available")
+        ? t(locale, "Auto recovery available", "Auto recovery available")
         : null,
       canAutoRecover === false && state && state !== "healthy"
-        ? t(locale, "自动恢复不可用", "Auto recovery unavailable")
+        ? t(locale, "Auto recovery unavailable", "Auto recovery unavailable")
         : null,
     ]),
     badge:
@@ -2200,31 +2530,31 @@ function formatExplanationCurrentStateSegment(
 
   return joinSegments([
     driveState
-      ? `${t(locale, "状态", "State")}: ${localizeDriveState(locale, driveState)}`
+      ? `${t(locale, "State", "State")}: ${localizeDriveState(locale, driveState)}`
       : null,
     missionStatus
-      ? `${t(locale, "任务", "Mission")}: ${formatKeyLabel(missionStatus)}`
+      ? `${t(locale, "Mission", "Mission")}: ${formatKeyLabel(missionStatus)}`
       : null,
     workflowStatus
-      ? `${t(locale, "工作流", "Workflow")}: ${formatKeyLabel(workflowStatus)}`
+      ? `${t(locale, "Workflow", "Workflow")}: ${formatKeyLabel(workflowStatus)}`
       : null,
     workflowStage
-      ? `${t(locale, "工作流阶段", "Workflow Stage")}: ${formatKeyLabel(workflowStage)}`
+      ? `${t(locale, "Workflow Stage", "Workflow Stage")}: ${formatKeyLabel(workflowStage)}`
       : null,
     currentStageLabel
-      ? `${t(locale, "当前阶段", "Stage")}: ${currentStageLabel}`
+      ? `${t(locale, "Stage", "Stage")}: ${currentStageLabel}`
       : null,
     routeSelectionStatus
-      ? `${t(locale, "路线选择", "Route Selection")}: ${localizeRouteSelectionStatus(
+      ? `${t(locale, "Route Selection", "Route Selection")}: ${localizeRouteSelectionStatus(
           locale,
           routeSelectionStatus
         )}`
       : null,
     selectedRouteId
-      ? `${t(locale, "已选路线", "Selected Route")}: ${selectedRouteId}`
+      ? `${t(locale, "Selected Route", "Selected Route")}: ${selectedRouteId}`
       : null,
     correlationTimelineId
-      ? `${t(locale, "时间线", "Timeline")}: ${correlationTimelineId}`
+      ? `${t(locale, "Timeline", "Timeline")}: ${correlationTimelineId}`
       : null,
   ]);
 }
@@ -2254,9 +2584,9 @@ function formatExplanationRecommendationDetail(
         )}`
       : null,
     routeId ? `${t(locale, "路线", "Route")}: ${routeId}` : null,
-    decisionId ? `${t(locale, "决策", "Decision")}: ${decisionId}` : null,
+      decisionId ? `${t(locale, "决策", "Decision")}: ${decisionId}` : null,
     correlationTimelineId
-      ? `${t(locale, "时间线", "Timeline")}: ${correlationTimelineId}`
+      ? `${t(locale, "Timeline", "Timeline")}: ${correlationTimelineId}`
       : null,
   ]);
 
@@ -2381,6 +2711,49 @@ function parseEvidence(source: unknown, locale: string): AutopilotBlock | null {
       ? t(locale, `${artifactCount} \u4e2a\u4ea7\u7269`, `${artifactCount} artifacts`)
       : null,
   ]);
+  const projection = projectionSource(source);
+  const projectionMarker = pickText(projection, [
+    "marker",
+    "projectionMarker",
+    "status",
+  ]);
+  const projectionEventId = pickText(projection, [
+    "evidence.eventId",
+    "evidence.evidenceEventId",
+    "evidenceEventId",
+    "eventId",
+  ]);
+  const projectionRouteId = pickText(projection, [
+    "route.selectedRouteId",
+    "route.id",
+    "selectedRouteId",
+    "routeId",
+  ]);
+  const projectionDriveState = pickText(projection, [
+    "driveState.state",
+    "driveState.key",
+    "state",
+  ]);
+  const projectionDetail =
+    projectionMarker || projectionEventId || projectionRouteId || projectionDriveState
+      ? joinSegments([
+          `${t(locale, "Takeover projection", "Takeover projection")}: ${
+            projectionMarker || t(locale, "recorded", "recorded")
+          }`,
+          projectionEventId
+            ? `${t(locale, "Event", "Event")}: ${projectionEventId}`
+            : null,
+          projectionRouteId
+            ? `${t(locale, "Route", "Route")}: ${projectionRouteId}`
+            : null,
+          projectionDriveState
+            ? `${t(locale, "State", "State")}: ${localizeDriveState(
+                locale,
+                projectionDriveState
+              )}`
+            : null,
+        ])
+      : null;
 
   return createBlock({
     value: explicitValue || countSummary || lastSignal,
@@ -2389,7 +2762,7 @@ function parseEvidence(source: unknown, locale: string): AutopilotBlock | null {
         ? lastSignal
         : null,
       trustLevel
-        ? `${t(locale, "可信度", "Trust")}: ${localizeEvidenceTrust(
+        ? `${t(locale, "Trust", "Trust")}: ${localizeEvidenceTrust(
             locale,
             trustLevel
           )}`
@@ -2402,7 +2775,8 @@ function parseEvidence(source: unknown, locale: string): AutopilotBlock | null {
         : null,
       prefixedSegment(t(locale, "\u8bc1\u636e\u6765\u6e90", "Sources"), evidenceSources),
       prefixedSegment(t(locale, "缺口", "Gaps"), evidenceGaps),
-      prefixedSegment(t(locale, "时间线", "Timeline"), timelinePreview),
+      prefixedSegment(t(locale, "Timeline", "Timeline"), timelinePreview),
+      projectionDetail,
     ]),
     badge: latestEventType
       ? localizeTimelineEventType(locale, latestEventType)
@@ -2434,7 +2808,7 @@ function parseExplanation(source: unknown, locale: string): AutopilotBlock | nul
     value: fallbackValue,
     detail: joinSegments([
       current && current !== fallbackValue ? current : null,
-      prefixedSegment(t(locale, "下一步", "Next"), nextSteps),
+      prefixedSegment(t(locale, "Next", "Next"), nextSteps),
       prefixedSegment(t(locale, "原因", "Why"), recommendationReasons),
       prefixedSegment(t(locale, "风险", "Risk"), riskSummary),
       prefixedSegment(t(locale, "证据提示", "Evidence"), evidenceHints),
@@ -2483,7 +2857,7 @@ function parseTakeover(source: unknown, locale: string): AutopilotBlock | null {
     "takeoverStatus",
   ]);
   const urgency = pickText(source, ["takeover.urgency"]);
-  const decisionId = pickText(source, ["takeover.decisionId"]);
+  const decisionId = pickText(source, ["takeover.decisionId", "decisionId"]);
   const required = pickBoolean(source, ["takeover.required"]);
   const blocking = pickBoolean(source, ["takeover.blocking"]);
   const options = takeoverOptionLabels(source);
@@ -2502,7 +2876,7 @@ function parseTakeover(source: unknown, locale: string): AutopilotBlock | null {
       reason,
       prompt && prompt !== reason ? prompt : null,
       decisionId ? `${t(locale, "决策", "Decision")}: ${decisionId}` : null,
-      required === true ? t(locale, "需要处理", "Action required") : null,
+      required === true ? t(locale, "Action required", "Action required") : null,
       blocking === true
         ? t(locale, "阻塞当前路线", "Blocking route progression")
         : null,
@@ -2513,6 +2887,201 @@ function parseTakeover(source: unknown, locale: string): AutopilotBlock | null {
       : urgency
         ? localizeScale(locale, urgency)
         : null,
+  });
+}
+
+function parseDecisionHandoff(
+  detail: MissionTaskDetail,
+  source: unknown,
+  locale: string
+): AutopilotBlock | null {
+  const decision = isRecord(detail.decision) ? detail.decision : null;
+  const decisionId =
+    pickText(source, ["takeover.decisionId"]) ||
+    asText(decision?.decisionId) ||
+    null;
+  const prompt =
+    pickText(source, ["takeover.prompt", "decision.prompt"]) ||
+    detail.decisionPrompt ||
+    asText(decision?.prompt);
+  const type =
+    pickText(source, ["takeover.type", "decision.type"]) ||
+    asText(decision?.type);
+  const options = uniqueStrings([
+    ...takeoverOptionLabels(source),
+    ...textListFromValue(detail.decisionPresets).slice(0, 3),
+  ]);
+  const hasWaitingDecision =
+    detail.status === "waiting" &&
+    (Boolean(decision) || detail.decisionPresets.length > 0 || Boolean(prompt));
+
+  if (!hasWaitingDecision && !decisionId && !prompt) {
+    return null;
+  }
+
+  return createBlock({
+    value: hasWaitingDecision
+      ? t(locale, "DecisionPanel owns waiting task / DecisionPanel 接管等待任务", "DecisionPanel owns waiting task")
+      : t(locale, "Decision handoff", "Decision handoff"),
+    detail: joinSegments([
+      prompt,
+      decisionId ? `${t(locale, "决策", "Decision")}: ${decisionId}` : null,
+      decisionId && locale === "zh-CN" ? `Decision: ${decisionId}` : null,
+      type ? `${t(locale, "Type", "Type")}: ${formatKeyLabel(type)}` : null,
+      prefixedSegment(t(locale, "Options", "Options"), options),
+      hasWaitingDecision
+        ? t(
+            locale,
+            "The right rail shows a read-only takeover summary; DecisionPanel keeps the single submission surface to avoid duplicate actions.",
+            "The right rail shows a read-only takeover summary; DecisionPanel keeps the single submission surface to avoid duplicate actions."
+          )
+        : null,
+    ]),
+    badge: hasWaitingDecision ? t(locale, "等待处理", "Waiting") : null,
+  });
+}
+
+function parseDecisionTakeoverItems(
+  detail: MissionTaskDetail,
+  source: unknown
+): AutopilotTakeoverItem[] {
+  const decision = isRecord(detail.decision) ? detail.decision : null;
+  const prompt =
+    pickText(source, ["takeover.prompt", "decision.prompt"]) ||
+    detail.decisionPrompt ||
+    asText(decision?.prompt);
+  const decisionId =
+    pickText(source, ["takeover.decisionId"]) ||
+    asText(decision?.decisionId) ||
+    (prompt ? `${detail.id}:decision` : null);
+  const hasWaitingDecision =
+    detail.status === "waiting" &&
+    (Boolean(decision) || detail.decisionPresets.length > 0 || Boolean(prompt));
+
+  if (!hasWaitingDecision || !decisionId) return [];
+
+  const projection = projectionSource(source);
+  const projectionEventId = pickText(projection, [
+    "evidence.eventId",
+    "evidence.evidenceEventId",
+    "evidenceEventId",
+    "eventId",
+  ]);
+  const projectionRouteId = pickText(projection, [
+    "route.selectedRouteId",
+    "route.id",
+    "selectedRouteId",
+    "routeId",
+  ]);
+  const projectionDriveState = pickText(projection, [
+    "driveState.state",
+    "driveState.key",
+    "state",
+  ]);
+  const evidenceRefs = uniqueStrings([
+    projectionRouteId ? `Route: ${projectionRouteId}` : null,
+    projectionDriveState ? `Drive: ${formatKeyLabel(projectionDriveState)}` : null,
+  ]);
+
+  return [
+    {
+      id: decisionId,
+      lane: "current",
+      type: "decision",
+      status: "requested",
+      reason:
+        prompt ||
+        pickText(source, ["takeover.reason", "takeover.detail"]) ||
+        "DecisionPanel owns the waiting task submission.",
+      recommendedAction:
+        "Submit the decision in DecisionPanel; this takeover queue is read-only.",
+      blocking: true,
+      evidenceEventId: projectionEventId,
+      evidenceRefs,
+    },
+  ];
+}
+
+function parseCostRisk(source: unknown, locale: string): AutopilotBlock | null {
+  const routeRiskPoints = collectTexts(source, ["route.riskPoints"]);
+  const explanationRisks = collectTexts(source, ["explanation.riskSummary"]);
+  const evidenceGaps = collectTexts(source, ["evidence.gaps"]);
+  const selectedRouteCost = pickText(source, [
+    "route.selected.estimatedCost",
+    "route.selectedRoute.estimatedCost",
+  ]);
+  const selectedRouteDuration = pickText(source, [
+    "route.selected.estimatedDuration",
+    "route.selectedRoute.estimatedDuration",
+  ]);
+  const routeRiskLevel = pickText(source, [
+    "route.selected.riskLevel",
+    "route.selectedRoute.riskLevel",
+    "driveState.riskLevel",
+  ]);
+  const takeoverLoad = pickText(source, [
+    "route.selected.takeoverLoad",
+    "route.selectedRoute.takeoverLoad",
+    "takeover.urgency",
+  ]);
+  const candidateCosts = uniqueStrings(
+    recordListFromPaths(source, ["route.candidateRoutes"])
+      .map(candidate => pickText(candidate, ["estimatedCost"]))
+      .filter((value): value is string => Boolean(value))
+  );
+  const candidateDurations = uniqueStrings(
+    recordListFromPaths(source, ["route.candidateRoutes"])
+      .map(candidate => pickText(candidate, ["estimatedDuration"]))
+      .filter((value): value is string => Boolean(value))
+  );
+  const riskSummary = uniqueStrings([
+    ...routeRiskPoints,
+    ...explanationRisks,
+    ...evidenceGaps,
+  ]);
+
+  if (
+    !selectedRouteCost &&
+    !selectedRouteDuration &&
+    !routeRiskLevel &&
+    !takeoverLoad &&
+    candidateCosts.length === 0 &&
+    candidateDurations.length === 0 &&
+    riskSummary.length === 0
+  ) {
+    return null;
+  }
+
+  return createBlock({
+    value:
+      routeRiskLevel || selectedRouteCost || selectedRouteDuration
+        ? t(locale, "Right rail cost/risk summary / 右栏成本/风险摘要", "Right rail cost/risk summary")
+        : summarizeList(riskSummary, 1),
+    detail: joinSegments([
+      routeRiskLevel
+        ? `${t(locale, "Risk", "Risk")}: ${localizeScale(locale, routeRiskLevel)}`
+        : null,
+      takeoverLoad
+        ? `${t(locale, "Takeover Load", "Takeover Load")}: ${localizeScale(
+            locale,
+            takeoverLoad
+          )}`
+        : null,
+      selectedRouteCost
+        ? `${t(locale, "Selected Cost", "Selected Cost")}: ${selectedRouteCost}`
+        : null,
+      selectedRouteDuration
+        ? `${t(locale, "Selected ETA", "Selected ETA")}: ${selectedRouteDuration}`
+        : null,
+      prefixedSegment(t(locale, "Cost Range", "Cost Range"), candidateCosts, 4),
+      prefixedSegment(
+        t(locale, "ETA Range", "ETA Range"),
+        candidateDurations,
+        4
+      ),
+      prefixedSegment(t(locale, "Risk Signals", "Risk Signals"), riskSummary, 3),
+    ]),
+    badge: routeRiskLevel ? localizeScale(locale, routeRiskLevel) : null,
   });
 }
 
@@ -2695,18 +3264,27 @@ function parseAutopilotSummary(
     return null;
   }
 
+  const decision = parseDecisionHandoff(detail, raw, locale);
+  const decisionPanelOwnsWaitingTask =
+    detail.status === "waiting" && Boolean(decision);
+  const takeoverItems = parseDecisionTakeoverItems(detail, raw);
   const parsed = {
     destination: parseDestination(raw, locale),
     route: parseRoute(raw, locale),
     execution: parseExecution(raw, locale),
     driveState: parseDriveState(raw, locale),
     fleet: parseFleet(raw, locale),
-    blockers: parseBlockers(raw, locale),
+    fleetRoles: buildFleetRoleCardsFromSummary(raw),
+    fleetLegacyText: buildFleetLegacyText(raw, locale),
+    blockers: decisionPanelOwnsWaitingTask ? null : parseBlockers(raw, locale),
     recovery: parseRecovery(raw, locale),
     outputs: parseOutputs(raw, locale),
     evidence: enhanceEvidenceBlock(raw, locale, parseEvidence(raw, locale)),
     explanation: enhanceExplanationBlock(raw, locale, parseExplanation(raw, locale)),
-    takeover: parseTakeover(raw, locale),
+    takeover: decisionPanelOwnsWaitingTask ? null : parseTakeover(raw, locale),
+    takeoverItems,
+    decision,
+    costRisk: parseCostRisk(raw, locale),
   };
 
   return Object.values(parsed).some(Boolean) ? parsed : null;
@@ -2716,7 +3294,7 @@ function SummaryBlock({
   title,
   block,
   testId,
-  wide = false,
+  wide: _wide,
 }: {
   title: string;
   block: AutopilotBlock;
@@ -2724,10 +3302,7 @@ function SummaryBlock({
   wide?: boolean;
 }) {
   return (
-    <section
-      className={cn(BLOCK_CLASS, wide && "sm:col-span-2")}
-      data-testid={testId}
-    >
+    <section className={BLOCK_CLASS} data-testid={testId}>
       <div className="flex items-start justify-between gap-3">
         <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500">
           {title}
@@ -2750,17 +3325,211 @@ function SummaryBlock({
   );
 }
 
+function SummaryGroup({
+  children,
+  testId,
+}: {
+  children: ReactNode;
+  testId: string;
+}) {
+  return (
+    <div className="space-y-3" data-testid={testId}>
+      {children}
+    </div>
+  );
+}
+
+function FleetSummaryBlock({
+  locale,
+  summary,
+}: {
+  locale: string;
+  summary: ParsedAutopilotSummary;
+}) {
+  if (!summary.fleet) return null;
+
+  if (summary.fleetRoles && summary.fleetRoles.length > 0) {
+    return (
+      <div
+        className="space-y-2"
+        data-testid="task-autopilot-fleet"
+        data-fleet-source="AutopilotFleetLiveView"
+      >
+        {summary.fleetLegacyText ? (
+          <div
+            className="sr-only"
+            data-testid="task-autopilot-fleet-legacy-summary"
+          >
+            {summary.fleetLegacyText}
+          </div>
+        ) : null}
+        <AutopilotFleetLiveView
+          className="rounded-[12px] p-3 shadow-none"
+          roles={summary.fleetRoles}
+          takeoverAnchorId="task-autopilot-takeover"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <SummaryBlock
+      title={t(locale, "\u7f16\u961f", "Fleet")}
+      block={summary.fleet}
+      testId="task-autopilot-fleet"
+    />
+  );
+}
+
+function SummarySingleBlockSlot({
+  title,
+  block,
+  testId,
+  groupTestId,
+}: {
+  title: string;
+  block?: AutopilotBlock | null;
+  testId: string;
+  groupTestId: string;
+}) {
+  if (!block) return null;
+
+  return (
+    <SummaryGroup testId={groupTestId}>
+      <SummaryBlock title={title} block={block} testId={testId} />
+    </SummaryGroup>
+  );
+}
+
+function LiveDriveSlot({
+  locale,
+  summary,
+}: {
+  locale: string;
+  summary: ParsedAutopilotSummary;
+}) {
+  return (
+    <SummaryGroup testId="task-autopilot-cockpit-drive-fleet-outputs">
+      {summary.execution ? (
+        <SummaryBlock
+          title={t(locale, "\u5f53\u524d\u6267\u884c", "Live Execution")}
+          block={summary.execution}
+          testId="task-autopilot-execution"
+        />
+      ) : null}
+      {summary.driveState ? (
+        <SummaryBlock
+          title={t(locale, "\u9a7e\u9a76\u72b6\u6001", "Drive State")}
+          block={summary.driveState}
+          testId="task-autopilot-drive-state"
+        />
+      ) : null}
+      <FleetSummaryBlock locale={locale} summary={summary} />
+      {summary.outputs ? (
+        <SummaryBlock
+          title={t(locale, "\u4e2d\u95f4\u4ea7\u7269", "Outputs")}
+          block={summary.outputs}
+          testId="task-autopilot-outputs"
+        />
+      ) : null}
+    </SummaryGroup>
+  );
+}
+
+function TakeoverSlot({
+  locale,
+  summary,
+}: {
+  locale: string;
+  summary: ParsedAutopilotSummary;
+}) {
+  return (
+    <SummaryGroup testId="task-autopilot-cockpit-decision-takeover">
+      {summary.decision ? (
+        <SummaryBlock
+          title={t(locale, "DecisionPanel", "DecisionPanel")}
+          block={summary.decision}
+          testId="task-autopilot-decision-handoff"
+        />
+      ) : null}
+      {summary.takeoverItems && summary.takeoverItems.length > 0 ? (
+        <AutopilotTakeoverControlPanel
+          className="shadow-none"
+          items={summary.takeoverItems}
+        />
+      ) : null}
+      {summary.takeover ? (
+        <SummaryBlock
+          title={t(locale, "\u63a5\u7ba1", "Takeover")}
+          block={summary.takeover}
+          testId="task-autopilot-takeover"
+        />
+      ) : null}
+      {summary.blockers ? (
+        <SummaryBlock
+          title={t(locale, "\u963b\u585e\u70b9", "Blockers")}
+          block={summary.blockers}
+          testId="task-autopilot-blockers"
+        />
+      ) : null}
+      {summary.recovery ? (
+        <SummaryBlock
+          title={t(locale, "Recovery", "Recovery")}
+          block={summary.recovery}
+          testId="task-autopilot-recovery"
+        />
+      ) : null}
+    </SummaryGroup>
+  );
+}
+
+function EvidenceSlot({
+  locale,
+  summary,
+}: {
+  locale: string;
+  summary: ParsedAutopilotSummary;
+}) {
+  return (
+    <SummaryGroup testId="task-autopilot-cockpit-evidence-cost-risk">
+      {summary.costRisk ? (
+        <SummaryBlock
+          title={t(locale, "Cost / Risk", "Cost / Risk")}
+          block={summary.costRisk}
+          testId="task-autopilot-cost-risk"
+        />
+      ) : null}
+      {summary.evidence ? (
+        <SummaryBlock
+          title={t(locale, "\u8bc1\u636e", "Evidence")}
+          block={summary.evidence}
+          testId="task-autopilot-evidence"
+        />
+      ) : null}
+      {summary.explanation ? (
+        <SummaryBlock
+          title={t(locale, "Explanation", "Explanation")}
+          block={summary.explanation}
+          testId="task-autopilot-explanation"
+        />
+      ) : null}
+    </SummaryGroup>
+  );
+}
+
 export function TaskAutopilotPanel({
   detail,
 }: {
   detail: MissionTaskDetail;
 }) {
   const { locale } = useI18n();
-  const summary = parseAutopilotSummary(detail, locale);
+  const parsedSummary = parseAutopilotSummary(detail, locale);
 
-  if (!summary) {
+  if (!parsedSummary) {
     return null;
   }
+  const summary = parsedSummary;
+  const renderedSummary: ParsedAutopilotSummary = summary;
 
   return (
     <Card className={PANEL_CLASS} data-testid="task-autopilot-panel">
@@ -2778,88 +3547,75 @@ export function TaskAutopilotPanel({
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="grid gap-3 sm:grid-cols-2">
-          {summary.destination ? (
-            <SummaryBlock
+        <AutopilotCockpitLayout
+          className="rounded-[24px] p-3"
+          destination={
+            <SummarySingleBlockSlot
               title={t(locale, "\u76ee\u7684\u5730", "Destination")}
-              block={summary.destination}
+              block={renderedSummary.destination}
               testId="task-autopilot-destination"
-              wide
+              groupTestId="task-autopilot-cockpit-destination-route"
             />
-          ) : null}
-          {summary.route ? (
-            <SummaryBlock
+          }
+          route={
+            <SummarySingleBlockSlot
               title={t(locale, "\u8def\u7ebf", "Route")}
-              block={summary.route}
+              block={renderedSummary.route}
               testId="task-autopilot-route"
+              groupTestId="task-autopilot-cockpit-route"
             />
-          ) : null}
-          {summary.execution ? (
-            <SummaryBlock
-              title={t(locale, "\u5f53\u524d\u6267\u884c", "Live Execution")}
-              block={summary.execution}
-              testId="task-autopilot-execution"
-            />
-          ) : null}
-          {summary.driveState ? (
-            <SummaryBlock
-              title={t(locale, "\u9a7e\u9a76\u72b6\u6001", "Drive State")}
-              block={summary.driveState}
-              testId="task-autopilot-drive-state"
-            />
-          ) : null}
-          {summary.fleet ? (
-            <SummaryBlock
-              title={t(locale, "\u7f16\u961f", "Fleet")}
-              block={summary.fleet}
-              testId="task-autopilot-fleet"
-            />
-          ) : null}
-          {summary.blockers ? (
-            <SummaryBlock
-              title={t(locale, "\u963b\u585e\u70b9", "Blockers")}
-              block={summary.blockers}
-              testId="task-autopilot-blockers"
-            />
-          ) : null}
-          {summary.recovery ? (
+          }
+          liveDrive={<LiveDriveSlot locale={locale} summary={renderedSummary} />}
+          takeover={<TakeoverSlot locale={locale} summary={renderedSummary} />}
+          evidence={<EvidenceSlot locale={locale} summary={renderedSummary} />}
+        />
+        {false ? (
+        <div className="hidden" aria-hidden="true" data-testid="task-autopilot-legacy-grid-shadow">
+          {renderedSummary.destination ? null : null}
+          {renderedSummary.route ? null : null}
+          {renderedSummary.execution ? null : null}
+          {renderedSummary.driveState ? null : null}
+          {renderedSummary.fleet ? null : null}
+          {renderedSummary.blockers ? null : null}
+          {renderedSummary.recovery ? (
             <SummaryBlock
               title={t(locale, "恢复", "Recovery")}
-              block={summary.recovery}
+              block={renderedSummary.recovery}
               testId="task-autopilot-recovery"
             />
           ) : null}
-          {summary.outputs ? (
+          {renderedSummary.outputs ? (
             <SummaryBlock
               title={t(locale, "\u4e2d\u95f4\u4ea7\u7269", "Outputs")}
-              block={summary.outputs}
+              block={renderedSummary.outputs}
               testId="task-autopilot-outputs"
               wide
             />
           ) : null}
-          {summary.evidence ? (
+          {renderedSummary.evidence ? (
             <SummaryBlock
               title={t(locale, "\u8bc1\u636e", "Evidence")}
-              block={summary.evidence}
+              block={renderedSummary.evidence}
               testId="task-autopilot-evidence"
             />
           ) : null}
-          {summary.explanation ? (
+          {renderedSummary.explanation ? (
             <SummaryBlock
               title={t(locale, "解释", "Explanation")}
-              block={summary.explanation}
+              block={renderedSummary.explanation}
               testId="task-autopilot-explanation"
               wide
             />
           ) : null}
-          {summary.takeover ? (
+          {renderedSummary.takeover ? (
             <SummaryBlock
               title={t(locale, "\u63a5\u7ba1", "Takeover")}
-              block={summary.takeover}
+              block={renderedSummary.takeover}
               testId="task-autopilot-takeover"
             />
           ) : null}
         </div>
+        ) : null}
       </CardContent>
     </Card>
   );

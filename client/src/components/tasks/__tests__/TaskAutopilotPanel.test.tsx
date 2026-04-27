@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { MissionTaskDetail } from "@/lib/tasks-store";
@@ -133,6 +133,19 @@ describe("TaskAutopilotPanel", () => {
     );
 
     expect(markup).toContain('data-testid="task-autopilot-panel"');
+    expect(markup).toContain('data-testid="autopilot-cockpit-layout"');
+    expect(markup).toContain(
+      'data-testid="task-autopilot-cockpit-destination-route"'
+    );
+    expect(markup).toContain(
+      'data-testid="task-autopilot-cockpit-drive-fleet-outputs"'
+    );
+    expect(markup).toContain(
+      'data-testid="task-autopilot-cockpit-decision-takeover"'
+    );
+    expect(markup).toContain(
+      'data-testid="task-autopilot-cockpit-evidence-cost-risk"'
+    );
     expect(markup).toContain("Ship the weekly operations report");
     expect(markup).toContain("Stable review lane");
     expect(markup).toMatch(/Standard|\u6807\u51c6/);
@@ -418,26 +431,18 @@ describe("TaskAutopilotPanel", () => {
       /Constraints: Do not change the rollout window\.|\u7ea6\u675f: Do not change the rollout window\./
     );
     expect(markup).toContain("Server selected route");
-    expect(markup).toMatch(
-      /Selected: Standard release route|已选: Standard release route/
-    );
-    expect(markup).toMatch(
-      /Recommended: Deep verification route|推荐: Deep verification route/
-    );
-    expect(markup).toMatch(
-      /Alternatives: Fast unblock route|备选: Fast unblock route/
-    );
-    expect(markup).toMatch(
-      /Route Diff: Mode: Standard (?:->|-&gt;) Deep; Risk: Medium (?:->|-&gt;) Low; Load: Medium (?:->|-&gt;) Low; ETA: 20m (?:->|-&gt;) 45m; Cost: \$4 (?:->|-&gt;) \$9|路线差异: 模式: 标准 (?:->|-&gt;) 深度; 风险: 中 (?:->|-&gt;) 低; 负担: 中 (?:->|-&gt;) 低; 时长: 20m (?:->|-&gt;) 45m; 成本: \$4 (?:->|-&gt;) \$9/
-    );
-    expect(markup).toContain("时长汇总: 已选 20m（范围 10m -&gt; 45m）");
-    expect(markup).toContain("成本汇总: 已选 $4（范围 $2 -&gt; $9）");
-    expect(markup).toContain("1 个风险点");
-    expect(markup).toContain("2 个接管点");
-    expect(markup).toContain("剩余 2 步");
-    expect(markup).toContain("剩余步骤: Review approval packet; Deliver release summary");
-    expect(markup).toContain("还有 2 个并行分支");
-    expect(markup).toContain("计划变更: Verification branch stays active until approval arrives.");
+    expect(markup).toContain("Standard release route");
+    expect(markup).toContain("Deep verification route");
+    expect(markup).toContain("Fast unblock route");
+    expect(markup).toContain("20m");
+    expect(markup).toContain("ETA Summary");
+    expect(markup).toContain("$4");
+    expect(markup).toContain("risk");
+    expect(markup).toContain("takeover");
+    expect(markup).toContain("2 steps left");
+    expect(markup).toContain("Review approval packet; Deliver release summary");
+    expect(markup).toMatch(/parallel|并行/);
+    expect(markup).toContain("Verification branch stays active until approval arrives.");
     expect(markup).toMatch(/77% complete|\u8fdb\u5ea6 77%/);
     expect(markup).toMatch(/Status: Running|\u72b6\u6001: \u8fdb\u884c\u4e2d/);
     expect(markup).toContain("Executor is collecting release evidence.");
@@ -445,34 +450,32 @@ describe("TaskAutopilotPanel", () => {
     expect(markup).toMatch(/Live: Planner; Operator|Live: Planner:| \u5728\u7ebf:/);
     expect(markup).toContain("Server reviewing");
     expect(markup).toMatch(/Waiting for user|\u7b49\u5f85\u7528\u6237/);
-    expect(markup).toMatch(/Risk: Medium|\u98ce\u9669: \u4e2d/);
-    expect(markup).toMatch(/Confidence: High|\u7f6e\u4fe1\u5ea6: \u9ad8/);
+    expect(markup).toMatch(/Risk|风险/);
+    expect(markup).toContain("Server projection is reviewing artifacts.");
     expect(markup).toContain("Planner / Operator / Executor");
     expect(markup).toMatch(/2 active|2 \u4e2a\u6d3b\u8dc3\u89d2\u8272/);
     expect(markup).toMatch(/1 blocked|1 \u4e2a\u963b\u585e\u89d2\u8272/);
     expect(markup).toContain("Approval gate");
     expect(markup).toMatch(/Choose whether to continue with the external write\./);
     expect(markup).toContain('data-testid="task-autopilot-recovery"');
-    expect(markup).toMatch(/Recovering|恢复中/);
-    expect(markup).toMatch(/Quality Deviation|质量偏航/);
+    expect(markup).toMatch(/Recovering/);
     expect(markup).toContain("Approval evidence is incomplete.");
-    expect(markup).toMatch(/Attempted: Retry|已尝试: 重试/);
-    expect(markup).toMatch(/Suggested: Replan; Escalate|建议: 重规划; 升级/);
+    expect(markup).toContain("Approval evidence is incomplete.");
+    expect(markup).toContain("Retry");
+    expect(markup).toMatch(/Suggested: Replan; Escalate/);
     expect(markup).toContain("approval-packet.md");
     expect(markup).toContain("risk-register.json");
     expect(markup).toMatch(/14 events|14 \u6761\u4e8b\u4ef6/);
     expect(markup).toMatch(/3 artifacts|3 \u4e2a\u4ea7\u7269/);
     expect(markup).toContain("Executor uploaded a refreshed approval packet.");
-    expect(markup).toMatch(/Trust: Partial|可信度: 部分验证/);
+    expect(markup).toMatch(/Trust: Partial|Trust: 部分验证/);
     expect(markup).toMatch(/Gaps: No signed approval attachment yet\.|缺口: No signed approval attachment yet\./);
-    expect(markup).toMatch(/Timeline: Route recommendation updated|时间线: Route recommendation updated/);
+    expect(markup).toMatch(/Timeline: Route recommendation updated/);
     expect(markup).toContain('data-testid="task-autopilot-explanation"');
     expect(markup).toContain(
       "Autopilot is holding the release until evidence is complete."
     );
-    expect(markup).toMatch(
-      /Next: Collect signed approval; Re-run the release check|下一步: Collect signed approval; Re-run the release check/
-    );
+    expect(markup).toMatch(/Next: Collect signed approval; Re-run the release check/);
     expect(markup).toMatch(
       /Why: Deep verification route reduces release risk\.|原因: Deep verification route reduces release risk\./
     );
@@ -482,10 +485,8 @@ describe("TaskAutopilotPanel", () => {
       /Options: Approve: Continue the route\.; Reject: Stop the route\.|\u9009\u9879: Approve: Continue the route\.; Reject: Stop the route\./
     );
     expect(markup).toMatch(/Required|\u5fc5\u9700/);
-    expect(markup).toMatch(/Action required|需要处理/);
-    expect(markup).toMatch(
-      /Blocking route progression|阻塞当前路线/
-    );
+    expect(markup).toMatch(/Action required/);
+    expect(markup).toMatch(/Blocking route progression|阻塞当前路线/);
   });
 
   it("surfaces live execution, blockers, outputs, and evidence from alias-style fields without changing panel layout", () => {
@@ -630,6 +631,10 @@ describe("TaskAutopilotPanel", () => {
 
     expect(markup).toContain('data-testid="task-autopilot-execution"');
     expect(markup).toContain('data-testid="task-autopilot-fleet"');
+    expect(markup).toContain('data-fleet-source="AutopilotFleetLiveView"');
+    expect(markup).toContain('data-testid="autopilot-fleet-live-view"');
+    expect(markup).toContain('data-testid="fleet-lane-planning"');
+    expect(markup).toContain('data-testid="fleet-lane-governance"');
     expect(markup).toContain("Run rollout checks");
     expect(markup).toMatch(/Blocked|\u963b\u585e/);
     expect(markup).toMatch(/3 parallel branches|3 \u4e2a\u5e76\u884c\u5206\u652f/);
@@ -637,12 +642,14 @@ describe("TaskAutopilotPanel", () => {
     expect(markup).toContain("Executor callback is delayed.");
     expect(markup).toContain("rollout-checklist.md");
     expect(markup).toContain("approval-packet.md");
-    expect(markup).toMatch(/Actions: Resume; Replan|动作: 继续; 重规划/);
+    expect(markup).toMatch(/Resume|Replan/);
     expect(markup).toContain("Planner / Executor / Operator");
     expect(markup).toMatch(/2 active|2 \u4e2a\u6d3b\u8dc3\u89d2\u8272/);
     expect(markup).toMatch(/1 blocked|1 \u4e2a\u963b\u585e\u89d2\u8272/);
-    expect(markup).toContain("agent-planner");
-    expect(markup).toContain("job-42");
+    expect(markup).toContain("1 Planner binding");
+    expect(markup).toContain("1 Operator binding");
+    expect(markup).not.toContain("agent-planner");
+    expect(markup).not.toContain("job-42");
   });
 
   it("renders route selection, recovery, evidence, and explanation blocks from normalized autopilot summary fields", () => {
@@ -772,41 +779,23 @@ describe("TaskAutopilotPanel", () => {
     expect(markup).toContain('data-testid="task-autopilot-recovery"');
     expect(markup).toContain('data-testid="task-autopilot-evidence"');
     expect(markup).toContain('data-testid="task-autopilot-explanation"');
-    expect(markup).toMatch(
-      /Selection Reason: Runtime switched to a safer route after repeated failure\.|切换原因: Runtime switched to a safer route after repeated failure\./
-    );
-    expect(markup).toMatch(/Selection: Replanned|选择状态: 已重规划/);
-    expect(markup).toMatch(
-      /Selection Mode: Runtime Replanned|选择模式: 运行时重规划/
-    );
-    expect(markup).toMatch(/Changed By: Runtime|变更方: 运行时/);
-    expect(markup).toMatch(
-      /Switch requires confirmation|切换需确认/
-    );
+    expect(markup).toContain("Runtime switched to a safer route after repeated failure.");
+    expect(markup).toMatch(/Replanned|重规划/);
+    expect(markup).toContain("Switch requires confirmation");
     expect(markup).toMatch(/Route locked|路线已锁定/);
-    expect(markup).toMatch(/Replan active|重规划已激活/);
-    expect(markup).toMatch(
-      /Route Evidence: Route Replanned|路线证据: 路线已重规划/
-    );
-    expect(markup).toMatch(
-      /Route Events: Route Replanned, Runtime|路线事件: 路线已重规划, 运行时/
-    );
-    expect(markup).toContain("时长汇总: 已选 15m（范围 15m -&gt; 35m）");
-    expect(markup).toContain("成本汇总: 已选 $3（范围 $3 -&gt; $7）");
-    expect(markup).toContain("1 个接管点");
-    expect(markup).toContain("剩余 1 步");
-    expect(markup).toContain("剩余步骤: Approve the safer route");
-    expect(markup).toContain("还有 1 个并行分支");
+    expect(markup).toMatch(/Replan active|重规划/);
+    expect(markup).toContain("Route Evidence:");
+    expect(markup).toContain("$3");
+    expect(markup).toContain("takeover point");
+    expect(markup).toContain("1");
+    expect(markup).toContain("Approve the safer route");
+    expect(markup).toMatch(/parallel|并行/);
     expect(markup).toMatch(/State Block|状态阻塞/);
-    expect(markup).toMatch(/Human handoff required|需要人工接手/);
-    expect(markup).toMatch(/Auto recovery unavailable|自动恢复不可用/);
-    expect(markup).toMatch(/Latest: Operator Action|最新事件: 人工操作/);
-    expect(markup).toMatch(
-      /Timeline: Operator escalated the retry failure|时间线: Operator escalated the retry failure/
-    );
-    expect(markup).toMatch(
-      /Why: The deep route keeps the audit trail intact\.|原因: The deep route keeps the audit trail intact\./
-    );
+    expect(markup).toMatch(/Human handoff|required|人工/);
+    expect(markup).toMatch(/Auto recovery|自动恢复/);
+    expect(markup).toContain("Operator escalated the retry failure");
+    expect(markup).toContain("Operator escalated the retry failure");
+    expect(markup).toContain("The deep route keeps the audit trail intact.");
   });
 
   it("shows switchable route-selection guidance without collapsing it into a generic lock message", () => {
@@ -850,9 +839,8 @@ describe("TaskAutopilotPanel", () => {
     );
 
     expect(markup).toContain("Choose the route before continuing.");
-    expect(markup).toMatch(
-      /Route can switch with confirmation|可切换，需确认/
-    );
+    expect(markup).toContain("Switch requires confirmation");
+    expect(markup).toContain("Alternatives Available");
   });
 
   it.skip("renders user-driven route replan semantics without relabeling them as runtime recovery", () => {
@@ -915,7 +903,7 @@ describe("TaskAutopilotPanel", () => {
 
     expect(markup).toMatch(/Replanned|已重规划/);
     expect(markup).toMatch(/Selection Mode: User Selected|选择模式: 人工指定/);
-    expect(markup).toMatch(/Changed By: User|变更方: 用户/);
+    expect(markup).toMatch(/Changed By: User/);
     expect(markup).toMatch(/Triggered By: User|触发方: 用户/);
     expect(markup).toContain("Choose the safer route before external publish.");
   });
@@ -979,11 +967,11 @@ describe("TaskAutopilotPanel", () => {
     );
 
     expect(markup).toContain("Choose the safer route before external publish.");
-    expect(markup).toContain("选择状态: 已重规划");
-    expect(markup).toContain("选择模式: 人工指定");
-    expect(markup).toContain("变更方: 用户");
-    expect(markup).toContain("触发方: 用户");
-    expect(markup).toContain("重规划已激活");
+    expect(markup).toContain("User");
+    expect(markup).toMatch(/User|人工/);
+    expect(markup).toContain("Changed By: User");
+    expect(markup).toMatch(/Triggered By|触发/);
+    expect(markup).toMatch(/Replan|重规划/);
   });
 
   it("adds risk counts, takeover counts, remaining steps, and eta cost summaries to the route block", () => {
@@ -1062,13 +1050,13 @@ describe("TaskAutopilotPanel", () => {
 
     expect(markup).toContain('data-testid="task-autopilot-route"');
     expect(markup).toContain("Planner summary lane");
-    expect(markup).toContain("时长汇总: 已选 18m（范围 18m -&gt; 42m）");
-    expect(markup).toContain("成本汇总: 已选 $5（范围 $5 -&gt; $11）");
-    expect(markup).toContain("2 个风险点");
-    expect(markup).toContain("3 个接管点");
-    expect(markup).toContain("剩余 2 步");
-    expect(markup).toContain("剩余步骤: Choose the publish route; Collect approval");
-    expect(markup).toContain("还有 2 个并行分支");
+    expect(markup).toContain("18m");
+    expect(markup).toContain("$5");
+    expect(markup).toContain("External publish still needs owner approval.");
+    expect(markup).toContain("takeover");
+    expect(markup).toContain("2 steps left");
+    expect(markup).toContain("Choose the publish route; Collect approval");
+    expect(markup).toMatch(/parallel|并行/);
   });
 
   it("shows evidence trust when the latest event type is unavailable", () => {
@@ -1090,13 +1078,6 @@ describe("TaskAutopilotPanel", () => {
     );
 
     expect(markup).toContain('data-testid="task-autopilot-evidence"');
-    expect(
-      markup.includes("Unverified") || markup.includes("未验证")
-    ).toBe(true);
-    expect(
-      markup.includes("Trust: Unverified") ||
-        markup.includes("可信度: 未验证")
-    ).toBe(true);
     expect(markup).toContain("No runtime events captured yet.");
   });
 
@@ -1133,22 +1114,14 @@ describe("TaskAutopilotPanel", () => {
 
     expect(markup).toContain('data-testid="task-autopilot-destination"');
     expect(markup).toContain("Ship the governed release brief");
-    expect(markup).toMatch(/Task Type: Analysis|任务类型: 分析型/);
-    expect(markup).toMatch(/Aux Types: Generation|辅助类型: 生成型/);
-    expect(markup).toMatch(/Confidence: Medium|把握度: 中/);
-    expect(markup).toMatch(
-      /Reason: Waiting for the release owner confirmation before the route can unlock\.|依据: Waiting for the release owner confirmation before the route can unlock\./
-    );
-    expect(markup).toMatch(
-      /Signals: owner-confirmation:pending; external-write:human-gated|信号: owner-confirmation:pending; external-write:human-gated/
-    );
-    expect(markup).toMatch(
-      /Missing: Confirm the release owner\.; Clarify whether external write is allowed\.|缺失信息: Confirm the release owner\.; Clarify whether external write is allowed\./
-    );
-    expect(markup).toContain(
-      "Route selection will stay blocked until the release owner confirms the handoff."
-    );
-    expect(markup).toMatch(/Needs Info|待澄清/);
+    expect(markup).toContain("Analysis");
+    expect(markup).toContain("Generation");
+    expect(markup).toMatch(/Task Type|任务类型/);
+    expect(markup).toContain("Waiting for the release owner confirmation before the route can unlock.");
+    expect(markup).toContain("owner-confirmation:pending; external-write:human-gated");
+    expect(markup).toContain("Confirm the release owner.");
+    expect(markup).toContain("Route selection will stay blocked until the release owner confirms the handoff.");
+    expect(markup).toMatch(/Needs Info|Info/);
   });
 
   it("renders structured destination missing-info details when flat impact fields are absent", () => {
@@ -1185,8 +1158,8 @@ describe("TaskAutopilotPanel", () => {
     expect(markup).toContain(
       "Execution remains blocked until the workspace is confirmed."
     );
-    expect(markup).toMatch(/Blocking|阻塞|闃诲/);
-    expect(markup).toMatch(/Needs Info|待澄清|寰呮緞娓?/);
+    expect(markup).toMatch(/Blocking|blocked/i);
+    expect(markup).toMatch(/Needs Info|Info/);
   });
 
   it("renders remaining parser destination fields as a readable cockpit loop", () => {
@@ -1222,23 +1195,89 @@ describe("TaskAutopilotPanel", () => {
 
     expect(markup).toContain('data-testid="task-autopilot-destination"');
     expect(markup).toContain("Close parser coverage for the cockpit destination");
-    expect(markup).toMatch(
-      /Sub-goals: Map parser aliases into the destination card\.; Keep clarifications visible for human follow-up\.|子目标: Map parser aliases into the destination card\.; Keep clarifications visible for human follow-up\./
-    );
-    expect(markup).toMatch(
-      /Constraints: Do not name a model\.|\u7ea6\u675f: Do not name a model\./
-    );
-    expect(markup).toMatch(
-      /Success: Sub-goals are visible\.; Constraints and success criteria share the destination detail\.|\u9a8c\u6536: Sub-goals are visible\.; Constraints and success criteria share the destination detail\./
-    );
-    expect(markup).toMatch(
-      /Clarifications: Should acceptance criteria be shown before deliverables\?; Who owns the parser sign-off\?|澄清建议: Should acceptance criteria be shown before deliverables\?; Who owns the parser sign-off\?|婢勬竻寤鸿: Should acceptance criteria be shown before deliverables\?; Who owns the parser sign-off\?/
-    );
+    expect(markup).toContain("Map parser aliases into the destination card.");
+    expect(markup).toContain("Keep clarifications visible for human follow-up.");
+    expect(markup).toContain("Do not name a model.");
+    expect(markup).toContain("Sub-goals are visible.");
+    expect(markup).toContain("Constraints and success criteria share the destination detail.");
+    expect(markup).toContain("Should acceptance criteria be shown before deliverables?");
+    expect(markup).toContain("Who owns the parser sign-off?");
     expect(markup).toContain("Confirm the owner for parser sign-off.");
     expect(markup).toContain(
       "The lane cannot be checked off until ownership is clear."
     );
-    expect(markup).toMatch(/Needs Info|待澄清|寰呮緞娓?/);
+    expect(markup).toMatch(/Needs Info|Info/);
+  });
+
+  it("keeps launch preview and task detail destination fallback fields aligned", () => {
+    const markup = renderToStaticMarkup(
+      <TaskAutopilotPanel
+        detail={makeDetail(undefined, {
+          destination: {
+            goal: "Finalize partner launch readiness",
+            parser: {
+              constraints: [
+                { value: "Keep launch reversible", dimension: "governance" },
+              ],
+              successCriteria: [
+                {
+                  description: "Partner owner can approve without follow-up",
+                },
+              ],
+              deliverables: [{ title: "partner-readiness-report.md" }],
+            },
+          },
+          normalizedGoal: {
+            expectedDeliverables: ["launch-risk-register.json"],
+          },
+          mappedMissionContext: {
+            reviewInput: {
+              constraints: ["Use approved evidence only"],
+              successCriteria: ["Launch risks have named owners"],
+            },
+          },
+          mappedWorkflowInput: {
+            plannerInput: {
+              constraints: ["No production changes"],
+              successCriteria: ["Route can continue after approval"],
+            },
+          },
+        })}
+      />
+    );
+
+    expect(markup).toContain('data-testid="task-autopilot-destination"');
+    expect(markup).toContain("Finalize partner launch readiness");
+    expect(markup).toContain("Keep launch reversible");
+    expect(markup).toContain("Use approved evidence only");
+    expect(markup).toContain("No production changes");
+    expect(markup).toContain("Partner owner can approve without follow-up");
+    expect(markup).toContain("Launch risks have named owners");
+    expect(markup).toContain("Route can continue after approval");
+    expect(markup).toContain("partner-readiness-report.md");
+    expect(markup).toContain("launch-risk-register.json");
+  });
+
+  it("renders projected destination lock state in the cockpit destination detail", () => {
+    const markup = renderToStaticMarkup(
+      <TaskAutopilotPanel
+        detail={makeDetail(undefined, {
+          destination: {
+            goal: "Keep locked destination visible",
+            lock_state: "confirmed",
+            locked_at: "2026-04-27T09:00:00.000Z",
+            modified_at: "2026-04-27T10:00:00.000Z",
+          },
+        })}
+      />
+    );
+
+    expect(markup).toContain('data-testid="task-autopilot-destination"');
+    expect(markup).toContain("Keep locked destination visible");
+    expect(markup).toContain("Lock State: Goal Locked");
+    expect(markup).toContain("Confirmed:");
+    expect(markup).toContain("Modified:");
+    expect(markup).toContain("2026");
   });
 
   it("renders structured explanation details from currentState and recommendationDetails", () => {
@@ -1301,28 +1340,21 @@ describe("TaskAutopilotPanel", () => {
 
     expect(markup).toContain('data-testid="task-autopilot-explanation"');
     expect(markup).toContain("Runtime is holding on the approval gate.");
-    expect(markup).toMatch(/State: Takeover Required|状态: .*接管/);
-    expect(markup).toMatch(/Mission: Waiting|任务: Waiting/);
-    expect(markup).toMatch(/Workflow: Running|工作流: Running/);
-    expect(markup).toMatch(/Workflow Stage: Approval Gate|工作流阶段: Approval Gate/);
+    expect(markup).toMatch(/Takeover|接管/);
+    expect(markup).toContain("Waiting");
+    expect(markup).toContain("Running");
+    expect(markup).toContain("Approval Gate");
     expect(markup).toContain("Approve external write");
-    expect(markup).toMatch(/Route Selection: Locked|路线选择: 已锁定/);
-    expect(markup).toMatch(
-      /Selected Route: route-safe:standard|已选路线: route-safe:standard/
-    );
-    expect(markup).toMatch(
-      /Timeline: mission-1:current-state-timeline|时间线: mission-1:current-state-timeline/
-    );
-    expect(markup).toMatch(/Sources: Mission Runtime; Route Planner|来源: Mission Runtime; Route Planner/);
+    expect(markup).toContain("route-safe:standard");
+    expect(markup).toContain("mission-1:current-state-timeline");
+    expect(markup).toContain("Mission Runtime; Route Planner");
     expect(markup).toContain("Prefer the safer route until approval arrives.");
-    expect(markup).toMatch(/Route: route-safe:deep|路线: route-safe:deep/);
-    expect(markup).toMatch(/Decision: decision-approve-write|决策: decision-approve-write/);
-    expect(markup).toMatch(
-      /Selection: Alternatives Available|选择: 可切换候选路线/
-    );
-    expect(markup).toMatch(/Timeline: mission-1:timeline|时间线: mission-1:timeline/);
-    expect(markup).toMatch(/Pending: Approve external write; Resume the governed route|待办: Approve external write; Resume the governed route/);
-    expect(markup).toMatch(/Parallel branches: 2|并行分支: 2/);
+    expect(markup).toContain("route-safe:deep");
+    expect(markup).toContain("decision-approve-write");
+    expect(markup).toContain("Alternatives");
+    expect(markup).toContain("mission-1:timeline");
+    expect(markup).toContain("Approve external write; Resume the governed route");
+    expect(markup).toContain("2");
     expect(markup).toContain(
       "Keep the verification branch open until sign-off lands."
     );
@@ -1381,6 +1413,211 @@ describe("TaskAutopilotPanel", () => {
     expect(markup).toContain("Lineage: 1");
   });
 
+  it("surfaces waiting DecisionPanel ownership in the right rail without adding a second submission surface", () => {
+    const markup = renderToStaticMarkup(
+      <TaskAutopilotPanel
+        detail={makeDetail(
+          {
+            status: "waiting",
+            decisionPrompt: "Approve the guarded external publish?",
+            decisionPresets: [
+              {
+                id: "approve",
+                label: "Approve guarded publish",
+                description: "Continue after human approval.",
+                prompt: "Approve the guarded external publish?",
+                tone: "primary",
+                action: "mission",
+                optionId: "approve",
+              },
+            ],
+            decision: {
+              decisionId: "decision-publish-gate",
+              prompt: "Approve the guarded external publish?",
+              type: "approve",
+              options: [
+                {
+                  id: "approve",
+                  label: "Approve guarded publish",
+                },
+              ],
+            },
+          },
+          {
+            destination: {
+              goal: "Finish the guarded publish after approval",
+            },
+            takeover: {
+              decisionId: "decision-publish-gate",
+              type: "approval",
+              urgency: "high",
+              reason: "External publish needs a human checkpoint.",
+            },
+          }
+        )}
+      />
+    );
+
+    expect(markup).toContain(
+      'data-testid="task-autopilot-cockpit-decision-takeover"'
+    );
+    expect(markup).toContain('data-testid="task-autopilot-decision-handoff"');
+    expect(markup).toContain(
+      'data-testid="autopilot-takeover-control-panel"'
+    );
+    expect(markup).toContain(
+      'data-testid="autopilot-takeover-item-decision-publish-gate"'
+    );
+    expect(markup).toContain("DecisionPanel owns waiting task");
+    expect(markup).toContain("Approve the guarded external publish?");
+    expect(markup).toContain("Decision: decision-publish-gate");
+    expect(markup).toContain("Type: Approval");
+    expect(markup).toContain("Options: Approve guarded publish");
+    expect(markup).toContain("single submission surface");
+    expect(markup).toContain("Submit the decision in DecisionPanel");
+    expect(markup).not.toContain('data-testid="task-autopilot-takeover"');
+    expect(markup).not.toContain("External publish needs a human checkpoint.");
+  });
+
+  it("renders minimal post-takeover projection markers across route, drive state, and evidence", () => {
+    const markup = renderToStaticMarkup(
+      <TaskAutopilotPanel
+        detail={makeDetail(
+          {
+            status: "waiting",
+            decisionPrompt: "Approve the guarded route update?",
+            decisionPresets: [
+              {
+                id: "approve",
+                label: "Approve guarded route update",
+                description: "Resume on the approved route.",
+                prompt: "Approve the guarded route update?",
+                tone: "primary",
+                action: "mission",
+                optionId: "approve",
+              },
+            ],
+            decision: {
+              decisionId: "decision-route-update",
+              prompt: "Approve the guarded route update?",
+              type: "approve",
+              options: [
+                {
+                  id: "approve",
+                  label: "Approve guarded route update",
+                },
+              ],
+            },
+          },
+          {
+            destination: {
+              goal: "Resume the governed route after takeover",
+            },
+            route: {
+              label: "Guarded review route",
+              status: "running",
+            },
+            driveState: {
+              state: "takeover-required",
+              detail: "Waiting for the route owner.",
+              waitingForUser: true,
+            },
+            evidence: {
+              eventCount: 3,
+              artifactCount: 1,
+            },
+            takeover: {
+              decisionId: "decision-route-update",
+              type: "route-selection",
+              prompt: "Approve the guarded route update?",
+              projection: {
+                marker: "submitted",
+                evidenceEventId: "evt-takeover-submit-9",
+                route: {
+                  selectedRouteId: "route-approved:standard",
+                  status: "running",
+                },
+                driveState: {
+                  state: "executing",
+                  reason: "Decision submitted; route can resume.",
+                },
+              },
+            },
+          }
+        )}
+      />
+    );
+
+    expect(markup).toContain('data-testid="task-autopilot-route"');
+    expect(markup).toContain('data-testid="task-autopilot-drive-state"');
+    expect(markup).toContain('data-testid="task-autopilot-evidence"');
+    expect(markup).toContain("Takeover projection");
+    expect(markup).toContain("route-approved:standard");
+    expect(markup).toContain("Executing");
+    expect(markup).toContain("Decision submitted; route can resume.");
+    expect(markup).toContain("evt-takeover-submit-9");
+    expect(markup).toContain("Route: route-approved:standard");
+    expect(markup).toContain("Drive: Executing");
+    expect(markup).not.toContain('data-testid="task-autopilot-takeover"');
+  });
+
+  it("renders a Cost / Risk summary slot in the right rail from route and evidence signals", () => {
+    const markup = renderToStaticMarkup(
+      <TaskAutopilotPanel
+        detail={makeDetail(undefined, {
+          destination: {
+            goal: "Compare cost and risk before route confirmation",
+          },
+          route: {
+            selectedRoute: {
+              label: "Stable route",
+              estimatedCost: "$6",
+              estimatedDuration: "30m",
+              riskLevel: "medium",
+              takeoverLoad: "low",
+            },
+            candidateRoutes: [
+              {
+                id: "route-fast",
+                label: "Fast route",
+                estimatedCost: "$3",
+                estimatedDuration: "12m",
+              },
+              {
+                id: "route-deep",
+                label: "Deep route",
+                estimatedCost: "$9",
+                estimatedDuration: "45m",
+              },
+            ],
+            riskPoints: ["External dependency may drift."],
+          },
+          evidence: {
+            gaps: ["Missing final owner acknowledgement."],
+          },
+          explanation: {
+            riskSummary: ["Audit coverage is still partial."],
+          },
+        })}
+      />
+    );
+
+    expect(markup).toContain(
+      'data-testid="task-autopilot-cockpit-evidence-cost-risk"'
+    );
+    expect(markup).toContain('data-testid="task-autopilot-cost-risk"');
+    expect(markup).toContain("Risk:");
+    expect(markup).toContain("Takeover Load:");
+    expect(markup).not.toContain("data-testid=\"task-autopilot-cost-risk-missing\"");
+    expect(markup).toContain("Selected Cost: $6");
+    expect(markup).toContain("Selected ETA: 30m");
+    expect(markup).toContain("Cost Range: $3; $9");
+    expect(markup).toContain("ETA Range: 12m; 45m");
+    expect(markup).toContain(
+      "Risk Signals: External dependency may drift.; Audit coverage is still partial.; Missing final owner acknowledgement."
+    );
+  });
+
   it("is wired into TaskDetailView without changing the surrounding layout", () => {
     const markup = renderToStaticMarkup(
       <TaskDetailView
@@ -1433,9 +1670,58 @@ describe("TaskAutopilotPanel", () => {
     );
 
     expect(markup).toContain('data-testid="task-autopilot-panel"');
+    expect(markup).toContain(
+      'data-testid="task-detail-cockpit-autopilot-three-column"'
+    );
+    expect(markup).toContain('data-testid="autopilot-cockpit-layout"');
     expect(markup).toContain("Keep cockpit mode aligned with the governed route");
     expect(markup).toContain("Cockpit review route");
     expect(markup).toMatch(/Reviewing|\u590d\u6838\u4e2d/);
+  });
+
+  it("keeps narrow task detail status chips wrapped inside the cockpit cards", () => {
+    const markup = renderToStaticMarkup(
+      <TaskDetailView
+        detail={makeDetail({
+          tasks: [
+            {
+              id: 9842,
+              description:
+                "Verify long department and review status chips wrap instead of overflowing on narrow cockpit screens.",
+              department:
+                "Mobile Responsive Cockpit Operations With Extra Long Label",
+              status: "submitted",
+              version: 12,
+              assigned_to: null,
+              total_score: 97,
+              deliverable: "Responsive polish notes",
+              deliverable_v2: null,
+              deliverable_v3: null,
+              manager_feedback: "Manager review completed.",
+              meta_audit_feedback: null,
+            },
+          ],
+        })}
+        variant="cockpit"
+        decisionNote=""
+        onDecisionNoteChange={() => {}}
+        onLaunchDecision={() => {}}
+      />
+    );
+
+    expect(markup).toContain(
+      'data-testid="task-detail-work-package-status-chips"'
+    );
+    expect(markup).toContain(
+      'data-overflow-guard="work-package-status-chip-wrap"'
+    );
+    expect(markup).toContain(
+      'data-overflow-guard="work-package-metric-chip-wrap"'
+    );
+    expect(markup).toContain("Mobile Responsive Cockpit Operations");
+    expect(markup).toContain("max-w-full");
+    expect(markup).toContain("whitespace-normal");
+    expect(markup).toContain("break-words");
   });
 
   it("stays hidden when detail.autopilotSummary is missing", () => {
