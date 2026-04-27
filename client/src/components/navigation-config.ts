@@ -1,12 +1,20 @@
 import {
+  BarChart3,
+  Bell,
+  BookOpen,
   BriefcaseBusiness,
+  Database,
   FileSearch,
   FolderKanban,
   HelpCircle,
   LayoutGrid,
+  ListTodo,
   type LucideIcon,
+  Navigation,
+  Settings,
   Settings2,
   Shield,
+  Store,
 } from "lucide-react";
 
 export type PrimaryNavigationId = "office" | "more";
@@ -158,4 +166,51 @@ export function isLowFrequencyPath(path: string) {
 export function getPrimaryNavigationId(path: string): PrimaryNavigationId {
   if (isLowFrequencyPath(path)) return "more";
   return "office";
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar navigation (spec: ui-redesign-sidebar-navigation)
+// ---------------------------------------------------------------------------
+
+export type SidebarNavigationId =
+  | "autopilot"
+  | "tasks"
+  | "projects"
+  | "knowledge"
+  | "datasource"
+  | "dashboard"
+  | "marketplace"
+  | "notifications"
+  | "settings";
+
+export interface SidebarNavigationItem {
+  id: SidebarNavigationId;
+  icon: LucideIcon;
+  href?: string;
+  mobileVisible: boolean;
+  disabled?: boolean;
+}
+
+export const SIDEBAR_NAV_ITEMS: SidebarNavigationItem[] = [
+  { id: "autopilot",     icon: Navigation,    href: "/",      mobileVisible: true },
+  { id: "tasks",         icon: ListTodo,      href: "/tasks", mobileVisible: true },
+  { id: "projects",      icon: FolderKanban,                  mobileVisible: false, disabled: true },
+  { id: "knowledge",     icon: BookOpen,                      mobileVisible: true,  disabled: true },
+  { id: "datasource",    icon: Database,                      mobileVisible: false, disabled: true },
+  { id: "dashboard",     icon: BarChart3,                     mobileVisible: false, disabled: true },
+  { id: "marketplace",   icon: Store,                         mobileVisible: false, disabled: true },
+  { id: "notifications", icon: Bell,                          mobileVisible: false, disabled: true },
+  { id: "settings",      icon: Settings,      href: "/debug", mobileVisible: true },
+];
+
+export function getMobileTabItems(): SidebarNavigationItem[] {
+  return SIDEBAR_NAV_ITEMS.filter(item => item.mobileVisible);
+}
+
+export function getActiveSidebarId(path: string): SidebarNavigationId {
+  const pathname = normalizeNavigationPath(path);
+  if (pathname === "/" || pathname === "") return "autopilot";
+  if (matchesPathPrefix(pathname, "/tasks")) return "tasks";
+  if (matchesPathPrefix(pathname, "/debug")) return "settings";
+  return "autopilot";
 }

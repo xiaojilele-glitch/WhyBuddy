@@ -2,13 +2,15 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Router as WouterRouter, Switch, useLocation } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { AppSidebar } from "./components/AppSidebar";
 import { ConfigPanel } from "./components/ConfigPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { MobileTabBar } from "./components/MobileTabBar";
 import { RecoveryDialog } from "./components/RecoveryDialog";
-import { Toolbar } from "./components/Toolbar";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { useRecoveryDetection } from "./hooks/useRecoveryDetection";
+import { useViewportTier } from "./hooks/useViewportTier";
 import { useAppStore } from "./lib/store";
 import Home from "./pages/Home";
 import { TaskDetailPage, TasksPage } from "./pages/tasks";
@@ -110,6 +112,16 @@ function RecoveryGuard() {
 }
 
 function App() {
+  const { isMobile, isTablet } = useViewportTier();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Default to collapsed on tablet
+  useEffect(() => {
+    setSidebarCollapsed(isTablet);
+  }, [isTablet]);
+
+  const sidebarWidth = isMobile ? 0 : sidebarCollapsed ? 64 : 240;
+
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
@@ -130,8 +142,31 @@ function App() {
           />
           <WouterRouter base={routerBase}>
             <RecoveryGuard />
-            <Router />
-            <Toolbar />
+
+            {/* Sidebar (desktop / tablet) */}
+            {!isMobile && (
+              <AppSidebar
+                collapsed={sidebarCollapsed}
+                onToggleCollapse={() => setSidebarCollapsed(c => !c)}
+              />
+            )}
+
+            {/* Content Area */}
+            <div
+              style={
+                {
+                  marginLeft: `${sidebarWidth}px`,
+                  "--sidebar-width": `${sidebarWidth}px`,
+                  transition: "margin-left 250ms ease-in-out",
+                } as React.CSSProperties
+              }
+            >
+              <Router />
+            </div>
+
+            {/* Mobile bottom tab bar */}
+            {isMobile && <MobileTabBar />}
+
             <ConfigPanel />
           </WouterRouter>
         </TooltipProvider>

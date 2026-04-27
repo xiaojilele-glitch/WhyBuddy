@@ -19,7 +19,6 @@ import { useDemoMode } from "@/hooks/useDemoMode";
 import { useWorkflowRuntimeBootstrap } from "@/hooks/useWorkflowRuntimeBootstrap";
 import { useI18n } from "@/i18n";
 import { CAN_USE_ADVANCED_RUNTIME, IS_GITHUB_PAGES } from "@/lib/deploy-target";
-import { OFFICE_DESKTOP_OPEN_MORE_EVENT } from "@/lib/navigation-events";
 import { buildOfficeNoticeBoardSnapshot } from "@/lib/scene-agent-detail";
 import { useAppStore } from "@/lib/store";
 import { useTelemetryStore } from "@/lib/telemetry-store";
@@ -309,11 +308,7 @@ export default function Home() {
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        window.dispatchEvent(
-                          new Event(OFFICE_DESKTOP_OPEN_MORE_EVENT)
-                        )
-                      }
+                      onClick={() => setLocation("/debug")}
                       className="rounded-full px-3 py-1 text-[11px] font-semibold text-[#8B7355] transition-all hover:text-[#5A4A3A]"
                     >
                       {copy.toolbar.primaryNav.more.label}
