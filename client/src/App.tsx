@@ -3,6 +3,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Router as WouterRouter, Switch, useLocation } from "wouter";
 import { useEffect, useState } from "react";
+
+import { REPLAY_PATH_PREFIX } from "@/components/navigation-config";
+import { ReplayPage } from "@/components/replay/ReplayPage";
+import DebugPage from "@/pages/debug/DebugPage";
+import LegacyCommandCenterPage from "@/pages/nl-command/LegacyCommandCenterPage";
+import LineagePage from "@/pages/lineage/LineagePage";
+
 import { AppSidebar } from "./components/AppSidebar";
 import { ConfigPanel } from "./components/ConfigPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -14,11 +21,6 @@ import { useViewportTier } from "./hooks/useViewportTier";
 import { useAppStore } from "./lib/store";
 import Home from "./pages/Home";
 import { TaskDetailPage, TasksPage } from "./pages/tasks";
-import { ReplayPage } from "./components/replay/ReplayPage";
-import LegacyCommandCenterPage from "@/pages/nl-command/LegacyCommandCenterPage";
-import LineagePage from "@/pages/lineage/LineagePage";
-import DebugPage from "@/pages/debug/DebugPage";
-import { REPLAY_PATH_PREFIX } from "@/components/navigation-config";
 
 const routerBase =
   import.meta.env.BASE_URL === "/"
@@ -82,10 +84,6 @@ function LocaleSync() {
   return null;
 }
 
-/**
- * RecoveryGuard — 启动时检测未完成快照，显示 RecoveryDialog。
- * 必须在 WouterRouter 内部渲染（需要 useLocation 进行导航）。
- */
 function RecoveryGuard() {
   const [, setLocation] = useLocation();
   const {
@@ -111,17 +109,46 @@ function RecoveryGuard() {
   );
 }
 
-function App() {
+function AppShell() {
   const { isMobile, isTablet } = useViewportTier();
+  const [location] = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Default to collapsed on tablet
   useEffect(() => {
     setSidebarCollapsed(isTablet);
   }, [isTablet]);
 
   const sidebarWidth = isMobile ? 0 : sidebarCollapsed ? 64 : 240;
 
+  return (
+    <>
+      <RecoveryGuard />
+
+      {!isMobile && location !== "/" && (
+        <AppSidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(current => !current)}
+        />
+      )}
+
+      <div
+        style={
+          {
+            "--sidebar-width": `${location === "/" ? 0 : sidebarWidth}px`,
+          } as React.CSSProperties
+        }
+      >
+        <Router />
+      </div>
+
+      {isMobile && <MobileTabBar />}
+
+      <ConfigPanel />
+    </>
+  );
+}
+
+function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
@@ -141,31 +168,7 @@ function App() {
             }}
           />
           <WouterRouter base={routerBase}>
-            <RecoveryGuard />
-
-            {/* Sidebar (desktop / tablet) */}
-            {!isMobile && (
-              <AppSidebar
-                collapsed={sidebarCollapsed}
-                onToggleCollapse={() => setSidebarCollapsed(c => !c)}
-              />
-            )}
-
-            {/* Content Area — full width, scene underneath */}
-            <div
-              style={
-                {
-                  "--sidebar-width": `${sidebarWidth}px`,
-                } as React.CSSProperties
-              }
-            >
-              <Router />
-            </div>
-
-            {/* Mobile bottom tab bar */}
-            {isMobile && <MobileTabBar />}
-
-            <ConfigPanel />
+            <AppShell />
           </WouterRouter>
         </TooltipProvider>
       </ThemeProvider>

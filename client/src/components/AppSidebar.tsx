@@ -138,9 +138,14 @@ function SidebarTaskStats() {
 export interface AppSidebarProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
+  embedded?: boolean;
 }
 
-export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
+export function AppSidebar({
+  collapsed,
+  onToggleCollapse,
+  embedded = false,
+}: AppSidebarProps) {
   const [location, setLocation] = useLocation();
   const { copy } = useI18n();
   const activeId = getActiveSidebarId(location);
@@ -160,7 +165,11 @@ export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
 
   return (
     <aside
-      className="fixed left-0 top-0 bottom-0 z-40 flex flex-col border-r transition-[width] duration-[250ms] ease-in-out backdrop-blur-xl"
+      className={cn(
+        "flex flex-col border-r transition-[width] duration-[250ms] ease-in-out backdrop-blur-xl",
+        embedded ? "relative h-full" : "fixed bottom-0 left-0 top-0 z-40",
+      )}
+      data-sidebar-mode={embedded ? "embedded" : "fixed"}
       style={{
         width: collapsed ? 64 : 240,
         backgroundColor: "rgba(22, 35, 63, 0.88)",
