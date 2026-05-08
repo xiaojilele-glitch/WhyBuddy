@@ -58,3 +58,37 @@
 4.2 系统 SHALL 支持步骤级部分成功和局部回退。  
 4.3 系统 SHALL 保留失败时已生成的资产和事件。  
 4.4 系统 SHALL 为前端提供可理解的失败解释。
+## 新增改造：阶段与事件契约
+
+### 需求 5：作业阶段要覆盖澄清、沙盒推导、运行台联动和交接态
+
+Job contract SHALL 明确区分各阶段的状态和交接语义。
+
+#### 验收标准
+
+5.1 系统 SHALL 具备 clarification、route_generation、spec_tree、spec_docs、preview、prompt_packaging、engineering_handoff 等阶段。
+5.2 系统 SHALL 将 `reviewing` 定义为已生成草稿、待人工确认的交接状态。
+5.3 系统 SHALL 允许不同阶段带不同的 payload 和 nextAction。
+5.4 系统 SHALL 保证前端可根据阶段直接决定展示内容。
+
+### 需求 6：事件契约要覆盖运行台和证据流
+
+统一响应 SHALL 支持将运行台、日志和证据一起推送给前端。
+
+#### 验收标准
+
+6.1 系统 SHALL 定义 clarification.*、sandbox.*、role.*、route.*、spec.*、scene.*、hud.*、browser.* 和 evidence.* 事件类型。
+6.2 系统 SHALL 允许事件携带 jobId、routeId、selectionId、specTreeId、nodeId 和 artifactId。
+6.3 系统 SHALL 允许前端按事件流驱动 3D、HUD、日志和浏览器预览。
+6.4 系统 SHALL 保留失败、重试和部分成功的事件链路.
+### 需求 7：扩展事件类型以覆盖 crew 与 capability
+
+**用户故事：** 作为前端和回放层，我希望能区分团队级事件和能力级事件，这样角色面板和执行细节可以分开渲染。
+
+#### 验收标准
+
+7.1 系统 SHALL 定义 `crew.*`、`capability.*`、`preview.*`、`prompt.*` 和 `mission.*` 事件类型。
+7.2 系统 SHALL 允许 `crew.*` 事件包含 crewId、roleIds、stage、presenceSummary 和 artifactIds。
+7.3 系统 SHALL 允许 `capability.*` 事件包含 roleId、capabilityId、nodeId、stage、inputSummary 和 outputSummary。
+7.4 系统 SHALL 允许 `preview.*` 事件描述未来效果预演，`prompt.*` 事件描述提示词打包，`mission.*` 事件描述工程落地交接。
+7.5 系统 SHALL 允许前端按事件级别分别订阅团队状态、执行细节、预演和交接状态。

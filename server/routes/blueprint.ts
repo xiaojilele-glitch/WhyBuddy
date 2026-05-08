@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -15,12 +15,18 @@ import type {
   BlueprintArtifactLineageEdge,
   BlueprintArtifactMemoryEntry,
   BlueprintArtifactPayloadSummary,
+  BlueprintArtifactDecisionReplay,
+  BlueprintArtifactEvolutionReplay,
   BlueprintArtifactReplayResponse,
   BlueprintArtifactReplaySnapshot,
   BlueprintArtifactReplayTimelineEntry,
   BlueprintArtifactReplaysResponse,
   BlueprintArtifactSourceIds,
   BlueprintCapabilityUsage,
+  BlueprintAgentCrew,
+  BlueprintAgentCrewResponse,
+  BlueprintAgentRole,
+  BlueprintCapabilityBinding,
   BlueprintCapabilityEvidence,
   BlueprintCapabilityEvidenceResponse,
   BlueprintCapabilityInvocation,
@@ -30,12 +36,21 @@ import type {
   BlueprintClarificationAnswer,
   BlueprintClarificationQuestion,
   BlueprintClarificationReadiness,
+  BlueprintClarificationReadinessSignalId,
+  BlueprintClarificationRouteDimension,
   BlueprintClarificationSession,
+  BlueprintClarificationStrategyId,
   BlueprintFetchCapabilityEvidenceRequest,
   BlueprintFetchCapabilityInvocationsRequest,
   BlueprintGithubSource,
   BlueprintInvokeCapabilityResponse,
   BlueprintRuntimeCapability,
+  BlueprintSandboxDerivationJob,
+  BlueprintSandboxDerivationJobRequest,
+  BlueprintSandboxDerivationJobResponse,
+  BlueprintSandboxDerivationJobsResponse,
+  BlueprintSandboxDerivationExecutionMode,
+  BlueprintSandboxRoutePath,
   BlueprintCreateGenerationJobResponse,
   BlueprintCreateArtifactReplayRequest,
   BlueprintDomainAsset,
@@ -44,11 +59,16 @@ import type {
   BlueprintIntakeRequest,
   BlueprintProjectDomainContext,
   BlueprintEffectPreview,
+  BlueprintEffectPreviewDependencyOrderEntry,
+  BlueprintEffectPreviewRuntimeProjection,
   BlueprintEffectPreviewMilestone,
+  BlueprintEffectPreviewNodeProgress,
   BlueprintEffectPreviewNode,
   BlueprintEffectPreviewPrototypeCue,
   BlueprintEffectPreviewSourceStatus,
   BlueprintEffectPreviewStatus,
+  BlueprintEffectPreviewVersionStatus,
+  BlueprintEffectPreviewVersionSync,
   BlueprintEffectPreviewsResponse,
   BlueprintEngineeringLandingPlan,
   BlueprintEngineeringLandingPlanStatus,
@@ -65,12 +85,27 @@ import type {
   BlueprintGenerateEffectPreviewsRequest,
   BlueprintGenerationArtifact,
   BlueprintGenerationEvent,
+  BlueprintGenerationEventFamily,
+  BlueprintGenerationEventFilters,
   BlueprintGenerationEventsResponse,
   BlueprintGenerationJob,
+  BlueprintGenerationArtifactLink,
+  BlueprintGenerationNextAction,
+  BlueprintGenerationNextActionOption,
   BlueprintGenerationRequest,
   BlueprintGenerationStage,
   BlueprintGenerationStatus,
+  BlueprintReviewHandoffState,
   BlueprintLatestGenerationJobResponse,
+  BlueprintRoleTimeline,
+  BlueprintRoleTimelineCollection,
+  BlueprintRoleTimelineEntry,
+  BlueprintRoleTimelineFilters,
+  BlueprintRoleTimelinesResponse,
+  BlueprintRolePresence,
+  BlueprintRolePresenceState,
+  BlueprintStageActivationPolicy,
+  BlueprintGenerationStagePayloadKind,
   BlueprintImplementationPromptItem,
   BlueprintImplementationPromptPackagesResponse,
   BlueprintImplementationPromptPackage,
@@ -347,8 +382,15 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
   });
 
   router.get("/capabilities", (_req, res) => {
+    const capabilities = getDefaultRuntimeCapabilities();
     res.json({
-      capabilities: getDefaultRuntimeCapabilities(),
+      capabilities,
+      agentCrew: buildAgentCrew({
+        jobId: "blueprint-capability-catalog",
+        stage: "runtime_capability",
+        createdAt: (deps.now?.() ?? new Date()).toISOString(),
+        capabilities,
+      }),
     } satisfies BlueprintCapabilityRegistryResponse);
   });
 
@@ -399,9 +441,19 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
       return;
     }
 
+    const parsed = parseClarificationSessionRequest(req.body);
+    if (!parsed.ok) {
+      res.status(400).json({
+        error: "Invalid blueprint clarification session request.",
+        message: parsed.message,
+      });
+      return;
+    }
+
     const session = createClarificationSession(intake, {
       now: deps.now,
       stores: blueprintStores,
+      request: parsed.request,
     });
 
     res.status(201).json({ session });
@@ -511,10 +563,80 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
       return;
     }
 
+    const parsed = parseGenerationEventFilters(req.query);
+    if (!parsed.ok) {
+      res.status(400).json({
+        error: "Invalid blueprint generation event filters.",
+        message: parsed.message,
+      });
+      return;
+    }
+
     res.json({
       job,
-      events: job.events,
+      events: filterGenerationEvents(job.events, parsed.filters),
+      filters: parsed.filters,
     } satisfies BlueprintGenerationEventsResponse);
+  };
+
+  const handleAgentCrew = (req: Request, res: Response) => {
+    const job = jobStore.get(req.params.jobId);
+    if (!job) {
+      res.status(404).json({
+        error: "Blueprint generation job not found.",
+        message: `No blueprint generation job exists for ${req.params.jobId}.`,
+      });
+      return;
+    }
+
+    const registry = getOrCreateCapabilityRegistry(job, {
+      now: deps.now,
+      store: jobStore,
+    });
+    const latestJob = registry.job;
+    const agentCrew = extractAgentCrew(latestJob) ?? registry.agentCrew;
+
+    res.json({
+      job: latestJob,
+      routeSet: extractRouteSet(latestJob),
+      specTree: extractSpecTree(latestJob),
+      agentCrew,
+      roleTimelines: extractRoleTimelines(latestJob),
+    } satisfies BlueprintAgentCrewResponse);
+  };
+
+  const handleRoleTimelines = (req: Request, res: Response) => {
+    const job = jobStore.get(req.params.jobId);
+    if (!job) {
+      res.status(404).json({
+        error: "Blueprint generation job not found.",
+        message: `No blueprint generation job exists for ${req.params.jobId}.`,
+      });
+      return;
+    }
+
+    const parsed = parseRoleTimelineFilters(req.query);
+    if (!parsed.ok) {
+      res.status(400).json({
+        error: "Invalid blueprint role timeline filters.",
+        message: parsed.message,
+      });
+      return;
+    }
+
+    const roleTimelines = filterRoleTimelines(
+      extractRoleTimelines(job),
+      parsed.filters
+    );
+
+    res.json({
+      job,
+      routeSet: extractRouteSet(job),
+      specTree: extractSpecTree(job),
+      agentCrew: extractAgentCrew(job),
+      roleTimelines,
+      filters: parsed.filters,
+    } satisfies BlueprintRoleTimelinesResponse);
   };
 
   const handleJobEventStream = (req: Request, res: Response) => {
@@ -532,7 +654,18 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
 
-    for (const event of job.events) {
+    const parsed = parseGenerationEventFilters(req.query);
+    if (!parsed.ok) {
+      res.status(400).json({
+        error: "Invalid blueprint generation event filters.",
+        message: parsed.message,
+      });
+      return;
+    }
+
+    const events = filterGenerationEvents(job.events, parsed.filters);
+
+    for (const event of events) {
       res.write(formatServerSentEvent(event.type, event, event.id));
     }
 
@@ -540,7 +673,8 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
       formatServerSentEvent("done", {
         jobId: job.id,
         status: job.status,
-        eventCount: job.events.length,
+        filters: parsed.filters,
+        eventCount: events.length,
       })
     );
     res.end();
@@ -563,6 +697,8 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
   router.get("/generations/:jobId/events", handleJobEvents);
   router.get("/generations/:jobId/events/stream", handleJobEventStream);
   router.get("/generations/:jobId", handleJobDetails);
+  router.get("/jobs/:jobId/agent-crew", handleAgentCrew);
+  router.get("/jobs/:jobId/role-timelines", handleRoleTimelines);
 
   router.get("/jobs/:jobId/capabilities", (req, res) => {
     const job = jobStore.get(req.params.jobId);
@@ -584,6 +720,7 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
       routeSet: extractRouteSet(result.job),
       specTree: extractSpecTree(result.job),
       capabilities: result.capabilities,
+      agentCrew: extractAgentCrew(result.job) ?? result.agentCrew,
       invocations: extractCapabilityInvocations(result.job),
     } satisfies BlueprintCapabilityInvocationsResponse);
   });
@@ -617,6 +754,7 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
       routeSet: extractRouteSet(registry.job),
       specTree: extractSpecTree(registry.job),
       capabilities: registry.capabilities,
+      agentCrew: extractAgentCrew(registry.job) ?? registry.agentCrew,
       invocations: filterCapabilityInvocations(
         extractCapabilityInvocations(registry.job),
         parsed.filters
@@ -644,6 +782,59 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
     }
 
     const result = invokeCapability(job, parsed.request, {
+      now: deps.now,
+      store: jobStore,
+    });
+
+    if (!result.ok) {
+      res.status(result.status).json({
+        error: result.error,
+        message: result.message,
+      });
+      return;
+    }
+
+    res.status(201).json(result.response);
+  });
+
+  router.get("/jobs/:jobId/sandbox-derivation-jobs", (req, res) => {
+    const job = jobStore.get(req.params.jobId);
+    if (!job) {
+      res.status(404).json({
+        error: "Blueprint generation job not found.",
+        message: `No blueprint generation job exists for ${req.params.jobId}.`,
+      });
+      return;
+    }
+
+    res.json({
+      job,
+      routeSet: extractRouteSet(job),
+      specTree: extractSpecTree(job),
+      sandboxDerivationJobs: extractSandboxDerivationJobs(job),
+    } satisfies BlueprintSandboxDerivationJobsResponse);
+  });
+
+  router.post("/jobs/:jobId/sandbox-derivation-jobs", (req, res) => {
+    const job = jobStore.get(req.params.jobId);
+    if (!job) {
+      res.status(404).json({
+        error: "Blueprint generation job not found.",
+        message: `No blueprint generation job exists for ${req.params.jobId}.`,
+      });
+      return;
+    }
+
+    const parsed = parseSandboxDerivationJobRequest(req.body);
+    if (!parsed.ok) {
+      res.status(400).json({
+        error: "Invalid blueprint sandbox derivation job request.",
+        message: parsed.message,
+      });
+      return;
+    }
+
+    const result = createSandboxDerivationJob(job, parsed.request, {
       now: deps.now,
       store: jobStore,
     });
@@ -1611,6 +1802,16 @@ type ParseClarificationAnswersRequestResult =
   | { ok: true; request: { answers: BlueprintClarificationAnswer[] } }
   | { ok: false; message: string };
 
+type ParseClarificationSessionRequestResult =
+  | { ok: true; request: BlueprintClarificationSessionRequest }
+  | { ok: false; message: string };
+
+interface BlueprintClarificationSessionRequest {
+  strategyId?: BlueprintClarificationStrategyId;
+  templateId?: string;
+  forceNew?: boolean;
+}
+
 type ResolveGenerationRequestResult =
   | {
       ok: true;
@@ -1687,23 +1888,96 @@ function createBlueprintIntake(
 
 function createClarificationSession(
   intake: BlueprintIntake,
-  options: { now?: () => Date; stores: BlueprintIntakeStores }
+  options: {
+    now?: () => Date;
+    stores: BlueprintIntakeStores;
+    request?: BlueprintClarificationSessionRequest;
+  }
 ): BlueprintClarificationSession {
   const createdAt = (options.now?.() ?? new Date()).toISOString();
-  const questions = buildClarificationQuestions(intake);
+  const strategy = selectClarificationStrategy(intake, options.request);
+  const reusable = options.request?.forceNew
+    ? undefined
+    : findReusableClarificationSession(intake, strategy, options.stores);
+  if (reusable) {
+    return reusable;
+  }
+
+  const questions = buildClarificationQuestions(intake, strategy);
+  const readiness = calculateClarificationReadiness(questions, []);
   const session: BlueprintClarificationSession = {
     id: createId("blueprint-clarification"),
     intakeId: intake.id,
     projectId: intake.projectId,
+    strategyId: strategy.id,
+    strategyLabel: strategy.label,
+    templateId: strategy.templateId,
+    routeReadySummary: buildClarificationRouteReadySummary(strategy, readiness, questions),
+    readinessSignals: uniqueClarificationReadinessSignals(questions),
     questions,
     answers: [],
-    readiness: calculateClarificationReadiness(questions, []),
+    readiness,
     createdAt,
     updatedAt: createdAt,
   };
 
   options.stores.clarificationSessions.set(session.id, session);
   return session;
+}
+
+function findReusableClarificationSession(
+  intake: BlueprintIntake,
+  strategy: BlueprintClarificationStrategyTemplate,
+  stores: BlueprintIntakeStores
+): BlueprintClarificationSession | undefined {
+  const sessions = [...stores.clarificationSessions.values()]
+    .filter(
+      session =>
+        session.intakeId === intake.id &&
+        session.strategyId === strategy.id &&
+        session.templateId === strategy.templateId
+    )
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+
+  return sessions[0];
+}
+
+function parseClarificationSessionRequest(
+  body: unknown
+): ParseClarificationSessionRequestResult {
+  if (typeof body === "undefined" || body === null) {
+    return { ok: true, request: {} };
+  }
+
+  if (!isPlainRecord(body)) {
+    return {
+      ok: false,
+      message: "Request body must be a JSON object when provided.",
+    };
+  }
+
+  const rawStrategy = readString(
+    body.strategyId ?? body.strategy_id ?? body.strategy ?? body.mode
+  );
+  const strategyId = rawStrategy
+    ? normalizeClarificationStrategyId(rawStrategy)
+    : undefined;
+  if (rawStrategy && !strategyId) {
+    return {
+      ok: false,
+      message:
+        "strategyId must be one of target_first, repository_first, risk_first, document_first, preview_first, or fast_execution.",
+    };
+  }
+
+  return {
+    ok: true,
+    request: {
+      strategyId,
+      templateId: readString(body.templateId ?? body.template_id),
+      forceNew: readBoolean(body.forceNew ?? body.force_new),
+    },
+  };
 }
 
 function parseClarificationAnswersRequest(
@@ -1718,7 +1992,7 @@ function parseClarificationAnswersRequest(
 
   const answers = normalizeClarifications(
     Array.isArray(body.answers) ? body.answers : [body]
-  );
+  ) ?? [];
   if (answers.length === 0) {
     return {
       ok: false,
@@ -1738,21 +2012,34 @@ function updateClarificationSession(
   options: { now?: () => Date; stores: BlueprintIntakeStores }
 ): BlueprintClarificationSession {
   const updatedAt = (options.now?.() ?? new Date()).toISOString();
-  const knownQuestionIds = new Set(session.questions.map(question => question.id));
+  const questionById = new Map(
+    session.questions.map(question => [question.id, question])
+  );
   const answerByQuestionId = new Map(
     session.answers.map(answer => [answer.questionId, answer])
   );
 
   for (const answer of answers) {
-    if (!knownQuestionIds.has(answer.questionId)) continue;
-    answerByQuestionId.set(answer.questionId, answer);
+    const question = questionById.get(answer.questionId);
+    if (!question) continue;
+    answerByQuestionId.set(
+      answer.questionId,
+      normalizeClarificationAnswerForQuestion(answer, question, updatedAt)
+    );
   }
 
   const nextAnswers = [...answerByQuestionId.values()];
+  const readiness = calculateClarificationReadiness(session.questions, nextAnswers);
   const updated: BlueprintClarificationSession = {
     ...session,
     answers: nextAnswers,
-    readiness: calculateClarificationReadiness(session.questions, nextAnswers),
+    readiness,
+    routeReadySummary: buildClarificationRouteReadySummary(
+      session,
+      readiness,
+      session.questions
+    ),
+    readinessSignals: uniqueClarificationReadinessSignals(session.questions),
     updatedAt,
   };
 
@@ -1920,7 +2207,12 @@ export function createGenerationJob(
       occurredAt: createdAt,
     }),
   ];
-  const routeSet = buildRouteSet(request, jobId, createdAt);
+  const routeSet = buildRouteSet(
+    request,
+    jobId,
+    createdAt,
+    options.clarificationSession
+  );
   const routeArtifact: BlueprintGenerationArtifact = {
     id: createId("blueprint-artifact"),
     type: "route_set",
@@ -1930,22 +2222,100 @@ export function createGenerationJob(
     createdAt,
     payload: routeSet,
   };
+  const agentCrew = buildAgentCrew({
+    jobId,
+    stage: "route_generation",
+    createdAt,
+    capabilities: getDefaultRuntimeCapabilities(),
+    artifactIds: [routeArtifact.id, routeSet.id],
+  });
+  const agentCrewArtifact: BlueprintGenerationArtifact = {
+    id: createId("blueprint-artifact"),
+    type: "agent_crew",
+    title: "Agent Crew fabric",
+    summary: `Agent Crew initialized with ${agentCrew.roles.length} roles and ${agentCrew.capabilityMatrix.length} role capability bindings.`,
+    createdAt,
+    payload: agentCrew,
+  };
+  const routeSandboxDerivation = createRouteGenerationSandboxDerivation({
+    jobId,
+    request,
+    routeSet,
+    agentCrew,
+    capabilities: getDefaultRuntimeCapabilities(),
+    createdAt,
+  });
   const contextArtifacts = buildGenerationContextArtifacts({
     createdAt,
     intake: options.intake,
     clarificationSession: options.clarificationSession,
     context: options.context,
   });
+  const nextAction = createGenerationNextAction({
+    type: "select_route",
+    label: "Select a route for SPEC tree derivation.",
+    stage: "route_generation",
+    artifactId: routeSandboxDerivation.artifact.id,
+    required: true,
+  });
 
   events.push(
     createGenerationEvent({
       jobId,
+      projectId: request.projectId,
       stage: "route_generation",
       status: "completed",
       type: "job.completed",
-      message: "RouteSet generated and ready for SPEC tree derivation.",
+      message:
+        "RouteSet generated from sandbox derivation evidence and ready for SPEC tree derivation.",
       occurredAt: createdAt,
-      payload: { routeSetId: routeSet.id },
+      artifactId: routeArtifact.id,
+      payload: {
+        routeSetId: routeSet.id,
+        sandboxDerivationJobId: routeSandboxDerivation.sandboxDerivationJob.id,
+        invocationIds: routeSandboxDerivation.invocations.map(
+          invocation => invocation.id
+        ),
+        evidenceIds: routeSandboxDerivation.evidenceItems.map(
+          evidence => evidence.id
+        ),
+      },
+    }),
+    ...routeSandboxDerivation.events,
+    createGenerationEvent({
+      jobId,
+      projectId: request.projectId,
+      stage: "route_generation",
+      status: "completed",
+      type: "crew.context.updated",
+      message: "Agent Crew context initialized for route generation.",
+      occurredAt: createdAt,
+      artifactId: agentCrewArtifact.id,
+      payload: {
+        crewId: agentCrew.id,
+        roleIds: agentCrew.roles.map(role => role.id),
+        capabilityIds: uniqueStrings(
+          agentCrew.capabilityMatrix.map(binding => binding.capabilityId)
+        ),
+        sourceIds: {
+          projectId: request.projectId,
+          crewIds: [agentCrew.id],
+          roleIds: agentCrew.roles.map(role => role.id),
+          capabilityIds: uniqueStrings(
+            agentCrew.capabilityMatrix.map(binding => binding.capabilityId)
+          ),
+        },
+      },
+    }),
+    ...createRolePresenceEvents({
+      jobId,
+      projectId: request.projectId,
+      crewId: agentCrew.id,
+      stage: "route_generation",
+      status: "completed",
+      occurredAt: createdAt,
+      presence: agentCrew.presence,
+      artifactId: routeArtifact.id,
     })
   );
 
@@ -1960,8 +2330,27 @@ export function createGenerationJob(
     createdAt,
     updatedAt: createdAt,
     completedAt: createdAt,
-    artifacts: [...contextArtifacts, routeArtifact],
+    artifacts: [
+      ...contextArtifacts,
+      routeArtifact,
+      ...routeSandboxDerivation.artifacts,
+      agentCrewArtifact,
+      routeSandboxDerivation.roleTimelineArtifact,
+    ],
     events,
+    stageState: createGenerationStageState({
+      stage: "route_generation",
+      status: "completed",
+      payloadKind: "route_set",
+      artifactIds: [
+        routeArtifact.id,
+        routeSandboxDerivation.artifact.id,
+        agentCrewArtifact.id,
+        routeSandboxDerivation.roleTimelineArtifact.id,
+      ],
+      nextAction,
+    }),
+    nextAction,
   };
 
   options.store.save(job);
@@ -1978,12 +2367,17 @@ export function createGenerationJob(
 function buildRouteSet(
   request: BlueprintGenerationRequest,
   requestId: string,
-  createdAt: string
+  createdAt: string,
+  clarificationSession?: BlueprintClarificationSession
 ): BlueprintRouteSet {
   const routeSetId = createId("blueprint-routeset");
   const primaryRouteId = `${routeSetId}:primary`;
   const targetLabel = summarizeRequestTarget(request);
   const hasGithub = (request.githubUrls?.length ?? 0) > 0;
+  const clarificationContext = buildClarificationRouteContext(
+    request,
+    clarificationSession
+  );
 
   return {
     id: routeSetId,
@@ -2005,6 +2399,7 @@ function buildRouteSet(
           ? "2-4 analysis passes"
           : "1-3 analysis passes",
         includeGithubStep: hasGithub,
+        clarificationContext,
       }),
       buildRouteCandidate({
         id: `${routeSetId}:alternative-docs-first`,
@@ -2019,6 +2414,7 @@ function buildRouteSet(
         complexity: "light",
         estimatedEffort: "1-2 review passes",
         includeGithubStep: hasGithub,
+        clarificationContext,
       }),
       buildRouteCandidate({
         id: `${routeSetId}:alternative-preview-first`,
@@ -2033,6 +2429,7 @@ function buildRouteSet(
         complexity: "deep",
         estimatedEffort: "3-5 exploration passes",
         includeGithubStep: hasGithub,
+        clarificationContext,
       }),
     ],
     nextAsset: {
@@ -2046,7 +2443,109 @@ function buildRouteSet(
       sourceId: request.sourceId,
       targetText: request.targetText,
       githubUrls: request.githubUrls ?? [],
+      clarificationSessionId: request.clarificationSessionId,
+      clarificationStrategyId: clarificationContext.strategyId,
+      clarificationTemplateId: clarificationContext.templateId,
+      clarificationReadinessSignals: clarificationContext.readinessSignals,
+      clarificationRouteDimensions: clarificationContext.routeDimensions,
+      clarificationAnsweredQuestionIds:
+        clarificationContext.answeredQuestionIds,
+      clarificationEvidenceIds: clarificationContext.evidenceIds,
+      clarificationSourceIds: clarificationContext.sourceIds,
+      clarificationRouteReadySummary: clarificationContext.routeReadySummary,
     },
+  };
+}
+
+interface BlueprintClarificationRouteContext {
+  strategyId?: BlueprintClarificationStrategyId;
+  templateId?: string;
+  routeReadySummary?: string;
+  readinessSignals: BlueprintClarificationReadinessSignalId[];
+  routeDimensions: BlueprintClarificationRouteDimension[];
+  answeredQuestionIds: string[];
+  evidenceIds: string[];
+  sourceIds: string[];
+  answerCount: number;
+}
+
+function buildClarificationRouteContext(
+  request: BlueprintGenerationRequest,
+  clarificationSession?: BlueprintClarificationSession
+): BlueprintClarificationRouteContext {
+  const answers = clarificationSession?.answers ?? request.clarifications ?? [];
+  const questionById = new Map(
+    (clarificationSession?.questions ?? []).map(question => [question.id, question])
+  );
+  const strategyIds = uniqueStrings(
+    [
+      clarificationSession?.strategyId,
+      ...answers.map(answer => answer.provenance?.strategyId),
+    ].filter(
+      (strategyId): strategyId is BlueprintClarificationStrategyId =>
+        Boolean(strategyId)
+    )
+  ) as BlueprintClarificationStrategyId[];
+  const templateIds = uniqueStrings(
+    [
+      clarificationSession?.templateId,
+      ...answers.map(answer => answer.provenance?.templateId),
+    ].filter(isString)
+  );
+  const readinessSignals = uniqueStrings(
+    [
+      ...(clarificationSession?.readinessSignals ?? []),
+      ...(clarificationSession?.readiness.readinessSignals ?? []),
+      ...answers.map(answer => answer.provenance?.readinessSignal),
+    ].filter(
+      (signal): signal is BlueprintClarificationReadinessSignalId =>
+        Boolean(signal)
+    )
+  ) as BlueprintClarificationReadinessSignalId[];
+  const routeDimensions = uniqueStrings(
+    [
+      ...(clarificationSession?.readiness.routeDimensions ?? []),
+      ...answers.map(answer => answer.provenance?.routeDimension),
+    ].filter(
+      (dimension): dimension is BlueprintClarificationRouteDimension =>
+        Boolean(dimension)
+    )
+  ) as BlueprintClarificationRouteDimension[];
+  const sourceIds = uniqueStrings(
+    answers
+      .flatMap(answer => questionById.get(answer.questionId)?.sourceIds ?? [])
+      .filter(isString)
+  );
+  const evidenceIds = uniqueStrings(
+    answers.flatMap(answer => {
+      const question = questionById.get(answer.questionId);
+      return question?.evidenceIds.length
+        ? question.evidenceIds
+        : [
+            stableId(
+              "blueprint-evidence-clarification",
+              `${answer.questionId}-${hashText(`${request.intakeId ?? request.clarificationSessionId ?? "request"}-${answer.answer}`)}`
+            ),
+          ];
+    })
+  );
+
+  return {
+    strategyId: strategyIds[0],
+    templateId: templateIds[0],
+    readinessSignals,
+    routeDimensions,
+    answeredQuestionIds: uniqueStrings(
+      answers.map(answer => answer.questionId).filter(isString)
+    ),
+    evidenceIds,
+    sourceIds,
+    answerCount: answers.length,
+    routeReadySummary:
+      clarificationSession?.routeReadySummary ??
+      (answers.length
+        ? `Clarification ${strategyIds[0] ?? "strategy"} provided ${answers.length} route-ready answer${answers.length === 1 ? "" : "s"} across ${routeDimensions.length || 1} route dimension${routeDimensions.length === 1 ? "" : "s"}.`
+        : undefined),
   };
 }
 
@@ -2085,7 +2584,9 @@ function buildGenerationContextArtifacts(input: {
       id: createId("blueprint-artifact"),
       type: "clarification_session",
       title: "Clarification Session",
-      summary: `${input.clarificationSession.readiness.answeredRequired}/${input.clarificationSession.readiness.requiredTotal} required clarification answers recorded.`,
+      summary:
+        input.clarificationSession.routeReadySummary ??
+        `${input.clarificationSession.readiness.answeredRequired}/${input.clarificationSession.readiness.requiredTotal} required clarification answers recorded.`,
       createdAt: input.createdAt,
       payload: input.clarificationSession,
     });
@@ -2116,32 +2617,59 @@ function buildRouteCandidate(input: {
   complexity: BlueprintRouteComplexity;
   estimatedEffort: string;
   includeGithubStep: boolean;
+  clarificationContext: BlueprintClarificationRouteContext;
 }): BlueprintRouteCandidate {
-  const steps = buildRouteSteps(input.includeGithubStep);
+  const steps = buildRouteSteps(
+    input.includeGithubStep,
+    input.clarificationContext
+  );
 
   return {
     id: input.id,
     kind: input.kind,
     title: input.title,
-    summary: input.summary,
-    rationale: input.rationale,
+    summary: appendClarificationRouteSummary(
+      input.summary,
+      input.clarificationContext
+    ),
+    rationale: appendClarificationRouteSummary(
+      input.rationale,
+      input.clarificationContext
+    ),
     riskLevel: input.riskLevel,
     costLevel: input.costLevel,
     complexity: input.complexity,
     estimatedEffort: input.estimatedEffort,
-    capabilities: buildCapabilityUsage(input.includeGithubStep),
+    capabilities: buildCapabilityUsage(
+      input.includeGithubStep,
+      input.clarificationContext
+    ),
     steps,
-    outputs: [
+    outputs: uniqueStrings([
       "RouteSet outline",
       "Decision evidence",
       "SPEC tree seed",
       "Architecture notes",
       "Implementation prompt seed",
-    ],
+      ...(input.clarificationContext.answerCount > 0
+        ? ["Clarification route-ready summary"]
+        : []),
+    ]),
   };
 }
 
-function buildRouteSteps(includeGithubStep: boolean): BlueprintRouteStep[] {
+function appendClarificationRouteSummary(
+  text: string,
+  context: BlueprintClarificationRouteContext
+): string {
+  if (!context.strategyId) return text;
+  return `${text} Clarification strategy: ${context.strategyId}; readiness signals: ${context.readinessSignals.join(", ") || "none"}.`;
+}
+
+function buildRouteSteps(
+  includeGithubStep: boolean,
+  clarificationContext: BlueprintClarificationRouteContext
+): BlueprintRouteStep[] {
   const steps: BlueprintRouteStep[] = [
     {
       id: "clarify-intent",
@@ -2161,6 +2689,18 @@ function buildRouteSteps(includeGithubStep: boolean): BlueprintRouteStep[] {
         "Inspect repositories and extract technology stack, module boundaries, and reusable assets.",
       role: "Source analyst",
       status: "ready",
+    });
+  }
+
+  if (clarificationContext.strategyId) {
+    steps.push({
+      id: `apply-${clarificationContext.strategyId}-clarification`,
+      title: `Apply ${clarificationContext.strategyId.replace(/_/g, "-")} clarification`,
+      description:
+        clarificationContext.routeReadySummary ??
+        "Bind clarification answers, readiness signals, and route dimensions into route generation.",
+      role: "Product strategist",
+      status: clarificationContext.answerCount > 0 ? "ready" : "blocked",
     });
   }
 
@@ -2193,7 +2733,8 @@ function buildRouteSteps(includeGithubStep: boolean): BlueprintRouteStep[] {
 }
 
 function buildCapabilityUsage(
-  includeGithubStep: boolean
+  includeGithubStep: boolean,
+  clarificationContext: BlueprintClarificationRouteContext
 ): BlueprintCapabilityUsage[] {
   const capabilities: BlueprintCapabilityUsage[] = [
     {
@@ -2238,7 +2779,538 @@ function buildCapabilityUsage(
     });
   }
 
+  if (clarificationContext.strategyId) {
+    capabilities.unshift({
+      id: `clarification-${clarificationContext.strategyId}`,
+      label: `${clarificationContext.strategyId.replace(/_/g, " ")} clarification strategy`,
+      kind: "role",
+      purpose:
+        clarificationContext.routeReadySummary ??
+        "Carry structured clarification strategy, provenance, and readiness signals into route generation.",
+    });
+  }
+
   return capabilities;
+}
+
+interface RouteGenerationSandboxDerivationResult {
+  sandboxDerivationJob: BlueprintSandboxDerivationJob;
+  artifact: BlueprintGenerationArtifact;
+  invocationArtifacts: BlueprintGenerationArtifact[];
+  evidenceArtifacts: BlueprintGenerationArtifact[];
+  roleTimelineArtifact: BlueprintGenerationArtifact;
+  invocations: BlueprintCapabilityInvocation[];
+  evidenceItems: BlueprintCapabilityEvidence[];
+  events: BlueprintGenerationEvent[];
+  artifacts: BlueprintGenerationArtifact[];
+}
+
+function createRouteGenerationSandboxDerivation(input: {
+  jobId: string;
+  request: BlueprintGenerationRequest;
+  routeSet: BlueprintRouteSet;
+  agentCrew: BlueprintAgentCrew;
+  capabilities: BlueprintRuntimeCapability[];
+  createdAt: string;
+}): RouteGenerationSandboxDerivationResult {
+  const capabilityIds = uniqueStrings(
+    input.routeSet.routes.flatMap(route =>
+      route.capabilities.map(capability => capability.id)
+    )
+  );
+  const selectedCapabilityIds = uniqueStrings(
+    [
+      ...(input.request.githubUrls?.length ? ["mcp-github-source"] : []),
+      "docker-analysis-sandbox",
+      "aigc-spec-node",
+      "role-system-architecture",
+      "skill-svg-architecture",
+    ].filter(id => capabilityIds.includes(id))
+  );
+  const routeGenerationCapabilities = selectedCapabilityIds
+    .map(capabilityId =>
+      input.capabilities.find(capability => capability.id === capabilityId)
+    )
+    .filter((capability): capability is BlueprintRuntimeCapability =>
+      Boolean(capability)
+    );
+  const primaryRoute =
+    input.routeSet.routes.find(route => route.id === input.routeSet.primaryRouteId) ??
+    input.routeSet.routes[0];
+  const roleId = "role-runtime-executor";
+  const crewId = input.agentCrew.id;
+  const baseJob: BlueprintGenerationJob = {
+    id: input.jobId,
+    request: input.request,
+    status: "running",
+    stage: "route_generation",
+    projectId: input.request.projectId,
+    sourceId: input.request.sourceId,
+    version: input.request.version ?? "blueprint-generation/v1",
+    createdAt: input.createdAt,
+    updatedAt: input.createdAt,
+    artifacts: [],
+    events: [],
+  };
+  const invocations = routeGenerationCapabilities.map((capability, index) => {
+    const route = input.routeSet.routes[index] ?? primaryRoute;
+    const invocationRoleId = resolveRouteSandboxCapabilityRoleId(capability);
+    const invocationInput = `Derive route candidate ${route.title} with ${capability.label}.`;
+    const invocation: BlueprintCapabilityInvocation = {
+      id: createId("blueprint-capability-invocation"),
+      jobId: input.jobId,
+      capabilityId: capability.id,
+      roleId: invocationRoleId,
+      capabilityLabel: capability.label,
+      kind: capability.kind,
+      status: "completed",
+      securityLevel: capability.securityLevel,
+      safetyGate: {
+        status: "allowed",
+        reason: capability.requiresApproval
+          ? `${capability.label} approved for deterministic route generation sandbox derivation.`
+          : `${capability.label} allowed for deterministic route generation sandbox derivation.`,
+        requiresApproval: capability.requiresApproval,
+        approved: capability.requiresApproval,
+        securityLevel: capability.securityLevel,
+      },
+      requestedAt: input.createdAt,
+      completedAt: input.createdAt,
+      requestedBy: "route-generation-sandbox-derivation",
+      routeId: route.id,
+      input: invocationInput,
+      outputSummary: buildCapabilityOutputSummary({
+        capability,
+        routeTitle: route.title,
+        input: invocationInput,
+      }),
+      logs: [],
+      evidenceIds: [],
+      durationMs: deterministicCapabilityDuration(capability, {
+        capabilityId: capability.id,
+        roleId: invocationRoleId,
+        routeId: route.id,
+        input: invocationInput,
+      }),
+      provenance: {
+        jobId: input.jobId,
+        projectId: input.request.projectId,
+        sourceId: input.request.sourceId,
+        routeSetId: input.routeSet.id,
+        routeId: route.id,
+        roleId: invocationRoleId,
+        targetText: input.request.targetText,
+        githubUrls: input.request.githubUrls ?? [],
+      },
+    };
+    return {
+      ...invocation,
+      logs: buildCapabilityInvocationLogs(capability, invocation.outputSummary),
+    };
+  });
+  const evidenceItems = invocations.map(invocation => {
+    const capability = routeGenerationCapabilities.find(
+      item => item.id === invocation.capabilityId
+    );
+    if (!capability) {
+      throw new Error(`Route sandbox capability ${invocation.capabilityId} missing.`);
+    }
+    return buildCapabilityEvidence({
+      job: baseJob,
+      capability,
+      invocation,
+      routeSet: input.routeSet,
+      createdAt: input.createdAt,
+      tags: ["route_generation", "sandbox_derivation"],
+    });
+  });
+  const invocationsWithEvidence = invocations.map(invocation => {
+    const evidence = evidenceItems.find(
+      item => item.invocationId === invocation.id
+    );
+    return {
+      ...invocation,
+      evidenceIds: evidence ? [evidence.id] : [],
+    };
+  });
+  const totalDurationMs = invocationsWithEvidence.reduce(
+    (total, invocation) => total + invocation.durationMs,
+    0
+  );
+  const roleIds = uniqueStrings(
+    invocationsWithEvidence
+      .map(invocation => invocation.roleId)
+      .filter(isString)
+      .concat(["role-quality-auditor"])
+  );
+  const sandboxDerivationJob: BlueprintSandboxDerivationJob = {
+    id: createId("blueprint-sandbox-derivation"),
+    jobId: input.jobId,
+    roleId,
+    crewId,
+    stage: "route_generation",
+    projectId: input.request.projectId,
+    routeId: primaryRoute?.id,
+    executionMode: "parallel",
+    status: "completed",
+    createdAt: input.createdAt,
+    startedAt: input.createdAt,
+    completedAt: input.createdAt,
+    durationMs: totalDurationMs,
+    capabilityIds: routeGenerationCapabilities.map(capability => capability.id),
+    invocationIds: invocationsWithEvidence.map(invocation => invocation.id),
+    evidenceIds: evidenceItems.map(evidence => evidence.id),
+    aggregate: {
+      routeOutline: buildSandboxRouteOutline(input.routeSet, evidenceItems),
+      mainPath: buildSandboxRoutePath(
+        input.jobId,
+        "main",
+        primaryRoute,
+        invocationsWithEvidence,
+        evidenceItems
+      ),
+      alternatePaths: input.routeSet.routes
+        .filter(route => route.id !== primaryRoute?.id)
+        .slice(0, 2)
+        .map((route, index) =>
+          buildSandboxRoutePath(
+            input.jobId,
+            `alternate-${index + 1}`,
+            route,
+            invocationsWithEvidence,
+            evidenceItems
+          )
+        ),
+      evaluation: [
+        {
+          id: `${input.jobId}:route-sandbox-eval-risk`,
+          label: "Route risk evidence",
+          score: Math.min(100, 64 + evidenceItems.length * 8),
+          summary: `${evidenceItems.length} route-generation evidence item(s) cover risk, cost, and architecture tradeoffs.`,
+        },
+        {
+          id: `${input.jobId}:route-sandbox-eval-cost`,
+          label: "Route cost signal",
+          score: Math.min(
+            100,
+            58 + input.routeSet.routes.filter(route => route.costLevel !== "high").length * 7
+          ),
+          summary: "Sandbox aggregation compares primary and alternative route cost signals before review.",
+        },
+        {
+          id: `${input.jobId}:route-sandbox-eval-complexity`,
+          label: "Route complexity signal",
+          score: Math.max(40, 95 - routeGenerationCapabilities.length * 6),
+          summary: `${routeGenerationCapabilities.length} runtime capability adapters contributed to route complexity assessment.`,
+        },
+      ],
+      outputSummary: `${invocationsWithEvidence.length} route-generation capability invocation(s) aggregated into RouteSet outline, primary route, alternatives, and evaluation data.`,
+    },
+    logs: [
+      `sandbox.job.started stage=route_generation id=${input.jobId}`,
+      "executionMode=parallel",
+      `capabilities=${routeGenerationCapabilities.map(capability => capability.id).join(",")}`,
+      `durationMs=${totalDurationMs}`,
+      `sandbox.job.completed invocationCount=${invocationsWithEvidence.length}`,
+    ],
+    provenance: {
+      jobId: input.jobId,
+      projectId: input.request.projectId,
+      sourceId: input.request.sourceId,
+      routeSetId: input.routeSet.id,
+      routeId: primaryRoute?.id,
+      roleId,
+      crewId,
+      targetText: input.request.targetText,
+      githubUrls: input.request.githubUrls ?? [],
+    },
+  };
+  const invocationArtifacts = invocationsWithEvidence.map(invocation => ({
+    id: createId("blueprint-artifact"),
+    type: "capability_invocation" as const,
+    title: `Route capability invocation: ${invocation.capabilityLabel}`,
+    summary: invocation.outputSummary,
+    createdAt: input.createdAt,
+    payload: invocation,
+  }));
+  const evidenceArtifacts = evidenceItems.map(evidence => ({
+    id: createId("blueprint-artifact"),
+    type: "capability_evidence" as const,
+    title: evidence.title,
+    summary: evidence.summary,
+    createdAt: input.createdAt,
+    payload: evidence,
+  }));
+  const artifact: BlueprintGenerationArtifact = {
+    id: createId("blueprint-artifact"),
+    type: "sandbox_derivation_job",
+    title: "Route generation sandbox derivation",
+    summary: sandboxDerivationJob.aggregate.outputSummary,
+    createdAt: input.createdAt,
+    payload: sandboxDerivationJob,
+  };
+  const capabilityEvents = invocationsWithEvidence.flatMap(invocation => {
+    const evidence = evidenceItems.find(item => item.invocationId === invocation.id);
+    return [
+      createGenerationEvent({
+        jobId: input.jobId,
+        projectId: input.request.projectId,
+        type: "capability.invoked",
+        family: "capability",
+        stage: "route_generation",
+        status: "running",
+        message: `Route generation capability ${invocation.capabilityLabel} invoked.`,
+        occurredAt: input.createdAt,
+        routeId: invocation.routeId,
+        roleId,
+        capabilityId: invocation.capabilityId,
+        evidenceId: evidence?.id,
+        payload: buildRouteSandboxCapabilityEventPayload({
+          input,
+          invocation,
+          evidence,
+          roleId,
+          crewId,
+        }),
+      }),
+      createGenerationEvent({
+        jobId: input.jobId,
+        projectId: input.request.projectId,
+        type: "capability.completed",
+        family: "capability",
+        stage: "route_generation",
+        status: "completed",
+        message: `Route generation capability ${invocation.capabilityLabel} completed.`,
+        occurredAt: input.createdAt,
+        routeId: invocation.routeId,
+        roleId,
+        capabilityId: invocation.capabilityId,
+        evidenceId: evidence?.id,
+        payload: buildRouteSandboxCapabilityEventPayload({
+          input,
+          invocation,
+          evidence,
+          roleId,
+          crewId,
+        }),
+      }),
+    ];
+  });
+  const roleEvents = [
+    createRoleEvent({
+      jobId: input.jobId,
+      projectId: input.request.projectId,
+      crewId,
+      type: "role.capability_invoked",
+      stage: "route_generation",
+      status: "running",
+      roleId,
+      presenceState: "active",
+      message:
+        "Runtime executor dispatched Docker, AIGC, and role analyzers for RouteSet derivation.",
+      occurredAt: input.createdAt,
+      currentAction: sandboxDerivationJob.aggregate.outputSummary,
+      capabilityId: sandboxDerivationJob.capabilityIds[0],
+      invocationId: sandboxDerivationJob.invocationIds[0],
+      evidenceId: sandboxDerivationJob.evidenceIds[0],
+      artifactId: artifact.id,
+      routeId: primaryRoute?.id,
+    }),
+    createRoleEvent({
+      jobId: input.jobId,
+      projectId: input.request.projectId,
+      crewId,
+      type: "role.review_completed",
+      stage: "route_generation",
+      status: "completed",
+      roleId: "role-quality-auditor",
+      presenceState: "reviewing",
+      message:
+        "Quality auditor reviewed route sandbox evidence before RouteSet handoff.",
+      occurredAt: input.createdAt,
+      currentAction:
+        "Quality auditor is checking route risk, cost, complexity, and evidence completeness.",
+      capabilityId: "role-system-architecture",
+      invocationId: sandboxDerivationJob.invocationIds.at(-1),
+      evidenceId: sandboxDerivationJob.evidenceIds.at(-1),
+      artifactId: artifact.id,
+      routeId: primaryRoute?.id,
+    }),
+  ];
+  const events = [
+    createGenerationEvent({
+      jobId: input.jobId,
+      projectId: input.request.projectId,
+      type: "sandbox.job.started",
+      family: "sandbox",
+      stage: "route_generation",
+      status: "running",
+      message: "Route generation sandbox derivation job started.",
+      occurredAt: input.createdAt,
+      routeId: primaryRoute?.id,
+      artifactId: artifact.id,
+      roleId,
+      payload: {
+        sandboxDerivationJobId: sandboxDerivationJob.id,
+        executionMode: sandboxDerivationJob.executionMode,
+        capabilityIds: sandboxDerivationJob.capabilityIds,
+        routeSetId: input.routeSet.id,
+        sourceIds: {
+          projectId: input.request.projectId,
+          routeSetId: input.routeSet.id,
+          roleIds,
+          crewIds: [crewId],
+          capabilityIds: sandboxDerivationJob.capabilityIds,
+        },
+      },
+    }),
+    ...capabilityEvents,
+    createGenerationEvent({
+      jobId: input.jobId,
+      projectId: input.request.projectId,
+      type: "sandbox.job.completed",
+      family: "sandbox",
+      stage: "route_generation",
+      status: "completed",
+      message: "Route generation sandbox derivation job completed.",
+      occurredAt: input.createdAt,
+      routeId: primaryRoute?.id,
+      artifactId: artifact.id,
+      roleId,
+      payload: {
+        sandboxDerivationJobId: sandboxDerivationJob.id,
+        invocationIds: sandboxDerivationJob.invocationIds,
+        evidenceIds: sandboxDerivationJob.evidenceIds,
+        durationMs: sandboxDerivationJob.durationMs,
+        routeSetId: input.routeSet.id,
+        sourceIds: {
+          projectId: input.request.projectId,
+          routeSetId: input.routeSet.id,
+          roleIds,
+          crewIds: [crewId],
+          capabilityIds: sandboxDerivationJob.capabilityIds,
+          capabilityInvocationIds: sandboxDerivationJob.invocationIds,
+          capabilityEvidenceIds: sandboxDerivationJob.evidenceIds,
+        },
+      },
+    }),
+    ...roleEvents,
+  ];
+  const roleTimelineCollection = buildRoleTimelineCollection(
+    {
+      ...baseJob,
+      artifacts: [artifact],
+      events,
+    },
+    input.createdAt,
+    input.agentCrew
+  );
+  const roleTimelineArtifact: BlueprintGenerationArtifact = {
+    id: createId("blueprint-artifact"),
+    type: "role_timeline",
+    title: "Route generation role timeline",
+    summary: `Role timeline captured for route sandbox derivation.`,
+    createdAt: input.createdAt,
+    payload: roleTimelineCollection,
+  };
+  const artifacts = [artifact].concat(invocationArtifacts, evidenceArtifacts);
+
+  return {
+    sandboxDerivationJob,
+    artifact,
+    invocationArtifacts,
+    evidenceArtifacts,
+    roleTimelineArtifact,
+    invocations: invocationsWithEvidence,
+    evidenceItems,
+    events,
+    artifacts,
+  };
+}
+
+function buildSandboxRouteOutline(
+  routeSet: BlueprintRouteSet,
+  evidenceItems: BlueprintCapabilityEvidence[]
+): string {
+  return [
+    `${routeSet.routes.length} RouteSet candidate(s) derived from sandbox capability outputs.`,
+    `Primary route: ${routeSet.primaryRouteId}.`,
+    `${evidenceItems.length} evidence item(s) attached for review.`,
+  ].join(" ");
+}
+
+function buildSandboxRoutePath(
+  jobId: string,
+  suffix: string,
+  route: BlueprintRouteCandidate | undefined,
+  invocations: BlueprintCapabilityInvocation[],
+  evidenceItems: BlueprintCapabilityEvidence[]
+): BlueprintSandboxRoutePath {
+  const routeInvocationIds = invocations
+    .filter(invocation => !route || invocation.routeId === route.id)
+    .map(invocation => invocation.id);
+  const routeEvidenceIds = evidenceItems
+    .filter(evidence => !route || evidence.routeId === route.id)
+    .map(evidence => evidence.id);
+
+  return {
+    id: `${jobId}:route-sandbox-path:${suffix}`,
+    title: route?.title ?? "Route sandbox path",
+    summary:
+      route?.summary ??
+      "Route sandbox path aggregated from capability invocation evidence.",
+    routeId: route?.id,
+    capabilityIds: route?.capabilities.map(capability => capability.id) ?? [],
+    invocationIds: routeInvocationIds.length
+      ? routeInvocationIds
+      : invocations.map(invocation => invocation.id),
+    evidenceIds: routeEvidenceIds.length
+      ? routeEvidenceIds
+      : evidenceItems.map(evidence => evidence.id),
+  };
+}
+
+function buildRouteSandboxCapabilityEventPayload(input: {
+  input: {
+    request: BlueprintGenerationRequest;
+    routeSet: BlueprintRouteSet;
+  };
+  invocation: BlueprintCapabilityInvocation;
+  evidence?: BlueprintCapabilityEvidence;
+  roleId: string;
+  crewId: string;
+}): Record<string, unknown> {
+  return {
+    capabilityId: input.invocation.capabilityId,
+    roleId: input.invocation.roleId ?? input.roleId,
+    crewId: input.crewId,
+    invocationId: input.invocation.id,
+    evidenceId: input.evidence?.id,
+    routeId: input.invocation.routeId,
+    routeSetId: input.input.routeSet.id,
+    durationMs: input.invocation.durationMs,
+    sourceIds: {
+      projectId: input.input.request.projectId,
+      routeSetId: input.input.routeSet.id,
+      roleIds: [input.invocation.roleId ?? input.roleId],
+      crewIds: [input.crewId],
+      capabilityIds: [input.invocation.capabilityId],
+      capabilityInvocationIds: [input.invocation.id],
+      capabilityEvidenceIds: input.evidence ? [input.evidence.id] : [],
+    },
+  };
+}
+
+function resolveRouteSandboxCapabilityRoleId(
+  capability: BlueprintRuntimeCapability
+): string {
+  if (capability.id === "skill-svg-architecture") {
+    return "role-experience-presenter";
+  }
+  if (capability.id === "role-system-architecture") {
+    return "role-architecture-planner";
+  }
+  return "role-runtime-executor";
 }
 
 function getDefaultRuntimeCapabilities(): BlueprintRuntimeCapability[] {
@@ -2307,7 +3379,7 @@ function getDefaultRuntimeCapabilities(): BlueprintRuntimeCapability[] {
       adapter: "blueprint.runtime.aigc.spec-node.simulated",
       inputSchema: "text/plain",
       outputTypes: ["analysis", "document"],
-      supportedStages: ["spec_tree", "runtime_capability"],
+      supportedStages: ["route_generation", "spec_tree", "runtime_capability"],
       requiresApproval: false,
       projectScoped: true,
     },
@@ -2336,24 +3408,609 @@ function getDefaultRuntimeCapabilities(): BlueprintRuntimeCapability[] {
   ];
 }
 
+function getDefaultAgentRoles(): BlueprintAgentRole[] {
+  return [
+    {
+      id: "role-product-decision",
+      name: "Product Decision Lead",
+      group: "decision",
+      responsibility: "Clarify product intent, tradeoffs, acceptance signals, and route selection criteria.",
+      defaultStages: ["input", "clarification", "route_generation", "spec_tree", "prompt_packaging"],
+      permissions: ["read_domain_context", "select_route", "prioritize_scope"],
+      displayName: "Product Decision Lead",
+      displayLabelZh: "产品决策者",
+    },
+    {
+      id: "role-architecture-planner",
+      name: "Architecture Planner",
+      group: "planning",
+      responsibility: "Plan RouteSet structure, SPEC tree shape, module boundaries, and delivery sequence.",
+      defaultStages: ["route_generation", "spec_tree", "spec_docs", "engineering_landing"],
+      permissions: ["plan_routes", "shape_spec_tree", "map_dependencies"],
+      displayName: "Architecture Planner",
+      displayLabelZh: "架构规划师",
+    },
+    {
+      id: "role-runtime-executor",
+      name: "Runtime Executor",
+      group: "execution",
+      responsibility: "Invoke Docker, MCP, AIGC node, browser, GitHub, SVG, docs, and retrieval capabilities through approved bindings.",
+      defaultStages: ["route_generation", "spec_tree", "spec_docs", "effect_preview", "runtime_capability", "engineering_landing"],
+      permissions: ["invoke_bound_capabilities", "produce_artifacts", "record_logs"],
+      displayName: "Runtime Executor",
+      displayLabelZh: "执行工程师",
+    },
+    {
+      id: "role-quality-auditor",
+      name: "Quality Auditor",
+      group: "audit",
+      responsibility: "Review risk, consistency, safety, cost, acceptance readiness, and evidence completeness.",
+      defaultStages: ["clarification", "route_generation", "spec_tree", "spec_docs", "effect_preview", "prompt_packaging", "engineering_landing"],
+      permissions: ["review_artifacts", "block_unsafe_invocations", "request_evidence"],
+      displayName: "Quality Auditor",
+      displayLabelZh: "审计者",
+    },
+    {
+      id: "role-experience-presenter",
+      name: "Experience Presenter",
+      group: "presentation",
+      responsibility: "Translate crew progress into HUD, 3D scene, logs, previews, diagrams, and user-facing summaries.",
+      defaultStages: ["clarification", "route_generation", "effect_preview", "prompt_packaging", "engineering_landing"],
+      permissions: ["summarize_progress", "render_preview_state", "publish_hud_labels"],
+      displayName: "Experience Presenter",
+      displayLabelZh: "表现导演",
+    },
+    {
+      id: "role-memory-curator",
+      name: "Memory Curator",
+      group: "memory",
+      responsibility: "Persist domain assets, artifact lineage, role findings, evidence, replay, and handoff context.",
+      defaultStages: ["input", "clarification", "route_generation", "spec_tree", "spec_docs", "effect_preview", "prompt_packaging", "runtime_capability", "engineering_landing"],
+      permissions: ["write_artifact_memory", "link_lineage", "prepare_replay"],
+      displayName: "Memory Curator",
+      displayLabelZh: "记忆管理员",
+    },
+  ];
+}
+
+function buildDefaultCapabilityMatrix(
+  capabilities: BlueprintRuntimeCapability[]
+): BlueprintCapabilityBinding[] {
+  const capabilityById = new Map(capabilities.map(item => [item.id, item]));
+  const roleById = new Map(getDefaultAgentRoles().map(item => [item.id, item]));
+  const bindings: Array<Omit<BlueprintCapabilityBinding, "capabilityLabel" | "capabilityKind" | "roleDisplayName">> = [
+    {
+      id: "binding-product-role-strategy",
+      roleId: "role-product-decision",
+      capabilityId: "role-product-strategy",
+      nodeId: "role.product.strategy",
+      applicableStages: ["input", "clarification", "route_generation"],
+      inputSchema: "application/json",
+      outputSchema: "application/json",
+      tools: ["docs", "retrieval"],
+      requiresSandbox: false,
+      producesArtifacts: true,
+      auditRules: ["retain decision rationale", "link clarification evidence"],
+    },
+    {
+      id: "binding-architecture-role",
+      roleId: "role-architecture-planner",
+      capabilityId: "role-system-architecture",
+      nodeId: "role.system.architecture",
+      applicableStages: ["route_generation", "spec_tree", "prompt_packaging", "engineering_landing"],
+      inputSchema: "text/plain",
+      outputSchema: "application/json",
+      tools: ["docs", "retrieval"],
+      requiresSandbox: false,
+      producesArtifacts: true,
+      auditRules: ["record architecture tradeoffs", "link route and SPEC tree ids"],
+    },
+    {
+      id: "binding-github-mcp",
+      roleId: "role-runtime-executor",
+      capabilityId: "mcp-github-source",
+      nodeId: "mcp.github.source",
+      applicableStages: ["route_generation", "runtime_capability"],
+      inputSchema: "application/json",
+      outputSchema: "application/json",
+      tools: ["mcp", "github", "retrieval"],
+      requiresSandbox: true,
+      producesArtifacts: true,
+      auditRules: ["requires approval for networked access", "summarize repository scope"],
+    },
+    {
+      id: "binding-docker-analysis",
+      roleId: "role-runtime-executor",
+      capabilityId: "docker-analysis-sandbox",
+      nodeId: "docker.analysis.sandbox",
+      applicableStages: ["route_generation", "spec_tree", "runtime_capability"],
+      inputSchema: "text/plain",
+      outputSchema: "text/plain",
+      tools: ["docker", "browser"],
+      requiresSandbox: true,
+      producesArtifacts: true,
+      auditRules: ["no host writes", "record command summary"],
+    },
+    {
+      id: "binding-aigc-spec",
+      roleId: "role-runtime-executor",
+      capabilityId: "aigc-spec-node",
+      nodeId: "aigc.spec.derivation",
+      applicableStages: [
+        "route_generation",
+        "spec_tree",
+        "spec_docs",
+        "runtime_capability",
+      ],
+      inputSchema: "text/plain",
+      outputSchema: "text/markdown",
+      tools: ["aigc_node", "docs"],
+      requiresSandbox: true,
+      producesArtifacts: true,
+      auditRules: ["keep generated SPEC content reviewable", "attach source route ids"],
+    },
+    {
+      id: "binding-svg-preview",
+      roleId: "role-experience-presenter",
+      capabilityId: "skill-svg-architecture",
+      nodeId: "skill.svg.architecture",
+      applicableStages: ["effect_preview", "runtime_capability"],
+      inputSchema: "text/markdown",
+      outputSchema: "image/svg+xml",
+      tools: ["skill", "svg", "browser"],
+      requiresSandbox: false,
+      producesArtifacts: true,
+      auditRules: ["render preview evidence", "summarize visible changes"],
+    },
+    {
+      id: "binding-audit-architecture",
+      roleId: "role-quality-auditor",
+      capabilityId: "role-system-architecture",
+      nodeId: "role.audit.architecture",
+      applicableStages: ["route_generation", "prompt_packaging", "engineering_landing"],
+      inputSchema: "text/plain",
+      outputSchema: "application/json",
+      tools: ["docs", "retrieval"],
+      requiresSandbox: false,
+      producesArtifacts: true,
+      auditRules: ["review risk/cost/consistency", "flag missing evidence"],
+    },
+    {
+      id: "binding-memory-retrieval",
+      roleId: "role-memory-curator",
+      capabilityId: "aigc-spec-node",
+      nodeId: "memory.artifact.retrieval",
+      applicableStages: ["spec_tree", "spec_docs", "effect_preview", "prompt_packaging", "engineering_landing"],
+      inputSchema: "application/json",
+      outputSchema: "application/json",
+      tools: ["retrieval", "docs"],
+      requiresSandbox: false,
+      producesArtifacts: true,
+      auditRules: ["preserve lineage", "dedupe artifact references"],
+    },
+  ];
+
+  return bindings
+    .map(binding => {
+      const capability = capabilityById.get(binding.capabilityId);
+      const role = roleById.get(binding.roleId);
+      if (!capability || !role) return undefined;
+      return {
+        ...binding,
+        capabilityLabel: capability.label,
+        capabilityKind: capability.kind,
+        roleDisplayName: role.displayName,
+      };
+    })
+    .filter((item): item is BlueprintCapabilityBinding => item !== undefined);
+}
+
+function getDefaultStageActivationPolicies(): BlueprintStageActivationPolicy[] {
+  const allRoleIds = getDefaultAgentRoles().map(role => role.id);
+  const policyInputs: Array<{
+    stage: BlueprintGenerationStage;
+    active: string[];
+    watching: string[];
+    reviewing: string[];
+  }> = [
+    {
+      stage: "input",
+      active: ["role-product-decision"],
+      watching: ["role-memory-curator"],
+      reviewing: ["role-quality-auditor"],
+    },
+    {
+      stage: "clarification",
+      active: ["role-product-decision"],
+      watching: ["role-architecture-planner", "role-experience-presenter", "role-memory-curator"],
+      reviewing: ["role-quality-auditor"],
+    },
+    {
+      stage: "route_generation",
+      active: ["role-product-decision", "role-architecture-planner", "role-runtime-executor"],
+      watching: ["role-experience-presenter", "role-memory-curator"],
+      reviewing: ["role-quality-auditor"],
+    },
+    {
+      stage: "spec_tree",
+      active: ["role-architecture-planner", "role-runtime-executor"],
+      watching: ["role-product-decision", "role-experience-presenter", "role-memory-curator"],
+      reviewing: ["role-quality-auditor"],
+    },
+    {
+      stage: "spec_docs",
+      active: ["role-runtime-executor", "role-memory-curator"],
+      watching: ["role-product-decision", "role-architecture-planner"],
+      reviewing: ["role-quality-auditor"],
+    },
+    {
+      stage: "effect_preview",
+      active: ["role-experience-presenter", "role-runtime-executor"],
+      watching: ["role-product-decision", "role-architecture-planner", "role-memory-curator"],
+      reviewing: ["role-quality-auditor"],
+    },
+    {
+      stage: "prompt_packaging",
+      active: ["role-product-decision", "role-experience-presenter", "role-memory-curator"],
+      watching: ["role-architecture-planner"],
+      reviewing: ["role-quality-auditor"],
+    },
+    {
+      stage: "runtime_capability",
+      active: ["role-runtime-executor"],
+      watching: ["role-architecture-planner", "role-experience-presenter", "role-memory-curator"],
+      reviewing: ["role-quality-auditor"],
+    },
+    {
+      stage: "engineering_landing",
+      active: ["role-architecture-planner", "role-runtime-executor", "role-memory-curator"],
+      watching: ["role-product-decision", "role-experience-presenter"],
+      reviewing: ["role-quality-auditor"],
+    },
+  ];
+
+  return policyInputs.map(policy => {
+    const assigned = new Set(policy.active.concat(policy.watching, policy.reviewing));
+    const sleepingRoleIds = allRoleIds.filter(roleId => !assigned.has(roleId));
+    return {
+      stage: policy.stage,
+      activeRoleIds: policy.active,
+      watchingRoleIds: policy.watching,
+      reviewingRoleIds: policy.reviewing,
+      sleepingRoleIds,
+      overrides: [
+        {
+          kind: "risk",
+          level: "high",
+          roleId: "role-quality-auditor",
+          state: "reviewing",
+          reason: "High risk routes keep audit in reviewing state.",
+        },
+        {
+          kind: "cost",
+          level: "high",
+          roleId: "role-product-decision",
+          state: "active",
+          reason: "High cost routes require product decision ownership.",
+        },
+        {
+          kind: "complexity",
+          level: "deep",
+          roleId: "role-architecture-planner",
+          state: "active",
+          reason: "Deep routes keep architecture planning active.",
+        },
+      ],
+    };
+  });
+}
+
+function buildAgentCrew(input: {
+  jobId: string;
+  stage: BlueprintGenerationStage;
+  createdAt: string;
+  capabilities?: BlueprintRuntimeCapability[];
+  artifactIds?: string[];
+  evidenceIds?: string[];
+}): BlueprintAgentCrew {
+  const capabilities = input.capabilities ?? getDefaultRuntimeCapabilities();
+  const roles = getDefaultAgentRoles();
+  const capabilityMatrix = buildDefaultCapabilityMatrix(capabilities);
+  const activationPolicies = getDefaultStageActivationPolicies();
+  const presence = buildRolePresence({
+    stage: input.stage,
+    capabilityMatrix,
+    activationPolicies,
+    artifactIds: input.artifactIds ?? [],
+    evidenceIds: input.evidenceIds ?? [],
+  });
+
+  return {
+    id: stableId("blueprint-agent-crew", input.jobId),
+    jobId: input.jobId,
+    createdAt: input.createdAt,
+    updatedAt: input.createdAt,
+    stage: input.stage,
+    roles,
+    capabilityMatrix,
+    activationPolicies,
+    presence,
+    sourceIds: {
+      capabilityIds: capabilities.map(capability => capability.id),
+    },
+  };
+}
+
+function buildRolePresence(input: {
+  stage: BlueprintGenerationStage;
+  capabilityMatrix: BlueprintCapabilityBinding[];
+  activationPolicies: BlueprintStageActivationPolicy[];
+  artifactIds: string[];
+  evidenceIds: string[];
+}): BlueprintRolePresence[] {
+  const policy =
+    input.activationPolicies.find(item => item.stage === input.stage) ??
+    input.activationPolicies[0];
+  const roles = getDefaultAgentRoles();
+
+  return roles.map(role => {
+    const state = resolveRolePresenceState(policy, role.id);
+    return {
+      roleId: role.id,
+      stage: input.stage,
+      state,
+      currentAction: buildRoleCurrentAction(role, input.stage, state),
+      capabilityIds: uniqueStrings(
+        input.capabilityMatrix
+          .filter(binding => binding.roleId === role.id)
+          .filter(binding => binding.applicableStages.includes(input.stage))
+          .map(binding => binding.capabilityId)
+      ),
+      artifactIds: state === "active" || state === "reviewing" ? input.artifactIds : [],
+      evidenceIds: state === "active" || state === "reviewing" ? input.evidenceIds : [],
+    };
+  });
+}
+
+function resolveRolePresenceState(
+  policy: BlueprintStageActivationPolicy,
+  roleId: string
+): BlueprintRolePresenceState {
+  if (policy.activeRoleIds.includes(roleId)) return "active";
+  if (policy.reviewingRoleIds.includes(roleId)) return "reviewing";
+  if (policy.watchingRoleIds.includes(roleId)) return "watching";
+  return "sleeping";
+}
+
+function buildRoleCurrentAction(
+  role: BlueprintAgentRole,
+  stage: BlueprintGenerationStage,
+  state: BlueprintRolePresenceState
+): string {
+  if (state === "sleeping") {
+    return `${role.displayLabelZh} is on standby for ${stage}.`;
+  }
+  if (state === "reviewing") {
+    return `${role.displayLabelZh} is reviewing ${stage} risk, consistency, and evidence.`;
+  }
+  if (state === "watching") {
+    return `${role.displayLabelZh} is watching ${stage} context for handoff signals.`;
+  }
+
+  return `${role.displayLabelZh} is driving ${stage} work.`;
+}
+
+function mapRolePresenceEventType(
+  state: BlueprintRolePresenceState
+): BlueprintGenerationEvent["type"] {
+  if (state === "active") return "role.activated";
+  if (state === "watching") return "role.watching";
+  if (state === "reviewing") return "role.review_started";
+  return "role.completed";
+}
+
+function createRolePresenceEvents(input: {
+  jobId: string;
+  projectId?: string;
+  crewId: string;
+  stage: BlueprintGenerationStage;
+  status: BlueprintGenerationStatus;
+  occurredAt: string;
+  presence: BlueprintRolePresence[];
+  artifactId?: string;
+  routeId?: string;
+  selectionId?: string;
+  specTreeId?: string;
+  nodeId?: string;
+  capabilityId?: string;
+  invocationId?: string;
+  evidenceId?: string;
+}): BlueprintGenerationEvent[] {
+  return input.presence.map(presence =>
+    createRoleEvent({
+      jobId: input.jobId,
+      projectId: input.projectId,
+      crewId: input.crewId,
+      stage: input.stage,
+      status: input.status,
+      occurredAt: input.occurredAt,
+      type: mapRolePresenceEventType(presence.state),
+      roleId: presence.roleId,
+      presenceState: presence.state,
+      message: `${presence.roleId} is ${presence.state} for ${input.stage}.`,
+      currentAction: presence.currentAction,
+      artifactId:
+        input.artifactId ??
+        (presence.state === "active" || presence.state === "reviewing"
+          ? presence.artifactIds[0]
+          : undefined),
+      routeId: input.routeId,
+      selectionId: input.selectionId,
+      specTreeId: input.specTreeId,
+      nodeId: input.nodeId,
+      capabilityId:
+        input.capabilityId ??
+        (presence.state === "active" || presence.state === "reviewing"
+          ? presence.capabilityIds[0]
+          : undefined),
+      invocationId: input.invocationId,
+      evidenceId:
+        input.evidenceId ??
+        (presence.state === "active" || presence.state === "reviewing"
+          ? presence.evidenceIds[0]
+          : undefined),
+    })
+  );
+}
+
+function createRoleEvent(input: {
+  jobId: string;
+  projectId?: string;
+  crewId?: string;
+  type: BlueprintGenerationEvent["type"];
+  stage: BlueprintGenerationStage;
+  status: BlueprintGenerationStatus;
+  roleId: string;
+  presenceState: BlueprintRolePresenceState;
+  message: string;
+  occurredAt: string;
+  currentAction?: string;
+  capabilityId?: string;
+  invocationId?: string;
+  evidenceId?: string;
+  artifactId?: string;
+  routeId?: string;
+  selectionId?: string;
+  specTreeId?: string;
+  nodeId?: string;
+}): BlueprintGenerationEvent {
+  return createGenerationEvent({
+    jobId: input.jobId,
+    projectId: input.projectId,
+    family: "role",
+    type: input.type,
+    stage: input.stage,
+    status: input.status,
+    roleId: input.roleId,
+    presenceState: input.presenceState,
+    capabilityId: input.capabilityId,
+    evidenceId: input.evidenceId,
+    artifactId: input.artifactId,
+    routeId: input.routeId,
+    selectionId: input.selectionId,
+    specTreeId: input.specTreeId,
+    nodeId: input.nodeId,
+    message: input.message,
+    occurredAt: input.occurredAt,
+    payload: {
+      jobId: input.jobId,
+      projectId: input.projectId,
+      crewId: input.crewId,
+      stage: input.stage,
+      roleId: input.roleId,
+      presenceState: input.presenceState,
+      currentAction: input.currentAction,
+      capabilityId: input.capabilityId,
+      invocationId: input.invocationId,
+      evidenceId: input.evidenceId,
+      artifactId: input.artifactId,
+      routeId: input.routeId,
+      selectionId: input.selectionId,
+      specTreeId: input.specTreeId,
+      nodeId: input.nodeId,
+      sourceIds: {
+        roleIds: [input.roleId],
+        crewIds: input.crewId ? [input.crewId] : [],
+        capabilityIds: input.capabilityId ? [input.capabilityId] : [],
+        capabilityInvocationIds: input.invocationId
+          ? [input.invocationId]
+          : [],
+        capabilityEvidenceIds: input.evidenceId ? [input.evidenceId] : [],
+        nodeIds: input.nodeId ? [input.nodeId] : [],
+      },
+    },
+  });
+}
+
 function createGenerationEvent(input: {
   jobId: string;
+  projectId?: string;
   type: BlueprintGenerationEvent["type"];
   stage: BlueprintGenerationStage;
   status: BlueprintGenerationStatus;
   message: string;
   occurredAt: string;
+  family?: BlueprintGenerationEventFamily;
+  routeId?: string;
+  selectionId?: string;
+  specTreeId?: string;
+  nodeId?: string;
+  artifactId?: string;
+  roleId?: string;
+  presenceState?: BlueprintRolePresenceState;
+  capabilityId?: string;
+  evidenceId?: string;
   payload?: unknown;
 }): BlueprintGenerationEvent {
   return {
     id: createId("blueprint-event"),
     jobId: input.jobId,
+    projectId: input.projectId,
     type: input.type,
+    family: input.family ?? mapGenerationEventFamily(input.type),
     stage: input.stage,
     status: input.status,
     message: input.message,
     occurredAt: input.occurredAt,
+    routeId: input.routeId,
+    selectionId: input.selectionId,
+    specTreeId: input.specTreeId,
+    nodeId: input.nodeId,
+    artifactId: input.artifactId,
+    roleId: input.roleId,
+    presenceState: input.presenceState,
+    capabilityId: input.capabilityId,
+    evidenceId: input.evidenceId,
     payload: input.payload,
+  };
+}
+
+function mapGenerationEventFamily(
+  type: BlueprintGenerationEvent["type"]
+): BlueprintGenerationEventFamily {
+  const prefix = type.split(".")[0];
+  if (
+    prefix === "crew" ||
+    prefix === "role" ||
+    prefix === "capability" ||
+    prefix === "preview" ||
+    prefix === "prompt" ||
+    prefix === "mission" ||
+    prefix === "sandbox"
+  ) {
+    return prefix;
+  }
+
+  return "job";
+}
+
+function createGenerationNextAction(input: BlueprintGenerationNextAction): BlueprintGenerationNextAction {
+  return input;
+}
+
+function createGenerationStageState(input: {
+  stage: BlueprintGenerationStage;
+  status: BlueprintGenerationStatus;
+  payloadKind: BlueprintGenerationStagePayloadKind;
+  artifactIds: string[];
+  nextAction?: BlueprintGenerationNextAction;
+}): BlueprintGenerationJob["stageState"] {
+  return {
+    stage: input.stage,
+    status: input.status,
+    payloadKind: input.payloadKind,
+    artifactIds: input.artifactIds,
+    nextAction: input.nextAction,
   };
 }
 
@@ -2539,6 +4196,20 @@ function extractRuntimeCapabilities(
   return registry?.capabilities ?? getDefaultRuntimeCapabilities();
 }
 
+function extractAgentCrew(
+  job: BlueprintGenerationJob
+): BlueprintAgentCrew | undefined {
+  return job.artifacts
+    .filter(
+      (artifact): artifact is BlueprintGenerationArtifact & {
+        type: "agent_crew";
+        payload: BlueprintAgentCrew;
+      } => artifact.type === "agent_crew"
+    )
+    .map(artifact => artifact.payload as BlueprintAgentCrew)
+    .find(isAgentCrewPayload);
+}
+
 function extractCapabilityInvocations(
   job: BlueprintGenerationJob
 ): BlueprintCapabilityInvocation[] {
@@ -2575,6 +4246,158 @@ function extractCapabilityEvidence(
         left.createdAt.localeCompare(right.createdAt) ||
         left.id.localeCompare(right.id)
     );
+}
+
+function extractSandboxDerivationJobs(
+  job: BlueprintGenerationJob
+): BlueprintSandboxDerivationJob[] {
+  return job.artifacts
+    .filter(
+      (artifact): artifact is BlueprintGenerationArtifact & {
+        type: "sandbox_derivation_job";
+        payload: BlueprintSandboxDerivationJob;
+      } => artifact.type === "sandbox_derivation_job"
+    )
+    .map(artifact => artifact.payload as BlueprintSandboxDerivationJob)
+    .filter(isSandboxDerivationJobPayload)
+    .sort(
+      (left, right) =>
+        left.createdAt.localeCompare(right.createdAt) ||
+        left.id.localeCompare(right.id)
+    );
+}
+
+function extractRoleTimelines(job: BlueprintGenerationJob): BlueprintRoleTimeline[] {
+  const collection = job.artifacts
+    .filter(
+      (artifact): artifact is BlueprintGenerationArtifact & {
+        type: "role_timeline";
+        payload: BlueprintRoleTimelineCollection;
+      } => artifact.type === "role_timeline"
+    )
+    .map(artifact => artifact.payload as BlueprintRoleTimelineCollection)
+    .filter(isRoleTimelineCollectionPayload)
+    .sort(
+      (left, right) =>
+        right.updatedAt.localeCompare(left.updatedAt) ||
+        right.id.localeCompare(left.id)
+    )[0];
+
+  return (
+    collection?.timelines ??
+    buildRoleTimelineCollection(
+      job,
+      job.updatedAt,
+      extractAgentCrew(job)
+    ).timelines
+  );
+}
+
+function collectReusableRoleFindings(
+  job: BlueprintGenerationJob,
+  filters: {
+    stages?: BlueprintGenerationStage[];
+    routeId?: string;
+    nodeId?: string;
+    limit?: number;
+  } = {}
+): BlueprintRoleTimelineEntry[] {
+  const entries = extractRoleTimelines(job)
+    .flatMap(timeline => timeline.entries)
+    .filter(entry => {
+      if (filters.stages && !filters.stages.includes(entry.stage)) {
+        return false;
+      }
+      if (filters.routeId && entry.routeId && entry.routeId !== filters.routeId) {
+        return false;
+      }
+      if (filters.nodeId && entry.nodeId && entry.nodeId !== filters.nodeId) {
+        return false;
+      }
+      return Boolean(
+        entry.currentAction ||
+          entry.evidenceId ||
+          entry.artifactId ||
+          entry.sourceIds.capabilityEvidenceIds?.length
+      );
+    })
+    .sort(
+      (left, right) =>
+        right.occurredAt.localeCompare(left.occurredAt) ||
+        right.id.localeCompare(left.id)
+    );
+  const strictEntries = entries.filter(entry => {
+    if (filters.routeId && entry.routeId !== filters.routeId) {
+      return false;
+    }
+    if (filters.nodeId && entry.nodeId !== filters.nodeId) {
+      return false;
+    }
+    return true;
+  });
+  return dedupeById(strictEntries.concat(entries))
+    .sort(compareReusableRoleFindings)
+    .slice(0, filters.limit ?? 8);
+}
+
+function compareReusableRoleFindings(
+  left: BlueprintRoleTimelineEntry,
+  right: BlueprintRoleTimelineEntry
+): number {
+  const leftHasEvidence =
+    Boolean(left.evidenceId) ||
+    (left.sourceIds.capabilityEvidenceIds?.length ?? 0) > 0;
+  const rightHasEvidence =
+    Boolean(right.evidenceId) ||
+    (right.sourceIds.capabilityEvidenceIds?.length ?? 0) > 0;
+  if (leftHasEvidence !== rightHasEvidence) {
+    return leftHasEvidence ? -1 : 1;
+  }
+
+  return (
+    right.occurredAt.localeCompare(left.occurredAt) ||
+    right.id.localeCompare(left.id)
+  );
+}
+
+function collectRoleFindingIds(
+  findings: BlueprintRoleTimelineEntry[]
+): string[] {
+  return uniqueStrings(findings.map(finding => finding.id));
+}
+
+function collectRoleFindingRoleIds(
+  findings: BlueprintRoleTimelineEntry[]
+): string[] {
+  return uniqueStrings(findings.map(finding => finding.roleId));
+}
+
+function collectRoleFindingEvidenceIds(
+  findings: BlueprintRoleTimelineEntry[]
+): string[] {
+  return uniqueStrings(
+    findings.flatMap(finding =>
+      [
+        finding.evidenceId,
+        ...(finding.sourceIds.capabilityEvidenceIds ?? []),
+      ].filter(isString)
+    )
+  );
+}
+
+function formatReusableRoleFinding(
+  finding: BlueprintRoleTimelineEntry
+): string {
+  const summary = finding.currentAction ?? finding.summary;
+  const refs = [
+    finding.capabilityId ? `capability=${finding.capabilityId}` : undefined,
+    finding.evidenceId ? `evidence=${finding.evidenceId}` : undefined,
+  ]
+    .filter(isString)
+    .join(", ");
+  return refs.length > 0
+    ? `${finding.roleId}: ${summary} (${refs})`
+    : `${finding.roleId}: ${summary}`;
 }
 
 function extractArtifactReplays(
@@ -2621,9 +4444,11 @@ const BLUEPRINT_GENERATION_STAGES: BlueprintGenerationStage[] = [
   "route_generation",
   "spec_tree",
   "spec_docs",
+  "preview",
   "effect_preview",
   "prompt_packaging",
   "runtime_capability",
+  "engineering_handoff",
   "engineering_landing",
 ];
 
@@ -2675,7 +4500,25 @@ function buildArtifactMemoryEntryFromEvent(
   event: BlueprintGenerationEvent,
   index: number
 ): BlueprintArtifactMemoryEntry {
-  const payload = isPlainRecord(event.payload) ? event.payload : {};
+  const basePayload = isPlainRecord(event.payload) ? event.payload : {};
+  const family = event.family ?? mapGenerationEventFamily(event.type);
+  const payload = {
+    ...basePayload,
+    jobId: event.jobId,
+    projectId: event.projectId,
+    stage: event.stage,
+    family,
+    type: event.type,
+    routeId: event.routeId,
+    selectionId: event.selectionId,
+    specTreeId: event.specTreeId,
+    nodeId: event.nodeId,
+    artifactId: event.artifactId,
+    roleId: event.roleId,
+    presenceState: event.presenceState,
+    capabilityId: event.capabilityId,
+    evidenceId: event.evidenceId,
+  };
 
   return {
     id: `blueprint-ledger-${event.id}`,
@@ -2684,11 +4527,17 @@ function buildArtifactMemoryEntryFromEvent(
     artifactType: "event",
     stage: event.stage,
     title: event.message,
-    summary: `${event.type} / ${event.status}`,
+    summary: `${family} / ${event.type} / ${event.status}`,
     createdAt: event.occurredAt,
     sourceIds: collectArtifactSourceIds("event", payload),
     version: index + 1,
-    tags: uniqueStrings(["event", event.type, event.stage, event.status]),
+    tags: uniqueStrings([
+      "event",
+      family,
+      event.type,
+      event.stage,
+      event.status,
+    ]),
     payloadSummary: summarizeArtifactPayload(payload),
   };
 }
@@ -2720,6 +4569,8 @@ function createArtifactReplaySnapshot(
     timelineEntries,
     stageCounts: buildArtifactReplayStageCounts(ledger),
     lineageEdges: buildArtifactLineageEdges(ledger),
+    artifactEvolution: buildArtifactEvolutionReplay(job),
+    decisions: buildArtifactDecisionReplay(job),
   };
   const replayArtifact: BlueprintGenerationArtifact = {
     id: createId("blueprint-artifact"),
@@ -2757,6 +4608,339 @@ function createArtifactReplaySnapshot(
 
   options.store.save(updatedJob);
   return { job: updatedJob, replay };
+}
+
+function buildArtifactEvolutionReplay(
+  job: BlueprintGenerationJob
+): BlueprintArtifactEvolutionReplay {
+  const routeSet = extractRouteSet(job);
+  const selection = extractRouteSelection(job);
+  const specTree = extractSpecTree(job);
+  const specTreeVersions = extractSpecTreeVersions(job);
+  const specDocuments = extractSpecDocuments(job);
+  const specDocumentVersions = extractSpecDocumentVersions(job);
+  const effectPreviews = extractEffectPreviews(job);
+  const promptPackages = extractImplementationPromptPackages(job);
+
+  return {
+    routeSets: routeSet
+      ? [
+          {
+            routeSetId: routeSet.id,
+            routeCount: routeSet.routes.length,
+            primaryRouteId: routeSet.primaryRouteId,
+            selectedRouteId: selection?.routeId,
+            selectedPathId: selection?.selectedPathId ?? selection?.routeId,
+            selectionId: selection?.id,
+            selectedBy: selection?.selectedBy,
+            reason: selection?.reason,
+            mergedAlternativeRouteIds: selection?.mergedAlternativeRouteIds ?? [],
+            createdAt: job.artifacts.find(
+              artifact => artifact.type === "route_set"
+            )?.createdAt,
+            selectedAt: selection?.selectedAt,
+          },
+        ]
+      : [],
+    specTrees: uniqueSpecTreeEvolution(specTree, specTreeVersions),
+    specDocuments: uniqueSpecDocumentEvolution(
+      specDocuments,
+      specDocumentVersions
+    ),
+    effectPreviews: effectPreviews.map(preview => ({
+      previewId: preview.id,
+      nodeId: preview.nodeId,
+      version: preview.version ?? preview.versionSync?.version ?? 1,
+      versionStatus:
+        preview.versionStatus ??
+        preview.versionSync?.versionStatus ??
+        "current",
+      status: preview.status,
+      sourceDocumentIds: [...preview.sourceDocumentIds],
+      sourceSnapshotHash:
+        preview.sourceSnapshotHash ??
+        preview.versionSync?.sourceSnapshotHash ??
+        "",
+      refreshedFromSpecTreeVersion:
+        preview.refreshedFromSpecTreeVersion ??
+        preview.versionSync?.refreshedFromSpecTreeVersion ??
+        preview.provenance.treeVersion,
+      updatedAt: preview.updatedAt ?? preview.createdAt,
+      previousPreviewIds: preview.previousPreviewIds ?? [],
+      preservedPreviewIds: preview.preservedPreviewIds ?? [],
+    })),
+    promptPackages: promptPackages.map(promptPackage => ({
+      promptPackageId: promptPackage.id,
+      targetPlatform: promptPackage.targetPlatform,
+      nodeIds: [...promptPackage.nodeIds],
+      sourceDocumentIds: [...promptPackage.sourceDocumentIds],
+      sourcePreviewIds: [...promptPackage.sourcePreviewIds],
+      sectionKinds: uniqueStrings(
+        promptPackage.sections.map(section => section.kind)
+      ) as BlueprintArtifactEvolutionReplay["promptPackages"][number]["sectionKinds"],
+      createdAt: promptPackage.createdAt,
+    })),
+  };
+}
+
+function uniqueSpecTreeEvolution(
+  current: BlueprintSpecTree | undefined,
+  versions: BlueprintSpecTreeVersionSnapshot[]
+): BlueprintArtifactEvolutionReplay["specTrees"] {
+  const snapshots: Array<
+    BlueprintArtifactEvolutionReplay["specTrees"][number] & { id: string }
+  > = versions.map(version => ({
+    id: `${version.treeId}:${version.version}:${version.id}`,
+    specTreeId: version.treeId,
+    selectionId: version.snapshot.selectionId,
+    selectedPathId:
+      version.snapshot.selectedPathId ?? version.snapshot.selectedRouteId,
+    routeId: version.snapshot.selectedRouteId,
+    version: version.version,
+    status: version.snapshot.status,
+    rootNodeId: version.snapshot.rootNodeId,
+    nodeCount: version.snapshot.nodes.length,
+    updatedAt: version.savedAt,
+    versionId: version.id,
+  }));
+  const currentEntry: Array<
+    BlueprintArtifactEvolutionReplay["specTrees"][number] & { id: string }
+  > = current
+    ? [
+        {
+          id: `${current.id}:${current.version}:current`,
+          specTreeId: current.id,
+          selectionId: current.selectionId,
+          selectedPathId: current.selectedPathId ?? current.selectedRouteId,
+          routeId: current.selectedRouteId,
+          version: current.version,
+          status: current.status,
+          rootNodeId: current.rootNodeId,
+          nodeCount: current.nodes.length,
+          updatedAt: current.updatedAt,
+        },
+      ]
+    : [];
+
+  return dedupeById(snapshots.concat(currentEntry))
+    .sort(
+      (left, right) =>
+        left.updatedAt.localeCompare(right.updatedAt) ||
+        left.version - right.version
+    )
+    .map(({ id: _id, ...entry }) => entry);
+}
+
+function uniqueSpecDocumentEvolution(
+  documents: BlueprintSpecDocument[],
+  versions: BlueprintSpecDocumentVersionSnapshot[]
+): BlueprintArtifactEvolutionReplay["specDocuments"] {
+  const versionEntries: Array<
+    BlueprintArtifactEvolutionReplay["specDocuments"][number] & { id: string }
+  > = versions.map(version => ({
+    id: `${version.sourceDocumentId}:${version.version}:${version.id}`,
+    documentId: version.documentId,
+    sourceDocumentId: version.sourceDocumentId,
+    nodeId: version.nodeId,
+    type: version.type,
+    version: version.version,
+    status: version.status,
+    updatedAt: version.savedAt,
+    reviewedBy: version.reviewedBy,
+    reviewNote: version.reviewNote,
+    acceptedAt: version.acceptedAt,
+    rejectedAt: version.rejectedAt,
+    versionId: version.id,
+  }));
+  const currentEntries: Array<
+    BlueprintArtifactEvolutionReplay["specDocuments"][number] & { id: string }
+  > = documents.map(document => ({
+    id: `${document.sourceDocumentId ?? document.id}:${document.version ?? 1}:current`,
+    documentId: document.id,
+    sourceDocumentId: document.sourceDocumentId,
+    nodeId: document.nodeId,
+    type: document.type,
+    version: document.version ?? 1,
+    status: normalizeSpecDocumentStatus(document.status),
+    updatedAt: document.updatedAt ?? document.createdAt,
+    reviewedBy: document.reviewedBy,
+    reviewNote: document.reviewNote,
+    acceptedAt: document.acceptedAt,
+    rejectedAt: document.rejectedAt,
+  }));
+
+  return dedupeById(versionEntries.concat(currentEntries))
+    .sort(
+      (left, right) =>
+        left.updatedAt.localeCompare(right.updatedAt) ||
+        left.type.localeCompare(right.type) ||
+        left.version - right.version
+    )
+    .map(({ id: _id, ...entry }) => entry);
+}
+
+function buildArtifactDecisionReplay(
+  job: BlueprintGenerationJob
+): BlueprintArtifactDecisionReplay {
+  const confirmations: BlueprintArtifactDecisionReplay["confirmations"] = [];
+  const handoffs: BlueprintArtifactDecisionReplay["handoffs"] = [];
+
+  for (const artifact of job.artifacts) {
+    const payload = isPlainRecord(artifact.payload) ? artifact.payload : null;
+    if (!payload) continue;
+
+    if (artifact.type === "route_selection") {
+      confirmations.push({
+        id: stableId("blueprint-confirmation", artifact.id),
+        kind: "route_selection",
+        artifactId: artifact.id,
+        routeId: readString(payload.routeId),
+        selectedPathId: readString(payload.selectedPathId) ?? readString(payload.routeId),
+        selectionId: readString(payload.id),
+        decidedBy: readString(payload.selectedBy),
+        note: readString(payload.reason),
+        occurredAt: readString(payload.selectedAt) ?? artifact.createdAt,
+      });
+    }
+
+    if (artifact.type === "spec_tree_version") {
+      confirmations.push({
+        id: stableId("blueprint-confirmation", artifact.id),
+        kind: "spec_tree_version",
+        artifactId: artifact.id,
+        specTreeId: readString(payload.treeId),
+        decidedBy: readString(payload.savedBy),
+        note: readString(payload.summary),
+        occurredAt: readString(payload.savedAt) ?? artifact.createdAt,
+      });
+    }
+
+    if (
+      artifact.type === "requirements" ||
+      artifact.type === "design" ||
+      artifact.type === "tasks"
+    ) {
+      const status = readString(payload.status);
+      if (status === "accepted" || status === "rejected" || status === "reviewing") {
+        confirmations.push({
+          id: stableId("blueprint-confirmation", artifact.id),
+          kind: "spec_document_review",
+          artifactId: artifact.id,
+          documentId: readString(payload.id),
+          status,
+          decidedBy: readString(payload.reviewedBy),
+          note: readString(payload.reviewNote),
+          occurredAt:
+            readString(payload.reviewedAt) ??
+            readString(payload.updatedAt) ??
+            artifact.createdAt,
+        });
+      }
+    }
+
+    if (artifact.type === "spec_document_version") {
+      confirmations.push({
+        id: stableId("blueprint-confirmation", artifact.id),
+        kind: "spec_document_version",
+        artifactId: artifact.id,
+        documentId: readString(payload.documentId),
+        specTreeId: readString(payload.treeId),
+        status: readString(payload.status),
+        decidedBy: readString(payload.savedBy),
+        note: readString(payload.reviewNote),
+        occurredAt: readString(payload.savedAt) ?? artifact.createdAt,
+      });
+    }
+
+    if (artifact.type === "prompt_pack") {
+      const packageId = readString(payload.id);
+      const sectionKinds = Array.isArray(payload.sections)
+        ? payload.sections
+            .filter(isPlainRecord)
+            .map(section => readString(section.kind))
+        : [];
+      if (packageId && sectionKinds.includes("handoff")) {
+        handoffs.push({
+          id: stableId("blueprint-handoff-decision", artifact.id),
+          kind: "prompt_package",
+          artifactId: artifact.id,
+          promptPackageIds: [packageId],
+          landingPlanIds: [],
+          platform: readString(payload.targetPlatform) as
+            | BlueprintArtifactDecisionReplay["handoffs"][number]["platform"]
+            | undefined,
+          occurredAt: artifact.createdAt,
+          summary: artifact.summary,
+        });
+      }
+    }
+
+    if (artifact.type === "engineering_plan") {
+      const planId = readString(payload.id);
+      const handoffItems = Array.isArray(payload.handoffs)
+        ? payload.handoffs.filter(isPlainRecord)
+        : [];
+      for (const handoff of handoffItems) {
+        handoffs.push({
+          id: stableId(
+            "blueprint-handoff-decision",
+            `${artifact.id}:${readString(handoff.id) ?? planId ?? "handoff"}`
+          ),
+          kind: "engineering_plan",
+          artifactId: artifact.id,
+          promptPackageIds: normalizeStringList(payload.promptPackageIds),
+          landingPlanIds: planId ? [planId] : [],
+          platform: readString(handoff.platform) as
+            | BlueprintArtifactDecisionReplay["handoffs"][number]["platform"]
+            | undefined,
+          status: readString(payload.status),
+          occurredAt: readString(payload.createdAt) ?? artifact.createdAt,
+          summary: readString(handoff.summary) ?? artifact.summary,
+        });
+      }
+    }
+
+    if (artifact.type === "engineering_run") {
+      const planId = readString(payload.landingPlanId);
+      handoffs.push({
+        id: stableId("blueprint-handoff-decision", artifact.id),
+        kind: "engineering_run",
+        artifactId: artifact.id,
+        promptPackageIds: normalizeStringList(payload.promptPackageIds),
+        landingPlanIds: planId ? [planId] : [],
+        status: readString(payload.status),
+        occurredAt:
+          readString(payload.completedAt) ??
+          readString(payload.startedAt) ??
+          artifact.createdAt,
+        summary: readString(payload.summary) ?? artifact.summary,
+      });
+    }
+  }
+
+  for (const event of job.events) {
+    if (event.type !== "mission.handoff") continue;
+    const payload = isPlainRecord(event.payload) ? event.payload : {};
+    handoffs.push({
+      id: stableId("blueprint-handoff-decision", event.id),
+      kind: "mission_handoff",
+      eventId: event.id,
+      promptPackageIds: normalizeStringList(payload.promptPackageIds),
+      landingPlanIds: normalizeStringList(payload.landingPlanIds),
+      status: event.status,
+      occurredAt: event.occurredAt,
+      summary: event.message,
+    });
+  }
+
+  return {
+    confirmations: confirmations.sort((left, right) =>
+      left.occurredAt.localeCompare(right.occurredAt)
+    ),
+    handoffs: handoffs.sort((left, right) =>
+      left.occurredAt.localeCompare(right.occurredAt)
+    ),
+  };
 }
 
 function compareArtifactLedgerEntries(
@@ -2928,7 +5112,11 @@ function inferArtifactStage(
   if (artifactType === "prompt_pack") {
     return "prompt_packaging";
   }
+  if (artifactType === "role_timeline") {
+    return "runtime_capability";
+  }
   if (
+    artifactType === "agent_crew" ||
     artifactType === "capability_registry" ||
     artifactType === "capability_invocation" ||
     artifactType === "capability_evidence"
@@ -2949,6 +5137,7 @@ function inferArtifactStage(
 
 function emptyArtifactSourceIds(): BlueprintArtifactSourceIds {
   return {
+    nodeIds: [],
     specDocumentIds: [],
     effectPreviewIds: [],
     promptPackageIds: [],
@@ -2957,6 +5146,8 @@ function emptyArtifactSourceIds(): BlueprintArtifactSourceIds {
     landingPlanIds: [],
     engineeringRunIds: [],
     capabilityIds: [],
+    roleIds: [],
+    crewIds: [],
   };
 }
 
@@ -2967,19 +5158,45 @@ function collectArtifactSourceIds(
   const explicit = isPlainRecord(payload.sourceIds)
     ? normalizeArtifactSourceIds(payload.sourceIds)
     : emptyArtifactSourceIds();
+  const runtimeProjection = isPlainRecord(payload.runtimeProjection)
+    ? payload.runtimeProjection
+    : {};
+  const runtimeProjectionSourceIds = isPlainRecord(runtimeProjection.sourceIds)
+    ? normalizeArtifactSourceIds(runtimeProjection.sourceIds)
+    : emptyArtifactSourceIds();
   const provenance = isPlainRecord(payload.provenance) ? payload.provenance : {};
 
+  const projectId =
+    readString(explicit.projectId) ??
+    readString(runtimeProjectionSourceIds.projectId) ??
+    readString(payload.projectId) ??
+    readString(provenance.projectId);
   const routeSetId =
     readString(explicit.routeSetId) ??
+    readString(runtimeProjectionSourceIds.routeSetId) ??
     readString(payload.routeSetId) ??
+    readString(provenance.routeSetId) ??
     (artifactType === "route_set" ? readString(payload.id) : undefined);
   const specTreeId =
     readString(explicit.specTreeId) ??
+    readString(runtimeProjectionSourceIds.specTreeId) ??
     readString(payload.specTreeId) ??
     readString(payload.treeId) ??
+    readString(provenance.specTreeId) ??
     (artifactType === "spec_tree" ? readString(payload.id) : undefined);
+  const nodeIds = uniqueStrings(
+    explicit.nodeIds.concat(
+      runtimeProjectionSourceIds.nodeIds,
+      normalizeStringList(payload.nodeIds),
+      normalizeStringList(payload.sourceNodeIds),
+      normalizeStringList(provenance.nodeIds),
+      normalizeStringList(provenance.sourceNodeIds),
+      [readString(payload.nodeId)].filter(isString)
+    )
+  );
   const specDocumentIds = uniqueStrings(
     explicit.specDocumentIds.concat(
+      runtimeProjectionSourceIds.specDocumentIds,
       normalizeStringList(payload.specDocumentIds),
       normalizeStringList(payload.sourceDocumentIds),
       normalizeStringList(provenance.sourceDocumentIds),
@@ -2995,6 +5212,7 @@ function collectArtifactSourceIds(
   );
   const effectPreviewIds = uniqueStrings(
     explicit.effectPreviewIds.concat(
+      runtimeProjectionSourceIds.effectPreviewIds,
       normalizeStringList(payload.effectPreviewIds),
       normalizeStringList(payload.sourcePreviewIds),
       normalizeStringList(provenance.sourcePreviewIds),
@@ -3005,6 +5223,7 @@ function collectArtifactSourceIds(
   );
   const promptPackageIds = uniqueStrings(
     explicit.promptPackageIds.concat(
+      runtimeProjectionSourceIds.promptPackageIds,
       normalizeStringList(payload.promptPackageIds),
       normalizeStringList(provenance.promptPackageIds),
       artifactType === "prompt_pack" ? [readString(payload.id)].filter(isString) : []
@@ -3012,6 +5231,7 @@ function collectArtifactSourceIds(
   );
   const capabilityInvocationIds = uniqueStrings(
     explicit.capabilityInvocationIds.concat(
+      runtimeProjectionSourceIds.capabilityInvocationIds,
       normalizeStringList(payload.capabilityInvocationIds),
       normalizeStringList(provenance.capabilityInvocationIds),
       artifactType === "capability_invocation"
@@ -3021,6 +5241,7 @@ function collectArtifactSourceIds(
   );
   const capabilityEvidenceIds = uniqueStrings(
     explicit.capabilityEvidenceIds.concat(
+      runtimeProjectionSourceIds.capabilityEvidenceIds,
       normalizeStringList(payload.capabilityEvidenceIds),
       normalizeStringList(provenance.capabilityEvidenceIds),
       artifactType === "capability_evidence"
@@ -3028,18 +5249,61 @@ function collectArtifactSourceIds(
         : []
     )
   );
+  const agentCrewCapabilityIds =
+    artifactType === "agent_crew" && Array.isArray(payload.capabilityMatrix)
+      ? payload.capabilityMatrix
+          .filter(isPlainRecord)
+          .map(binding => readString(binding.capabilityId))
+          .filter(isString)
+      : [];
   const capabilityIds = uniqueStrings(
     explicit.capabilityIds.concat(
+      runtimeProjectionSourceIds.capabilityIds,
       normalizeStringList(payload.capabilityIds),
       normalizeStringList(provenance.capabilityIds),
-      artifactType === "capability_registry"
+      artifactType === "capability_registry" || artifactType === "agent_crew"
         ? normalizeStringList(payload.capabilities)
         : [],
+      agentCrewCapabilityIds,
       [readString(payload.capabilityId)].filter(isString)
+    )
+  );
+  const agentCrewRoleIds =
+    artifactType === "agent_crew" && Array.isArray(payload.roles)
+      ? payload.roles
+          .filter(isPlainRecord)
+          .map(role => readString(role.id))
+          .filter(isString)
+      : [];
+  const roleTimelineRoleIds =
+    artifactType === "role_timeline" && Array.isArray(payload.timelines)
+      ? payload.timelines
+          .filter(isPlainRecord)
+          .map(timeline => readString(timeline.roleId))
+          .filter(isString)
+      : [];
+  const roleIds = uniqueStrings(
+    explicit.roleIds.concat(
+      runtimeProjectionSourceIds.roleIds,
+      normalizeStringList(payload.roleIds),
+      normalizeStringList(provenance.roleIds),
+      [readString(payload.roleId)].filter(isString),
+      agentCrewRoleIds,
+      roleTimelineRoleIds
+    )
+  );
+  const crewIds = uniqueStrings(
+    explicit.crewIds.concat(
+      runtimeProjectionSourceIds.crewIds,
+      normalizeStringList(payload.crewIds),
+      normalizeStringList(provenance.crewIds),
+      [readString(payload.crewId)].filter(isString),
+      artifactType === "agent_crew" ? [readString(payload.id)].filter(isString) : []
     )
   );
   const landingPlanIds = uniqueStrings(
     explicit.landingPlanIds.concat(
+      runtimeProjectionSourceIds.landingPlanIds,
       normalizeStringList(payload.landingPlanIds),
       normalizeStringList(provenance.landingPlanIds),
       artifactType === "engineering_plan"
@@ -3049,6 +5313,7 @@ function collectArtifactSourceIds(
   );
   const engineeringRunIds = uniqueStrings(
     explicit.engineeringRunIds.concat(
+      runtimeProjectionSourceIds.engineeringRunIds,
       normalizeStringList(payload.engineeringRunIds),
       normalizeStringList(provenance.engineeringRunIds),
       artifactType === "engineering_run"
@@ -3058,8 +5323,10 @@ function collectArtifactSourceIds(
   );
 
   return {
+    projectId,
     routeSetId,
     specTreeId,
+    nodeIds,
     specDocumentIds,
     effectPreviewIds,
     promptPackageIds,
@@ -3068,6 +5335,8 @@ function collectArtifactSourceIds(
     landingPlanIds,
     engineeringRunIds,
     capabilityIds,
+    roleIds,
+    crewIds,
   };
 }
 
@@ -3075,8 +5344,10 @@ function normalizeArtifactSourceIds(
   value: Record<string, unknown>
 ): BlueprintArtifactSourceIds {
   return {
+    projectId: readString(value.projectId),
     routeSetId: readString(value.routeSetId),
     specTreeId: readString(value.specTreeId),
+    nodeIds: normalizeStringList(value.nodeIds),
     specDocumentIds: normalizeStringList(value.specDocumentIds),
     effectPreviewIds: normalizeStringList(value.effectPreviewIds),
     promptPackageIds: normalizeStringList(value.promptPackageIds),
@@ -3085,6 +5356,8 @@ function normalizeArtifactSourceIds(
     landingPlanIds: normalizeStringList(value.landingPlanIds),
     engineeringRunIds: normalizeStringList(value.engineeringRunIds),
     capabilityIds: normalizeStringList(value.capabilityIds),
+    roleIds: normalizeStringList(value.roleIds),
+    crewIds: normalizeStringList(value.crewIds),
   };
 }
 
@@ -3094,7 +5367,9 @@ function mergeArtifactSourceIds(
 ): BlueprintArtifactSourceIds {
   return {
     routeSetId: override?.routeSetId ?? base.routeSetId,
+    projectId: override?.projectId ?? base.projectId,
     specTreeId: override?.specTreeId ?? base.specTreeId,
+    nodeIds: uniqueStrings(base.nodeIds.concat(override?.nodeIds ?? [])),
     specDocumentIds: uniqueStrings(
       base.specDocumentIds.concat(override?.specDocumentIds ?? [])
     ),
@@ -3121,6 +5396,8 @@ function mergeArtifactSourceIds(
     capabilityIds: uniqueStrings(
       base.capabilityIds.concat(override?.capabilityIds ?? [])
     ),
+    roleIds: uniqueStrings(base.roleIds.concat(override?.roleIds ?? [])),
+    crewIds: uniqueStrings(base.crewIds.concat(override?.crewIds ?? [])),
   };
 }
 
@@ -3156,16 +5433,25 @@ function summarizeArtifactPayload(
   const summary: BlueprintArtifactPayloadSummary = {};
   for (const key of [
     "id",
+    "projectId",
     "status",
+    "family",
     "type",
     "version",
+    "versionStatus",
+    "refreshedFromSpecTreeVersion",
+    "sourceSnapshotHash",
     "nodeId",
     "treeId",
     "routeSetId",
     "targetPlatform",
     "landingPlanId",
     "capabilityId",
+    "roleId",
+    "presenceState",
+    "crewId",
     "invocationId",
+    "evidenceId",
     "securityLevel",
   ]) {
     const value = payload[key];
@@ -3197,6 +5483,177 @@ function buildArtifactReplayStageCounts(
   return counts;
 }
 
+function buildRoleTimelineCollection(
+  job: BlueprintGenerationJob,
+  updatedAt: string,
+  agentCrew?: BlueprintAgentCrew
+): BlueprintRoleTimelineCollection {
+  const roleById = new Map(
+    (agentCrew?.roles ?? getDefaultAgentRoles()).map(role => [role.id, role])
+  );
+  const roleEvents = job.events
+    .filter(event => event.family === "role")
+    .filter(event => typeof event.roleId === "string")
+    .sort(
+      (left, right) =>
+        left.occurredAt.localeCompare(right.occurredAt) ||
+        left.id.localeCompare(right.id)
+    );
+  const entriesByRoleId = new Map<string, BlueprintRoleTimelineEntry[]>();
+
+  for (const event of roleEvents) {
+    const roleId = event.roleId;
+    if (!roleId) continue;
+    const payload = isPlainRecord(event.payload) ? event.payload : {};
+    const sourceIds = isPlainRecord(payload.sourceIds)
+      ? normalizeArtifactSourceIds(payload.sourceIds)
+      : collectArtifactSourceIds("event", payload);
+    const presenceState = isRolePresenceState(event.presenceState)
+      ? event.presenceState
+      : "watching";
+    const entry: BlueprintRoleTimelineEntry = {
+      id: `blueprint-role-timeline-entry-${event.id}`,
+      eventId: event.id,
+      jobId: job.id,
+      projectId: event.projectId ?? job.projectId,
+      crewId: readString(payload.crewId),
+      stage: event.stage,
+      roleId,
+      presenceState,
+      type: event.type,
+      occurredAt: event.occurredAt,
+      summary: event.message,
+      currentAction: readString(payload.currentAction),
+      capabilityId: event.capabilityId ?? readString(payload.capabilityId),
+      invocationId: readString(payload.invocationId),
+      evidenceId: event.evidenceId ?? readString(payload.evidenceId),
+      artifactId: event.artifactId ?? readString(payload.artifactId),
+      routeId: event.routeId ?? readString(payload.routeId),
+      selectionId: event.selectionId ?? readString(payload.selectionId),
+      specTreeId: event.specTreeId ?? readString(payload.specTreeId),
+      nodeId: event.nodeId ?? readString(payload.nodeId),
+      sourceIds,
+    };
+    entriesByRoleId.set(
+      roleId,
+      (entriesByRoleId.get(roleId) ?? []).concat(entry)
+    );
+  }
+
+  const timelines = Array.from(entriesByRoleId.entries())
+    .map(([roleId, entries]) => {
+      const latest = entries[entries.length - 1];
+      const role = roleById.get(roleId);
+      return {
+        id: stableId("blueprint-role-timeline", `${job.id}:${roleId}`),
+        jobId: job.id,
+        projectId: job.projectId,
+        crewId: latest.crewId ?? agentCrew?.id,
+        roleId,
+        roleDisplayName: role?.displayName,
+        roleDisplayLabelZh: role?.displayLabelZh,
+        latestStage: latest.stage,
+        latestPresenceState: latest.presenceState,
+        latestAction: latest.currentAction ?? latest.summary,
+        latestCapabilityId: latest.capabilityId,
+        latestArtifactId: latest.artifactId,
+        latestEvidenceId: latest.evidenceId,
+        startedAt: entries[0].occurredAt,
+        updatedAt: latest.occurredAt,
+        entryCount: entries.length,
+        entries,
+      } satisfies BlueprintRoleTimeline;
+    })
+    .sort((left, right) => left.roleId.localeCompare(right.roleId));
+  const sourceIds: Partial<BlueprintArtifactSourceIds> = {
+    projectId: job.projectId,
+    roleIds: uniqueStrings(timelines.map(timeline => timeline.roleId)),
+    crewIds: uniqueStrings(
+      timelines.map(timeline => timeline.crewId).filter(isString)
+    ),
+    capabilityIds: uniqueStrings(
+      timelines.flatMap(timeline =>
+        timeline.entries.map(entry => entry.capabilityId).filter(isString)
+      )
+    ),
+    capabilityInvocationIds: uniqueStrings(
+      timelines.flatMap(timeline =>
+        timeline.entries.map(entry => entry.invocationId).filter(isString)
+      )
+    ),
+    capabilityEvidenceIds: uniqueStrings(
+      timelines.flatMap(timeline =>
+        timeline.entries.map(entry => entry.evidenceId).filter(isString)
+      )
+    ),
+    nodeIds: uniqueStrings(
+      timelines.flatMap(timeline =>
+        timeline.entries.map(entry => entry.nodeId).filter(isString)
+      )
+    ),
+  };
+
+  return {
+    id: stableId("blueprint-role-timeline-collection", job.id),
+    jobId: job.id,
+    projectId: job.projectId,
+    createdAt: timelines[0]?.startedAt ?? job.createdAt,
+    updatedAt,
+    latestStage: job.stage,
+    timelines,
+    sourceIds,
+  };
+}
+
+function filterRoleTimelines(
+  timelines: BlueprintRoleTimeline[],
+  filters: BlueprintRoleTimelineFilters
+): BlueprintRoleTimeline[] {
+  const filteredTimelines: BlueprintRoleTimeline[] = [];
+
+  for (const timeline of timelines) {
+    if (filters.jobId && timeline.jobId !== filters.jobId) {
+      continue;
+    }
+    if (filters.roleId && timeline.roleId !== filters.roleId) {
+      continue;
+    }
+
+    const entries = timeline.entries.filter(entry => {
+      if (filters.stage && entry.stage !== filters.stage) return false;
+      if (filters.routeId && entry.routeId !== filters.routeId) return false;
+      if (filters.nodeId && entry.nodeId !== filters.nodeId) return false;
+      if (filters.artifactId && entry.artifactId !== filters.artifactId) {
+        return false;
+      }
+      if (filters.capabilityId && entry.capabilityId !== filters.capabilityId) {
+        return false;
+      }
+      if (filters.from && entry.occurredAt < filters.from) return false;
+      if (filters.to && entry.occurredAt > filters.to) return false;
+      return true;
+    });
+
+    if (entries.length === 0) continue;
+    const latest = entries[entries.length - 1];
+    filteredTimelines.push({
+      ...timeline,
+      latestStage: latest.stage,
+      latestPresenceState: latest.presenceState,
+      latestAction: latest.currentAction ?? latest.summary,
+      latestCapabilityId: latest.capabilityId,
+      latestArtifactId: latest.artifactId,
+      latestEvidenceId: latest.evidenceId,
+      startedAt: entries[0].occurredAt,
+      updatedAt: latest.occurredAt,
+      entryCount: entries.length,
+      entries,
+    });
+  }
+
+  return filteredTimelines;
+}
+
 function buildArtifactLineageEdges(
   ledger: BlueprintArtifactMemoryEntry[]
 ): BlueprintArtifactLineageEdge[] {
@@ -3216,6 +5673,10 @@ function buildArtifactLineageEdges(
       sourceType: BlueprintArtifactLineageEdge["sourceType"];
     }> = [
       {
+        ids: entry.sourceIds.projectId ? [entry.sourceIds.projectId] : [],
+        sourceType: "project",
+      },
+      {
         ids: entry.sourceIds.routeSetId ? [entry.sourceIds.routeSetId] : [],
         sourceType: "route_set",
       },
@@ -3224,9 +5685,12 @@ function buildArtifactLineageEdges(
         sourceType: "spec_tree",
       },
       { ids: entry.sourceIds.specDocumentIds, sourceType: "spec_document" },
+      { ids: entry.sourceIds.nodeIds, sourceType: "spec_node" },
       { ids: entry.sourceIds.effectPreviewIds, sourceType: "effect_preview" },
       { ids: entry.sourceIds.promptPackageIds, sourceType: "prompt_package" },
       { ids: entry.sourceIds.capabilityIds, sourceType: "capability_registry" },
+      { ids: entry.sourceIds.roleIds, sourceType: "role" },
+      { ids: entry.sourceIds.crewIds, sourceType: "crew" },
       {
         ids: entry.sourceIds.capabilityInvocationIds,
         sourceType: "capability_invocation",
@@ -3285,8 +5749,11 @@ function createJobDetailsPayload(
     effectPreviews: extractEffectPreviews(job),
     promptPackages: extractImplementationPromptPackages(job),
     capabilities: extractRuntimeCapabilities(job),
+    agentCrew: extractAgentCrew(job),
+    roleTimelines: extractRoleTimelines(job),
     capabilityInvocations: extractCapabilityInvocations(job),
     capabilityEvidence: extractCapabilityEvidence(job),
+    sandboxDerivationJobs: extractSandboxDerivationJobs(job),
     specTreeVersions: extractSpecTreeVersions(job),
     engineeringLandingPlans: extractEngineeringLandingPlans(job),
     engineeringRuns: extractEngineeringRuns(job),
@@ -3768,6 +6235,18 @@ type ParseCapabilityEvidenceFiltersResult =
   | { ok: true; filters: BlueprintFetchCapabilityEvidenceRequest }
   | { ok: false; message: string };
 
+type ParseGenerationEventFiltersResult =
+  | { ok: true; filters: BlueprintGenerationEventFilters }
+  | { ok: false; message: string };
+
+type ParseRoleTimelineFiltersResult =
+  | { ok: true; filters: BlueprintRoleTimelineFilters }
+  | { ok: false; message: string };
+
+type ParseSandboxDerivationJobRequestResult =
+  | { ok: true; request: BlueprintSandboxDerivationJobRequest }
+  | { ok: false; message: string };
+
 type ParseCreateArtifactReplayRequestResult =
   | { ok: true; request: BlueprintCreateArtifactReplayRequest }
   | { ok: false; message: string };
@@ -4120,6 +6599,14 @@ function parseCapabilityInvocationRequest(
     };
   }
 
+  const roleId = readString(body.roleId);
+  if (!roleId) {
+    return {
+      ok: false,
+      message: "Provide roleId to invoke a blueprint runtime capability.",
+    };
+  }
+
   const evidenceTags = hasOwn(body, "evidenceTags")
     ? normalizeStringList(body.evidenceTags)
     : [];
@@ -4128,6 +6615,7 @@ function parseCapabilityInvocationRequest(
     ok: true,
     request: {
       capabilityId,
+      roleId,
       routeId: readString(body.routeId),
       nodeId: readString(body.nodeId),
       input: readString(body.input),
@@ -4168,6 +6656,166 @@ function parseCapabilityEvidenceFilters(
       capabilityId,
       nodeId,
       routeId,
+    },
+  };
+}
+
+function parseGenerationEventFilters(
+  query: Record<string, unknown>
+): ParseGenerationEventFiltersResult {
+  const stage = readString(query.stage);
+  if (stage && !isBlueprintGenerationStage(stage)) {
+    return {
+      ok: false,
+      message:
+        "stage must be one of input, clarification, route_generation, spec_tree, spec_docs, preview, effect_preview, prompt_packaging, runtime_capability, engineering_handoff, or engineering_landing.",
+    };
+  }
+
+  const family = readString(query.family);
+  if (family && !isGenerationEventFamily(family)) {
+    return {
+      ok: false,
+      message:
+        "family must be one of job, crew, role, capability, preview, prompt, mission, or sandbox.",
+    };
+  }
+
+  return {
+    ok: true,
+    filters: {
+      jobId: readString(query.jobId),
+      stage: stage as BlueprintGenerationStage | undefined,
+      family: family as BlueprintGenerationEventFamily | undefined,
+      routeId: readString(query.routeId),
+      nodeId: readString(query.nodeId),
+      artifactId: readString(query.artifactId),
+      roleId: readString(query.roleId),
+      capabilityId: readString(query.capabilityId),
+      evidenceId: readString(query.evidenceId),
+    },
+  };
+}
+
+function parseRoleTimelineFilters(
+  query: Record<string, unknown>
+): ParseRoleTimelineFiltersResult {
+  const stage = readString(query.stage);
+  if (stage && !isBlueprintGenerationStage(stage)) {
+    return {
+      ok: false,
+      message:
+        "stage must be one of input, clarification, route_generation, spec_tree, spec_docs, preview, effect_preview, prompt_packaging, runtime_capability, engineering_handoff, or engineering_landing.",
+    };
+  }
+
+  return {
+    ok: true,
+    filters: {
+      jobId: readString(query.jobId),
+      roleId: readString(query.roleId),
+      stage: stage as BlueprintGenerationStage | undefined,
+      routeId: readString(query.routeId),
+      nodeId: readString(query.nodeId),
+      artifactId: readString(query.artifactId),
+      capabilityId: readString(query.capabilityId),
+      from: readString(query.from),
+      to: readString(query.to),
+    },
+  };
+}
+
+function filterGenerationEvents(
+  events: BlueprintGenerationEvent[],
+  filters: BlueprintGenerationEventFilters
+): BlueprintGenerationEvent[] {
+  return events.filter(event => {
+    if (filters.jobId && event.jobId !== filters.jobId) return false;
+    if (filters.stage && event.stage !== filters.stage) return false;
+    const family = event.family ?? mapGenerationEventFamily(event.type);
+    if (filters.family && family !== filters.family) return false;
+    if (filters.routeId && event.routeId !== filters.routeId) return false;
+    if (filters.nodeId && event.nodeId !== filters.nodeId) return false;
+    if (filters.artifactId && event.artifactId !== filters.artifactId) return false;
+    if (filters.roleId && event.roleId !== filters.roleId) return false;
+    if (filters.capabilityId && event.capabilityId !== filters.capabilityId) {
+      return false;
+    }
+    if (filters.evidenceId && event.evidenceId !== filters.evidenceId) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function parseSandboxDerivationJobRequest(
+  body: unknown
+): ParseSandboxDerivationJobRequestResult {
+  if (!isPlainRecord(body)) {
+    return {
+      ok: false,
+      message: "Request body must be a JSON object.",
+    };
+  }
+
+  const rawCapabilities = Array.isArray(body.capabilities)
+    ? body.capabilities
+    : [];
+  if (rawCapabilities.length === 0) {
+    return {
+      ok: false,
+      message: "Provide at least one capability request.",
+    };
+  }
+
+  const stage = readString(body.stage);
+  if (stage && !isBlueprintGenerationStage(stage)) {
+    return {
+      ok: false,
+      message: "stage must be a valid blueprint generation stage.",
+    };
+  }
+
+  const executionMode = readString(body.executionMode);
+  if (executionMode && !isSandboxDerivationExecutionMode(executionMode)) {
+    return {
+      ok: false,
+      message: "executionMode must be sequential or parallel.",
+    };
+  }
+
+  const capabilities: BlueprintSandboxDerivationJobRequest["capabilities"] = [];
+  for (const rawCapability of rawCapabilities) {
+    const parsed = parseCapabilityInvocationRequest(rawCapability);
+    if (!parsed.ok) {
+      return parsed;
+    }
+
+    capabilities.push({
+      ...parsed.request,
+      roleId:
+        parsed.request.roleId ??
+        readString(body.roleId) ??
+        "role-runtime-executor",
+      crewId: readString(rawCapability.crewId) ?? readString(body.crewId),
+      routeId: parsed.request.routeId ?? readString(body.routeId),
+      nodeId: parsed.request.nodeId ?? readString(body.nodeId),
+    });
+  }
+
+  return {
+    ok: true,
+    request: {
+      roleId: readString(body.roleId),
+      crewId: readString(body.crewId),
+      stage: stage as BlueprintGenerationStage | undefined,
+      projectId: readString(body.projectId),
+      routeId: readString(body.routeId),
+      nodeId: readString(body.nodeId),
+      executionMode: executionMode as
+        | BlueprintSandboxDerivationExecutionMode
+        | undefined,
+      capabilities,
     },
   };
 }
@@ -4326,11 +6974,17 @@ function parsePartialArtifactSourceIds(
   if (specTreeId) sourceIds.specTreeId = specTreeId;
 
   for (const key of [
+    "nodeIds",
     "specDocumentIds",
     "effectPreviewIds",
     "promptPackageIds",
+    "capabilityInvocationIds",
+    "capabilityEvidenceIds",
     "landingPlanIds",
     "engineeringRunIds",
+    "capabilityIds",
+    "roleIds",
+    "crewIds",
   ] as const) {
     if (!hasOwn(value, key)) continue;
     if (!Array.isArray(value[key])) {
@@ -4664,6 +7318,7 @@ function selectRouteForSpecTree(
     id: createId("blueprint-route-selection"),
     routeSetId: routeSet.id,
     routeId: selectedRoute.id,
+    selectedPathId: selectedRoute.id,
     routeTitle: selectedRoute.title,
     selectedAt,
     selectedBy: request.selectedBy,
@@ -4676,15 +7331,10 @@ function selectRouteForSpecTree(
       sourceId: job.sourceId,
     },
   };
-  const specTree = buildSpecTreeFromRouteSet({
-    job,
-    routeSet,
-    selection,
-    selectedRoute,
-    createdAt: selectedAt,
-  });
+  const routeSelectionArtifactId = createId("blueprint-artifact");
+  const specTreeArtifactId = createId("blueprint-artifact");
   const routeSelectionArtifact: BlueprintGenerationArtifact = {
-    id: createId("blueprint-artifact"),
+    id: routeSelectionArtifactId,
     type: "route_selection",
     title: `Selected route: ${selectedRoute.title}`,
     summary:
@@ -4692,8 +7342,28 @@ function selectRouteForSpecTree(
     createdAt: selectedAt,
     payload: selection,
   };
+  const artifactLinks = createSpecTreeArtifactLinks({
+    routeSet,
+    routeSetArtifact: job.artifacts.find(artifact => artifact.type === "route_set"),
+    routeSelectionArtifact,
+    specTreeArtifactId,
+  });
+  const previousRoleFindings = collectReusableRoleFindings(job, {
+    stages: ["route_generation"],
+    routeId: selectedRoute.id,
+    limit: 6,
+  });
+  const specTree = buildSpecTreeFromRouteSet({
+    job,
+    routeSet,
+    selection,
+    selectedRoute,
+    createdAt: selectedAt,
+    artifactLinks,
+    previousRoleFindings,
+  });
   const specTreeArtifact: BlueprintGenerationArtifact = {
-    id: createId("blueprint-artifact"),
+    id: specTreeArtifactId,
     type: "spec_tree",
     title: "Derived SPEC tree",
     summary:
@@ -4701,10 +7371,98 @@ function selectRouteForSpecTree(
     createdAt: selectedAt,
     payload: specTree,
   };
+  const capabilities = extractRuntimeCapabilities(job);
+  const existingCrew = extractAgentCrew(job);
+  const agentCrew = buildAgentCrew({
+    jobId: job.id,
+    stage: "spec_tree",
+    createdAt: selectedAt,
+    capabilities,
+    artifactIds: [routeSelectionArtifact.id, specTreeArtifact.id],
+  });
+  const updatedAgentCrew: BlueprintAgentCrew = existingCrew
+    ? {
+        ...agentCrew,
+        id: existingCrew.id,
+        createdAt: existingCrew.createdAt,
+        activationPolicies: existingCrew.activationPolicies,
+      }
+    : agentCrew;
+  const agentCrewArtifact: BlueprintGenerationArtifact = {
+    id: createId("blueprint-artifact"),
+    type: "agent_crew",
+    title: "Agent Crew fabric",
+    summary: `Agent Crew aligned to SPEC tree stage with ${updatedAgentCrew.presence.length} role presences.`,
+    createdAt: selectedAt,
+    payload: updatedAgentCrew,
+  };
+  const nextAction = createGenerationNextAction({
+    type: "review_spec_tree",
+    label: "Review the generated SPEC tree before document generation.",
+    stage: "spec_tree",
+    artifactId: specTreeArtifact.id,
+    routeId: selectedRoute.id,
+    selectionId: selection.id,
+    specTreeId: specTree.id,
+    nodeId: specTree.rootNodeId,
+    required: true,
+    actions: createSpecTreeReviewActionOptions({
+      routeId: selectedRoute.id,
+      selectionId: selection.id,
+      selectedPathId: selection.selectedPathId ?? selectedRoute.id,
+      specTreeId: specTree.id,
+      artifactId: specTreeArtifact.id,
+      nodeId: specTree.rootNodeId,
+    }),
+    handoff: createSpecTreeReviewHandoffState({
+      job,
+      routeSet,
+      selection,
+      routeId: selectedRoute.id,
+      selectedPathId: selection.selectedPathId ?? selectedRoute.id,
+      specTree,
+      specTreeArtifact,
+      artifactLinks,
+    }),
+  });
   const preservedArtifacts = job.artifacts.filter(
     artifact =>
-      artifact.type !== "route_selection" && artifact.type !== "spec_tree"
+      artifact.type !== "route_selection" &&
+      artifact.type !== "spec_tree" &&
+      artifact.type !== "agent_crew" &&
+      artifact.type !== "role_timeline"
   );
+  const rolePresenceEvents = createRolePresenceEvents({
+    jobId: job.id,
+    projectId: job.projectId,
+    crewId: updatedAgentCrew.id,
+    stage: "spec_tree",
+    status: "reviewing",
+    occurredAt: selectedAt,
+    presence: updatedAgentCrew.presence,
+    artifactId: specTreeArtifact.id,
+    routeId: selectedRoute.id,
+    selectionId: selection.id,
+    specTreeId: specTree.id,
+    nodeId: specTree.rootNodeId,
+  });
+  const roleTimelineCollection = buildRoleTimelineCollection(
+    {
+      ...job,
+      events: job.events.concat(rolePresenceEvents),
+      artifacts: job.artifacts.concat(agentCrewArtifact),
+    },
+    selectedAt,
+    updatedAgentCrew
+  );
+  const roleTimelineArtifact: BlueprintGenerationArtifact = {
+    id: createId("blueprint-artifact"),
+    type: "role_timeline",
+    title: "Agent role timeline",
+    summary: `Role timelines captured for ${roleTimelineCollection.timelines.length} crew roles.`,
+    createdAt: selectedAt,
+    payload: roleTimelineCollection,
+  };
   const events = job.events.concat([
     createGenerationEvent({
       jobId: job.id,
@@ -4713,10 +7471,16 @@ function selectRouteForSpecTree(
       type: "job.stage",
       message: `Selected route ${selectedRoute.title} and started SPEC tree derivation.`,
       occurredAt: selectedAt,
+      routeId: selectedRoute.id,
+      selectionId: selection.id,
       payload: {
         routeSetId: routeSet.id,
         routeId: selectedRoute.id,
         selectionId: selection.id,
+        selectedPathId: selection.selectedPathId ?? selectedRoute.id,
+        handoffActionIds: nextAction.actions?.map(action => action.id) ?? [],
+        reusedRoleFindingIds: collectRoleFindingIds(previousRoleFindings),
+        reusedEvidenceIds: collectRoleFindingEvidenceIds(previousRoleFindings),
       },
     }),
     createGenerationEvent({
@@ -4727,12 +7491,27 @@ function selectRouteForSpecTree(
       message:
         "SPEC tree draft generated and ready for the Deduction workbench.",
       occurredAt: selectedAt,
+      routeId: selectedRoute.id,
+      selectionId: selection.id,
+      specTreeId: specTree.id,
+      nodeId: specTree.rootNodeId,
+      artifactId: specTreeArtifact.id,
       payload: {
         specTreeId: specTree.id,
         rootNodeId: specTree.rootNodeId,
         nodeCount: specTree.nodes.length,
+        routeSetId: routeSet.id,
+        routeId: selectedRoute.id,
+        selectionId: selection.id,
+        selectedPathId: selection.selectedPathId ?? selectedRoute.id,
+        handoffStateId: nextAction.handoff?.id,
+        artifactLinks,
+        reusedRoleFindingIds: collectRoleFindingIds(previousRoleFindings),
+        reusedRoleIds: collectRoleFindingRoleIds(previousRoleFindings),
+        reusedEvidenceIds: collectRoleFindingEvidenceIds(previousRoleFindings),
       },
     }),
+    ...rolePresenceEvents,
   ]);
   const updatedJob: BlueprintGenerationJob = {
     ...job,
@@ -4742,9 +7521,24 @@ function selectRouteForSpecTree(
     completedAt: selectedAt,
     artifacts: preservedArtifacts.concat(
       routeSelectionArtifact,
-      specTreeArtifact
+      specTreeArtifact,
+      agentCrewArtifact,
+      roleTimelineArtifact
     ),
     events,
+    stageState: createGenerationStageState({
+      stage: "spec_tree",
+      status: "reviewing",
+      payloadKind: "spec_tree",
+      artifactIds: [
+        routeSelectionArtifact.id,
+        specTreeArtifact.id,
+        agentCrewArtifact.id,
+        roleTimelineArtifact.id,
+      ],
+      nextAction,
+    }),
+    nextAction,
   };
 
   options.store.save(updatedJob);
@@ -4763,6 +7557,13 @@ function resetRouteSelection(
   options: CreateGenerationJobOptions
 ): BlueprintResetRouteSelectionResponse {
   const updatedAt = (options.now?.() ?? new Date()).toISOString();
+  const nextAction = createGenerationNextAction({
+    type: "select_route",
+    label: "Select a route for SPEC tree derivation.",
+    stage: "route_generation",
+    artifactId: routeSet.id,
+    required: true,
+  });
   const preservedArtifacts = job.artifacts.filter(artifact =>
     [
       "route_set",
@@ -4770,6 +7571,9 @@ function resetRouteSelection(
       "github_source",
       "clarification_session",
       "project_context",
+      "sandbox_derivation_job",
+      "capability_invocation",
+      "capability_evidence",
     ].includes(artifact.type)
   );
   const updatedJob: BlueprintGenerationJob = {
@@ -4792,6 +7596,14 @@ function resetRouteSelection(
         },
       })
     ),
+    stageState: createGenerationStageState({
+      stage: "route_generation",
+      status: "completed",
+      payloadKind: "route_set",
+      artifactIds: preservedArtifacts.map(artifact => artifact.id),
+      nextAction,
+    }),
+    nextAction,
   };
 
   options.store.save(updatedJob);
@@ -4799,6 +7611,141 @@ function resetRouteSelection(
   return {
     job: updatedJob,
     routeSet,
+  };
+}
+
+function createSpecTreeArtifactLinks(input: {
+  routeSet: BlueprintRouteSet;
+  routeSetArtifact?: BlueprintGenerationArtifact;
+  routeSelectionArtifact: BlueprintGenerationArtifact;
+  specTreeArtifactId: string;
+}): BlueprintGenerationArtifactLink[] {
+  return [
+    {
+      artifactId: input.routeSetArtifact?.id ?? input.routeSet.id,
+      artifactType: "route_set",
+      relation: "source",
+      title: input.routeSetArtifact?.title ?? "RouteSet source",
+    },
+    {
+      artifactId: input.routeSelectionArtifact.id,
+      artifactType: "route_selection",
+      relation: "selection",
+      title: input.routeSelectionArtifact.title,
+    },
+    {
+      artifactId: input.specTreeArtifactId,
+      artifactType: "spec_tree",
+      relation: "derived",
+      title: "Derived SPEC tree",
+    },
+  ];
+}
+
+function createSpecTreeReviewActionOptions(input: {
+  routeId: string;
+  selectionId: string;
+  selectedPathId: string;
+  specTreeId: string;
+  artifactId: string;
+  nodeId: string;
+}): BlueprintGenerationNextActionOption[] {
+  const common = {
+    routeId: input.routeId,
+    selectionId: input.selectionId,
+    selectedPathId: input.selectedPathId,
+    specTreeId: input.specTreeId,
+    artifactId: input.artifactId,
+    nodeId: input.nodeId,
+  };
+
+  return [
+    {
+      id: "confirm_spec_tree",
+      type: "review_spec_documents",
+      label: "Confirm SPEC tree and generate SPEC documents.",
+      stage: "spec_docs",
+      required: true,
+      ...common,
+    },
+    {
+      id: "fine_tune_spec_tree",
+      type: "review_spec_tree",
+      label: "Fine-tune SPEC tree nodes before continuing.",
+      stage: "spec_tree",
+      required: false,
+      ...common,
+    },
+    {
+      id: "reselect_route",
+      type: "select_route",
+      label: "Reselect a different route and derive a new SPEC tree.",
+      stage: "route_generation",
+      required: false,
+      ...common,
+    },
+    {
+      id: "merge_route",
+      type: "select_route",
+      label: "Merge alternative routes into this SPEC tree source.",
+      stage: "route_generation",
+      required: false,
+      ...common,
+    },
+    {
+      id: "enter_downstream_menus",
+      type: "review_prompt_package",
+      label: "Enter downstream document, preview, prompt, and landing menus.",
+      stage: "prompt_packaging",
+      required: false,
+      ...common,
+    },
+  ];
+}
+
+function createSpecTreeReviewHandoffState(input: {
+  job: BlueprintGenerationJob;
+  routeSet: BlueprintRouteSet;
+  selection: BlueprintRouteSelection;
+  routeId: string;
+  selectedPathId: string;
+  specTree: BlueprintSpecTree;
+  specTreeArtifact: BlueprintGenerationArtifact;
+  artifactLinks: BlueprintGenerationArtifactLink[];
+}): BlueprintReviewHandoffState {
+  return {
+    id: stableId(
+      "blueprint-review-handoff",
+      `${input.job.id}:${input.selection.id}:${input.specTree.id}`
+    ),
+    stage: "spec_tree",
+    status: "reviewing",
+    confirmable: true,
+    editable: true,
+    resumable: true,
+    routeId: input.routeId,
+    selectionId: input.selection.id,
+    selectedPathId: input.selectedPathId,
+    specTreeId: input.specTree.id,
+    nodeId: input.specTree.rootNodeId,
+    artifactId: input.specTreeArtifact.id,
+    artifactLinks: input.artifactLinks,
+    downstreamMenus: [
+      "spec_docs",
+      "effect_preview",
+      "prompt_packaging",
+      "engineering_landing",
+    ],
+    provenance: {
+      jobId: input.job.id,
+      projectId: input.job.projectId,
+      sourceId: input.job.sourceId,
+      routeSetId: input.routeSet.id,
+      routeId: input.routeId,
+      selectionId: input.selection.id,
+      selectedPathId: input.selectedPathId,
+      specTreeId: input.specTree.id,
+    },
   };
 }
 
@@ -5579,17 +8526,24 @@ function generateSpecDocuments(
       : SPEC_DOCUMENT_TYPES;
   const documents = specTree.nodes
     .filter(node => targetNodeIds.has(node.id))
-    .flatMap(node =>
-      targetTypes.map(type =>
+    .flatMap(node => {
+      const previousRoleFindings = collectReusableRoleFindings(job, {
+        stages: ["route_generation", "spec_tree", "runtime_capability"],
+        routeId: node.routeId ?? specTree.selectedRouteId,
+        nodeId: node.id,
+        limit: 8,
+      });
+      return targetTypes.map(type =>
         buildSpecDocument({
           job,
           specTree,
           node,
           type,
           createdAt,
+          previousRoleFindings,
         })
-      )
-    );
+      );
+    });
   const generatedDocumentKeys = new Set(
     documents.map(document => `${document.nodeId}:${document.type}`)
   );
@@ -5675,6 +8629,7 @@ function generateEffectPreviews(
     ? new Set([request.nodeId])
     : new Set(specTree.nodes.map(node => node.id));
   const targetNodes = specTree.nodes.filter(node => targetNodeIds.has(node.id));
+  const existingPreviews = extractEffectPreviews(job);
   const sourceDocuments = extractSpecDocuments(job).filter(document => {
     if (!targetNodeIds.has(document.nodeId)) {
       return false;
@@ -5709,6 +8664,9 @@ function generateEffectPreviews(
         specTree,
         node,
         documents,
+        existingPreviews: existingPreviews.filter(
+          preview => preview.nodeId === node.id
+        ),
         includeDrafts,
         createdAt,
       });
@@ -5733,14 +8691,20 @@ function generateEffectPreviews(
     createdAt,
     payload: preview,
   })) satisfies BlueprintGenerationArtifact[];
-  const preservedArtifacts = job.artifacts.filter(artifact => {
-    if (artifact.type !== "effect_preview") {
-      return true;
+  const preservedArtifacts = job.artifacts.map(artifact => {
+    if (artifact.type !== "effect_preview" || !isPlainRecord(artifact.payload)) {
+      return artifact;
     }
 
-    const payload = isPlainRecord(artifact.payload) ? artifact.payload : null;
-    const nodeId = readString(payload?.nodeId);
-    return !nodeId || !replacedNodeIds.has(nodeId);
+    const payload = artifact.payload as unknown as BlueprintEffectPreview;
+    if (!replacedNodeIds.has(payload.nodeId)) {
+      return artifact;
+    }
+
+    return {
+      ...artifact,
+      payload: archiveEffectPreviewVersion(payload, createdAt),
+    };
   });
   const updatedJob: BlueprintGenerationJob = {
     ...job,
@@ -5762,7 +8726,41 @@ function generateEffectPreviews(
           specTreeId: specTree.id,
           previewCount: previews.length,
           sourceDocumentCount: sourceDocuments.length,
+          previewIds: previews.map(preview => preview.id),
+          previousPreviewIds: uniqueStrings(
+            previews.flatMap(preview => preview.previousPreviewIds)
+          ),
           includeDrafts,
+        },
+      }),
+      createGenerationEvent({
+        jobId: job.id,
+        projectId: job.projectId,
+        stage: "effect_preview",
+        status: "completed",
+        type: "preview.generated",
+        message: "Effect preview assets generated for replay visibility.",
+        occurredAt: createdAt,
+        specTreeId: specTree.id,
+        nodeId: previews[0]?.nodeId,
+        artifactId: previewArtifacts[0]?.id,
+        payload: {
+          specTreeId: specTree.id,
+          nodeIds: previews.map(preview => preview.nodeId),
+          previewIds: previews.map(preview => preview.id),
+          sourceDocumentIds: uniqueStrings(
+            previews.flatMap(preview => preview.sourceDocumentIds)
+          ),
+          includeDrafts,
+          sourceIds: {
+            projectId: job.projectId,
+            specTreeId: specTree.id,
+            nodeIds: previews.map(preview => preview.nodeId),
+            effectPreviewIds: previews.map(preview => preview.id),
+            specDocumentIds: uniqueStrings(
+              previews.flatMap(preview => preview.sourceDocumentIds)
+            ),
+          },
         },
       })
     ),
@@ -5830,7 +8828,7 @@ function generateImplementationPromptPackages(
   }
 
   const candidatePreviews = extractEffectPreviews(job).filter(preview =>
-    targetNodeIds.has(preview.nodeId)
+    targetNodeIds.has(preview.nodeId) && isConsumableEffectPreviewVersion(preview)
   );
   const acceptedPreviews = candidatePreviews.filter(
     preview => preview.provenance.sourceStatus === "accepted"
@@ -5923,6 +8921,36 @@ function generateImplementationPromptPackages(
           targetPlatforms,
           includeDrafts,
           includePreviewDrafts,
+        },
+      }),
+      createGenerationEvent({
+        jobId: job.id,
+        projectId: job.projectId,
+        stage: "prompt_packaging",
+        status: "completed",
+        type: "prompt.packaged",
+        message: "Implementation prompt packages packaged for handoff.",
+        occurredAt: createdAt,
+        specTreeId: specTree.id,
+        nodeId: nodeIds[0],
+        artifactId: packageArtifacts[0]?.id,
+        payload: {
+          specTreeId: specTree.id,
+          nodeIds,
+          promptPackageIds: packages.map(promptPackage => promptPackage.id),
+          sourceDocumentIds,
+          sourcePreviewIds,
+          targetPlatforms,
+          includeDrafts,
+          includePreviewDrafts,
+          sourceIds: {
+            projectId: job.projectId,
+            specTreeId: specTree.id,
+            nodeIds,
+            promptPackageIds: packages.map(promptPackage => promptPackage.id),
+            specDocumentIds: sourceDocumentIds,
+            effectPreviewIds: sourcePreviewIds,
+          },
         },
       })
     ),
@@ -6024,6 +9052,63 @@ function generateEngineeringLandingPlans(
             Object.values(plan.provenance.promptPackagePlatforms)
           ),
         },
+      }),
+      createGenerationEvent({
+        jobId: job.id,
+        projectId: job.projectId,
+        stage: "engineering_landing",
+        status: "completed",
+        type: "mission.handoff",
+        message:
+          "Engineering landing handoff prepared from implementation prompt packages.",
+        occurredAt: createdAt,
+        specTreeId: specTree.id,
+        nodeId: plans[0]?.steps[0]?.sourceNodeIds[0],
+        artifactId: planArtifacts[0]?.id,
+        payload: {
+          specTreeId: specTree.id,
+          landingPlanIds: plans.map(plan => plan.id),
+          promptPackageIds: plans.flatMap(plan => plan.promptPackageIds),
+          targetPlatforms: plans.flatMap(plan =>
+            Object.values(plan.provenance.promptPackagePlatforms)
+          ),
+          sourceNodeIds: uniqueStrings(
+            plans.flatMap(plan =>
+              plan.steps.flatMap(step => step.sourceNodeIds)
+            )
+          ),
+          sourceDocumentIds: uniqueStrings(
+            plans.flatMap(plan =>
+              plan.steps.flatMap(step => step.sourceDocumentIds)
+            )
+          ),
+          sourcePreviewIds: uniqueStrings(
+            plans.flatMap(plan =>
+              plan.steps.flatMap(step => step.sourcePreviewIds)
+            )
+          ),
+          sourceIds: {
+            projectId: job.projectId,
+            specTreeId: specTree.id,
+            nodeIds: uniqueStrings(
+              plans.flatMap(plan =>
+                plan.steps.flatMap(step => step.sourceNodeIds)
+              )
+            ),
+            specDocumentIds: uniqueStrings(
+              plans.flatMap(plan =>
+                plan.steps.flatMap(step => step.sourceDocumentIds)
+              )
+            ),
+            effectPreviewIds: uniqueStrings(
+              plans.flatMap(plan =>
+                plan.steps.flatMap(step => step.sourcePreviewIds)
+              )
+            ),
+            promptPackageIds: plans.flatMap(plan => plan.promptPackageIds),
+            landingPlanIds: plans.map(plan => plan.id),
+          },
+        },
       })
     ),
   };
@@ -6102,10 +9187,362 @@ function selectEngineeringLandingPromptPackages(
   return { ok: true, promptPackages: selectedPromptPackages };
 }
 
+type CreateSandboxDerivationJobResult =
+  | { ok: true; response: BlueprintSandboxDerivationJobResponse }
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      message: string;
+      job?: BlueprintGenerationJob;
+    };
+
 type GetOrCreateCapabilityRegistryResult = {
   job: BlueprintGenerationJob;
   capabilities: BlueprintRuntimeCapability[];
+  agentCrew: BlueprintAgentCrew;
 };
+
+function createSandboxDerivationJob(
+  job: BlueprintGenerationJob,
+  request: BlueprintSandboxDerivationJobRequest,
+  options: CreateGenerationJobOptions
+): CreateSandboxDerivationJobResult {
+  const createdAt = (options.now?.() ?? new Date()).toISOString();
+  const registry = getOrCreateCapabilityRegistry(job, options);
+  const routeSet = extractRouteSet(registry.job);
+  const specTree = extractSpecTree(registry.job);
+  const stage = request.stage ?? registry.job.stage ?? "runtime_capability";
+  const executionMode = request.executionMode ?? "sequential";
+  const routeId = request.routeId ?? request.capabilities[0]?.routeId;
+  const nodeId = request.nodeId ?? request.capabilities[0]?.nodeId;
+  const roleId = request.roleId ?? request.capabilities[0]?.roleId;
+  const crewId = request.crewId ?? request.capabilities[0]?.crewId;
+  const invocations: BlueprintCapabilityInvocation[] = [];
+  const evidenceItems: BlueprintCapabilityEvidence[] = [];
+  let currentJob = registry.job;
+  const recordSandboxFailure = (
+    failedJob: BlueprintGenerationJob,
+    failure: Extract<InvokeCapabilityResult, { ok: false }>
+  ): Extract<CreateSandboxDerivationJobResult, { ok: false }> => {
+    const failedAt = (options.now?.() ?? new Date()).toISOString();
+    const specTree = extractSpecTree(failedJob);
+    const updatedJob: BlueprintGenerationJob = {
+      ...failedJob,
+      status: "reviewing",
+      stage,
+      updatedAt: failedAt,
+      events: failedJob.events.concat(
+        createGenerationEvent({
+          jobId: job.id,
+          projectId: failedJob.projectId,
+          type: "sandbox.job.failed",
+          family: "sandbox",
+          stage,
+          status: "failed",
+          message: failure.message,
+          occurredAt: failedAt,
+          routeId,
+          specTreeId: specTree?.id,
+          nodeId,
+          payload: {
+            error: failure.error,
+            status: failure.status,
+            executionMode,
+            capabilityIds: request.capabilities.map(item => item.capabilityId),
+            routeId,
+            nodeId,
+            roleId,
+            crewId,
+            sourceIds: {
+              projectId: failedJob.projectId,
+              roleIds: roleId ? [roleId] : [],
+              crewIds: crewId ? [crewId] : [],
+              capabilityIds: request.capabilities.map(
+                item => item.capabilityId
+              ),
+              nodeIds: nodeId ? [nodeId] : [],
+            },
+          },
+        })
+      ),
+    };
+
+    options.store.save(updatedJob);
+    return { ...failure, job: updatedJob };
+  };
+
+  for (const capabilityRequest of request.capabilities) {
+    const invocationResult = invokeCapability(
+      currentJob,
+      {
+        ...capabilityRequest,
+        routeId: capabilityRequest.routeId ?? routeId,
+        nodeId: capabilityRequest.nodeId ?? nodeId,
+        requestedBy:
+          capabilityRequest.requestedBy ?? "sandbox-derivation-job",
+      },
+      options
+    );
+
+    if (!invocationResult.ok) {
+      const failedJob =
+        invocationResult.job ?? options.store.get(job.id) ?? currentJob;
+      return recordSandboxFailure(failedJob, invocationResult);
+    }
+
+    invocations.push(invocationResult.response.invocation);
+    evidenceItems.push(invocationResult.response.evidence);
+    currentJob = invocationResult.response.job;
+  }
+
+  const latestJob = options.store.get(job.id) ?? currentJob;
+  const previousRoleFindings = collectReusableRoleFindings(latestJob, {
+    stages: ["route_generation", "spec_tree", "runtime_capability"],
+    routeId,
+    nodeId,
+    limit: 6,
+  });
+  const capabilityIds = uniqueStrings(
+    request.capabilities.map(item => item.capabilityId)
+  );
+  const invocationIds = invocations.map(invocation => invocation.id);
+  const evidenceIds = evidenceItems.map(evidence => evidence.id);
+  const mainRoute = routeSet?.routes.find(route => route.id === routeId);
+  const alternateRoutes = routeSet?.routes.filter(route => route.id !== routeId) ?? [];
+  const previousFindingCount = previousRoleFindings.length;
+  const previousFindingSummary =
+    previousFindingCount > 0
+      ? ` Reused ${previousFindingCount} previous role finding(s).`
+      : "";
+  const sandboxDerivationJob: BlueprintSandboxDerivationJob = {
+    id: createId("blueprint-sandbox-derivation"),
+    jobId: job.id,
+    roleId,
+    crewId,
+    stage,
+    projectId: request.projectId ?? latestJob.projectId,
+    routeId,
+    nodeId,
+    executionMode,
+    status: "completed",
+    createdAt,
+    startedAt: createdAt,
+    completedAt: createdAt,
+    durationMs: invocations.reduce(
+      (total, invocation) => total + invocation.durationMs,
+      0
+    ),
+    capabilityIds,
+    invocationIds,
+    evidenceIds,
+    aggregate: {
+      routeOutline:
+        mainRoute?.summary ??
+        `Sandbox derivation completed ${invocations.length} capability invocation(s).`,
+      mainPath: {
+        id: `${job.id}:sandbox-main-path`,
+        title: mainRoute?.title ?? "Sandbox derived main path",
+        summary:
+          mainRoute?.summary ??
+          evidenceItems.map(item => item.summary).join(" "),
+        routeId,
+        nodeId,
+        capabilityIds,
+        invocationIds,
+        evidenceIds,
+      },
+      alternatePaths: alternateRoutes.slice(0, 2).map(route => ({
+        id: `${job.id}:sandbox-alt:${route.id}`,
+        title: route.title,
+        summary: route.summary,
+        routeId: route.id,
+        nodeId,
+        capabilityIds: route.capabilities.map(capability => capability.id),
+        invocationIds: [],
+        evidenceIds: [],
+      })),
+      evaluation: [
+        {
+          id: `${job.id}:sandbox-eval-risk`,
+          label: "Risk coverage",
+          score: Math.min(100, 60 + evidenceIds.length * 10),
+          summary: `${evidenceIds.length} evidence item(s) linked to sandbox derivation.`,
+        },
+        {
+          id: `${job.id}:sandbox-eval-cost`,
+          label: "Cost signal",
+          score: executionMode === "parallel" ? 72 : 84,
+          summary: `${executionMode} execution used for deterministic capability aggregation.`,
+        },
+        {
+          id: `${job.id}:sandbox-eval-complexity`,
+          label: "Complexity signal",
+          score: Math.max(40, 90 - capabilityIds.length * 8),
+          summary: `${capabilityIds.length} capability binding(s) contributed to route complexity assessment.`,
+        },
+      ],
+      outputSummary: `${invocations.length} capability invocation(s) aggregated into ${executionMode} sandbox derivation output.${previousFindingSummary}`,
+    },
+    logs: [
+      `sandbox.job.started id=${job.id}`,
+      `executionMode=${executionMode}`,
+      `capabilities=${capabilityIds.join(",")}`,
+      `reusedRoleFindingIds=${collectRoleFindingIds(previousRoleFindings).join(",")}`,
+      `reusedEvidenceIds=${collectRoleFindingEvidenceIds(previousRoleFindings).join(",")}`,
+      `sandbox.job.completed invocationCount=${invocationIds.length}`,
+    ],
+    provenance: {
+      jobId: job.id,
+      projectId: request.projectId ?? latestJob.projectId,
+      sourceId: latestJob.sourceId,
+      routeSetId: routeSet?.id,
+      routeId,
+      specTreeId: specTree?.id,
+      nodeId,
+      roleId,
+      crewId,
+      targetText: latestJob.request.targetText,
+      githubUrls: latestJob.request.githubUrls ?? [],
+    },
+  };
+  const artifact: BlueprintGenerationArtifact = {
+    id: createId("blueprint-artifact"),
+    type: "sandbox_derivation_job",
+    title: "Sandbox derivation job",
+    summary: sandboxDerivationJob.aggregate.outputSummary,
+    createdAt,
+    payload: sandboxDerivationJob,
+  };
+  const sandboxRoleEvents = [
+    createRoleEvent({
+      jobId: job.id,
+      projectId: latestJob.projectId,
+      crewId,
+      type: "role.capability_invoked",
+      stage,
+      status: "running",
+      roleId: roleId ?? "role-runtime-executor",
+      presenceState: "active",
+      message: "Runtime executor coordinated sandbox derivation capability fan-out.",
+      occurredAt: createdAt,
+      currentAction: sandboxDerivationJob.aggregate.outputSummary,
+      capabilityId: capabilityIds[0],
+      invocationId: invocationIds[0],
+      evidenceId: evidenceIds[0],
+      artifactId: artifact.id,
+      routeId,
+      specTreeId: specTree?.id,
+      nodeId,
+    }),
+    createRoleEvent({
+      jobId: job.id,
+      projectId: latestJob.projectId,
+      crewId,
+      type: "role.completed",
+      stage,
+      status: "completed",
+      roleId: roleId ?? "role-runtime-executor",
+      presenceState: "active",
+      message: "Runtime executor completed sandbox derivation aggregation.",
+      occurredAt: createdAt,
+      currentAction: sandboxDerivationJob.aggregate.outputSummary,
+      capabilityId: capabilityIds[0],
+      invocationId: invocationIds[0],
+      evidenceId: evidenceIds[0],
+      artifactId: artifact.id,
+      routeId,
+      specTreeId: specTree?.id,
+      nodeId,
+    }),
+  ];
+  const agentCrew = registry.agentCrew;
+  const roleTimelineCollection = buildRoleTimelineCollection(
+    {
+      ...latestJob,
+      artifacts: latestJob.artifacts
+        .filter(artifactItem => artifactItem.type !== "role_timeline")
+        .concat(artifact),
+      events: latestJob.events.concat(sandboxRoleEvents),
+    },
+    createdAt,
+    agentCrew
+  );
+  const roleTimelineArtifact: BlueprintGenerationArtifact = {
+    id: createId("blueprint-artifact"),
+    type: "role_timeline",
+    title: "Agent role timeline",
+    summary: `Role timeline updated for sandbox derivation job.`,
+    createdAt,
+    payload: roleTimelineCollection,
+  };
+  const updatedJob: BlueprintGenerationJob = {
+    ...latestJob,
+    status: "reviewing",
+    stage,
+    updatedAt: createdAt,
+    artifacts: latestJob.artifacts
+      .filter(artifactItem => artifactItem.type !== "role_timeline")
+      .concat(artifact, roleTimelineArtifact),
+    events: latestJob.events.concat(
+      sandboxRoleEvents[0],
+      createGenerationEvent({
+        jobId: job.id,
+        projectId: latestJob.projectId,
+        type: "sandbox.job.started",
+        family: "sandbox",
+        stage,
+        status: "running",
+        message: "Sandbox derivation job started.",
+        occurredAt: createdAt,
+        routeId,
+        nodeId,
+        artifactId: artifact.id,
+        payload: {
+          sandboxDerivationJobId: sandboxDerivationJob.id,
+          executionMode,
+          capabilityIds,
+        },
+      }),
+      createGenerationEvent({
+        jobId: job.id,
+        projectId: latestJob.projectId,
+        type: "sandbox.job.completed",
+        family: "sandbox",
+        stage,
+        status: "completed",
+        message: "Sandbox derivation job completed.",
+        occurredAt: createdAt,
+        routeId,
+        nodeId,
+        artifactId: artifact.id,
+        payload: {
+          sandboxDerivationJobId: sandboxDerivationJob.id,
+          invocationIds,
+          evidenceIds,
+          routeId,
+          nodeId,
+        },
+      }),
+      sandboxRoleEvents[1]
+    ),
+  };
+
+  options.store.save(updatedJob);
+
+  return {
+    ok: true,
+    response: {
+      job: updatedJob,
+      routeSet,
+      specTree,
+      agentCrew,
+      sandboxDerivationJob,
+      invocations,
+      evidence: evidenceItems,
+    },
+  };
+}
 
 function getOrCreateCapabilityRegistry(
   job: BlueprintGenerationJob,
@@ -6117,11 +9554,40 @@ function getOrCreateCapabilityRegistry(
   );
 
   if (hasRegistry) {
-    return { job, capabilities: existing };
+    const agentCrew =
+      extractAgentCrew(job) ??
+      buildAgentCrew({
+        jobId: job.id,
+        stage: job.stage,
+        createdAt: job.updatedAt,
+        capabilities: existing,
+      });
+    return { job, capabilities: existing, agentCrew };
   }
 
   const createdAt = (options.now?.() ?? new Date()).toISOString();
   const capabilities = getDefaultRuntimeCapabilities();
+  const existingCrew = extractAgentCrew(job);
+  const agentCrew = existingCrew
+    ? {
+        ...existingCrew,
+        updatedAt: createdAt,
+        stage: "runtime_capability" as BlueprintGenerationStage,
+        capabilityMatrix: buildDefaultCapabilityMatrix(capabilities),
+        presence: buildRolePresence({
+          stage: "runtime_capability",
+          capabilityMatrix: buildDefaultCapabilityMatrix(capabilities),
+          activationPolicies: existingCrew.activationPolicies,
+          artifactIds: [],
+          evidenceIds: [],
+        }),
+      }
+    : buildAgentCrew({
+        jobId: job.id,
+        stage: "runtime_capability",
+        createdAt,
+        capabilities,
+      });
   const registryArtifact: BlueprintGenerationArtifact = {
     id: createId("blueprint-artifact"),
     type: "capability_registry",
@@ -6139,15 +9605,79 @@ function getOrCreateCapabilityRegistry(
       },
     },
   };
+  const agentCrewArtifact: BlueprintGenerationArtifact = {
+    id: createId("blueprint-artifact"),
+    type: "agent_crew",
+    title: "Agent Crew fabric",
+    summary: `Agent Crew updated for runtime capability stage with ${agentCrew.capabilityMatrix.length} role capability bindings.`,
+    createdAt,
+    payload: agentCrew,
+  };
+  const rolePresenceEvents = createRolePresenceEvents({
+    jobId: job.id,
+    projectId: job.projectId,
+    crewId: agentCrew.id,
+    stage: "runtime_capability",
+    status: "reviewing",
+    occurredAt: createdAt,
+    presence: agentCrew.presence,
+    artifactId: agentCrewArtifact.id,
+  });
+  const crewContextEvent = createGenerationEvent({
+    jobId: job.id,
+    projectId: job.projectId,
+    type: "crew.context.updated",
+    stage: "runtime_capability",
+    status: "reviewing",
+    message: "Agent Crew context updated for runtime capability registry.",
+    occurredAt: createdAt,
+    artifactId: agentCrewArtifact.id,
+    payload: {
+      crewId: agentCrew.id,
+      capabilityIds: capabilities.map(capability => capability.id),
+      roleIds: agentCrew.roles.map(role => role.id),
+      sourceIds: {
+        projectId: job.projectId,
+        crewIds: [agentCrew.id],
+        roleIds: agentCrew.roles.map(role => role.id),
+        capabilityIds: capabilities.map(capability => capability.id),
+      },
+    },
+  });
+  const roleTimelineCollection = buildRoleTimelineCollection(
+    {
+      ...job,
+      artifacts: job.artifacts
+        .filter(artifact => artifact.type !== "agent_crew")
+        .concat(registryArtifact, agentCrewArtifact),
+      events: job.events.concat(crewContextEvent, rolePresenceEvents),
+    },
+    createdAt,
+    agentCrew
+  );
+  const roleTimelineArtifact: BlueprintGenerationArtifact = {
+    id: createId("blueprint-artifact"),
+    type: "role_timeline",
+    title: "Agent role timeline",
+    summary: `Role timelines captured for runtime capability stage.`,
+    createdAt,
+    payload: roleTimelineCollection,
+  };
   const updatedJob: BlueprintGenerationJob = {
     ...job,
     status: "reviewing",
     stage: "runtime_capability",
     updatedAt: createdAt,
-    artifacts: job.artifacts.concat(registryArtifact),
+    artifacts: job.artifacts
+      .filter(
+        artifact =>
+          artifact.type !== "agent_crew" && artifact.type !== "role_timeline"
+      )
+      .concat(registryArtifact, agentCrewArtifact, roleTimelineArtifact),
     events: job.events.concat(
       createGenerationEvent({
         jobId: job.id,
+        projectId: job.projectId,
         type: "job.stage",
         stage: "runtime_capability",
         status: "reviewing",
@@ -6157,45 +9687,137 @@ function getOrCreateCapabilityRegistry(
           capabilityIds: capabilities.map(capability => capability.id),
           capabilityCount: capabilities.length,
         },
-      })
+      }),
+      crewContextEvent,
+      ...rolePresenceEvents
     ),
   };
 
   options.store.save(updatedJob);
-  return { job: updatedJob, capabilities };
+  return { job: updatedJob, capabilities, agentCrew };
 }
 
 type InvokeCapabilityResult =
   | { ok: true; response: BlueprintInvokeCapabilityResponse }
-  | { ok: false; status: number; error: string; message: string };
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      message: string;
+      job?: BlueprintGenerationJob;
+    };
 
 function invokeCapability(
   job: BlueprintGenerationJob,
   request: BlueprintCapabilityInvocationRequest,
   options: CreateGenerationJobOptions
 ): InvokeCapabilityResult {
+  const roleId = request.roleId;
+  if (!roleId) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Blueprint role id required.",
+      message: "Provide roleId to invoke a blueprint runtime capability.",
+    };
+  }
+
   const registry = getOrCreateCapabilityRegistry(job, options);
+  const failCapabilityInvocation = (input: {
+    status: number;
+    error: string;
+    message: string;
+    capabilityId?: string;
+    roleId?: string;
+  }): Extract<InvokeCapabilityResult, { ok: false }> => {
+    const failedAt = (options.now?.() ?? new Date()).toISOString();
+    const specTree = extractSpecTree(registry.job);
+    const failedJob: BlueprintGenerationJob = {
+      ...registry.job,
+      status: "reviewing",
+      stage: "runtime_capability",
+      updatedAt: failedAt,
+      events: registry.job.events.concat(
+        createGenerationEvent({
+          jobId: registry.job.id,
+          projectId: registry.job.projectId,
+          type: "capability.failed",
+          family: "capability",
+          stage: "runtime_capability",
+          status: "failed",
+          message: input.message,
+          occurredAt: failedAt,
+          routeId: request.routeId,
+          specTreeId: specTree?.id,
+          nodeId: request.nodeId,
+          roleId: input.roleId,
+          capabilityId: input.capabilityId,
+          payload: {
+            error: input.error,
+            status: input.status,
+            capabilityId: input.capabilityId,
+            roleId: input.roleId,
+            routeId: request.routeId,
+            nodeId: request.nodeId,
+            sourceIds: {
+              projectId: registry.job.projectId,
+              roleIds: input.roleId ? [input.roleId] : [],
+              capabilityIds: input.capabilityId ? [input.capabilityId] : [],
+              nodeIds: request.nodeId ? [request.nodeId] : [],
+            },
+          },
+        })
+      ),
+    };
+
+    options.store.save(failedJob);
+    return {
+      ok: false,
+      status: input.status,
+      error: input.error,
+      message: input.message,
+      job: failedJob,
+    };
+  };
   const capability = registry.capabilities.find(
     item => item.id === request.capabilityId
   );
 
   if (!capability) {
-    return {
-      ok: false,
+    return failCapabilityInvocation({
       status: 404,
       error: "Blueprint runtime capability not found.",
       message: `No runtime capability ${request.capabilityId} exists in job ${job.id}.`,
-    };
+      capabilityId: request.capabilityId,
+      roleId,
+    });
+  }
+
+  const binding = registry.agentCrew.capabilityMatrix.find(
+    item =>
+      item.roleId === roleId &&
+      item.capabilityId === request.capabilityId &&
+      item.applicableStages.includes(registry.job.stage)
+  );
+  if (!binding) {
+    return failCapabilityInvocation({
+      status: 403,
+      error: "Blueprint role capability binding not allowed.",
+      message: `Role ${roleId} is not bound to capability ${request.capabilityId} for stage ${registry.job.stage}.`,
+      capabilityId: capability.id,
+      roleId,
+    });
   }
 
   const safetyGate = evaluateCapabilitySafetyGate(capability, request);
   if (safetyGate.status === "blocked") {
-    return {
-      ok: false,
+    return failCapabilityInvocation({
       status: 403,
       error: "Blueprint runtime capability approval required.",
       message: safetyGate.reason,
-    };
+      capabilityId: capability.id,
+      roleId,
+    });
   }
 
   const createdAt = (options.now?.() ?? new Date()).toISOString();
@@ -6213,6 +9835,7 @@ function invokeCapability(
     id: createId("blueprint-capability-invocation"),
     jobId: registry.job.id,
     capabilityId: capability.id,
+    roleId,
     capabilityLabel: capability.label,
     kind: capability.kind,
     status: "completed",
@@ -6236,6 +9859,7 @@ function invokeCapability(
       routeId: request.routeId,
       specTreeId: specTree?.id,
       nodeId: request.nodeId,
+      roleId,
       targetText: registry.job.request.targetText,
       githubUrls: registry.job.request.githubUrls ?? [],
     },
@@ -6269,28 +9893,218 @@ function invokeCapability(
     createdAt,
     payload: evidence,
   };
+  const updatedPresence = buildRolePresence({
+    stage: "runtime_capability",
+    capabilityMatrix: registry.agentCrew.capabilityMatrix,
+    activationPolicies: registry.agentCrew.activationPolicies,
+    artifactIds: [invocationArtifact.id, evidenceArtifact.id],
+    evidenceIds: [evidence.id],
+  });
+  const updatedAgentCrew: BlueprintAgentCrew = {
+    ...registry.agentCrew,
+    updatedAt: createdAt,
+    stage: "runtime_capability",
+    presence: updatedPresence,
+    sourceIds: {
+      ...registry.agentCrew.sourceIds,
+      capabilityIds: uniqueStrings(
+        (registry.agentCrew.sourceIds.capabilityIds ?? []).concat(
+          capability.id
+        )
+      ),
+      capabilityInvocationIds: [invocationWithEvidence.id],
+      capabilityEvidenceIds: [evidence.id],
+    },
+  };
+  const agentCrewArtifact: BlueprintGenerationArtifact = {
+    id: createId("blueprint-artifact"),
+    type: "agent_crew",
+    title: "Agent Crew fabric",
+    summary: `Agent Crew updated after ${capability.label} invocation.`,
+    createdAt,
+    payload: updatedAgentCrew,
+  };
+  const roleCapabilityEvent = createRoleEvent({
+    jobId: registry.job.id,
+    projectId: registry.job.projectId,
+    crewId: updatedAgentCrew.id,
+    type: "role.capability_invoked",
+    stage: "runtime_capability",
+    status: "reviewing",
+    roleId,
+    presenceState: "active",
+    message: `${roleId} invoked runtime capability ${capability.label}.`,
+    occurredAt: createdAt,
+    currentAction: outputSummary,
+    capabilityId: capability.id,
+    invocationId: invocationWithEvidence.id,
+    evidenceId: evidence.id,
+    artifactId: invocationArtifact.id,
+    routeId: request.routeId,
+    specTreeId: specTree?.id,
+    nodeId: request.nodeId,
+  });
+  const roleReviewEvent = createRoleEvent({
+    jobId: registry.job.id,
+    projectId: registry.job.projectId,
+    crewId: updatedAgentCrew.id,
+    type: "role.review_completed",
+    stage: "runtime_capability",
+    status: "reviewing",
+    roleId: "role-quality-auditor",
+    presenceState: "reviewing",
+    message: `Quality auditor reviewed runtime evidence from ${capability.label}.`,
+    occurredAt: createdAt,
+    currentAction:
+      "Quality auditor is checking runtime capability evidence for replay.",
+    capabilityId: capability.id,
+    invocationId: invocationWithEvidence.id,
+    evidenceId: evidence.id,
+    artifactId: evidenceArtifact.id,
+    routeId: request.routeId,
+    specTreeId: specTree?.id,
+    nodeId: request.nodeId,
+  });
+  const crewContextEvent = createGenerationEvent({
+    jobId: registry.job.id,
+    projectId: registry.job.projectId,
+    type: "crew.context.updated",
+    stage: "runtime_capability",
+    status: "reviewing",
+    message: `Agent Crew context updated after ${capability.label} invocation.`,
+    occurredAt: createdAt,
+    artifactId: agentCrewArtifact.id,
+    capabilityId: capability.id,
+    evidenceId: evidence.id,
+    routeId: request.routeId,
+    specTreeId: specTree?.id,
+    nodeId: request.nodeId,
+    payload: {
+      crewId: updatedAgentCrew.id,
+      roleId,
+      capabilityId: capability.id,
+      invocationId: invocationWithEvidence.id,
+      evidenceId: evidence.id,
+      sourceIds: {
+        projectId: registry.job.projectId,
+        crewIds: [updatedAgentCrew.id],
+        roleIds: [roleId],
+        capabilityIds: [capability.id],
+        capabilityInvocationIds: [invocationWithEvidence.id],
+        capabilityEvidenceIds: [evidence.id],
+        nodeIds: request.nodeId ? [request.nodeId] : [],
+      },
+    },
+  });
+  const roleTimelineCollection = buildRoleTimelineCollection(
+    {
+      ...registry.job,
+      artifacts: registry.job.artifacts
+        .filter(artifact => artifact.type !== "agent_crew")
+        .concat(invocationArtifact, evidenceArtifact, agentCrewArtifact),
+      events: registry.job.events.concat(
+        roleCapabilityEvent,
+        crewContextEvent,
+        roleReviewEvent
+      ),
+    },
+    createdAt,
+    updatedAgentCrew
+  );
+  const roleTimelineArtifact: BlueprintGenerationArtifact = {
+    id: createId("blueprint-artifact"),
+    type: "role_timeline",
+    title: "Agent role timeline",
+    summary: `Role timeline updated for capability ${capability.label}.`,
+    createdAt,
+    payload: roleTimelineCollection,
+  };
   const updatedJob: BlueprintGenerationJob = {
     ...registry.job,
     status: "reviewing",
     stage: "runtime_capability",
     updatedAt: createdAt,
-    artifacts: registry.job.artifacts.concat(invocationArtifact, evidenceArtifact),
+    artifacts: registry.job.artifacts
+      .filter(
+        artifact =>
+          artifact.type !== "agent_crew" && artifact.type !== "role_timeline"
+      )
+      .concat(
+        invocationArtifact,
+        evidenceArtifact,
+        agentCrewArtifact,
+        roleTimelineArtifact
+      ),
     events: registry.job.events.concat(
+      roleCapabilityEvent,
       createGenerationEvent({
         jobId: registry.job.id,
-        type: "job.stage",
+        projectId: registry.job.projectId,
+        type: "capability.invoked",
+        family: "capability",
         stage: "runtime_capability",
-        status: "reviewing",
-        message: `Runtime capability ${capability.label} completed.`,
+        status: "running",
+        message: `Runtime capability ${capability.label} invoked.`,
         occurredAt: createdAt,
+        routeId: request.routeId,
+        specTreeId: specTree?.id,
+        nodeId: request.nodeId,
+        artifactId: invocationArtifact.id,
+        roleId,
+        capabilityId: capability.id,
+        evidenceId: evidence.id,
         payload: {
           capabilityId: capability.id,
+          roleId,
           invocationId: invocationWithEvidence.id,
           evidenceId: evidence.id,
           routeId: request.routeId,
           nodeId: request.nodeId,
+          sourceIds: {
+            projectId: registry.job.projectId,
+            roleIds: [roleId],
+            capabilityIds: [capability.id],
+            capabilityInvocationIds: [invocationWithEvidence.id],
+            capabilityEvidenceIds: [evidence.id],
+            nodeIds: request.nodeId ? [request.nodeId] : [],
+          },
         },
-      })
+      }),
+      createGenerationEvent({
+        jobId: registry.job.id,
+        projectId: registry.job.projectId,
+        type: "capability.completed",
+        family: "capability",
+        stage: "runtime_capability",
+        status: "reviewing",
+        message: `Runtime capability ${capability.label} completed.`,
+        occurredAt: createdAt,
+        routeId: request.routeId,
+        specTreeId: specTree?.id,
+        nodeId: request.nodeId,
+        artifactId: evidenceArtifact.id,
+        roleId,
+        capabilityId: capability.id,
+        evidenceId: evidence.id,
+        payload: {
+          capabilityId: capability.id,
+          roleId,
+          invocationId: invocationWithEvidence.id,
+          evidenceId: evidence.id,
+          routeId: request.routeId,
+          nodeId: request.nodeId,
+          sourceIds: {
+            projectId: registry.job.projectId,
+            roleIds: [roleId],
+            capabilityIds: [capability.id],
+            capabilityInvocationIds: [invocationWithEvidence.id],
+            capabilityEvidenceIds: [evidence.id],
+            nodeIds: request.nodeId ? [request.nodeId] : [],
+          },
+        },
+      }),
+      crewContextEvent,
+      roleReviewEvent
     ),
   };
 
@@ -6303,6 +10117,7 @@ function invokeCapability(
       routeSet,
       specTree,
       capability,
+      agentCrew: updatedAgentCrew,
       invocation: invocationWithEvidence,
       evidence,
     },
@@ -7423,6 +11238,14 @@ function resolvePromptSourceStatus(
   return "mixed";
 }
 
+function isConsumableEffectPreviewVersion(
+  preview: BlueprintEffectPreview
+): boolean {
+  const versionStatus =
+    preview.versionStatus ?? preview.versionSync?.versionStatus ?? "current";
+  return versionStatus === "current" || versionStatus === "accepted";
+}
+
 function promptPackageReplacementKey(
   promptPackage: Pick<
     BlueprintImplementationPromptPackage,
@@ -7437,6 +11260,7 @@ function buildEffectPreview(input: {
   specTree: BlueprintSpecTree;
   node: BlueprintSpecTreeNode;
   documents: BlueprintSpecDocument[];
+  existingPreviews: BlueprintEffectPreview[];
   includeDrafts: boolean;
   createdAt: string;
 }): BlueprintEffectPreview {
@@ -7462,6 +11286,45 @@ function buildEffectPreview(input: {
     input.node,
     input.documents
   );
+  const previewId = createId("blueprint-effect-preview");
+  const previousPreviews = input.existingPreviews
+    .slice()
+    .sort(
+      (left, right) =>
+        (left.version ?? 1) - (right.version ?? 1) ||
+        left.createdAt.localeCompare(right.createdAt)
+    );
+  const latestPreviousPreview = previousPreviews[previousPreviews.length - 1];
+  const previousPreviewIds = previousPreviews.map(preview => preview.id);
+  const preservedPreviewIds = [...previousPreviewIds];
+  const version = previousPreviews.length > 0
+    ? Math.max(...previousPreviews.map(preview => preview.version ?? 1)) + 1
+    : 1;
+  const sourceSnapshotHash = buildEffectPreviewSourceSnapshotHash({
+    specTree: input.specTree,
+    node: input.node,
+    documents: input.documents,
+  });
+  const nodeProgress = buildEffectPreviewNodeProgress(
+    input.specTree,
+    input.node
+  );
+  const dependencyOrder = buildEffectPreviewDependencyOrder(
+    input.specTree,
+    input.node
+  );
+  const versionSync: BlueprintEffectPreviewVersionSync = {
+    version,
+    versionStatus: "current",
+    supersedesPreviewId: latestPreviousPreview?.id,
+    previousPreviewIds,
+    preservedPreviewIds,
+    refreshedFromSpecTreeVersion: input.specTree.version,
+    refreshedAt: input.createdAt,
+    sourceSnapshotHash,
+    nodeProgress,
+    dependencyOrder,
+  };
   const previewNode: BlueprintEffectPreviewNode = {
     id: createId("blueprint-effect-preview-node"),
     nodeId: input.node.id,
@@ -7478,12 +11341,31 @@ function buildEffectPreview(input: {
     milestones: progressPlan,
     prototypeCues,
   };
+  const runtimeProjection = buildEffectPreviewRuntimeProjection({
+    id: previewId,
+    job: input.job,
+    specTree: input.specTree,
+    node: input.node,
+    status,
+    sourceDocumentIds,
+    createdAt: input.createdAt,
+    progressPlan,
+    prototypeCues,
+  });
 
   return {
-    id: createId("blueprint-effect-preview"),
+    id: previewId,
     jobId: input.job.id,
     treeId: input.specTree.id,
     nodeId: input.node.id,
+    version,
+    versionStatus: "current",
+    supersedesPreviewId: versionSync.supersedesPreviewId,
+    previousPreviewIds,
+    preservedPreviewIds,
+    refreshedFromSpecTreeVersion: input.specTree.version,
+    refreshedAt: input.createdAt,
+    sourceSnapshotHash,
     sourceDocumentIds,
     status,
     createdAt: input.createdAt,
@@ -7493,6 +11375,10 @@ function buildEffectPreview(input: {
     prototypeNotes: prototypeCues.map(cue => cue.cue),
     progressPlan,
     nodes: [previewNode],
+    runtimeProjection,
+    nodeProgress,
+    dependencyOrder,
+    versionSync,
     provenance: {
       jobId: input.job.id,
       projectId: input.job.projectId,
@@ -7515,12 +11401,255 @@ function buildEffectPreview(input: {
   };
 }
 
+function buildEffectPreviewRuntimeProjection(input: {
+  id: string;
+  job: BlueprintGenerationJob;
+  specTree: BlueprintSpecTree;
+  node: BlueprintSpecTreeNode;
+  status: BlueprintEffectPreviewStatus;
+  sourceDocumentIds: string[];
+  createdAt: string;
+  progressPlan: BlueprintEffectPreviewMilestone[];
+  prototypeCues: BlueprintEffectPreviewPrototypeCue[];
+}): BlueprintEffectPreviewRuntimeProjection {
+  const routeId = input.node.routeId ?? input.specTree.selectedRouteId;
+  const projectionSeed = `${input.job.id}:${input.specTree.id}:${input.node.id}:${input.id}`;
+  const sceneSnapshotId = stableId(
+    "blueprint-scene-snapshot",
+    projectionSeed
+  );
+  const browserPreviewId = stableId(
+    "blueprint-browser-preview",
+    projectionSeed
+  );
+  const progressPercent =
+    input.status === "completed"
+      ? 100
+      : Math.max(35, Math.min(95, input.progressPlan.length * 25));
+  const cueBadges = input.prototypeCues
+    .map(cue => cue.surface)
+    .filter((surface, index, surfaces) => surfaces.indexOf(surface) === index);
+
+  return {
+    id: stableId("blueprint-runtime-projection", projectionSeed),
+    jobId: input.job.id,
+    projectId: input.job.projectId,
+    routeSetId: input.specTree.routeSetId,
+    routeId,
+    specTreeId: input.specTree.id,
+    nodeId: input.node.id,
+    effectPreviewId: input.id,
+    sceneSnapshotId,
+    hudState: {
+      id: stableId("blueprint-hud-state", projectionSeed),
+      status: input.status,
+      stage: "effect_preview",
+      title: `${input.node.title} runtime projection`,
+      summary: `Bind ${input.node.title} preview state to 3D, HUD, logs, and browser surfaces.`,
+      progressPercent,
+      activeNodeId: input.node.id,
+      badges: [
+        "3D scene",
+        "HUD",
+        "log timeline",
+        "browser preview",
+        ...cueBadges.map(surface => `cue:${surface}`),
+      ],
+    },
+    logTimeline: [
+      {
+        id: stableId("blueprint-preview-log", `${projectionSeed}:scene`),
+        level: "info",
+        message: `Scene snapshot ${sceneSnapshotId} prepared for ${input.node.title}.`,
+        occurredAt: input.createdAt,
+        sourceDocumentIds: input.sourceDocumentIds,
+      },
+      {
+        id: stableId("blueprint-preview-log", `${projectionSeed}:hud`),
+        level: input.status === "completed" ? "success" : "info",
+        message: `HUD state bound to ${input.node.title} with ${progressPercent}% preview progress.`,
+        occurredAt: input.createdAt,
+        sourceDocumentIds: input.sourceDocumentIds,
+      },
+      {
+        id: stableId("blueprint-preview-log", `${projectionSeed}:browser`),
+        level: "success",
+        message: `Browser preview ${browserPreviewId} linked to route ${routeId}.`,
+        occurredAt: input.createdAt,
+        sourceDocumentIds: input.sourceDocumentIds,
+      },
+    ],
+    browserPreviewId,
+    browserPreview: {
+      id: browserPreviewId,
+      title: `${input.node.title} browser preview`,
+      summary: `Interactive browser surface for ${input.node.summary}`,
+      routeId,
+      nodeId: input.node.id,
+      url: `/autopilot/preview/${input.job.id}/${input.node.id}`,
+    },
+    sourceIds: {
+      projectId: input.job.projectId,
+      routeSetId: input.specTree.routeSetId,
+      specTreeId: input.specTree.id,
+      nodeIds: [input.node.id],
+      specDocumentIds: input.sourceDocumentIds,
+      effectPreviewIds: [input.id],
+    },
+  };
+}
+
+function archiveEffectPreviewVersion(
+  preview: BlueprintEffectPreview,
+  archivedAt: string
+): BlueprintEffectPreview {
+  const version = preview.version ?? preview.versionSync?.version ?? 1;
+  const versionSync: BlueprintEffectPreviewVersionSync = {
+    version,
+    versionStatus: "archived",
+    supersedesPreviewId: preview.supersedesPreviewId,
+    previousPreviewIds: preview.previousPreviewIds ?? [],
+    preservedPreviewIds: uniqueStrings(
+      (preview.preservedPreviewIds ?? []).concat(preview.id)
+    ),
+    refreshedFromSpecTreeVersion:
+      preview.refreshedFromSpecTreeVersion ??
+      preview.versionSync?.refreshedFromSpecTreeVersion ??
+      preview.provenance.treeVersion,
+    refreshedAt:
+      preview.refreshedAt ?? preview.versionSync?.refreshedAt ?? archivedAt,
+    sourceSnapshotHash:
+      preview.sourceSnapshotHash ??
+      preview.versionSync?.sourceSnapshotHash ??
+      stableId("blueprint-preview-snapshot", preview.id),
+    nodeProgress:
+      preview.nodeProgress ??
+      preview.versionSync?.nodeProgress ??
+      buildFallbackEffectPreviewNodeProgress(preview),
+    dependencyOrder:
+      preview.dependencyOrder ??
+      preview.versionSync?.dependencyOrder ??
+      [],
+  };
+
+  return {
+    ...preview,
+    version,
+    versionStatus: "archived",
+    preservedPreviewIds: versionSync.preservedPreviewIds ?? [],
+    updatedAt: archivedAt,
+    versionSync,
+  };
+}
+
+function buildEffectPreviewNodeProgress(
+  specTree: BlueprintSpecTree,
+  node: BlueprintSpecTreeNode
+): BlueprintEffectPreviewNodeProgress {
+  return {
+    nodeId: node.id,
+    status: node.status,
+    completionPercent: mapSpecTreeNodeStatusToCompletion(node.status),
+    dependencyIds: resolveEffectPreviewDependencyIds(specTree, node),
+    outputIds: [...node.outputs],
+    updatedFromTreeVersion: specTree.version,
+  };
+}
+
+function buildFallbackEffectPreviewNodeProgress(
+  preview: BlueprintEffectPreview
+): BlueprintEffectPreviewNodeProgress {
+  return {
+    nodeId: preview.nodeId,
+    status: "draft",
+    completionPercent: 50,
+    dependencyIds: [],
+    outputIds: [],
+    updatedFromTreeVersion: preview.provenance.treeVersion,
+  };
+}
+
+function buildEffectPreviewDependencyOrder(
+  specTree: BlueprintSpecTree,
+  node: BlueprintSpecTreeNode
+): BlueprintEffectPreviewDependencyOrderEntry[] {
+  const dependencyNodes = resolveEffectPreviewDependencyNodes(specTree, node);
+  return dependencyNodes.concat(node).map((item, index) => ({
+    nodeId: item.id,
+    title: item.title,
+    status: item.status,
+    order: index + 1,
+    dependencyIds: resolveEffectPreviewDependencyIds(specTree, item),
+  }));
+}
+
+function resolveEffectPreviewDependencyNodes(
+  specTree: BlueprintSpecTree,
+  node: BlueprintSpecTreeNode
+): BlueprintSpecTreeNode[] {
+  const nodesById = new Map(specTree.nodes.map(item => [item.id, item]));
+  const nodesByType = new Map<string, BlueprintSpecTreeNode>(
+    specTree.nodes.map(item => [item.type, item])
+  );
+  const dependencies = node.dependencies
+    .map(dependency => nodesById.get(dependency) ?? nodesByType.get(dependency))
+    .filter((item): item is BlueprintSpecTreeNode => Boolean(item));
+
+  return dependencies.sort(
+    (left, right) => left.priority - right.priority || left.title.localeCompare(right.title)
+  );
+}
+
+function resolveEffectPreviewDependencyIds(
+  specTree: BlueprintSpecTree,
+  node: BlueprintSpecTreeNode
+): string[] {
+  return resolveEffectPreviewDependencyNodes(specTree, node).map(item => item.id);
+}
+
+function mapSpecTreeNodeStatusToCompletion(
+  status: BlueprintSpecTreeNodeStatus
+): number {
+  if (status === "accepted") return 100;
+  if (status === "ready") return 80;
+  if (status === "draft") return 50;
+  return 20;
+}
+
+function buildEffectPreviewSourceSnapshotHash(input: {
+  specTree: BlueprintSpecTree;
+  node: BlueprintSpecTreeNode;
+  documents: BlueprintSpecDocument[];
+}): string {
+  const source = JSON.stringify({
+    treeId: input.specTree.id,
+    treeVersion: input.specTree.version,
+    node: {
+      id: input.node.id,
+      title: input.node.title,
+      summary: input.node.summary,
+      status: input.node.status,
+      dependencies: input.node.dependencies,
+      outputs: input.node.outputs,
+    },
+    documents: input.documents.map(document => ({
+      id: document.id,
+      type: document.type,
+      status: normalizeSpecDocumentStatus(document.status),
+      version: document.version ?? 1,
+      updatedAt: document.updatedAt ?? document.createdAt,
+    })),
+  });
+  return `sha256:${createHash("sha256").update(source).digest("hex").slice(0, 16)}`;
+}
+
 function buildSpecDocument(input: {
   job: BlueprintGenerationJob;
   specTree: BlueprintSpecTree;
   node: BlueprintSpecTreeNode;
   type: BlueprintSpecDocumentType;
   createdAt: string;
+  previousRoleFindings?: BlueprintRoleTimelineEntry[];
 }): BlueprintSpecDocument {
   const id = createId("blueprint-spec-document");
   const heading = buildSpecDocumentHeading(input.type, input.node.title);
@@ -7553,6 +11682,13 @@ function buildSpecDocument(input: {
       nodeSummary: input.node.summary,
       dependencies: [...input.node.dependencies],
       outputs: [...input.node.outputs],
+      reusedRoleFindingIds: collectRoleFindingIds(
+        input.previousRoleFindings ?? []
+      ),
+      reusedRoleIds: collectRoleFindingRoleIds(input.previousRoleFindings ?? []),
+      reusedEvidenceIds: collectRoleFindingEvidenceIds(
+        input.previousRoleFindings ?? []
+      ),
     },
   };
 }
@@ -7573,6 +11709,7 @@ function buildSpecDocumentHeading(
 function buildSpecDocumentBody(input: {
   node: BlueprintSpecTreeNode;
   type: BlueprintSpecDocumentType;
+  previousRoleFindings?: BlueprintRoleTimelineEntry[];
 }): string {
   const title = buildSpecDocumentHeading(input.type, input.node.title);
   const lines = [
@@ -7597,9 +11734,25 @@ function buildSpecDocumentBody(input: {
     "## Derived Content",
     "",
     ...buildSpecDocumentSectionLines(input.type, input.node),
+    ...buildReusableRoleFindingLines(input.previousRoleFindings ?? []),
   ];
 
   return lines.join("\n");
+}
+
+function buildReusableRoleFindingLines(
+  findings: BlueprintRoleTimelineEntry[]
+): string[] {
+  if (findings.length === 0) {
+    return [];
+  }
+
+  return [
+    "",
+    "## Reused Role Findings",
+    "",
+    ...findings.map(finding => `- ${formatReusableRoleFinding(finding)}`),
+  ];
 }
 
 function buildSpecDocumentSectionLines(
@@ -7786,9 +11939,13 @@ function buildSpecTreeFromRouteSet(input: {
   selection: BlueprintRouteSelection;
   selectedRoute: BlueprintRouteCandidate;
   createdAt: string;
+  artifactLinks?: BlueprintGenerationArtifactLink[];
+  previousRoleFindings?: BlueprintRoleTimelineEntry[];
 }): BlueprintSpecTree {
+  const specTreeId = createId("blueprint-spec-tree");
   const rootNodeId = createId("blueprint-spec-node");
   const targetTitle = summarizeRequestTarget(input.job.request);
+  const previousRoleFindings = input.previousRoleFindings ?? [];
   const mainStepNodes = input.selectedRoute.steps.map((step, index) =>
     createSpecTreeNode({
       parentId: rootNodeId,
@@ -7855,17 +12012,35 @@ function buildSpecTreeFromRouteSet(input: {
     metadata: {
       selectedRouteTitle: input.selectedRoute.title,
       routeSetId: input.routeSet.id,
+      routeId: input.selectedRoute.id,
+      selectionId: input.selection.id,
+      selectedPathId: input.selection.selectedPathId ?? input.selectedRoute.id,
+      handoffState: "reviewing",
+      confirmable: true,
+      editable: true,
+      resumable: true,
+      previousRoleFindingCount: previousRoleFindings.length,
+      reusedRoleFindingIds: collectRoleFindingIds(previousRoleFindings),
+      reusedRoleIds: collectRoleFindingRoleIds(previousRoleFindings),
+      reusedEvidenceIds: collectRoleFindingEvidenceIds(previousRoleFindings),
+      downstreamMenus: [
+        "spec_docs",
+        "effect_preview",
+        "prompt_packaging",
+        "engineering_landing",
+      ],
     },
   };
 
   return {
-    id: createId("blueprint-spec-tree"),
+    id: specTreeId,
     routeSetId: input.routeSet.id,
     selectionId: input.selection.id,
+    selectedPathId: input.selection.selectedPathId ?? input.selectedRoute.id,
     selectedRouteId: input.selectedRoute.id,
     rootNodeId,
     version: 1,
-    status: "draft",
+    status: "reviewing",
     createdAt: input.createdAt,
     updatedAt: input.createdAt,
     alternativeRouteIds: alternativeNodes
@@ -7876,8 +12051,17 @@ function buildSpecTreeFromRouteSet(input: {
       jobId: input.job.id,
       projectId: input.job.projectId,
       sourceId: input.job.sourceId,
+      routeSetId: input.routeSet.id,
+      routeId: input.selectedRoute.id,
+      selectionId: input.selection.id,
+      selectedPathId: input.selection.selectedPathId ?? input.selectedRoute.id,
+      specTreeId,
       targetText: input.job.request.targetText,
       githubUrls: input.job.request.githubUrls ?? [],
+      artifactLinks: input.artifactLinks,
+      reusedRoleFindingIds: collectRoleFindingIds(previousRoleFindings),
+      reusedRoleIds: collectRoleFindingRoleIds(previousRoleFindings),
+      reusedEvidenceIds: collectRoleFindingEvidenceIds(previousRoleFindings),
     },
   };
 }
@@ -8472,59 +12656,321 @@ function buildIntakeAssets(
   return dedupeById(assets);
 }
 
-function buildClarificationQuestions(
-  intake: BlueprintIntake
-): BlueprintClarificationQuestion[] {
-  const sourceIds = intake.sources.map(source => source.id);
-  const evidenceIds = intake.evidence.map(item => item.id);
-  const questions: BlueprintClarificationQuestion[] = [
-    {
-      id: "blueprint-question-goal",
-      kind: "goal",
-      prompt: "What outcome should the blueprint optimize for first?",
-      required: true,
-      sourceIds: [],
-      evidenceIds,
-    },
-    {
-      id: "blueprint-question-audience",
-      kind: "audience",
-      prompt: "Who is the primary user or operator for this project?",
-      required: true,
-      sourceIds: [],
-      evidenceIds,
-    },
-    {
-      id: "blueprint-question-constraints",
-      kind: "constraint",
-      prompt: "What constraints, integrations, or risks must the route preserve?",
-      required: true,
-      sourceIds,
-      evidenceIds,
-    },
-  ];
+interface BlueprintClarificationStrategyTemplate {
+  id: BlueprintClarificationStrategyId;
+  label: string;
+  templateId: string;
+  summary: string;
+  questionIds: string[];
+  settledQuestionIds?: string[];
+}
 
-  if (intake.sources.length > 0) {
-    questions.push({
-      id: "blueprint-question-github-role",
-      kind: "github",
-      prompt: "How should the GitHub repository influence the first RouteSet?",
-      required: true,
-      sourceIds,
-      evidenceIds: intake.sources.flatMap(source => source.evidenceIds),
-    });
-  }
+interface BlueprintClarificationQuestionBlueprint {
+  id: string;
+  kind: BlueprintClarificationQuestion["kind"];
+  prompt: string;
+  required: boolean;
+  routeDimension: BlueprintClarificationRouteDimension;
+  readinessSignal: BlueprintClarificationReadinessSignalId;
+  sourceScope?: "none" | "all" | "github";
+  defaultAnswer?: (intake: BlueprintIntake) => string | undefined;
+}
 
-  questions.push({
+const CLARIFICATION_STRATEGY_TEMPLATES: BlueprintClarificationStrategyTemplate[] = [
+  {
+    id: "target_first",
+    label: "Target-first clarification",
+    templateId: "clarification-template-target-first",
+    summary: "Start from the desired outcome, then bind audience, risk, and durable assets.",
+    questionIds: [
+      "blueprint-question-goal",
+      "blueprint-question-audience",
+      "blueprint-question-constraints",
+      "blueprint-question-domain-assets",
+    ],
+  },
+  {
+    id: "repository_first",
+    label: "Repository-first clarification",
+    templateId: "clarification-template-repository-first",
+    summary: "Use repository context as the first route anchor before target and risk refinement.",
+    questionIds: [
+      "blueprint-question-goal",
+      "blueprint-question-audience",
+      "blueprint-question-constraints",
+      "blueprint-question-github-role",
+      "blueprint-question-domain-assets",
+    ],
+  },
+  {
+    id: "risk_first",
+    label: "Risk-first clarification",
+    templateId: "clarification-template-risk-first",
+    summary: "Surface constraints and high-risk assumptions before routing execution.",
+    questionIds: [
+      "blueprint-question-constraints",
+      "blueprint-question-risk-review",
+      "blueprint-question-goal",
+      "blueprint-question-audience",
+      "blueprint-question-domain-assets",
+    ],
+  },
+  {
+    id: "document_first",
+    label: "Document-first clarification",
+    templateId: "clarification-template-document-first",
+    summary: "Stabilize requirements, design, and task document intent before preview work.",
+    questionIds: [
+      "blueprint-question-goal",
+      "blueprint-question-document-shape",
+      "blueprint-question-constraints",
+      "blueprint-question-audience",
+      "blueprint-question-domain-assets",
+    ],
+  },
+  {
+    id: "preview_first",
+    label: "Preview-first clarification",
+    templateId: "clarification-template-preview-first",
+    summary: "Prioritize visible effect preview expectations before route and document handoff.",
+    questionIds: [
+      "blueprint-question-goal",
+      "blueprint-question-preview-target",
+      "blueprint-question-audience",
+      "blueprint-question-constraints",
+      "blueprint-question-domain-assets",
+    ],
+    settledQuestionIds: ["blueprint-question-domain-assets"],
+  },
+  {
+    id: "fast_execution",
+    label: "Fast-execution clarification",
+    templateId: "clarification-template-fast-execution",
+    summary: "Ask only the blocking execution questions and settle optional routing preferences by strategy.",
+    questionIds: [
+      "blueprint-question-goal",
+      "blueprint-question-constraints",
+      "blueprint-question-execution-slice",
+      "blueprint-question-audience",
+      "blueprint-question-domain-assets",
+    ],
+    settledQuestionIds: [
+      "blueprint-question-audience",
+      "blueprint-question-domain-assets",
+    ],
+  },
+];
+
+const CLARIFICATION_QUESTION_BLUEPRINTS: BlueprintClarificationQuestionBlueprint[] = [
+  {
+    id: "blueprint-question-goal",
+    kind: "goal",
+    prompt: "What outcome should the blueprint optimize for first?",
+    required: true,
+    routeDimension: "goal",
+    readinessSignal: "goal_defined",
+    sourceScope: "none",
+  },
+  {
+    id: "blueprint-question-audience",
+    kind: "audience",
+    prompt: "Who is the primary user or operator for this project?",
+    required: true,
+    routeDimension: "audience",
+    readinessSignal: "audience_defined",
+    sourceScope: "none",
+    defaultAnswer: intake =>
+      intake.targetText
+        ? "Use the audience implied by the target request until the user narrows it."
+        : undefined,
+  },
+  {
+    id: "blueprint-question-constraints",
+    kind: "constraint",
+    prompt: "What constraints, integrations, or risks must the route preserve?",
+    required: true,
+    routeDimension: "risk",
+    readinessSignal: "constraints_defined",
+    sourceScope: "all",
+  },
+  {
+    id: "blueprint-question-github-role",
+    kind: "github",
+    prompt: "How should the GitHub repository influence the first RouteSet?",
+    required: true,
+    routeDimension: "repository",
+    readinessSignal: "repository_context",
+    sourceScope: "github",
+    defaultAnswer: intake =>
+      intake.sources.length > 0
+        ? `Treat ${intake.sources[0].slug} as the first repository context source.`
+        : undefined,
+  },
+  {
     id: "blueprint-question-domain-assets",
     kind: "domain",
     prompt: "Which durable domain assets should be carried into later stages?",
     required: false,
-    sourceIds,
-    evidenceIds,
+    routeDimension: "domain",
+    readinessSignal: "domain_assets",
+    sourceScope: "all",
+    defaultAnswer: intake =>
+      intake.assets.length > 0
+        ? "Carry forward normalized intake assets and repository evidence."
+        : undefined,
+  },
+  {
+    id: "blueprint-question-risk-review",
+    kind: "constraint",
+    prompt: "Which risk should block autopilot execution until explicitly reviewed?",
+    required: true,
+    routeDimension: "risk",
+    readinessSignal: "risk_review",
+    sourceScope: "all",
+  },
+  {
+    id: "blueprint-question-document-shape",
+    kind: "document",
+    prompt: "Which requirements, design, or task documents should be generated first?",
+    required: true,
+    routeDimension: "document",
+    readinessSignal: "document_intent",
+    sourceScope: "all",
+  },
+  {
+    id: "blueprint-question-preview-target",
+    kind: "preview",
+    prompt: "What preview behavior should prove the route is heading in the right direction?",
+    required: true,
+    routeDimension: "preview",
+    readinessSignal: "preview_intent",
+    sourceScope: "all",
+  },
+  {
+    id: "blueprint-question-execution-slice",
+    kind: "execution",
+    prompt: "What is the smallest execution slice that should run first?",
+    required: true,
+    routeDimension: "execution",
+    readinessSignal: "fast_path",
+    sourceScope: "all",
+  },
+];
+
+function selectClarificationStrategy(
+  intake: BlueprintIntake,
+  request?: BlueprintClarificationSessionRequest
+): BlueprintClarificationStrategyTemplate {
+  const requestedStrategy = request?.strategyId
+    ? getClarificationStrategyTemplate(request.strategyId)
+    : undefined;
+  if (requestedStrategy) {
+    return overrideClarificationTemplateId(requestedStrategy, request?.templateId);
+  }
+
+  const searchableText = [intake.targetText, ...intake.domainNotes]
+    .filter(isString)
+    .join(" ")
+    .toLowerCase();
+  const inferredStrategyId: BlueprintClarificationStrategyId =
+    intake.sources.length > 0
+      ? "repository_first"
+      : /\b(preview|prototype|ui|screen|visual)\b/.test(searchableText)
+        ? "preview_first"
+        : /\b(doc|docs|document|requirement|design|task|spec)\b/.test(searchableText)
+          ? "document_first"
+          : /\b(risk|security|compliance|audit|privacy|permission)\b/.test(searchableText)
+            ? "risk_first"
+            : /\b(fast|quick|mvp|asap|execute|execution)\b/.test(searchableText)
+              ? "fast_execution"
+              : "target_first";
+
+  return overrideClarificationTemplateId(
+    getClarificationStrategyTemplate(inferredStrategyId),
+    request?.templateId
+  );
+}
+
+function overrideClarificationTemplateId(
+  strategy: BlueprintClarificationStrategyTemplate,
+  templateId?: string
+): BlueprintClarificationStrategyTemplate {
+  return templateId ? { ...strategy, templateId } : strategy;
+}
+
+function getClarificationStrategyTemplate(
+  strategyId: BlueprintClarificationStrategyId
+): BlueprintClarificationStrategyTemplate {
+  return (
+    CLARIFICATION_STRATEGY_TEMPLATES.find(strategy => strategy.id === strategyId) ??
+    CLARIFICATION_STRATEGY_TEMPLATES[0]
+  );
+}
+
+function normalizeClarificationStrategyId(
+  value: string
+): BlueprintClarificationStrategyId | undefined {
+  const normalized = value.trim().toLowerCase().replace(/[-\s]+/g, "_");
+  return CLARIFICATION_STRATEGY_TEMPLATES.some(
+    strategy => strategy.id === normalized
+  )
+    ? (normalized as BlueprintClarificationStrategyId)
+    : undefined;
+}
+
+function buildClarificationQuestions(
+  intake: BlueprintIntake,
+  strategy: BlueprintClarificationStrategyTemplate
+): BlueprintClarificationQuestion[] {
+  const settledQuestionIds = new Set(strategy.settledQuestionIds ?? []);
+  const blueprintsById = new Map(
+    CLARIFICATION_QUESTION_BLUEPRINTS.map(question => [question.id, question])
+  );
+  const selectedIds = strategy.questionIds.filter(questionId => {
+    if (questionId === "blueprint-question-github-role") {
+      return intake.sources.length > 0;
+    }
+    return true;
   });
 
-  return questions;
+  return selectedIds.flatMap(questionId => {
+    const blueprint = blueprintsById.get(questionId);
+    if (!blueprint) return [];
+
+    const settledByStrategy = settledQuestionIds.has(questionId);
+    const sourceIds =
+      blueprint.sourceScope === "github"
+        ? intake.sources.map(source => source.id)
+        : blueprint.sourceScope === "all"
+          ? intake.sources.map(source => source.id)
+          : [];
+    const evidenceIds =
+      blueprint.sourceScope === "github"
+        ? intake.sources.flatMap(source => source.evidenceIds)
+        : blueprint.sourceScope === "all"
+          ? intake.evidence.map(item => item.id)
+          : intake.evidence.map(item => item.id);
+
+    return [
+      {
+        id: blueprint.id,
+        kind: blueprint.kind,
+        prompt: blueprint.prompt,
+        required: settledByStrategy ? false : blueprint.required,
+        sourceIds,
+        evidenceIds,
+        routeDimension: blueprint.routeDimension,
+        readinessSignal: blueprint.readinessSignal,
+        templateId: strategy.templateId,
+        strategyId: strategy.id,
+        settledByStrategy,
+        settledReason: settledByStrategy
+          ? `${strategy.label} uses a strategy default for this route dimension.`
+          : undefined,
+        defaultAnswer: blueprint.defaultAnswer?.(intake),
+      },
+    ];
+  });
 }
 
 function buildClarificationEvidence(
@@ -8540,12 +12986,13 @@ function buildClarificationEvidence(
     return {
       id: stableId(
         "blueprint-evidence-clarification",
-        `${session.id}-${answer.questionId}-${answer.answer}`
+        `${answer.questionId}-${hashText(`${session.intakeId}-${answer.answer}`)}`
       ),
       kind: "clarification_answer",
       label: question?.prompt ?? answer.questionId,
       summary: summarizeText(answer.answer, 120),
       value: answer.answer,
+      sourceId: question?.strategyId,
       createdAt,
     };
   });
@@ -8556,16 +13003,51 @@ function buildClarificationAssets(
   evidence: BlueprintDomainEvidence[],
   createdAt: string
 ): BlueprintDomainAsset[] {
-  return evidence.map(item => ({
-    id: stableId("blueprint-asset-clarification", `${session.id}-${item.id}`),
-    kind: "clarification",
-    title: "Clarification Answer",
-    summary: item.summary,
-    sourceIds: [],
-    evidenceIds: [item.id],
-    tags: ["clarification"],
-    createdAt,
-  }));
+  const questionById = new Map(
+    session.questions.map(question => [question.id, question])
+  );
+  const evidenceByQuestionId = new Map(
+    session.answers
+      .map(answer => {
+        const matchingEvidence = evidence.find(
+          item =>
+            item.id ===
+            stableId(
+              "blueprint-evidence-clarification",
+              `${answer.questionId}-${hashText(`${session.intakeId}-${answer.answer}`)}`
+            )
+        );
+        return matchingEvidence
+          ? ([matchingEvidence.id, answer.questionId] as const)
+          : undefined;
+      })
+      .filter((item): item is readonly [string, string] => Boolean(item))
+  );
+
+  return evidence.map(item => {
+    const question = questionById.get(evidenceByQuestionId.get(item.id) ?? "");
+    return {
+      id: stableId(
+        "blueprint-asset-clarification",
+        `${question?.id ?? "question"}-${hashText(`${session.intakeId}-${item.id}`)}`
+      ),
+      kind: "clarification",
+      title: "Clarification Answer",
+      summary: item.summary,
+      sourceIds: [],
+      evidenceIds: [item.id],
+      tags: uniqueStrings(
+        [
+          "clarification",
+          session.strategyId,
+          session.templateId,
+          question?.routeDimension,
+          question?.readinessSignal,
+        ].filter(isString)
+      ),
+      createdAt,
+    };
+  });
 }
 
 function calculateIntakeReadiness(
@@ -8590,8 +13072,11 @@ function calculateClarificationReadiness(
   const answeredQuestionIds = new Set(
     answers.filter(answer => answer.answer.trim()).map(answer => answer.questionId)
   );
+  const settledQuestionIds = questions
+    .filter(question => question.settledByStrategy)
+    .map(question => question.id);
   const requiredQuestionIds = questions
-    .filter(question => question.required)
+    .filter(question => question.required && !question.settledByStrategy)
     .map(question => question.id);
   const missingQuestionIds = requiredQuestionIds.filter(
     questionId => !answeredQuestionIds.has(questionId)
@@ -8608,7 +13093,83 @@ function calculateClarificationReadiness(
     answeredRequired,
     requiredTotal: requiredQuestionIds.length,
     missingQuestionIds,
+    readinessSignals: uniqueClarificationReadinessSignals(questions),
+    settledQuestionIds,
+    routeDimensions: uniqueClarificationRouteDimensions(questions),
   };
+}
+
+function normalizeClarificationAnswerForQuestion(
+  answer: BlueprintClarificationAnswer,
+  question: BlueprintClarificationQuestion,
+  answeredAt: string
+): BlueprintClarificationAnswer {
+  return {
+    ...answer,
+    answeredAt: answer.answeredAt ?? answeredAt,
+    source: answer.source ?? "user",
+    provenance: {
+      ...answer.provenance,
+      strategyId: answer.provenance?.strategyId ?? question.strategyId,
+      templateId: answer.provenance?.templateId ?? question.templateId,
+      routeDimension:
+        answer.provenance?.routeDimension ?? question.routeDimension,
+      readinessSignal:
+        answer.provenance?.readinessSignal ?? question.readinessSignal,
+    },
+  };
+}
+
+function buildClarificationRouteReadySummary(
+  strategy:
+    | BlueprintClarificationStrategyTemplate
+    | BlueprintClarificationSession,
+  readiness: BlueprintClarificationReadiness,
+  questions: BlueprintClarificationQuestion[]
+): string {
+  const label =
+    "label" in strategy
+      ? strategy.label
+      : strategy.strategyLabel ?? "Clarification strategy";
+  const dimensions = uniqueClarificationRouteDimensions(questions);
+  const missing = readiness.missingQuestionIds.length;
+  const readyText =
+    missing === 0
+      ? "ready for Route Orchestrator"
+      : `${missing} required route signal${missing === 1 ? "" : "s"} still open`;
+  return `${label} is ${readiness.answeredRequired}/${readiness.requiredTotal} required answers ${readyText}. Route dimensions: ${dimensions.join(", ") || "none"}.`;
+}
+
+function uniqueClarificationReadinessSignals(
+  questions: BlueprintClarificationQuestion[]
+): BlueprintClarificationReadinessSignalId[] {
+  return uniqueStrings(
+    questions.filter(hasClarificationReadinessSignal).map(question => question.readinessSignal)
+  ) as BlueprintClarificationReadinessSignalId[];
+}
+
+function uniqueClarificationRouteDimensions(
+  questions: BlueprintClarificationQuestion[]
+): BlueprintClarificationRouteDimension[] {
+  return uniqueStrings(
+    questions.filter(hasClarificationRouteDimension).map(question => question.routeDimension)
+  ) as BlueprintClarificationRouteDimension[];
+}
+
+function hasClarificationReadinessSignal(
+  question: BlueprintClarificationQuestion
+): question is BlueprintClarificationQuestion & {
+  readinessSignal: BlueprintClarificationReadinessSignalId;
+} {
+  return Boolean(question.readinessSignal);
+}
+
+function hasClarificationRouteDimension(
+  question: BlueprintClarificationQuestion
+): question is BlueprintClarificationQuestion & {
+  routeDimension: BlueprintClarificationRouteDimension;
+} {
+  return Boolean(question.routeDimension);
 }
 
 function createEmptyProjectContext(
@@ -8680,6 +13241,10 @@ function stableId(prefix: string, value: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 96);
   return `${prefix}-${slug || "unknown"}`;
+}
+
+function hashText(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 12);
 }
 
 function normalizeGithubUrls(...values: unknown[]): string[] {
@@ -8761,6 +13326,16 @@ function readString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : undefined;
+}
+
+function readBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "force"].includes(normalized)) return true;
+    if (["false", "0", "no"].includes(normalized)) return false;
+  }
+  return undefined;
 }
 
 function isString(value: unknown): value is string {
@@ -8864,11 +13439,34 @@ function isBlueprintGenerationStage(
     value === "route_generation" ||
     value === "spec_tree" ||
     value === "spec_docs" ||
+    value === "preview" ||
     value === "effect_preview" ||
     value === "prompt_packaging" ||
     value === "runtime_capability" ||
+    value === "engineering_handoff" ||
     value === "engineering_landing"
   );
+}
+
+function isGenerationEventFamily(
+  value: unknown
+): value is BlueprintGenerationEventFamily {
+  return (
+    value === "job" ||
+    value === "crew" ||
+    value === "role" ||
+    value === "capability" ||
+    value === "preview" ||
+    value === "prompt" ||
+    value === "mission" ||
+    value === "sandbox"
+  );
+}
+
+function isSandboxDerivationExecutionMode(
+  value: unknown
+): value is BlueprintSandboxDerivationExecutionMode {
+  return value === "sequential" || value === "parallel";
 }
 
 function isArtifactFeedbackKind(
@@ -9005,6 +13603,67 @@ function isRuntimeCapabilityPayload(
   );
 }
 
+function isRolePresenceState(
+  value: unknown
+): value is BlueprintRolePresenceState {
+  return (
+    value === "active" ||
+    value === "watching" ||
+    value === "reviewing" ||
+    value === "sleeping"
+  );
+}
+
+function isAgentCrewPayload(value: unknown): value is BlueprintAgentCrew {
+  return (
+    isPlainRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.jobId === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.updatedAt === "string" &&
+    isBlueprintGenerationStage(value.stage) &&
+    Array.isArray(value.roles) &&
+    Array.isArray(value.capabilityMatrix) &&
+    Array.isArray(value.activationPolicies) &&
+    Array.isArray(value.presence)
+  );
+}
+
+function isRoleTimelineCollectionPayload(
+  value: unknown
+): value is BlueprintRoleTimelineCollection {
+  return (
+    isPlainRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.jobId === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.updatedAt === "string" &&
+    Array.isArray(value.timelines)
+  );
+}
+
+function isSandboxDerivationJobPayload(
+  value: unknown
+): value is BlueprintSandboxDerivationJob {
+  return (
+    isPlainRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.jobId === "string" &&
+    isBlueprintGenerationStage(value.stage) &&
+    isSandboxDerivationExecutionMode(value.executionMode) &&
+    typeof value.status === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.startedAt === "string" &&
+    typeof value.completedAt === "string" &&
+    Array.isArray(value.capabilityIds) &&
+    Array.isArray(value.invocationIds) &&
+    Array.isArray(value.evidenceIds) &&
+    isPlainRecord(value.aggregate) &&
+    Array.isArray(value.logs) &&
+    isPlainRecord(value.provenance)
+  );
+}
+
 function isCapabilityInvocationPayload(
   value: unknown
 ): value is BlueprintCapabilityInvocation {
@@ -9013,6 +13672,7 @@ function isCapabilityInvocationPayload(
     typeof value.id === "string" &&
     typeof value.jobId === "string" &&
     typeof value.capabilityId === "string" &&
+    typeof value.roleId === "string" &&
     typeof value.capabilityLabel === "string" &&
     typeof value.kind === "string" &&
     typeof value.status === "string" &&

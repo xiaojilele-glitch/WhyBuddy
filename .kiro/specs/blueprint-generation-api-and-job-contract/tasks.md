@@ -24,3 +24,15 @@
   - [x] 5.1 Contract tests
   - [x] 5.2 Job and artifact tests
   - [x] 5.3 Compatibility tests
+
+- [x] 6. Extend the stage model
+  - [x] 6.1 Add clarification, route_generation, spec_tree, spec_docs, preview, prompt_packaging, and engineering_handoff stages.
+  - [x] 6.2 Model reviewing as an explicit handoff state with nextAction.
+  - [x] 6.3 Allow stage-specific payloads and result shapes.
+  - [x] 6.4 Add tests for stage transitions and reviewing semantics.
+
+- [x] 7. Extend the event contract
+  - [x] 7.1 Add crew.*, capability.*, preview.*, prompt.*, and mission.* event families.
+  - [x] 7.2 Carry jobId, routeId, selectionId, specTreeId, nodeId, and artifactId in event payloads.
+  - [x] 7.3 Support frontends subscribing by stage and event family.
+  - [x] 7.4 Add tests for event routing and replay visibility.

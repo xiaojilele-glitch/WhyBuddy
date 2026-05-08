@@ -58,3 +58,36 @@
 4.2 系统 SHALL 支持查看资产谱系图。  
 4.3 系统 SHALL 支持从任意产物反查到输入和澄清。  
 4.4 系统 SHALL 为下游菜单提供回放入口。
+## 新增改造：统一事件流回放
+
+### 需求 5：所有运行过程都要沉淀为时间线事件
+
+资产记忆 SHALL 把澄清、沙盒推导、路线、SPEC Tree、预演、HUD、日志和浏览器相关事件统一沉淀。
+
+#### 验收标准
+
+5.1 系统 SHALL 记录 clarification.*、sandbox.*、role.*、route.*、spec.*、scene.*、hud.*、browser.* 和 evidence.* 事件。
+5.2 系统 SHALL 按时间线保存这些事件，并允许按 jobId、projectId、nodeId 或版本查询。
+5.3 系统 SHALL 为每条事件保留来源、版本和证据指针。
+5.4 系统 SHALL 让任何结果都能回到上游输入与澄清过程。
+
+### 需求 6：回放必须能恢复可见状态
+
+Replay SHALL 不只回放文本，还要能恢复运行台里可见的状态关系。
+
+#### 验收标准
+
+6.1 系统 SHALL 支持回放 RouteSet、SpecTree、SpecDocument、EffectPreview 和 PromptPackage 的演化过程。
+6.2 系统 SHALL 支持回放 3D 场景、HUD 和浏览器预览的关键状态。
+6.3 系统 SHALL 保留用户确认、交接态和版本选择记录。
+6.4 系统 SHALL 支持用回放结果反哺下一轮澄清和推导。
+### 需求 7：沉淀团队层与能力层时间线
+
+**用户故事：** 作为项目成员，我希望既能回看“团队当时处于什么状态”，也能回看“具体能力当时做了什么”，这样复盘才完整。
+
+#### 验收标准
+
+7.1 系统 SHALL 记录 `crew.*`、`capability.*`、`preview.*`、`prompt.*` 和 `mission.*` 事件到时间线。
+7.2 系统 SHALL 允许按 crewId、roleId、capabilityId、jobId、projectId、nodeId 和 version 查询。
+7.3 系统 SHALL 支持恢复团队状态、角色状态、能力调用和产物证据。
+7.4 系统 SHALL 让回放结果能够反哺下一轮澄清、路线和 SPEC 推导。

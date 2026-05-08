@@ -24,3 +24,21 @@
   - [x] 5.1 Route generation tests
   - [x] 5.2 Capability pool structure tests
   - [x] 5.3 Route selection, merge, rollback, and persistence tests
+
+- [x] 6. Wire structured clarification into route generation
+  - [x] 6.1 Accept clarification strategy mode as route input.
+  - [x] 6.2 Carry readiness signals, source evidence, and question answers into RouteSet generation.
+  - [x] 6.3 Support target-first, repository-first, risk-first, document-first, preview-first, and fast-execution clarification modes.
+  - [x] 6.4 Add tests for strategy-driven route generation.
+
+- [x] 7. Package route generation as sandbox derivation jobs
+  - [x] 7.1 Dispatch Docker, MCP, Skills, role analyzers, and AIGC nodes through Runtime Capability Bridge.
+  - [x] 7.2 Aggregate sandbox outputs into route outline, primary route, alternative route, risk, cost, and complexity fields.
+  - [x] 7.3 Record job status, duration, evidence, artifacts, and output summaries.
+  - [x] 7.4 Add tests for sandbox derivation aggregation and evidence persistence.
+
+- [x] 8. Make SPEC Tree reviewing an explicit handoff state
+  - [x] 8.1 Represent reviewing as confirmable, editable, and resumable handoff state.
+  - [x] 8.2 Show next actions for confirm, fine-tune, reselect route, merge route, and enter downstream menus.
+  - [x] 8.3 Persist routeId, selectedPathId, specTreeId, provenance, and job artifact links.
+  - [x] 8.4 Add tests for reviewing state transitions and route-to-spec lineage.

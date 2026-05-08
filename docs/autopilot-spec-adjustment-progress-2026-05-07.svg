@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1840" height="1440" viewBox="0 0 1840 1440" role="img" aria-labelledby="title desc">
+  <title id="title">/autopilot 任务执行进度总览 v10</title>
+  <desc id="desc">展示本轮 /autopilot 八个 target spec 的 tasks.md 执行进度：249 个任务点已全部完成，master 下游菜单、工程落地、核心资产层与体验投影层已收口。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#eef3f8"/>
+    </linearGradient>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="56%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="doneFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#15803d"/>
+    </linearGradient>
+    <linearGradient id="crewFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="patchFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <linearGradient id="darkBand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .hero-title { font: 700 32px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #ffffff; }
+      .hero-sub { font: 500 15px "Segoe UI", "Microsoft YaHei", sans-serif; fill: rgba(255,255,255,0.86); }
+      .hero-k { font: 600 12px "Segoe UI", "Microsoft YaHei", sans-serif; fill: rgba(255,255,255,0.72); }
+      .hero-v { font: 700 27px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #ffffff; }
+      .card-title { font: 700 15px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #0f172a; }
+      .card-value { font: 700 22px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #0f172a; }
+      .card-meta { font: 500 12px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #64748b; }
+      .kicker { font: 600 12px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #64748b; letter-spacing: 1px; }
+      .label { font: 700 14px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #0f172a; }
+      .body { font: 500 13px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #334155; }
+      .small { font: 500 12px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #475569; }
+      .section-title { font: 700 18px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #0f172a; }
+      .section-meta { font: 500 12px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #64748b; }
+      .spec-title { font: 700 14px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #0f172a; }
+      .spec-slug { font: 500 10px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #64748b; }
+      .spec-task { font: 500 11px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #475569; }
+      .badge-done { font: 700 10px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #15803d; }
+      .badge-work { font: 700 10px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #1d4ed8; }
+      .badge-reopen { font: 700 10px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #a16207; }
+      .badge-idle { font: 700 10px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #475569; }
+      .alert-title { font: 700 16px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #1e3a8a; }
+      .alert-copy { font: 500 13px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #1d4ed8; }
+      .legend { font: 500 11px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #64748b; }
+      .foot { font: 500 12px "Segoe UI", "Microsoft YaHei", sans-serif; fill: #64748b; }
+      .card { rx: 18; filter: url(#shadow); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1840" height="1440" fill="url(#bg)"/>
+
+  <!-- Hero -->
+  <rect x="36" y="28" width="1768" height="210" rx="28" fill="url(#hero)" filter="url(#shadow)"/>
+  <text x="60" y="78" class="hero-title">/autopilot 任务执行进度总览</text>
+  <text x="60" y="108" class="hero-sub">口径说明：这张图统计的是 8 份 target spec 的 tasks.md 勾选进度，不是代码实现进度。</text>
+  <text x="60" y="138" class="hero-sub">当前 8 份 spec 一共 249 个任务点，已完成 249 个，剩余 0 个。</text>
+  <text x="60" y="168" class="hero-sub">0 份 spec 未启动，8 份 spec 已清零；下游菜单、工程落地、核心资产层与体验投影层已收口。</text>
+
+  <rect x="1230" y="48" width="154" height="66" rx="18" fill="rgba(255,255,255,0.11)" stroke="rgba(255,255,255,0.18)"/>
+  <text x="1248" y="73" class="hero-k">规格范围</text>
+  <text x="1248" y="103" class="hero-v">8 / 8</text>
+
+  <rect x="1402" y="48" width="164" height="66" rx="18" fill="rgba(56,189,248,0.18)" stroke="rgba(125,211,252,0.46)"/>
+  <text x="1420" y="73" class="hero-k">已完成</text>
+  <text x="1420" y="103" class="hero-v">249 / 249</text>
+
+  <rect x="1584" y="48" width="198" height="66" rx="18" fill="rgba(245,158,11,0.18)" stroke="rgba(253,186,116,0.50)"/>
+  <text x="1602" y="73" class="hero-k">剩余任务</text>
+  <text x="1602" y="103" class="hero-v">0</text>
+
+  <rect x="1230" y="144" width="552" height="10" rx="5" fill="rgba(255,255,255,0.18)"/>
+  <rect x="1230" y="144" width="552" height="10" rx="5" fill="url(#doneFill)"/>
+  <text x="1230" y="181" class="hero-sub">RouteSet 已由沙盒推导证据驱动；Agent Crew、Replay 和工程落地均已接入，完成率 100%。</text>
+
+  <!-- Summary cards -->
+  <rect x="36" y="262" width="424" height="112" rx="22" fill="#ffffff" stroke="#dbe5f1" filter="url(#shadow)"/>
+  <text x="58" y="296" class="card-title">Spec 组范围</text>
+  <text x="58" y="334" class="card-value">8 / 8</text>
+  <text x="58" y="358" class="card-meta">本轮只统计这 8 份 target spec</text>
+
+  <rect x="476" y="262" width="424" height="112" rx="22" fill="#eff6ff" stroke="#bfdbfe" filter="url(#shadow)"/>
+  <text x="498" y="296" class="card-title">任务完成</text>
+  <text x="498" y="334" class="card-value">249 / 249</text>
+  <text x="498" y="358" class="card-meta">已完成 100%</text>
+
+  <rect x="916" y="262" width="424" height="112" rx="22" fill="#fff7ed" stroke="#fed7aa" filter="url(#shadow)"/>
+  <text x="938" y="296" class="card-title">剩余任务</text>
+  <text x="938" y="334" class="card-value">0</text>
+  <text x="938" y="358" class="card-meta">8 份 target spec 全部清零</text>
+
+  <rect x="1356" y="262" width="448" height="112" rx="22" fill="#f8fafc" stroke="#cbd5e1" filter="url(#shadow)"/>
+  <text x="1378" y="296" class="card-title">执行状态</text>
+  <text x="1378" y="334" class="card-value">已完成</text>
+  <text x="1378" y="358" class="card-meta">master 5.x 与 8.x 已同步收口</text>
+
+  <!-- Current status -->
+  <rect x="36" y="432" width="1768" height="122" rx="22" fill="#eff6ff" stroke="#bfdbfe" filter="url(#shadow)"/>
+  <rect x="58" y="456" width="132" height="22" rx="11" fill="#dbeafe"/>
+  <text x="76" y="471" class="badge-work">249/249 done</text>
+  <text x="208" y="472" class="alert-title">进度口径已修正：现在看的是 tasks.md 执行进度，不再把文档同步当成完成度</text>
+  <text x="58" y="506" class="alert-copy">已完成 249 个，剩余 0 个；8 份 target spec 已全部清零。</text>
+  <text x="58" y="534" class="alert-copy">route reviewing 已显式化为 confirm/edit/resume handoff，并写入 route/spec lineage。</text>
+  <text x="950" y="506" class="alert-copy">Agent Crew 前序发现可被后续推导复用，Replay 已保留资产演进和人工决策。</text>
+  <text x="950" y="534" class="alert-copy">master 下游菜单、工程落地、核心资产层与体验投影层均已对齐完成。</text>
+
+  <!-- Spec responsibility -->
+  <text x="44" y="596" class="section-title">spec 任务分布</text>
+  <text x="352" y="596" class="section-meta">八份 spec 均已启动并清零；master 下游菜单、工程落地、核心资产层与体验投影层已完成</text>
+
+  <rect x="36" y="614" width="424" height="116" rx="18" fill="#ecfdf5" stroke="#22c55e" filter="url(#shadow)"/>
+  <rect x="52" y="628" width="60" height="18" rx="9" fill="#e8fbf2"/>
+  <text x="64" y="641" class="badge-work">已完成</text>
+  <text x="444" y="644" text-anchor="end" class="card-value" style="font-size:17px;">30/30</text>
+  <text x="52" y="674" class="spec-title">#1 主规范</text>
+  <text x="52" y="694" class="spec-slug">project-autopilot-blueprint-master</text>
+  <text x="52" y="714" class="spec-task">下游菜单、工程落地、资产层和体验投影已全部收口</text>
+  <rect x="52" y="720" width="392" height="6" rx="3" fill="#e5ebf3"/>
+  <rect x="52" y="720" width="392" height="6" rx="3" fill="url(#doneFill)"/>
+
+  <rect x="476" y="614" width="424" height="116" rx="18" fill="#ecfdf5" stroke="#22c55e" filter="url(#shadow)"/>
+  <rect x="492" y="628" width="60" height="18" rx="9" fill="#e8fbf2"/>
+  <text x="504" y="641" class="badge-work">已完成</text>
+  <text x="884" y="644" text-anchor="end" class="card-value" style="font-size:17px;">30/30</text>
+  <text x="492" y="674" class="spec-title">#2 澄清工作流</text>
+  <text x="492" y="694" class="spec-slug">blueprint-clarification-workflow</text>
+  <text x="492" y="714" class="spec-task">策略模板、答案 provenance、路线摘要和复开复用已收口</text>
+  <rect x="492" y="720" width="392" height="6" rx="3" fill="#e5ebf3"/>
+  <rect x="492" y="720" width="392" height="6" rx="3" fill="url(#crewFill)"/>
+
+  <rect x="916" y="614" width="424" height="116" rx="18" fill="#ecfdf5" stroke="#22c55e" filter="url(#shadow)"/>
+  <rect x="932" y="628" width="60" height="18" rx="9" fill="#e8fbf2"/>
+  <text x="944" y="641" class="badge-work">已完成</text>
+  <text x="1324" y="644" text-anchor="end" class="card-value" style="font-size:17px;">35/35</text>
+  <text x="932" y="674" class="spec-title">#3 路线编排</text>
+  <text x="932" y="694" class="spec-slug">blueprint-autopilot-route-orchestrator</text>
+  <text x="932" y="714" class="spec-task">reviewing handoff、next actions 和 route-to-spec lineage 已收口</text>
+  <rect x="932" y="720" width="392" height="6" rx="3" fill="#e5ebf3"/>
+  <rect x="932" y="720" width="392" height="6" rx="3" fill="url(#doneFill)"/>
+
+  <rect x="1356" y="614" width="448" height="116" rx="18" fill="#ecfdf5" stroke="#22c55e" filter="url(#shadow)"/>
+  <rect x="1372" y="628" width="60" height="18" rx="9" fill="#e8fbf2"/>
+  <text x="1384" y="641" class="badge-work">已完成</text>
+  <text x="1788" y="644" text-anchor="end" class="card-value" style="font-size:17px;">30/30</text>
+  <text x="1372" y="674" class="spec-title">#4 角色层</text>
+  <text x="1372" y="694" class="spec-slug">blueprint-agent-crew-fabric</text>
+  <text x="1372" y="714" class="spec-task">RoleTimeline 持久化、回放和前序发现复用已收口</text>
+  <rect x="1372" y="720" width="416" height="6" rx="3" fill="#e5ebf3"/>
+  <rect x="1372" y="720" width="416" height="6" rx="3" fill="url(#crewFill)"/>
+
+  <rect x="36" y="748" width="424" height="116" rx="18" fill="#ecfdf5" stroke="#22c55e" filter="url(#shadow)"/>
+  <rect x="52" y="762" width="60" height="18" rx="9" fill="#e8fbf2"/>
+  <text x="64" y="775" class="badge-work">已完成</text>
+  <text x="444" y="778" text-anchor="end" class="card-value" style="font-size:17px;">34/34</text>
+  <text x="52" y="808" class="spec-title">#5 运行桥接</text>
+  <text x="52" y="828" class="spec-slug">blueprint-runtime-capability-bridge</text>
+  <text x="52" y="848" class="spec-task">事件订阅、失败链路、RoleTimeline/CrewTimeline 回放已收口</text>
+  <rect x="52" y="854" width="392" height="6" rx="3" fill="#e5ebf3"/>
+  <rect x="52" y="854" width="392" height="6" rx="3" fill="url(#patchFill)"/>
+
+  <rect x="476" y="748" width="424" height="116" rx="18" fill="#ecfdf5" stroke="#22c55e" filter="url(#shadow)"/>
+  <rect x="492" y="762" width="60" height="18" rx="9" fill="#e8fbf2"/>
+  <text x="504" y="775" class="badge-work">已完成</text>
+  <text x="884" y="778" text-anchor="end" class="card-value" style="font-size:17px;">30/30</text>
+  <text x="492" y="808" class="spec-title">#6 API 契约</text>
+  <text x="492" y="828" class="spec-slug">blueprint-generation-api-and-job-contract</text>
+  <text x="492" y="848" class="spec-task">stageState / nextAction / event family 查询与回放可见性已收口</text>
+  <rect x="492" y="854" width="392" height="6" rx="3" fill="#e5ebf3"/>
+  <rect x="492" y="854" width="392" height="6" rx="3" fill="url(#crewFill)"/>
+
+  <rect x="916" y="748" width="424" height="116" rx="18" fill="#ecfdf5" stroke="#22c55e" filter="url(#shadow)"/>
+  <rect x="932" y="762" width="60" height="18" rx="9" fill="#e8fbf2"/>
+  <text x="944" y="775" class="badge-work">已完成</text>
+  <text x="1324" y="778" text-anchor="end" class="card-value" style="font-size:17px;">30/30</text>
+  <text x="932" y="808" class="spec-title">#7 效果预演</text>
+  <text x="932" y="828" class="spec-slug">blueprint-effect-preview-generator</text>
+  <text x="932" y="848" class="spec-task">预演投影、版本链、节点进度和依赖顺序已收口</text>
+  <rect x="932" y="854" width="392" height="6" rx="3" fill="#e5ebf3"/>
+  <rect x="932" y="854" width="392" height="6" rx="3" fill="url(#patchFill)"/>
+
+  <rect x="1356" y="748" width="448" height="116" rx="18" fill="#ecfdf5" stroke="#22c55e" filter="url(#shadow)"/>
+  <rect x="1372" y="762" width="60" height="18" rx="9" fill="#e8fbf2"/>
+  <text x="1384" y="775" class="badge-work">已完成</text>
+  <text x="1764" y="778" text-anchor="end" class="card-value" style="font-size:17px;">30/30</text>
+  <text x="1372" y="808" class="spec-title">#8 资产回放</text>
+  <text x="1372" y="828" class="spec-slug">blueprint-artifact-memory-and-replay</text>
+  <text x="1372" y="848" class="spec-task">资产演进、人工确认、handoff 决策和 team state 回放已收口</text>
+  <rect x="1372" y="854" width="416" height="6" rx="3" fill="#e5ebf3"/>
+  <rect x="1372" y="854" width="416" height="6" rx="3" fill="url(#crewFill)"/>
+
+  <!-- Footer -->
+  <g transform="translate(36 1180)">
+    <rect class="card" width="1768" height="166" rx="28" fill="url(#darkBand)" stroke="#1e293b" stroke-width="2"/>
+    <text class="kicker" x="28" y="38" fill="#94a3b8">当前进度解读</text>
+    <text class="section-title" x="28" y="70" fill="#e2e8f0">现在看的是 tasks.md 执行口径，不再把文档同步当成完成度。</text>
+    <text class="body" x="28" y="106" fill="#cbd5e1">0 份 spec 未启动，8 份 spec 已清零；reviewing、Agent Crew 复用、Replay 决策和工程落地均已收口。</text>
+    <text class="small" x="28" y="132" fill="#94a3b8">剩余 0 个 checkbox；master downstream 与 asset/projection 两组任务已完成。</text>
+
+    <g transform="translate(1234 28)">
+      <rect width="500" height="106" rx="18" fill="#0f172a" stroke="#334155"/>
+      <text class="label" x="20" y="30" fill="#f8fafc">剩余任务结构</text>
+      <text class="small" x="20" y="56" fill="#cbd5e1">master downstream：0</text>
+      <text class="small" x="20" y="76" fill="#cbd5e1">master asset/projection：0</text>
+      <text class="small" x="20" y="96" fill="#cbd5e1">其他 target spec：0</text>
+      <text class="small" x="336" y="96" fill="#f8fafc">合计：0</text>
+    </g>
+  </g>
+</svg>

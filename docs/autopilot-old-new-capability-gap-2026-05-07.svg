@@ -1,0 +1,255 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1240" viewBox="0 0 1800 1240" role="img" aria-labelledby="title desc">
+  <title id="title">/autopilot 新旧能力差异架构图</title>
+  <desc id="desc">对比旧版 Home mode=autopilot 执行驾驶舱与新版 AutopilotRoutePage 蓝图推导页面的能力差异，并给出合流目标架构。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f7fbfc"/>
+      <stop offset="48%" stop-color="#eef7f4"/>
+      <stop offset="100%" stop-color="#f5f7fb"/>
+    </linearGradient>
+    <linearGradient id="oldGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#eef2ff"/>
+      <stop offset="100%" stop-color="#e0f2fe"/>
+    </linearGradient>
+    <linearGradient id="newGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ecfdf5"/>
+      <stop offset="100%" stop-color="#ccfbf1"/>
+    </linearGradient>
+    <linearGradient id="gapGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fff7ed"/>
+      <stop offset="100%" stop-color="#fffbeb"/>
+    </linearGradient>
+    <filter id="shadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrowTeal" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#0f766e"/>
+    </marker>
+    <marker id="arrowSlate" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#475569"/>
+    </marker>
+    <style>
+      .title { font: 900 34px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 700 16px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #475569; }
+      .section-title { font: 900 22px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #0f172a; }
+      .section-kicker { font: 900 12px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #64748b; letter-spacing: 1px; }
+      .body { font: 700 14px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #334155; }
+      .body-small { font: 700 12px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #475569; }
+      .label { font: 900 13px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #0f172a; }
+      .mono { font: 800 12px Consolas, "Microsoft YaHei", monospace; fill: #0f172a; }
+      .pill { font: 900 11px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; }
+      .card { rx: 20; filter: url(#shadow); }
+      .mini { rx: 14; }
+      .line { stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .dash { stroke-dasharray: 8 8; }
+    </style>
+  </defs>
+
+  <rect width="1800" height="1240" fill="url(#bg)"/>
+
+  <g transform="translate(64 46)">
+    <text class="title" x="0" y="0">/autopilot 新旧能力差异架构图</text>
+    <text class="subtitle" x="0" y="34">旧版偏任务执行驾驶舱，新版偏 RouteSet / SPEC 资产工厂；下一步要做的是把二者合流成“先推演未来，再接入执行”的闭环。</text>
+    <text class="mono" x="0" y="66">生成日期：2026-05-07 ｜ 对比基线：HEAD~1 的 /autopilot = Home mode="autopilot"，当前版 = AutopilotRoutePage</text>
+  </g>
+
+  <!-- Column shells -->
+  <g transform="translate(60 150)">
+    <rect class="card" width="510" height="710" rx="28" fill="url(#oldGrad)" stroke="#93c5fd" stroke-width="2"/>
+    <text class="section-kicker" x="28" y="40">旧版能力</text>
+    <text class="section-title" x="28" y="70">执行态 Autopilot Cockpit</text>
+    <text class="body-small" x="28" y="98">入口：/autopilot -> Home mode="autopilot"</text>
+
+    <g transform="translate(28 128)">
+      <rect class="mini" width="454" height="76" fill="#ffffff" stroke="#bfdbfe"/>
+      <text class="label" x="18" y="26">1. 项目工作台与 3D 办公室</text>
+      <text class="body-small" x="18" y="49">项目选择 / 项目卡片 / Scene3D / OfficeNoticeBoard</text>
+      <text class="body-small" x="18" y="66">强调“项目空间里的自动驾驶状态”。</text>
+    </g>
+
+    <g transform="translate(28 220)">
+      <rect class="mini" width="454" height="88" fill="#ffffff" stroke="#bfdbfe"/>
+      <text class="label" x="18" y="26">2. 任务发起与 Mission Runtime</text>
+      <text class="body-small" x="18" y="49">UnifiedLaunchComposer -> createMission -> tasks-store</text>
+      <text class="body-small" x="18" y="66">能直接把用户输入推进到任务 / Mission 执行。</text>
+    </g>
+
+    <g transform="translate(28 324)">
+      <rect class="mini" width="454" height="124" fill="#ffffff" stroke="#bfdbfe"/>
+      <text class="label" x="18" y="26">3. 任务驾驶舱读模型</text>
+      <text class="body-small" x="18" y="50">TaskAutopilotPanel 消费 autopilotSummary：</text>
+      <text class="body-small" x="18" y="70">Destination / Route / Live Execution / Drive State</text>
+      <text class="body-small" x="18" y="90">Fleet / Blockers / Recovery / Outputs / Evidence</text>
+      <text class="body-small" x="18" y="110">Explanation / Takeover / Decision handoff</text>
+    </g>
+
+    <g transform="translate(28 464)">
+      <rect class="mini" width="454" height="98" fill="#ffffff" stroke="#bfdbfe"/>
+      <text class="label" x="18" y="26">4. 实时执行与接管能力</text>
+      <text class="body-small" x="18" y="50">workflow-store / telemetry / mission projection</text>
+      <text class="body-small" x="18" y="70">展示风险、等待用户、恢复、证据时间线。</text>
+    </g>
+
+    <g transform="translate(28 584)">
+      <rect class="mini" width="454" height="84" fill="#dbeafe" stroke="#60a5fa"/>
+      <text class="label" x="18" y="26">旧版强项</text>
+      <text class="body-small" x="18" y="50">执行现场感强：能看任务、看 Agent、看接管、看运行证据。</text>
+      <text class="body-small" x="18" y="68">但缺少“先推导 SPEC 资产树”的前置规划闭环。</text>
+    </g>
+  </g>
+
+  <g transform="translate(645 150)">
+    <rect class="card" width="510" height="710" rx="28" fill="url(#gapGrad)" stroke="#f59e0b" stroke-width="2"/>
+    <text class="section-kicker" x="28" y="40">能力差异</text>
+    <text class="section-title" x="28" y="70">不是替换，是焦点迁移</text>
+    <text class="body-small" x="28" y="98">旧版“执行中看车况”，新版“执行前推演路线与资产”。</text>
+
+    <g transform="translate(28 128)">
+      <rect class="mini" width="454" height="104" fill="#ffffff" stroke="#fed7aa"/>
+      <text class="label" x="18" y="26">新版已经补齐</text>
+      <text class="body-small" x="18" y="50">独立 /autopilot 页面、中文 RouteSet 预检、GitHub 输入。</text>
+      <text class="body-small" x="18" y="70">澄清问题、主/次路径选择、SPEC 树草稿、交接到 /specs。</text>
+      <text class="body-small" x="18" y="90">后端有 blueprint job / artifacts / events / docs / preview / prompts API。</text>
+    </g>
+
+    <g transform="translate(28 250)">
+      <rect class="mini" width="454" height="136" fill="#fff7ed" stroke="#fb923c"/>
+      <text class="label" x="18" y="26">当前看起来“变弱”的地方</text>
+      <text class="body-small" x="18" y="50">1. 新页不再直接创建 Mission，也没有接任务执行驾驶舱。</text>
+      <text class="body-small" x="18" y="70">2. 旧版的 Fleet / Takeover / Recovery / Evidence 未迁到新页。</text>
+      <text class="body-small" x="18" y="90">3. RouteSet 还偏“规划产物”，没有自动落到 task runtime。</text>
+      <text class="body-small" x="18" y="110">4. Docker / MCP / Skills / AIGC 节点更多是能力桥雏形，</text>
+      <text class="body-small" x="36" y="128">还没形成可观察的执行编队。</text>
+    </g>
+
+    <g transform="translate(28 404)">
+      <rect class="mini" width="454" height="116" fill="#fffbeb" stroke="#fbbf24"/>
+      <text class="label" x="18" y="26">当前真正的断点</text>
+      <text class="body-small" x="18" y="50">SPEC 树“评审中”不是后台卡住，而是阶段边界：</text>
+      <text class="body-small" x="18" y="70">RouteSet 选择完成 -> SPEC 树草稿生成 -> 等待推导确认。</text>
+      <text class="body-small" x="18" y="90">需要一个“确认后自动生成规格文档/预演/提示词”的推进按钮。</text>
+    </g>
+
+    <g transform="translate(28 546)">
+      <rect class="mini" width="454" height="122" fill="#ffffff" stroke="#fed7aa"/>
+      <text class="label" x="18" y="26">下一步建议</text>
+      <text class="body-small" x="18" y="50">把老版执行驾驶舱作为“工程落地后的运行态视图”接回来。</text>
+      <text class="body-small" x="18" y="70">新版继续负责：输入 -> 澄清 -> RouteSet -> SPEC 树。</text>
+      <text class="body-small" x="18" y="90">旧版能力继续负责：任务执行 -> Agent 编队 -> 接管 -> 证据。</text>
+      <text class="body-small" x="18" y="110">两边通过工程落地计划和 artifact memory 串起来。</text>
+    </g>
+  </g>
+
+  <g transform="translate(1230 150)">
+    <rect class="card" width="510" height="710" rx="28" fill="url(#newGrad)" stroke="#5eead4" stroke-width="2"/>
+    <text class="section-kicker" x="28" y="40">当前新版能力</text>
+    <text class="section-title" x="28" y="70">Blueprint Route / SPEC Factory</text>
+    <text class="body-small" x="28" y="98">入口：/autopilot -> AutopilotRoutePage</text>
+
+    <g transform="translate(28 128)">
+      <rect class="mini" width="454" height="84" fill="#ffffff" stroke="#99f6e4"/>
+      <text class="label" x="18" y="26">1. 输入预检</text>
+      <text class="body-small" x="18" y="49">执行目标 + GitHub 地址解析 + 重复链接检测。</text>
+      <text class="body-small" x="18" y="67">项目上下文资产与证据挂接。</text>
+    </g>
+
+    <g transform="translate(28 228)">
+      <rect class="mini" width="454" height="94" fill="#ffffff" stroke="#99f6e4"/>
+      <text class="label" x="18" y="26">2. 澄清会话</text>
+      <text class="body-small" x="18" y="50">createBlueprintIntake / ClarificationSession / Answers</text>
+      <text class="body-small" x="18" y="70">把目标、用户、约束、GitHub 角色变成可追踪输入。</text>
+    </g>
+
+    <g transform="translate(28 338)">
+      <rect class="mini" width="454" height="96" fill="#ffffff" stroke="#99f6e4"/>
+      <text class="label" x="18" y="26">3. RouteSet 生成</text>
+      <text class="body-small" x="18" y="50">createBlueprintGenerationJob -> route_generation</text>
+      <text class="body-small" x="18" y="70">输出主执行路径与次选执行路径。</text>
+    </g>
+
+    <g transform="translate(28 450)">
+      <rect class="mini" width="454" height="106" fill="#ffffff" stroke="#99f6e4"/>
+      <text class="label" x="18" y="26">4. 路线选择 -> SPEC 树草稿</text>
+      <text class="body-small" x="18" y="50">selectBlueprintRoute -> route_selection -> spec_tree</text>
+      <text class="body-small" x="18" y="70">SPEC tree draft 持久化到 blueprint job artifacts。</text>
+      <text class="body-small" x="18" y="90">页面显示“阶段交接”，跳转到 /specs 推导工作台。</text>
+    </g>
+
+    <g transform="translate(28 584)">
+      <rect class="mini" width="454" height="84" fill="#ccfbf1" stroke="#14b8a6"/>
+      <text class="label" x="18" y="26">新版强项</text>
+      <text class="body-small" x="18" y="50">执行前先沉淀资产：SPEC 树、规格文档、效果预演、提示词。</text>
+      <text class="body-small" x="18" y="68">但还没有把结果接回“运行态自动驾驶”。</text>
+    </g>
+  </g>
+
+  <!-- Cross-column arrows -->
+  <path class="line dash" d="M570 505 C610 505 610 505 645 505" stroke="#475569" marker-end="url(#arrowSlate)"/>
+  <path class="line dash" d="M1155 505 C1195 505 1195 505 1230 505" stroke="#0f766e" marker-end="url(#arrowTeal)"/>
+  <text class="body-small" x="590" y="488">能力分叉</text>
+  <text class="body-small" x="1168" y="488">新链路</text>
+
+  <!-- Bottom target architecture -->
+  <g transform="translate(60 910)">
+    <rect class="card" width="1680" height="260" rx="30" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+    <text class="section-kicker" x="28" y="40">目标合流架构</text>
+    <text class="section-title" x="28" y="70">从“推演未来”到“执行落地”的完整 Autopilot</text>
+    <text class="body-small" x="28" y="98">新版蓝图链路作为前置大脑，旧版任务驾驶舱作为运行仪表盘；两者通过 Engineering Landing 和 Artifact Memory 连接。</text>
+
+    <g transform="translate(34 132)">
+      <rect class="mini" width="168" height="64" fill="#ecfeff" stroke="#67e8f9"/>
+      <text class="label" x="16" y="26">输入 / GitHub</text>
+      <text class="body-small" x="16" y="48">目标与源码</text>
+    </g>
+    <path class="line" d="M210 164 L252 164" stroke="#0f766e" marker-end="url(#arrowTeal)"/>
+
+    <g transform="translate(260 132)">
+      <rect class="mini" width="168" height="64" fill="#f0fdfa" stroke="#5eead4"/>
+      <text class="label" x="16" y="26">澄清 / RouteSet</text>
+      <text class="body-small" x="16" y="48">主路与备选路</text>
+    </g>
+    <path class="line" d="M436 164 L478 164" stroke="#0f766e" marker-end="url(#arrowTeal)"/>
+
+    <g transform="translate(486 132)">
+      <rect class="mini" width="168" height="64" fill="#ecfdf5" stroke="#34d399"/>
+      <text class="label" x="16" y="26">SPEC 树</text>
+      <text class="body-small" x="16" y="48">长期资产</text>
+    </g>
+    <path class="line" d="M662 164 L704 164" stroke="#0f766e" marker-end="url(#arrowTeal)"/>
+
+    <g transform="translate(712 132)">
+      <rect class="mini" width="168" height="64" fill="#fefce8" stroke="#facc15"/>
+      <text class="label" x="16" y="26">规格文档</text>
+      <text class="body-small" x="16" y="48">需求 / 设计 / 任务</text>
+    </g>
+    <path class="line" d="M888 164 L930 164" stroke="#0f766e" marker-end="url(#arrowTeal)"/>
+
+    <g transform="translate(938 132)">
+      <rect class="mini" width="168" height="64" fill="#fff7ed" stroke="#fb923c"/>
+      <text class="label" x="16" y="26">效果预演</text>
+      <text class="body-small" x="16" y="48">架构 / 原型 / 进度</text>
+    </g>
+    <path class="line" d="M1114 164 L1156 164" stroke="#0f766e" marker-end="url(#arrowTeal)"/>
+
+    <g transform="translate(1164 132)">
+      <rect class="mini" width="168" height="64" fill="#f5f3ff" stroke="#a78bfa"/>
+      <text class="label" x="16" y="26">实现提示词</text>
+      <text class="body-small" x="16" y="48">Cursor / Kiro / Codex</text>
+    </g>
+    <path class="line" d="M1340 164 L1382 164" stroke="#0f766e" marker-end="url(#arrowTeal)"/>
+
+    <g transform="translate(1390 132)">
+      <rect class="mini" width="218" height="64" fill="#eef2ff" stroke="#818cf8"/>
+      <text class="label" x="16" y="26">工程落地 / Mission</text>
+      <text class="body-small" x="16" y="48">接回旧版执行驾驶舱</text>
+    </g>
+
+    <path class="line dash" d="M1498 196 C1498 226 910 226 910 202" stroke="#475569" marker-end="url(#arrowSlate)"/>
+    <text class="body-small" x="1032" y="246">执行证据回流 Artifact Memory，反哺下一版 SPEC 树</text>
+  </g>
+
+  <!-- Footer notes -->
+  <g transform="translate(72 1198)">
+    <text class="body-small" x="0" y="0">结论：新版 /autopilot 不是老版 cockpit 的等价替换，而是新增“执行前路线推导与 SPEC 资产沉淀层”。短板是还没把老版实时执行、接管、恢复和证据面板接回新链路。</text>
+  </g>
+</svg>

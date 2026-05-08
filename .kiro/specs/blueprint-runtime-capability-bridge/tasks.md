@@ -24,3 +24,20 @@
   - [x] 5.1 Cover capability registry reads.
   - [x] 5.2 Cover runtime invocation scheduling and deterministic evidence output.
   - [x] 5.3 Cover safety gate blocking and artifact evidence persistence.
+
+- [x] 6. Package sandbox derivation jobs
+  - [x] 6.1 Bundle one or more capability invocations into a single SandboxDerivationJob.
+  - [x] 6.2 Carry roleId, crewId, stage, projectId, routeId, and nodeId through the job contract.
+  - [x] 6.3 Support sequential and parallel capability execution inside the same job.
+  - [x] 6.4 Aggregate outputs into route outline, main/alternate paths, and evaluation data.
+
+- [x] 7. Emit runtime events and bind role/crew timelines
+  - [x] 7.1 Emit capability.invoked, capability.completed, capability.failed, sandbox.job.started, sandbox.job.completed, and sandbox.job.failed events.
+  - [x] 7.2 Publish structured events for role and crew context changes.
+  - [x] 7.3 Write execution summaries back to RoleTimeline and CrewTimeline.
+  - [x] 7.4 Allow frontends and replay surfaces to subscribe by jobId, routeId, or nodeId.
+
+- [x] 8. Extend tests for the new bridge contract
+  - [x] 8.1 Cover SandboxDerivationJob packaging and aggregation.
+  - [x] 8.2 Cover runtime event emission and subscription filtering.
+  - [x] 8.3 Cover role/crew timeline backfill and replay visibility.

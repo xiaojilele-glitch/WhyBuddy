@@ -24,3 +24,15 @@
   - [x] 5.1 Cover preview generation
   - [x] 5.2 Cover artifact binding and filtering
   - [x] 5.3 Cover workbench rendering
+
+- [x] 6. Bind preview results to runtime projections
+  - [x] 6.1 Persist sceneSnapshotId, hudState, logTimeline, and browserPreviewId.
+  - [x] 6.2 Bind preview results to SpecNode, RouteSet, or Job identifiers.
+  - [x] 6.3 Expose preview state for 3D, HUD, logs, and browser surfaces.
+  - [x] 6.4 Add tests for projection binding.
+
+- [x] 7. Sync preview versions with SPEC and progress changes
+  - [x] 7.1 Refresh preview versions when SpecTree or stage progress changes.
+  - [x] 7.2 Preserve older accepted and rejected preview versions.
+  - [x] 7.3 Surface node completion and dependency order in preview outputs.
+  - [x] 7.4 Add tests for version refresh and node-state sync.

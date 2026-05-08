@@ -58,3 +58,26 @@
 4.2 系统 SHALL 支持接受、重新生成或废弃预演版本。  
 4.3 系统 SHALL 保留预演和来源文档的版本关系。  
 4.4 系统 SHALL 允许后续模块只消费已接受的预演版本。
+## 新增改造：运行台联动预演
+
+### 需求 5：预演结果必须绑定 3D、HUD、日志和浏览器
+
+效果预演 SHALL 不只是静态图片或文本，而是对运行台状态的联动预演。
+
+#### 验收标准
+
+5.1 系统 SHALL 支持把预演结果绑定到 3D 场景、HUD、日志和浏览器预览。
+5.2 系统 SHALL 为每个预演结果记录 sceneSnapshotId、hudState、logTimeline 和 browserPreviewId。
+5.3 系统 SHALL 允许按 SpecNode、RouteSet 或 Job 回看预演状态。
+5.4 系统 SHALL 让用户在未开发前看到“未来会发生什么”。
+
+### 需求 6：预演必须跟 SPEC Tree 和阶段进度联动
+
+效果预演 SHALL 跟 SPEC Tree 的节点状态、阶段进度和风险变化同步，而不是固定截图。
+
+#### 验收标准
+
+6.1 系统 SHALL 为关键 SPEC 节点生成 FutureState 摘要。
+6.2 系统 SHALL 展示节点完成后的可见变化、依赖顺序和影响范围。
+6.3 系统 SHALL 输出可用于实现提示词的预演摘要。
+6.4 系统 SHALL 随 RouteSet 或 SPEC Tree 变更而更新预演版本。

@@ -24,3 +24,15 @@
   - [x] 5.1 Cover artifact persistence
   - [x] 5.2 Cover replay behavior
   - [x] 5.3 Cover feedback backfill
+
+- [x] 6. Ingest runtime event timelines
+  - [x] 6.1 Persist clarification, sandbox, role, crew, capability, route, spec, preview, prompt, mission, and evidence events.
+  - [x] 6.2 Index events by jobId, projectId, nodeId, version, crewId, roleId, and capabilityId.
+  - [x] 6.3 Keep event provenance and evidence pointers alongside artifacts.
+  - [x] 6.4 Add tests for event ingestion and querying.
+
+- [x] 7. Extend replay to runtime and team state
+  - [x] 7.1 Replay RouteSet, SpecTree, SpecDocument, EffectPreview, and PromptPackage evolution.
+  - [x] 7.2 Restore 3D scene, HUD, browser, crew, role, and capability states in replay.
+  - [x] 7.3 Preserve user confirmations and handoff decisions.
+  - [x] 7.4 Add tests for runtime-state replay and team-state recovery.

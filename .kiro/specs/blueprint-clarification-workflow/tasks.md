@@ -24,3 +24,15 @@
   - [x] 5.1 Question generation tests
   - [x] 5.2 Multi-round answer tests
   - [x] 5.3 Readiness gate tests
+
+- [x] 6. Add strategy-based clarification
+  - [x] 6.1 Implement a clarification strategy selector.
+  - [x] 6.2 Support target-first, repository-first, risk-first, document-first, preview-first, and fast-execution templates.
+  - [x] 6.3 Bind questions to route dimensions and readiness signals.
+  - [x] 6.4 Avoid regenerating questions that are already settled by the chosen strategy.
+
+- [x] 7. Persist reusable clarification assets
+  - [x] 7.1 Store strategy id, template id, and answer provenance.
+  - [x] 7.2 Produce a route-ready clarification summary for Route Orchestrator.
+  - [x] 7.3 Allow reopening the same session with template context intact.
+  - [x] 7.4 Add tests for strategy selection and asset reuse.

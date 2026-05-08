@@ -12,8 +12,14 @@ import type {
   BlueprintCapabilityRegistryResponse,
   BlueprintCapabilitySafetyGate,
   BlueprintCapabilitySafetyGateStatus,
+  BlueprintAgentCrew,
+  BlueprintAgentRole,
+  BlueprintCapabilityBinding,
   BlueprintClarificationAnswer,
+  BlueprintClarificationReadinessSignalId,
+  BlueprintClarificationRouteDimension,
   BlueprintClarificationSession,
+  BlueprintClarificationStrategyId,
   BlueprintEffectPreview,
   BlueprintEffectPreviewMilestone,
   BlueprintEffectPreviewsResponse,
@@ -53,6 +59,8 @@ import type {
   BlueprintRuntimeCapabilityKind,
   BlueprintRuntimeCapabilitySecurityLevel,
   BlueprintRuntimeCapabilityStatus,
+  BlueprintRolePresenceState,
+  BlueprintRoleTimelineEntry,
 } from "@shared/blueprint/contracts";
 
 export type {
@@ -62,6 +70,74 @@ export type {
   BlueprintSpecTreeActionResponse,
   BlueprintRuntimeCapability,
 } from "@shared/blueprint/contracts";
+
+export type BlueprintEffectPreviewRuntimeProjection =
+  BlueprintEffectPreview["runtimeProjection"];
+export type BlueprintEffectPreviewHudState =
+  BlueprintEffectPreviewRuntimeProjection["hudState"];
+export type BlueprintEffectPreviewLogEntry =
+  BlueprintEffectPreviewRuntimeProjection["logTimeline"][number];
+export type BlueprintEffectPreviewBrowserPreview =
+  BlueprintEffectPreviewRuntimeProjection["browserPreview"];
+
+export interface BlueprintEffectPreviewRuntimeProjectionContext {
+  previewId?: string;
+  jobId?: string;
+  projectId?: string;
+  routeSetId?: string;
+  routeId?: string;
+  treeId?: string;
+  nodeId?: string;
+  title?: string;
+  summary?: string;
+  status?: BlueprintEffectPreview["status"];
+}
+
+export interface BlueprintEffectPreviewNodeProgressSnapshot {
+  nodeId?: string;
+  status?: string;
+  completion?: number;
+  completionPercent?: number;
+  dependencyIds?: string[];
+  outputIds?: string[];
+  updatedFromTreeVersion?: BlueprintEffectPreviewVersionValue;
+}
+
+export type BlueprintEffectPreviewVersionValue = number | string;
+
+type BlueprintEffectPreviewVersionSnapshotFields =
+  | "version"
+  | "versionStatus"
+  | "supersedesPreviewId"
+  | "previousPreviewIds"
+  | "preservedPreviewIds"
+  | "refreshedFromSpecTreeVersion"
+  | "refreshedAt"
+  | "sourceSnapshotHash"
+  | "nodeProgress"
+  | "dependencyOrder"
+  | "versionSync";
+
+export type BlueprintEffectPreviewSnapshot = Omit<
+  BlueprintEffectPreview,
+  BlueprintEffectPreviewVersionSnapshotFields
+> & {
+  version?: BlueprintEffectPreviewVersionValue;
+  supersedesPreviewId?: string;
+  versionStatus?: string;
+  refreshedFromSpecTreeVersion?: BlueprintEffectPreviewVersionValue;
+  refreshedAt?: string;
+  nodeProgress?: BlueprintEffectPreviewNodeProgressSnapshot;
+  dependencyOrder?: string[];
+  previousPreviewIds?: string[];
+  preservedPreviewIds?: string[];
+  sourceSnapshotHash?: string;
+};
+
+export interface BlueprintEffectPreviewsSnapshotResponse
+  extends Omit<BlueprintEffectPreviewsResponse, "effectPreviews"> {
+  effectPreviews: BlueprintEffectPreviewSnapshot[];
+}
 
 export const BLUEPRINT_SPECS_ENDPOINT = "/api/blueprint/specs";
 export const BLUEPRINT_JOBS_ENDPOINT = "/api/blueprint/jobs";
@@ -109,17 +185,64 @@ export type FetchBlueprintSpecsResult =
   | { ok: true; data: BlueprintSpecsProgress }
   | { ok: false; error: ApiRequestError };
 
-export type BlueprintGenerationJobResult =
-  | { ok: true; data: BlueprintCreateGenerationJobResponse }
-  | { ok: false; error: ApiRequestError };
-
 export type FetchBlueprintJobEventsResult =
   | { ok: true; data: BlueprintGenerationEventsResponse }
   | { ok: false; error: ApiRequestError };
 
+export interface BlueprintClarificationStrategyMetadata {
+  strategyId?: BlueprintClarificationStrategyId;
+  strategyLabel?: string;
+  templateId?: string;
+  routeDimension?: BlueprintClarificationRouteDimension;
+  readinessSignal?: BlueprintClarificationReadinessSignalId;
+  settledByStrategy?: boolean;
+  answerProvenance?: unknown;
+  routeReadySummary?: string;
+}
+
+export type BlueprintClarificationStrategyQuestion =
+  BlueprintClarificationSession["questions"][number] &
+    BlueprintClarificationStrategyMetadata;
+
+export type BlueprintClarificationStrategyAnswer =
+  BlueprintClarificationSession["answers"][number] &
+    BlueprintClarificationStrategyMetadata;
+
+export type BlueprintClarificationStrategyReadiness =
+  BlueprintClarificationSession["readiness"] &
+    Pick<
+      BlueprintClarificationStrategyMetadata,
+      "readinessSignal" | "routeReadySummary"
+    >;
+
+export interface BlueprintClarificationStrategySession
+  extends Omit<
+      BlueprintClarificationSession,
+      "questions" | "answers" | "readiness"
+    >,
+    BlueprintClarificationStrategyMetadata {
+  questions: BlueprintClarificationStrategyQuestion[];
+  answers: BlueprintClarificationStrategyAnswer[];
+  readiness: BlueprintClarificationStrategyReadiness;
+}
+
+export interface BlueprintCreateGenerationJobSnapshotResponse
+  extends Omit<
+    BlueprintCreateGenerationJobResponse,
+    "intake" | "clarificationSession" | "projectContext"
+  > {
+  intake?: BlueprintIntake;
+  clarificationSession?: BlueprintClarificationStrategySession;
+  projectContext?: BlueprintProjectDomainContext;
+}
+
+export type BlueprintGenerationJobResult =
+  | { ok: true; data: BlueprintCreateGenerationJobSnapshotResponse }
+  | { ok: false; error: ApiRequestError };
+
 export interface BlueprintIntakeResponse {
   intake: BlueprintIntake;
-  clarificationSession?: BlueprintClarificationSession;
+  clarificationSession?: BlueprintClarificationStrategySession;
   projectContext?: BlueprintProjectDomainContext;
 }
 
@@ -130,7 +253,7 @@ export interface BlueprintIntakesResponse {
 
 export interface BlueprintClarificationSessionResponse {
   intake?: BlueprintIntake;
-  clarificationSession: BlueprintClarificationSession;
+  clarificationSession: BlueprintClarificationStrategySession;
   projectContext?: BlueprintProjectDomainContext;
 }
 
@@ -218,11 +341,11 @@ export type SaveBlueprintSpecDocumentVersionResult =
   | { ok: false; error: ApiRequestError };
 
 export type FetchBlueprintEffectPreviewsResult =
-  | { ok: true; data: BlueprintEffectPreviewsResponse }
+  | { ok: true; data: BlueprintEffectPreviewsSnapshotResponse }
   | { ok: false; error: ApiRequestError };
 
 export type GenerateBlueprintEffectPreviewResult =
-  | { ok: true; data: BlueprintEffectPreviewsResponse }
+  | { ok: true; data: BlueprintEffectPreviewsSnapshotResponse }
   | { ok: false; error: ApiRequestError };
 
 export type BlueprintPromptTargetPlatform =
@@ -540,6 +663,7 @@ export type BlueprintInvokeRuntimeCapabilityRequest =
 
 export interface BlueprintCapabilityRegistrySnapshot {
   capabilities: BlueprintRuntimeCapability[];
+  agentCrew?: BlueprintAgentCrewSnapshot | null;
 }
 
 export interface BlueprintJobCapabilitiesResponse {
@@ -547,19 +671,74 @@ export interface BlueprintJobCapabilitiesResponse {
   routeSet?: BlueprintCapabilityInvocationsResponse["routeSet"];
   specTree?: BlueprintCapabilityInvocationsResponse["specTree"];
   capabilities: BlueprintRuntimeCapability[];
+  agentCrew?: BlueprintAgentCrewSnapshot | null;
+}
+
+export interface BlueprintAgentCrewRoleTimeline {
+  id: string;
+  jobId: string;
+  roleId: string;
+  roleName: string;
+  displayName: string;
+  displayLabel: string;
+  group: string;
+  stage: string;
+  state: BlueprintRolePresenceState;
+  currentAction: string;
+  capabilityIds: string[];
+  capabilityLabels: string[];
+  artifactIds: string[];
+  evidenceIds: string[];
+  latestArtifact?: string;
+  latestEvidence?: string;
+  latestCapability?: string;
+  entryCount: number;
+  entries: BlueprintRoleTimelineEntry[];
+}
+
+export interface BlueprintAgentCrewSnapshot {
+  id: string;
+  jobId: string;
+  createdAt: string;
+  updatedAt: string;
+  stage: string;
+  roles: BlueprintAgentRole[];
+  capabilityMatrix: BlueprintCapabilityBinding[];
+  activationPolicies: BlueprintAgentCrew["activationPolicies"];
+  presence: BlueprintAgentCrewRoleTimeline[];
+  roleTimelines: BlueprintAgentCrewRoleTimeline[];
+  sourceIds: Record<string, unknown>;
+}
+
+export interface BlueprintCapabilityInvocationsSnapshotResponse
+  extends Omit<BlueprintCapabilityInvocationsResponse, "agentCrew"> {
+  agentCrew?: BlueprintAgentCrewSnapshot | null;
+}
+
+export interface BlueprintInvokeCapabilitySnapshotResponse
+  extends Omit<BlueprintInvokeCapabilityResponse, "agentCrew"> {
+  agentCrew?: BlueprintAgentCrewSnapshot | null;
 }
 
 export type BlueprintLatestGenerationJobSnapshot = Omit<
   BlueprintLatestGenerationJobResponse,
+  | "effectPreviews"
   | "promptPackages"
   | "engineeringLandingPlans"
   | "engineeringRuns"
+  | "agentCrew"
+  | "roleTimelines"
   | "artifactLedgerEntries"
   | "artifactReplays"
   | "artifactFeedback"
 > & {
+  effectPreviews?: BlueprintEffectPreviewSnapshot[];
   promptPackages?: BlueprintPromptPackage[];
   capabilities?: BlueprintRuntimeCapability[];
+  agentCrew?: BlueprintAgentCrewSnapshot | null;
+  roleTimelines?: BlueprintAgentCrewRoleTimeline[];
+  clarificationSession?: BlueprintClarificationStrategySession;
+  runtimeProjection?: BlueprintEffectPreviewRuntimeProjection;
   capabilityInvocations?: BlueprintCapabilityInvocation[];
   capabilityEvidence?: BlueprintCapabilityEvidence[];
   landingPlans?: BlueprintEngineeringLandingPlan[];
@@ -590,11 +769,11 @@ export type FetchBlueprintJobCapabilitiesResult =
   | { ok: false; error: ApiRequestError };
 
 export type FetchBlueprintCapabilityInvocationsResult =
-  | { ok: true; data: BlueprintCapabilityInvocationsResponse }
+  | { ok: true; data: BlueprintCapabilityInvocationsSnapshotResponse }
   | { ok: false; error: ApiRequestError };
 
 export type InvokeBlueprintCapabilityResult =
-  | { ok: true; data: BlueprintInvokeCapabilityResponse }
+  | { ok: true; data: BlueprintInvokeCapabilitySnapshotResponse }
   | { ok: false; error: ApiRequestError };
 
 export type FetchBlueprintCapabilityEvidenceResult =
@@ -644,6 +823,38 @@ type RawBlueprintSpecsResponse = Record<string, unknown> & {
 type RawBlueprintSpec = Record<string, unknown>;
 
 const DOC_KEYS = ["requirements", "design", "tasks"] as const;
+const CLARIFICATION_STRATEGY_IDS = [
+  "target_first",
+  "repository_first",
+  "risk_first",
+  "document_first",
+  "preview_first",
+  "fast_execution",
+] as const satisfies readonly BlueprintClarificationStrategyId[];
+const CLARIFICATION_ROUTE_DIMENSIONS = [
+  "goal",
+  "audience",
+  "risk",
+  "repository",
+  "domain",
+  "document",
+  "preview",
+  "output",
+  "execution",
+  "handoff",
+] as const satisfies readonly BlueprintClarificationRouteDimension[];
+const CLARIFICATION_READINESS_SIGNALS = [
+  "goal_defined",
+  "audience_defined",
+  "constraints_defined",
+  "repository_context",
+  "domain_assets",
+  "document_intent",
+  "preview_intent",
+  "output_preference",
+  "risk_review",
+  "fast_path",
+] as const satisfies readonly BlueprintClarificationReadinessSignalId[];
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object"
@@ -688,6 +899,14 @@ function asStringArray(value: unknown): string[] {
       .filter(Boolean);
   }
   return [];
+}
+
+function normalizeStringEnum<T extends string>(
+  value: unknown,
+  allowed: readonly T[]
+): T | undefined {
+  const normalized = asString(value).toLowerCase().replace(/[-\s]+/g, "_");
+  return allowed.includes(normalized as T) ? (normalized as T) : undefined;
 }
 
 function clampPercent(value: number): number {
@@ -858,11 +1077,228 @@ function normalizeEffectPreviewPlanStep(
   };
 }
 
+function normalizeEffectPreviewStatus(
+  value: unknown
+): BlueprintEffectPreview["status"] {
+  const normalized = asString(value).toLowerCase();
+  return normalized === "completed" ? "completed" : "preview";
+}
+
+function normalizeEffectPreviewVersionValue(
+  value: unknown
+): BlueprintEffectPreviewVersionValue | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : value.trim();
+  }
+  return undefined;
+}
+
+function normalizeEffectPreviewNodeProgress(
+  value: unknown
+): BlueprintEffectPreviewNodeProgressSnapshot | undefined {
+  const record = asRecord(value);
+  if (!record) {
+    const status = asString(value);
+    return status ? { status } : undefined;
+  }
+
+  const status = asString(record.status ?? record.state);
+  const completion = normalizeEffectPreviewVersionValue(
+    record.completion ??
+      record.completionPercent ??
+      record.completion_percent ??
+      record.percent ??
+      record.progress
+  );
+
+  return status || typeof completion !== "undefined"
+    ? {
+        status: status || undefined,
+        completion:
+          typeof completion === "number" ? clampPercent(completion) : undefined,
+      }
+    : undefined;
+}
+
+function normalizeBlueprintEffectPreviewLogEntry(
+  value: unknown,
+  index: number,
+  fallbackSourceDocumentIds: string[]
+): BlueprintEffectPreviewLogEntry {
+  const record = asRecord(value);
+  if (!record) {
+    const message = asString(value, `Runtime log ${index + 1}`);
+    return {
+      id: `runtime-log-${index + 1}`,
+      level: "info",
+      message,
+      occurredAt: "",
+      sourceDocumentIds: fallbackSourceDocumentIds,
+    };
+  }
+
+  const normalizedLevel = asString(record.level ?? record.severity).toLowerCase();
+  const level: BlueprintEffectPreviewLogEntry["level"] =
+    normalizedLevel === "warning" ||
+    normalizedLevel === "success" ||
+    normalizedLevel === "info"
+      ? normalizedLevel
+      : "info";
+
+  return {
+    id: asString(record.id ?? record.entryId ?? record.entry_id, `runtime-log-${index + 1}`),
+    level,
+    message: asString(
+      record.message ?? record.summary ?? record.detail ?? record.text,
+      `Runtime log ${index + 1}`
+    ),
+    occurredAt: asString(
+      record.occurredAt ?? record.occurred_at ?? record.createdAt ?? record.created_at
+    ),
+    sourceDocumentIds: asStringArray(
+      record.sourceDocumentIds ??
+        record.source_document_ids ??
+        record.documentIds ??
+        record.document_ids
+    ),
+  };
+}
+
+export function normalizeBlueprintEffectPreviewRuntimeProjection(
+  value: unknown,
+  context: BlueprintEffectPreviewRuntimeProjectionContext = {}
+): BlueprintEffectPreviewRuntimeProjection {
+  const record = asRecord(value) ?? {};
+  const sceneRecord = asRecord(record.scene ?? record.sceneSnapshot);
+  const hudRecord = asRecord(record.hudState ?? record.hud_state ?? record.hud);
+  const logValue =
+    record.logTimeline ??
+    record.log_timeline ??
+    record.logs ??
+    record.log ??
+    record.timeline;
+  const browserRecord = asRecord(
+    record.browserPreview ?? record.browser_preview ?? record.browser
+  );
+  const browserPreviewId = asString(
+    record.browserPreviewId ??
+      record.browser_preview_id ??
+      browserRecord?.id ??
+      browserRecord?.previewId ??
+      browserRecord?.preview_id
+  );
+  const sceneSnapshotId = asString(
+    record.sceneSnapshotId ??
+      record.scene_snapshot_id ??
+      sceneRecord?.id ??
+      sceneRecord?.snapshotId ??
+      sceneRecord?.snapshot_id
+  );
+  const nodeId = asString(record.nodeId ?? record.node_id, context.nodeId);
+  const routeId = asString(record.routeId ?? record.route_id, context.routeId);
+  const title = asString(
+    hudRecord?.title ?? record.title ?? browserRecord?.title,
+    context.title ?? "Runtime projection"
+  );
+  const summary = asString(
+    hudRecord?.summary ??
+      record.summary ??
+      browserRecord?.summary ??
+      sceneRecord?.summary,
+    context.summary ?? "Runtime projection is waiting for preview data."
+  );
+  const fallbackSourceDocumentIds = asStringArray(
+    record.sourceDocumentIds ??
+      record.source_document_ids ??
+      sceneRecord?.sourceDocumentIds ??
+      sceneRecord?.source_document_ids
+  );
+  const logTimeline = asUnknownArray(logValue).map((item, index) =>
+    normalizeBlueprintEffectPreviewLogEntry(
+      item,
+      index,
+      fallbackSourceDocumentIds
+    )
+  );
+  const status = normalizeEffectPreviewStatus(
+    hudRecord?.status ?? record.status ?? context.status
+  );
+  const sourceIds = asRecord(record.sourceIds ?? record.source_ids) ?? {};
+
+  return {
+    id: asString(
+      record.id ?? record.projectionId ?? record.projection_id,
+      context.previewId ? `${context.previewId}-runtime-projection` : "runtime-projection"
+    ),
+    jobId: asString(record.jobId ?? record.job_id, context.jobId),
+    projectId:
+      asString(record.projectId ?? record.project_id, context.projectId) ||
+      undefined,
+    routeSetId: asString(record.routeSetId ?? record.route_set_id, context.routeSetId),
+    routeId: routeId || undefined,
+    specTreeId: asString(
+      record.specTreeId ?? record.spec_tree_id ?? record.treeId ?? record.tree_id,
+      context.treeId
+    ),
+    nodeId,
+    effectPreviewId: asString(
+      record.effectPreviewId ?? record.effect_preview_id ?? record.previewId,
+      context.previewId
+    ),
+    sceneSnapshotId,
+    hudState: {
+      id: asString(hudRecord?.id ?? hudRecord?.stateId ?? hudRecord?.state_id, "runtime-hud"),
+      status,
+      stage: "effect_preview",
+      title,
+      summary,
+      progressPercent: clampPercent(
+        asNumber(
+          hudRecord?.progressPercent ??
+            hudRecord?.progress_percent ??
+            hudRecord?.progress ??
+            record.progressPercent ??
+            record.progress_percent,
+          0
+        )
+      ),
+      activeNodeId: asString(
+        hudRecord?.activeNodeId ?? hudRecord?.active_node_id ?? nodeId,
+        nodeId
+      ),
+      badges: asStringArray(hudRecord?.badges ?? record.badges),
+    },
+    logTimeline,
+    browserPreviewId,
+    browserPreview: {
+      id: browserPreviewId || "runtime-browser-preview",
+      title: asString(browserRecord?.title ?? record.browserTitle, title),
+      summary: asString(
+        browserRecord?.summary ?? record.browserSummary,
+        summary
+      ),
+      routeId:
+        asString(browserRecord?.routeId ?? browserRecord?.route_id, routeId) ||
+        undefined,
+      nodeId: asString(browserRecord?.nodeId ?? browserRecord?.node_id, nodeId),
+      url: asString(
+        browserRecord?.url ??
+          browserRecord?.href ??
+          record.browserPreviewUrl ??
+          record.browser_preview_url
+      ),
+    },
+    sourceIds: sourceIds as BlueprintEffectPreviewRuntimeProjection["sourceIds"],
+  };
+}
+
 export function normalizeBlueprintEffectPreview(
   value: unknown,
   index: number,
   fallbackJobId = ""
-): BlueprintEffectPreview {
+): BlueprintEffectPreviewSnapshot {
   const record = asRecord(value) ?? {};
   const title = asString(
     record.title ?? record.name,
@@ -882,14 +1318,45 @@ export function normalizeBlueprintEffectPreview(
       record.document_ids ??
       record.specDocumentIds
   );
+  const id = asString(
+    record.id ?? record.previewId ?? record.preview_id,
+    `effect-preview-${index + 1}`
+  );
+  const jobId = asString(record.jobId ?? record.job_id, fallbackJobId);
+  const treeId = asString(record.treeId ?? record.tree_id);
+  const nodeId = asString(record.nodeId ?? record.node_id);
+  const status = normalizeEffectPreviewStatus(record.status);
+  const version = normalizeEffectPreviewVersionValue(record.version);
+  const refreshedFromSpecTreeVersion = normalizeEffectPreviewVersionValue(
+    record.refreshedFromSpecTreeVersion ??
+      record.refreshed_from_spec_tree_version ??
+      record.specTreeVersion ??
+      record.spec_tree_version
+  );
+  const versionStatus = asString(
+    record.versionStatus ?? record.version_status ?? record.status
+  );
+  const nodeProgress = normalizeEffectPreviewNodeProgress(
+    record.nodeProgress ??
+      record.node_progress ??
+      ((record.nodeStatus ??
+        record.node_status ??
+        record.nodeCompletion ??
+        record.node_completion) !== undefined
+        ? {
+            status: record.nodeStatus ?? record.node_status,
+            completion: record.nodeCompletion ?? record.node_completion,
+          }
+        : undefined)
+  );
 
   return {
-    id: asString(record.id ?? record.previewId, `effect-preview-${index + 1}`),
-    jobId: asString(record.jobId ?? record.job_id, fallbackJobId),
-    treeId: asString(record.treeId ?? record.tree_id),
-    nodeId: asString(record.nodeId ?? record.node_id),
+    id,
+    jobId,
+    treeId,
+    nodeId,
     sourceDocumentIds,
-    status: asString(record.status, "preview") as BlueprintEffectPreview["status"],
+    status,
     createdAt: asString(record.createdAt ?? record.created_at),
     updatedAt: asString(record.updatedAt ?? record.updated_at),
     summary: asString(record.summary ?? record.description, title),
@@ -913,10 +1380,22 @@ export function normalizeBlueprintEffectPreview(
     nodes: Array.isArray(record.nodes)
       ? (record.nodes as BlueprintEffectPreview["nodes"])
       : [],
+    runtimeProjection: normalizeBlueprintEffectPreviewRuntimeProjection(
+      record.runtimeProjection ?? record.runtime_projection ?? record.projection,
+      {
+        previewId: id,
+        jobId,
+        treeId,
+        nodeId,
+        title,
+        summary: asString(record.summary ?? record.description, title),
+        status,
+      }
+    ),
     provenance:
       (record.provenance as BlueprintEffectPreview["provenance"] | undefined) ??
       {
-        jobId: asString(record.jobId ?? record.job_id, fallbackJobId),
+        jobId,
         githubUrls: [],
         treeVersion: asNumber(record.treeVersion ?? record.tree_version, 0),
         nodeType: "effect_preview",
@@ -926,13 +1405,35 @@ export function normalizeBlueprintEffectPreview(
         includeDrafts: false,
         sourceDocumentStatuses: {},
       },
+    version,
+    supersedesPreviewId:
+      asString(
+        record.supersedesPreviewId ?? record.supersedes_preview_id
+      ) || undefined,
+    versionStatus: versionStatus || undefined,
+    refreshedFromSpecTreeVersion,
+    refreshedAt:
+      asString(record.refreshedAt ?? record.refreshed_at) || undefined,
+    nodeProgress,
+    dependencyOrder: asStringArray(
+      record.dependencyOrder ?? record.dependency_order
+    ),
+    previousPreviewIds: asStringArray(
+      record.previousPreviewIds ?? record.previous_preview_ids
+    ),
+    preservedPreviewIds: asStringArray(
+      record.preservedPreviewIds ?? record.preserved_preview_ids
+    ),
+    sourceSnapshotHash:
+      asString(record.sourceSnapshotHash ?? record.source_snapshot_hash) ||
+      undefined,
   };
 }
 
 export function normalizeBlueprintEffectPreviewsResponse(
   payload: unknown,
   fallbackJobId = ""
-): BlueprintEffectPreviewsResponse {
+): BlueprintEffectPreviewsSnapshotResponse {
   const record = asRecord(payload) ?? {};
   const rawPreviews =
     record.previews ??
@@ -1207,6 +1708,12 @@ const CAPABILITY_EVIDENCE_STATUSES = [
   "blocked",
   "failed",
 ] as const;
+const BLUEPRINT_ROLE_PRESENCE_STATES = [
+  "active",
+  "watching",
+  "reviewing",
+  "sleeping",
+] as const;
 
 function normalizeEnum<T extends readonly string[]>(
   value: unknown,
@@ -1257,6 +1764,12 @@ function normalizeCapabilityEvidenceStatus(
   value: unknown
 ): BlueprintCapabilityEvidenceStatus {
   return normalizeEnum(value, CAPABILITY_EVIDENCE_STATUSES, "recorded");
+}
+
+function normalizeBlueprintRolePresenceState(
+  value: unknown
+): BlueprintRolePresenceState {
+  return normalizeEnum(value, BLUEPRINT_ROLE_PRESENCE_STATES, "sleeping");
 }
 
 export function normalizeBlueprintRuntimeCapability(
@@ -1323,8 +1836,11 @@ function normalizeCapabilityRegistryList(payload: unknown): BlueprintRuntimeCapa
 export function normalizeBlueprintCapabilityRegistryResponse(
   payload: unknown
 ): BlueprintCapabilityRegistrySnapshot {
+  const record = asRecord(payload) ?? {};
+
   return {
     capabilities: normalizeCapabilityRegistryList(payload),
+    agentCrew: normalizeBlueprintAgentCrew(record.agentCrew ?? record.agent_crew),
   };
 }
 
@@ -1337,8 +1853,281 @@ export function normalizeBlueprintJobCapabilitiesResponse(
     job: record.job as BlueprintJobCapabilitiesResponse["job"],
     routeSet: record.routeSet as BlueprintJobCapabilitiesResponse["routeSet"],
     specTree: record.specTree as BlueprintJobCapabilitiesResponse["specTree"],
+    agentCrew: normalizeBlueprintAgentCrew(record.agentCrew ?? record.agent_crew),
     capabilities: normalizeCapabilityRegistryList(payload),
   };
+}
+
+function normalizeBlueprintAgentCrewRoleTimeline(
+  value: unknown,
+  index: number,
+  rolesById: Map<string, BlueprintAgentRole>,
+  capabilitiesById: Map<string, string>,
+  fallbackStage: string
+): BlueprintAgentCrewRoleTimeline {
+  const record = asRecord(value) ?? {};
+  const rawEntries = asUnknownArray(record.entries);
+  const latestEntry = asRecord(rawEntries.at(-1));
+  const roleValue = asRecord(record.role);
+  const roleId = asString(
+    record.roleId ?? record.role_id ?? roleValue?.id ?? record.id,
+    `role-${index + 1}`
+  );
+  const role = rolesById.get(roleId);
+  const capabilityIds = uniqueStrings(
+    asStringArray(
+      record.capabilityIds ??
+        record.capability_ids ??
+        record.latestCapabilityId ??
+        record.latest_capability_id ??
+        latestEntry?.capabilityId ??
+        latestEntry?.capability_id ??
+        record.capabilities ??
+        record.capability
+    )
+  );
+  const artifactIds = uniqueStrings(
+    asStringArray(
+      record.artifactIds ??
+        record.artifact_ids ??
+        record.latestArtifactId ??
+        record.latest_artifact_id ??
+        latestEntry?.artifactId ??
+        latestEntry?.artifact_id ??
+        record.artifacts ??
+        record.latestArtifact ??
+        record.latest_artifact
+    )
+  );
+  const evidenceIds = uniqueStrings(
+    asStringArray(
+      record.evidenceIds ??
+        record.evidence_ids ??
+        record.latestEvidenceId ??
+        record.latest_evidence_id ??
+        latestEntry?.evidenceId ??
+        latestEntry?.evidence_id ??
+        record.evidence ??
+        record.latestEvidence ??
+        record.latest_evidence
+    )
+  );
+  const latestCapability = asString(
+      record.latestCapability ??
+      record.latest_capability ??
+      record.latestCapabilityId ??
+      record.latest_capability_id ??
+      latestEntry?.capabilityId ??
+      latestEntry?.capability_id ??
+      record.capabilityLabel ??
+      record.capability_label,
+    capabilityIds
+      .map(capabilityId => capabilitiesById.get(capabilityId) ?? capabilityId)
+      .filter(Boolean)[0] ?? ""
+  );
+  const stage = asString(
+    record.latestStage ??
+      record.latest_stage ??
+      record.stage ??
+      latestEntry?.stage ??
+      record.phase,
+    fallbackStage
+  );
+  const state = normalizeBlueprintRolePresenceState(
+    record.latestPresenceState ??
+      record.latest_presence_state ??
+      record.presenceState ??
+      record.presence_state ??
+      latestEntry?.presenceState ??
+      latestEntry?.presence_state ??
+      record.state ??
+      record.status
+  );
+  const currentAction = asString(
+    record.latestAction ??
+      record.latest_action ??
+      record.currentAction ??
+      record.current_action ??
+      latestEntry?.currentAction ??
+      latestEntry?.current_action ??
+      record.action ??
+      record.summary,
+    "Standing by for the next blueprint action."
+  );
+  const jobId = asString(
+    record.jobId ?? record.job_id ?? latestEntry?.jobId ?? latestEntry?.job_id
+  );
+  const entries = rawEntries.map((entryValue, entryIndex) => {
+    const entry = asRecord(entryValue) ?? {};
+    const entryType = asString(
+      entry.type ?? entry.eventType ?? entry.event_type,
+      "role.watching"
+    ) as BlueprintRoleTimelineEntry["type"];
+    return {
+      id: asString(
+        entry.id ?? entry.entryId ?? entry.entry_id,
+        `${roleId}-entry-${entryIndex + 1}`
+      ),
+      eventId: asString(
+        entry.eventId ?? entry.event_id,
+        `${roleId}-event-${entryIndex + 1}`
+      ),
+      jobId: asString(entry.jobId ?? entry.job_id, jobId),
+      projectId:
+        asString(entry.projectId ?? entry.project_id) || undefined,
+      crewId: asString(entry.crewId ?? entry.crew_id) || undefined,
+      stage: asString(entry.stage ?? entry.phase, stage) as BlueprintRoleTimelineEntry["stage"],
+      roleId: asString(entry.roleId ?? entry.role_id, roleId),
+      presenceState: normalizeBlueprintRolePresenceState(
+        entry.presenceState ?? entry.presence_state ?? entry.state ?? state
+      ),
+      type: entryType,
+      occurredAt: asString(
+        entry.occurredAt ??
+          entry.occurred_at ??
+          entry.createdAt ??
+          entry.created_at,
+        asString(record.updatedAt ?? record.updated_at)
+      ),
+      summary: asString(
+        entry.summary ?? entry.message ?? entry.currentAction ?? entry.current_action,
+        currentAction
+      ),
+      currentAction:
+        asString(entry.currentAction ?? entry.current_action) || undefined,
+      capabilityId:
+        asString(entry.capabilityId ?? entry.capability_id) || undefined,
+      invocationId:
+        asString(entry.invocationId ?? entry.invocation_id) || undefined,
+      evidenceId:
+        asString(entry.evidenceId ?? entry.evidence_id) || undefined,
+      artifactId:
+        asString(entry.artifactId ?? entry.artifact_id) || undefined,
+      routeId: asString(entry.routeId ?? entry.route_id) || undefined,
+      selectionId:
+        asString(entry.selectionId ?? entry.selection_id) || undefined,
+      specTreeId:
+        asString(entry.specTreeId ?? entry.spec_tree_id) || undefined,
+      nodeId: asString(entry.nodeId ?? entry.node_id) || undefined,
+      sourceIds:
+        (asRecord(entry.sourceIds ?? entry.source_ids) ??
+          {}) as BlueprintRoleTimelineEntry["sourceIds"],
+    } satisfies BlueprintRoleTimelineEntry;
+  });
+
+  return {
+    id: asString(record.id ?? record.timelineId ?? record.timeline_id, roleId),
+    jobId,
+    roleId,
+    roleName: asString(
+      record.roleName ?? record.role_name ?? roleValue?.name ?? role?.name,
+      roleId
+    ),
+    displayName: asString(
+      record.displayName ??
+        record.display_name ??
+        roleValue?.displayName ??
+        roleValue?.display_name ??
+        role?.displayName,
+      role?.name ?? roleId
+    ),
+    displayLabel: asString(
+      record.displayLabel ??
+        record.display_label ??
+        record.displayLabelZh ??
+        record.display_label_zh ??
+        roleValue?.displayLabel ??
+        roleValue?.display_label ??
+        roleValue?.displayLabelZh ??
+        roleValue?.display_label_zh ??
+        role?.displayLabelZh ??
+        role?.displayName,
+      role?.name ?? roleId
+    ),
+    group: asString(
+      record.group ?? roleValue?.group ?? role?.group,
+      "execution"
+    ),
+    stage,
+    state,
+    currentAction,
+    capabilityIds,
+    capabilityLabels: capabilityIds.map(
+      capabilityId => capabilitiesById.get(capabilityId) ?? capabilityId
+    ),
+    artifactIds,
+    evidenceIds,
+    latestArtifact: asString(
+      record.latestArtifact ?? record.latest_artifact,
+      artifactIds[0] ?? ""
+    ),
+    latestEvidence: asString(
+      record.latestEvidence ?? record.latest_evidence,
+      evidenceIds[0] ?? ""
+    ),
+    latestCapability,
+    entryCount: asNumber(record.entryCount ?? record.entry_count, entries.length),
+    entries,
+  };
+}
+
+export function normalizeBlueprintAgentCrew(
+  value: unknown
+): BlueprintAgentCrewSnapshot | null {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const roles = asUnknownArray(record.roles).map(
+    role => (asRecord(role) ?? {}) as unknown as BlueprintAgentRole
+  );
+  const rolesById = new Map(roles.map(role => [role.id, role]));
+  const capabilityMatrix = asUnknownArray(
+    record.capabilityMatrix ?? record.capability_matrix ?? record.bindings
+  ).map(
+    binding => (asRecord(binding) ?? {}) as unknown as BlueprintCapabilityBinding
+  );
+  const capabilitiesById = new Map(
+    capabilityMatrix.map(binding => [
+      binding.capabilityId,
+      binding.capabilityLabel || binding.capabilityId,
+    ])
+  );
+  const fallbackStage = asString(record.stage ?? record.phase);
+  const rawRoleTimelines =
+    record.roleTimelines ??
+    record.role_timelines ??
+    record.timelines ??
+    record.roleTimeline ??
+    record.role_timeline ??
+    record.presence ??
+    [];
+  const roleTimelines = asUnknownArray(rawRoleTimelines).map((item, index) =>
+    normalizeBlueprintAgentCrewRoleTimeline(
+      item,
+      index,
+      rolesById,
+      capabilitiesById,
+      fallbackStage
+    )
+  );
+
+  return {
+    id: asString(record.id, "blueprint-agent-crew"),
+    jobId: asString(record.jobId ?? record.job_id),
+    createdAt: asString(record.createdAt ?? record.created_at),
+    updatedAt: asString(record.updatedAt ?? record.updated_at),
+    stage: fallbackStage,
+    roles,
+    capabilityMatrix,
+    activationPolicies: asUnknownArray(
+      record.activationPolicies ?? record.activation_policies
+    ) as BlueprintAgentCrew["activationPolicies"],
+    presence: roleTimelines,
+    roleTimelines,
+    sourceIds:
+      asRecord(record.sourceIds ?? record.source_ids) ??
+      ({} as Record<string, unknown>),
+  } as BlueprintAgentCrewSnapshot;
 }
 
 function normalizeBlueprintCapabilitySafetyGate(
@@ -1391,6 +2180,7 @@ export function normalizeBlueprintCapabilityInvocation(
     ),
     jobId: asString(record.jobId ?? record.job_id, fallbackJobId),
     capabilityId,
+    roleId: asString(record.roleId ?? record.role_id, "role-runtime-executor"),
     capabilityLabel: asString(
       record.capabilityLabel ??
         record.capability_label ??
@@ -1435,6 +2225,7 @@ export function normalizeBlueprintCapabilityInvocation(
       specTreeId:
         asString(record.specTreeId ?? record.spec_tree_id) || undefined,
       nodeId: nodeId || undefined,
+      roleId: asString(record.roleId ?? record.role_id) || undefined,
       targetText: asString(record.targetText ?? record.target_text) || undefined,
       githubUrls: asStringArray(record.githubUrls ?? record.github_urls),
     },
@@ -1444,7 +2235,7 @@ export function normalizeBlueprintCapabilityInvocation(
 export function normalizeBlueprintCapabilityInvocationsResponse(
   payload: unknown,
   fallbackJobId = ""
-): BlueprintCapabilityInvocationsResponse {
+): BlueprintCapabilityInvocationsSnapshotResponse {
   const record = asRecord(payload) ?? {};
   const rawInvocations =
     record.invocations ??
@@ -1458,6 +2249,7 @@ export function normalizeBlueprintCapabilityInvocationsResponse(
     routeSet: record.routeSet as BlueprintCapabilityInvocationsResponse["routeSet"],
     specTree: record.specTree as BlueprintCapabilityInvocationsResponse["specTree"],
     capabilities: normalizeCapabilityRegistryList(payload),
+    agentCrew: normalizeBlueprintAgentCrew(record.agentCrew ?? record.agent_crew),
     invocations: asUnknownArray(rawInvocations).map((item, index) =>
       normalizeBlueprintCapabilityInvocation(item, index, fallbackJobId)
     ),
@@ -1559,7 +2351,7 @@ export function normalizeBlueprintCapabilityEvidenceResponse(
 export function normalizeBlueprintInvokeCapabilityResponse(
   payload: unknown,
   fallbackJobId = ""
-): BlueprintInvokeCapabilityResponse {
+): BlueprintInvokeCapabilitySnapshotResponse {
   const record = asRecord(payload) ?? {};
   const capabilityValue = record.capability ?? {};
   const invocationValue = record.invocation ?? record.capabilityInvocation ?? {};
@@ -1570,6 +2362,7 @@ export function normalizeBlueprintInvokeCapabilityResponse(
     routeSet: record.routeSet as BlueprintInvokeCapabilityResponse["routeSet"],
     specTree: record.specTree as BlueprintInvokeCapabilityResponse["specTree"],
     capability: normalizeBlueprintRuntimeCapability(capabilityValue, 0),
+    agentCrew: normalizeBlueprintAgentCrew(record.agentCrew ?? record.agent_crew),
     invocation: normalizeBlueprintCapabilityInvocation(
       invocationValue,
       0,
@@ -1819,6 +2612,16 @@ export function normalizeBlueprintEngineeringLandingPlan(
     record.verification ??
     record.commands ??
     record.checks ??
+    (Array.isArray(stepsValue)
+      ? stepsValue.flatMap(step => {
+          const stepRecord = asRecord(step);
+          return asCommandStringArray(
+            stepRecord?.verificationCommands ??
+              stepRecord?.verification_commands ??
+              stepRecord?.checks
+          );
+        })
+      : []) ??
     [];
 
   return {
@@ -2680,14 +3483,69 @@ export function normalizeBlueprintLatestGenerationJobResponse(
   const record = asRecord(payload) ?? {};
   const job = asRecord(record.job);
   const fallbackJobId = asString(job?.id);
+  const effectPreviews = normalizeBlueprintEffectPreviewsResponse(
+    payload,
+    fallbackJobId
+  ).effectPreviews;
+  const rawRuntimeProjection =
+    record.runtimeProjection ?? record.runtime_projection ?? record.projection;
+  const agentCrew = normalizeBlueprintAgentCrew(
+    record.agentCrew ?? record.agent_crew
+  );
+  const rawRoleTimelines = asUnknownArray(
+    record.roleTimelines ?? record.role_timelines
+  );
+  const roleTimelines = rawRoleTimelines.length
+    ? rawRoleTimelines.map(
+        (item, index) =>
+          normalizeBlueprintAgentCrewRoleTimeline(
+            item,
+            index,
+            new Map((agentCrew?.roles ?? []).map(role => [role.id, role])),
+            new Map(
+              (agentCrew?.capabilityMatrix ?? []).map(binding => [
+                binding.capabilityId,
+                binding.capabilityLabel || binding.capabilityId,
+              ])
+            ),
+            agentCrew?.stage ?? ""
+          )
+      )
+    : agentCrew?.roleTimelines ?? [];
   return {
     ...payload,
+    effectPreviews,
     promptPackages: normalizeBlueprintPromptPackagesResponse(
       payload,
       fallbackJobId
     ).promptPackages,
     capabilities: normalizeBlueprintCapabilityRegistryResponse(payload)
       .capabilities,
+    agentCrew: agentCrew
+      ? {
+          ...agentCrew,
+          roleTimelines,
+          presence: roleTimelines.length ? roleTimelines : agentCrew.presence,
+        }
+      : null,
+    roleTimelines,
+    clarificationSession:
+      record.clarificationSession || record.clarification_session
+        ? normalizeBlueprintClarificationSession(
+            record.clarificationSession ?? record.clarification_session
+          )
+        : undefined,
+    runtimeProjection: rawRuntimeProjection
+      ? normalizeBlueprintEffectPreviewRuntimeProjection(rawRuntimeProjection, {
+          jobId: fallbackJobId,
+          previewId: effectPreviews[0]?.id,
+          treeId: effectPreviews[0]?.treeId,
+          nodeId: effectPreviews[0]?.nodeId,
+          title: effectPreviews[0]?.summary,
+          summary: effectPreviews[0]?.summary,
+          status: effectPreviews[0]?.status,
+        })
+      : undefined,
     capabilityInvocations: normalizeBlueprintCapabilityInvocationsResponse(
       payload,
       fallbackJobId
@@ -2716,6 +3574,27 @@ export function normalizeBlueprintLatestGenerationJobResponse(
       payload,
       fallbackJobId
     ),
+  };
+}
+
+function normalizeBlueprintCreateGenerationJobResponse(
+  payload: unknown
+): BlueprintCreateGenerationJobSnapshotResponse {
+  const record = asRecord(payload) ?? {};
+  return {
+    ...(payload as BlueprintCreateGenerationJobResponse),
+    intake: record.intake ? normalizeBlueprintIntake(record.intake) : undefined,
+    clarificationSession:
+      record.clarificationSession || record.clarification_session
+        ? normalizeBlueprintClarificationSession(
+            record.clarificationSession ?? record.clarification_session
+          )
+        : undefined,
+    projectContext: record.projectContext
+      ? normalizeBlueprintProjectDomainContext(record.projectContext)
+      : record.project_context
+        ? normalizeBlueprintProjectDomainContext(record.project_context)
+        : undefined,
   };
 }
 
@@ -2793,8 +3672,16 @@ function normalizeBlueprintIntake(value: unknown): BlueprintIntake {
 
 function normalizeBlueprintClarificationQuestion(
   value: unknown
-): BlueprintClarificationSession["questions"][number] {
+): BlueprintClarificationStrategyQuestion {
   const record = asRecord(value) ?? {};
+  const routeDimension = normalizeStringEnum(
+    record.routeDimension ?? record.route_dimension,
+    CLARIFICATION_ROUTE_DIMENSIONS
+  );
+  const readinessSignal = normalizeStringEnum(
+    record.readinessSignal ?? record.readiness_signal,
+    CLARIFICATION_READINESS_SIGNALS
+  );
   return {
     id: asString(record.id ?? record.questionId ?? record.question_id, "question"),
     kind: asString(record.kind, "goal") as BlueprintClarificationSession["questions"][number]["kind"],
@@ -2802,29 +3689,133 @@ function normalizeBlueprintClarificationQuestion(
     required: asBoolean(record.required ?? record.isRequired ?? record.is_required),
     sourceIds: asStringArray(record.sourceIds ?? record.source_ids),
     evidenceIds: asStringArray(record.evidenceIds ?? record.evidence_ids),
+    strategyId: normalizeStringEnum(
+      record.strategyId ?? record.strategy_id,
+      CLARIFICATION_STRATEGY_IDS
+    ),
+    strategyLabel: asString(record.strategyLabel) || undefined,
+    templateId: asString(record.templateId ?? record.template_id) || undefined,
+    routeDimension,
+    readinessSignal,
+    settledByStrategy:
+      record.settledByStrategy !== undefined ||
+      record.settled_by_strategy !== undefined
+        ? asBoolean(record.settledByStrategy ?? record.settled_by_strategy)
+        : undefined,
+    answerProvenance:
+      record.answerProvenance ?? record.answer_provenance ?? undefined,
+    routeReadySummary:
+      asString(record.routeReadySummary ?? record.route_ready_summary) ||
+      undefined,
   };
 }
 
 function normalizeBlueprintClarificationSession(
   value: unknown
-): BlueprintClarificationSession {
+): BlueprintClarificationStrategySession {
   const record = asRecord(value) ?? {};
+  const routeDimension = normalizeStringEnum(
+    record.routeDimension ?? record.route_dimension,
+    CLARIFICATION_ROUTE_DIMENSIONS
+  );
+  const readinessSignal = normalizeStringEnum(
+    record.readinessSignal ?? record.readiness_signal,
+    CLARIFICATION_READINESS_SIGNALS
+  );
   return {
     id: asString(record.id ?? record.sessionId ?? record.session_id, "clarification-session"),
     intakeId: asString(record.intakeId ?? record.intake_id),
     projectId: asString(record.projectId ?? record.project_id),
+    strategyId: normalizeStringEnum(
+      record.strategyId ?? record.strategy_id,
+      CLARIFICATION_STRATEGY_IDS
+    ),
+    strategyLabel: asString(record.strategyLabel) || undefined,
+    templateId: asString(record.templateId ?? record.template_id) || undefined,
+    routeDimension,
+    readinessSignal,
+    settledByStrategy:
+      record.settledByStrategy !== undefined ||
+      record.settled_by_strategy !== undefined
+        ? asBoolean(record.settledByStrategy ?? record.settled_by_strategy)
+        : undefined,
+    answerProvenance:
+      record.answerProvenance ?? record.answer_provenance ?? undefined,
+    routeReadySummary:
+      asString(record.routeReadySummary ?? record.route_ready_summary) ||
+      undefined,
     questions: asUnknownArray(record.questions ?? record.clarificationQuestions ?? []).map(
       item => normalizeBlueprintClarificationQuestion(item)
     ),
     answers: asUnknownArray(record.answers ?? record.clarificationAnswers ?? []).map(
       item => {
         const answerRecord = asRecord(item) ?? {};
+        const answerProvenance = asRecord(
+          answerRecord.provenance ??
+            answerRecord.answerProvenance ??
+            answerRecord.answer_provenance
+        );
         return {
           questionId: asString(
             answerRecord.questionId ?? answerRecord.question_id,
             "question"
           ),
           answer: asString(answerRecord.answer ?? answerRecord.value),
+          answeredAt:
+            asString(answerRecord.answeredAt ?? answerRecord.answered_at) ||
+            undefined,
+          answeredBy:
+            asString(answerRecord.answeredBy ?? answerRecord.answered_by) ||
+            undefined,
+          source: asString(answerRecord.source) as BlueprintClarificationAnswer["source"],
+          strategyId: normalizeStringEnum(
+            answerRecord.strategyId ??
+              answerRecord.strategy_id ??
+              answerProvenance?.strategyId ??
+              answerProvenance?.strategy_id,
+            CLARIFICATION_STRATEGY_IDS
+          ),
+          strategyLabel: asString(answerRecord.strategyLabel) || undefined,
+          templateId:
+            asString(
+              answerRecord.templateId ??
+                answerRecord.template_id ??
+                answerProvenance?.templateId ??
+                answerProvenance?.template_id
+            ) || undefined,
+          routeDimension: normalizeStringEnum(
+            answerRecord.routeDimension ??
+              answerRecord.route_dimension ??
+              answerProvenance?.routeDimension ??
+              answerProvenance?.route_dimension,
+            CLARIFICATION_ROUTE_DIMENSIONS
+          ),
+          readinessSignal: normalizeStringEnum(
+            answerRecord.readinessSignal ??
+              answerRecord.readiness_signal ??
+              answerProvenance?.readinessSignal ??
+              answerProvenance?.readiness_signal,
+            CLARIFICATION_READINESS_SIGNALS
+          ),
+          settledByStrategy:
+            answerRecord.settledByStrategy !== undefined ||
+            answerRecord.settled_by_strategy !== undefined
+              ? asBoolean(
+                  answerRecord.settledByStrategy ??
+                    answerRecord.settled_by_strategy
+                )
+              : undefined,
+          answerProvenance:
+            answerRecord.provenance ??
+            answerRecord.answerProvenance ??
+            answerRecord.answer_provenance ??
+            undefined,
+          provenance: answerRecord.provenance as BlueprintClarificationAnswer["provenance"],
+          routeReadySummary:
+            asString(
+              answerRecord.routeReadySummary ??
+                answerRecord.route_ready_summary
+            ) || undefined,
         };
       }
     ),
@@ -2851,6 +3842,21 @@ function normalizeBlueprintClarificationSession(
           record.missingQuestionIds ??
           record.missing_question_ids
       ),
+      readinessSignal:
+        normalizeStringEnum(
+          asRecord(record.readiness)?.readinessSignal ??
+            asRecord(record.readiness)?.readiness_signal ??
+            record.readinessSignal ??
+            record.readiness_signal,
+          CLARIFICATION_READINESS_SIGNALS
+        ),
+      routeReadySummary:
+        asString(
+          asRecord(record.readiness)?.routeReadySummary ??
+            asRecord(record.readiness)?.route_ready_summary ??
+            record.routeReadySummary ??
+            record.route_ready_summary
+        ) || undefined,
     },
     createdAt: asString(record.createdAt ?? record.created_at),
     updatedAt: asString(record.updatedAt ?? record.updated_at),
@@ -3071,7 +4077,7 @@ export async function fetchBlueprintProjectContext(
 export async function createBlueprintGenerationJob(
   request: BlueprintGenerationRequest
 ): Promise<BlueprintGenerationJobResult> {
-  const result = await fetchJsonSafe<BlueprintCreateGenerationJobResponse>(
+  const result = await fetchJsonSafe<unknown>(
     BLUEPRINT_JOBS_ENDPOINT,
     {
       method: "POST",
@@ -3084,13 +4090,16 @@ export async function createBlueprintGenerationJob(
     return { ok: false, error: result.error };
   }
 
-  return { ok: true, data: result.data };
+  return {
+    ok: true,
+    data: normalizeBlueprintCreateGenerationJobResponse(result.data),
+  };
 }
 
 export async function createBlueprintGenerationCompatJob(
   request: BlueprintGenerationRequest
 ): Promise<BlueprintGenerationJobResult> {
-  const result = await fetchJsonSafe<BlueprintCreateGenerationJobResponse>(
+  const result = await fetchJsonSafe<unknown>(
     BLUEPRINT_GENERATIONS_ENDPOINT,
     {
       method: "POST",
@@ -3103,7 +4112,10 @@ export async function createBlueprintGenerationCompatJob(
     return { ok: false, error: result.error };
   }
 
-  return { ok: true, data: result.data };
+  return {
+    ok: true,
+    data: normalizeBlueprintCreateGenerationJobResponse(result.data),
+  };
 }
 
 export async function fetchBlueprintJobEvents(

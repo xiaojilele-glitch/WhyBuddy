@@ -49,14 +49,23 @@ import {
   type BlueprintArtifactLedgerEntry,
   type BlueprintArtifactReplay,
   type BlueprintDocumentProgress,
+  type BlueprintAgentCrewSnapshot,
+  type BlueprintClarificationStrategyQuestion,
+  type BlueprintClarificationStrategySession,
   type BlueprintCapabilityEvidence,
   type BlueprintCapabilityInvocation,
   type BlueprintEngineeringLandingPlan,
   type BlueprintEngineeringRun,
   type BlueprintEngineeringRunStatus,
+  type BlueprintEffectPreviewRuntimeProjection,
+  type BlueprintEffectPreviewSnapshot,
   type BlueprintPromptPackage,
   type BlueprintPromptTargetPlatform,
   type BlueprintRuntimeCapability,
+  type BlueprintEffectPreviewLogEntry,
+  normalizeBlueprintEffectPreviewRuntimeProjection,
+  normalizeBlueprintEngineeringLandingResponse,
+  normalizeBlueprintEngineeringRunsResponse,
   type BlueprintSpecsProgress,
   type BlueprintTaskProgress,
 } from "@/lib/blueprint-api";
@@ -65,10 +74,11 @@ import { blueprintCopy } from "@/lib/blueprint-copy";
 import { cn } from "@/lib/utils";
 import type {
   BlueprintGenerationJob,
-  BlueprintEffectPreview as SharedBlueprintEffectPreview,
   BlueprintRouteCandidate,
   BlueprintRouteSelection,
   BlueprintRouteSet,
+  BlueprintRolePresenceState,
+  BlueprintRoleTimelineEntry,
   BlueprintSpecDocument,
   BlueprintSpecTree,
   BlueprintSpecTreeVersionSnapshot,
@@ -77,7 +87,44 @@ import type {
 import SpecTreeWorkbenchPanel from "./SpecTreeWorkbenchPanel";
 import SpecDocumentWorkbenchPanel from "./SpecDocumentWorkbenchPanel";
 
-type BlueprintEffectPreview = SharedBlueprintEffectPreview & { title?: string };
+type BlueprintEffectPreview = BlueprintEffectPreviewSnapshot & { title?: string };
+type BlueprintEffectPreviewWithProjection = BlueprintEffectPreview & {
+  runtimeProjection?: BlueprintEffectPreviewRuntimeProjection;
+  runtime_projection?: unknown;
+  projection?: unknown;
+};
+type BlueprintRoleEventConsumerId = "scene" | "hud" | "logs" | "browser" | "spec";
+type BlueprintRoleEventProjectionItem = {
+  id: BlueprintRoleEventConsumerId;
+  label: string;
+  value: string;
+  detail: string;
+  status: string;
+  roleState?: BlueprintRolePresenceState;
+  eventType?: string;
+  sourceEventId?: string;
+};
+type BlueprintRoleEventProjection = {
+  items: BlueprintRoleEventProjectionItem[];
+  eventCount: number;
+  roleCount: number;
+  latestEvent?: BlueprintRoleTimelineEntry;
+};
+type BlueprintEffectPreviewWithVersionSync = BlueprintEffectPreview & {
+  supersedes_preview_id?: unknown;
+  version_status?: unknown;
+  refreshed_from_spec_tree_version?: unknown;
+  refreshed_at?: unknown;
+  node_progress?: unknown;
+  nodeStatus?: unknown;
+  node_status?: unknown;
+  nodeCompletion?: unknown;
+  node_completion?: unknown;
+  dependency_order?: unknown;
+  previous_preview_ids?: unknown;
+  preserved_preview_ids?: unknown;
+  source_snapshot_hash?: unknown;
+};
 
 interface BlueprintProgressPanelProps {
   className?: string;
@@ -91,6 +138,8 @@ interface BlueprintProgressPanelProps {
   initialEffectPreviews?: BlueprintEffectPreview[] | null;
   initialPromptPackages?: BlueprintPromptPackage[] | null;
   initialCapabilities?: BlueprintRuntimeCapability[] | null;
+  initialAgentCrew?: BlueprintAgentCrewSnapshot | null;
+  initialClarificationSession?: BlueprintClarificationStrategySession | null;
   initialCapabilityInvocations?: BlueprintCapabilityInvocation[] | null;
   initialCapabilityEvidence?: BlueprintCapabilityEvidence[] | null;
   initialEngineeringLandingPlans?: BlueprintEngineeringLandingPlan[] | null;
@@ -489,6 +538,9 @@ function RouteSetPreview({
 type LatestJobWithEffectPreviews = {
   effectPreviews?: BlueprintEffectPreview[];
   effect_previews?: BlueprintEffectPreview[];
+  runtimeProjection?: BlueprintEffectPreviewRuntimeProjection;
+  runtime_projection?: unknown;
+  projection?: unknown;
 };
 
 type LatestJobWithPromptPackages = {
@@ -500,6 +552,8 @@ type LatestJobWithRuntimeCapabilities = {
   capabilities?: BlueprintRuntimeCapability[];
   runtimeCapabilities?: BlueprintRuntimeCapability[];
   runtime_capabilities?: BlueprintRuntimeCapability[];
+  agentCrew?: BlueprintAgentCrewSnapshot;
+  agent_crew?: BlueprintAgentCrewSnapshot;
   capabilityInvocations?: BlueprintCapabilityInvocation[];
   capability_invocations?: BlueprintCapabilityInvocation[];
   invocations?: BlueprintCapabilityInvocation[];
@@ -508,13 +562,27 @@ type LatestJobWithRuntimeCapabilities = {
   evidence?: BlueprintCapabilityEvidence[];
 };
 
+type LatestJobWithClarificationSession = {
+  clarificationSession?: BlueprintClarificationStrategySession;
+  clarification_session?: BlueprintClarificationStrategySession;
+  session?: BlueprintClarificationStrategySession;
+  intake?: {
+    clarificationSession?: BlueprintClarificationStrategySession;
+    clarification_session?: BlueprintClarificationStrategySession;
+  };
+};
+
 type LatestJobWithEngineeringLanding = {
+  job?: { id?: string };
+  jobId?: string;
+  job_id?: string;
   landingPlans?: BlueprintEngineeringLandingPlan[];
   landing_plans?: BlueprintEngineeringLandingPlan[];
   engineeringLandingPlans?: BlueprintEngineeringLandingPlan[];
   engineering_landing_plans?: BlueprintEngineeringLandingPlan[];
   engineeringRuns?: BlueprintEngineeringRun[];
   engineering_runs?: BlueprintEngineeringRun[];
+  runs?: BlueprintEngineeringRun[];
 };
 
 type LatestJobWithArtifactMemory = {
@@ -554,7 +622,25 @@ function readLatestSpecTreeVersions(
 function readLatestEffectPreviews(value: unknown): BlueprintEffectPreview[] {
   const record = value as LatestJobWithEffectPreviews | null;
   const previews = record?.effectPreviews ?? record?.effect_previews ?? [];
-  return Array.isArray(previews) ? previews : [];
+  if (!Array.isArray(previews)) return [];
+
+  const latestProjection =
+    record?.runtimeProjection ?? record?.runtime_projection ?? record?.projection;
+  if (!latestProjection) {
+    return previews;
+  }
+
+  return previews.map((preview, index) =>
+    index === 0 &&
+    !runtimeProjectionHasSignal(
+      normalizeRuntimeProjection(preview, readRuntimeProjection(preview))
+    )
+      ? ({
+          ...preview,
+          runtimeProjection: normalizeRuntimeProjection(preview, latestProjection),
+        } satisfies BlueprintEffectPreviewWithProjection)
+      : preview
+  );
 }
 
 function readLatestPromptPackages(value: unknown): BlueprintPromptPackage[] {
@@ -571,6 +657,25 @@ function readLatestCapabilities(value: unknown): BlueprintRuntimeCapability[] {
     record?.runtime_capabilities ??
     [];
   return Array.isArray(capabilities) ? capabilities : [];
+}
+
+function readLatestAgentCrew(value: unknown): BlueprintAgentCrewSnapshot | null {
+  const record = value as LatestJobWithRuntimeCapabilities | null;
+  return record?.agentCrew ?? record?.agent_crew ?? null;
+}
+
+function readLatestClarificationSession(
+  value: unknown
+): BlueprintClarificationStrategySession | null {
+  const record = value as LatestJobWithClarificationSession | null;
+  return (
+    record?.clarificationSession ??
+    record?.clarification_session ??
+    record?.session ??
+    record?.intake?.clarificationSession ??
+    record?.intake?.clarification_session ??
+    null
+  );
 }
 
 function readLatestCapabilityInvocations(
@@ -601,19 +706,20 @@ function readLatestEngineeringLandingPlans(
   value: unknown
 ): BlueprintEngineeringLandingPlan[] {
   const record = value as LatestJobWithEngineeringLanding | null;
-  const plans =
-    record?.landingPlans ??
-    record?.landing_plans ??
-    record?.engineeringLandingPlans ??
-    record?.engineering_landing_plans ??
-    [];
-  return Array.isArray(plans) ? plans : [];
+  const fallbackJobId = record?.job?.id ?? record?.jobId ?? record?.job_id ?? "";
+  return normalizeBlueprintEngineeringLandingResponse(
+    value,
+    fallbackJobId
+  ).landingPlans;
 }
 
 function readLatestEngineeringRuns(value: unknown): BlueprintEngineeringRun[] {
   const record = value as LatestJobWithEngineeringLanding | null;
-  const runs = record?.engineeringRuns ?? record?.engineering_runs ?? [];
-  return Array.isArray(runs) ? runs : [];
+  const fallbackJobId = record?.job?.id ?? record?.jobId ?? record?.job_id ?? "";
+  return normalizeBlueprintEngineeringRunsResponse(
+    value,
+    fallbackJobId
+  ).engineeringRuns;
 }
 
 function readLatestArtifactLedgerEntries(
@@ -712,6 +818,840 @@ function artifactTokenLabel(value: string | undefined, fallback: string): string
     .join(" ");
 }
 
+function clarificationValue(value: unknown, fallback = ""): string {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function clarificationBooleanLabel(value: boolean | undefined): string | null {
+  if (value === undefined) return null;
+  return value ? "settled" : "open";
+}
+
+function clarificationQuestionDimension(
+  question: BlueprintClarificationStrategyQuestion
+): string {
+  return (
+    clarificationValue(question.routeDimension) ||
+    clarificationValue(question.kind) ||
+    "question"
+  );
+}
+
+function hasClarificationStrategySignal(
+  session: BlueprintClarificationStrategySession | null
+): boolean {
+  if (!session) return false;
+  return Boolean(
+    session.strategyId ||
+      session.strategyLabel ||
+      session.templateId ||
+      session.routeDimension ||
+      session.readinessSignal ||
+      session.routeReadySummary ||
+      session.readiness.readinessSignal ||
+      session.readiness.routeReadySummary ||
+      session.questions.some(
+        question =>
+          question.strategyId ||
+          question.strategyLabel ||
+          question.templateId ||
+          question.routeDimension ||
+          question.readinessSignal ||
+          question.routeReadySummary
+      )
+  );
+}
+
+function BlueprintClarificationStrategySummary({
+  session,
+}: {
+  session: BlueprintClarificationStrategySession | null;
+}) {
+  if (!hasClarificationStrategySignal(session)) return null;
+
+  const strategyLabel =
+    clarificationValue(session?.strategyLabel) ||
+    clarificationValue(session?.strategyId, "Strategy pending");
+  const templateLabel =
+    clarificationValue(session?.templateId) ||
+    clarificationValue(session?.questions[0]?.templateId, "Template pending");
+  const readinessSignal =
+    clarificationValue(session?.readinessSignal) ||
+    clarificationValue(session?.readiness.readinessSignal) ||
+    artifactTokenLabel(session?.readiness.status, "Readiness pending");
+  const routeReadySummary =
+    clarificationValue(session?.routeReadySummary) ||
+    clarificationValue(session?.readiness.routeReadySummary);
+  const settledLabel = clarificationBooleanLabel(session?.settledByStrategy);
+  const visibleQuestions = session?.questions.slice(0, 4) ?? [];
+
+  return (
+    <div
+      className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4"
+      data-testid="blueprint-clarification-strategy-summary"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-xs font-black uppercase tracking-normal text-slate-500">
+            Clarification Strategy
+          </div>
+          <h3 className="mt-2 text-lg font-black text-slate-950">
+            {blueprintCopy(strategyLabel)}
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-500">
+            {blueprintCopy(
+              routeReadySummary ||
+                "Strategy metadata is linked to the clarification session."
+            )}
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Badge
+            variant="outline"
+            className="rounded-full border-[#0f766e]/25 bg-white text-[10px] font-black text-[#0f766e]"
+          >
+            {blueprintCopy(templateLabel)}
+          </Badge>
+          <Badge
+            variant="outline"
+            className="rounded-full border-slate-200 bg-white text-[10px] font-black text-slate-500"
+          >
+            {blueprintCopy(readinessSignal)}
+          </Badge>
+          {settledLabel ? (
+            <Badge
+              variant="outline"
+              className="rounded-full border-slate-200 bg-white text-[10px] font-black text-slate-500"
+            >
+              {settledLabel}
+            </Badge>
+          ) : null}
+        </div>
+      </div>
+
+      {visibleQuestions.length ? (
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {visibleQuestions.map(question => (
+            <div
+              key={question.id}
+              className="rounded-[12px] border border-slate-200 bg-white px-3 py-2"
+              data-testid="blueprint-clarification-strategy-question"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="rounded-full border-slate-200 bg-slate-50 text-[10px] font-black text-slate-500"
+                >
+                  {blueprintCopy(clarificationQuestionDimension(question))}
+                </Badge>
+                {question.readinessSignal ? (
+                  <span className="text-[10px] font-black uppercase tracking-normal text-slate-400">
+                    {blueprintCopy(question.readinessSignal)}
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-2 line-clamp-2 text-xs font-bold leading-5 text-slate-700">
+                {blueprintCopy(question.prompt)}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function agentRoleStateLabel(state: string): string {
+  if (state === "active") return "Active";
+  if (state === "watching") return "Watching";
+  if (state === "reviewing") return "Reviewing";
+  if (state === "sleeping") return "Sleeping";
+  return artifactTokenLabel(state, "Status");
+}
+
+function agentRoleStateClass(state: string): string {
+  if (state === "active") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (state === "watching") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (state === "reviewing") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  return "border-slate-200 bg-slate-100 text-slate-500";
+}
+
+function agentRoleStateDetail(state: string): string {
+  if (state === "active") return "driving current work";
+  if (state === "watching") return "watching handoff signals";
+  if (state === "reviewing") return "reviewing evidence";
+  if (state === "sleeping") return "standing by";
+  return "role presence";
+}
+
+function latestAgentRoleItem(
+  values: string[],
+  explicit: string | undefined,
+  fallback: string
+): string {
+  return explicit || values[0] || fallback;
+}
+
+function uniqueBlueprintStrings(values: Array<string | undefined>): string[] {
+  return Array.from(new Set(values.filter(Boolean) as string[]));
+}
+
+function compareRoleTimelineEvents(
+  left: BlueprintRoleTimelineEntry,
+  right: BlueprintRoleTimelineEntry
+): number {
+  return (
+    left.occurredAt.localeCompare(right.occurredAt) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+function eventMatchesRuntimeProjection(
+  event: BlueprintRoleTimelineEntry,
+  projection: BlueprintEffectPreviewRuntimeProjection | null | undefined
+): boolean {
+  if (!projection) return true;
+  const linkedIds = uniqueBlueprintStrings([
+    projection.jobId,
+    projection.routeId,
+    projection.specTreeId,
+    projection.nodeId,
+    projection.sceneSnapshotId,
+    projection.browserPreviewId,
+    projection.effectPreviewId,
+  ]);
+  const eventIds = uniqueBlueprintStrings([
+    event.jobId,
+    event.routeId,
+    event.specTreeId,
+    event.nodeId,
+    event.artifactId,
+    event.capabilityId,
+    event.evidenceId,
+  ]);
+
+  return (
+    linkedIds.length === 0 ||
+    eventIds.length === 0 ||
+    eventIds.some(id => linkedIds.includes(id)) ||
+    Boolean(projection.nodeId && event.nodeId === projection.nodeId) ||
+    Boolean(projection.routeId && event.routeId === projection.routeId)
+  );
+}
+
+function collectRoleTimelineEvents(
+  agentCrew: BlueprintAgentCrewSnapshot | null | undefined,
+  projection: BlueprintEffectPreviewRuntimeProjection | null | undefined
+): BlueprintRoleTimelineEntry[] {
+  return (agentCrew?.roleTimelines ?? agentCrew?.presence ?? [])
+    .flatMap(role => role.entries ?? [])
+    .filter(event => eventMatchesRuntimeProjection(event, projection))
+    .sort(compareRoleTimelineEvents);
+}
+
+function roleEventValue(
+  event: BlueprintRoleTimelineEntry | undefined,
+  fallback: string
+): string {
+  return event?.currentAction || event?.summary || fallback;
+}
+
+function roleEventSearchText(event: BlueprintRoleTimelineEntry): string {
+  return [
+    event.type,
+    event.summary,
+    event.currentAction,
+    event.artifactId,
+    event.capabilityId,
+    event.evidenceId,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function latestRoleEventByPredicate(
+  events: BlueprintRoleTimelineEntry[],
+  predicate: (event: BlueprintRoleTimelineEntry) => boolean
+): BlueprintRoleTimelineEntry | undefined {
+  return events.filter(predicate).at(-1);
+}
+
+function roleEventProjectionStatus(
+  event: BlueprintRoleTimelineEntry | undefined,
+  fallback = "pending"
+): string {
+  return event?.presenceState ?? fallback;
+}
+
+function buildRoleEventProjection(
+  agentCrew: BlueprintAgentCrewSnapshot | null | undefined,
+  projection: BlueprintEffectPreviewRuntimeProjection | null | undefined
+): BlueprintRoleEventProjection {
+  const events = collectRoleTimelineEvents(agentCrew, projection);
+  const latestEvent = events.at(-1);
+  const sceneEvent = latestRoleEventByPredicate(
+    events,
+    event => {
+      const text = roleEventSearchText(event);
+      return (
+        text.includes("3d") ||
+        text.includes("scene") ||
+        text.includes("snapshot") ||
+        event.stage === "spec_tree" ||
+        Boolean(event.specTreeId || event.nodeId)
+      );
+    }
+  );
+  const hudEvent = latestRoleEventByPredicate(
+    events,
+    event => {
+      const text = roleEventSearchText(event);
+      return text.includes("hud") || event.type === "role.activated";
+    }
+  );
+  const logEvent = latestRoleEventByPredicate(
+    events,
+    event =>
+      event.type === "role.capability_invoked" ||
+      Boolean(event.capabilityId) ||
+      Boolean(event.evidenceId)
+  );
+  const browserEvent = latestRoleEventByPredicate(
+    events,
+    event => {
+      const text = roleEventSearchText(event);
+      return text.includes("browser") || text.includes("preview");
+    }
+  );
+  const specEvent = latestRoleEventByPredicate(
+    events,
+    event =>
+      event.stage === "spec_tree" ||
+      event.stage === "spec_docs" ||
+      Boolean(event.specTreeId) ||
+      Boolean(event.nodeId)
+  );
+
+  return {
+    eventCount: events.length,
+    roleCount: uniqueBlueprintStrings(events.map(event => event.roleId)).length,
+    latestEvent,
+    items: [
+      {
+        id: "scene",
+        label: "3D Scene",
+        value:
+          projection?.sceneSnapshotId ||
+          roleEventValue(sceneEvent, "Waiting for scene role event"),
+        detail: sceneEvent
+          ? `Role event ${sceneEvent.eventId} keeps scene state aligned.`
+          : projection?.sceneSnapshotId
+            ? "Scene snapshot is linked to the runtime projection."
+            : "No scene role event yet.",
+        status: roleEventProjectionStatus(
+          sceneEvent,
+          projection?.sceneSnapshotId ? "ready" : "pending"
+        ),
+        roleState: sceneEvent?.presenceState,
+        eventType: sceneEvent?.type,
+        sourceEventId: sceneEvent?.eventId,
+      },
+      {
+        id: "hud",
+        label: "HUD",
+        value:
+          projection?.hudState.summary ||
+          projection?.hudState.title ||
+          roleEventValue(hudEvent, "Waiting for HUD role event"),
+        detail: hudEvent
+          ? `Role event ${hudEvent.eventId} drives HUD presence ${agentRoleStateLabel(
+              hudEvent.presenceState
+            )}.`
+          : projection?.hudState.badges.length
+            ? projection.hudState.badges.join(" / ")
+            : `${artifactTokenLabel(projection?.hudState.status, "preview")} status`,
+        status: roleEventProjectionStatus(
+          hudEvent,
+          projection?.hudState.status ?? "pending"
+        ),
+        roleState: hudEvent?.presenceState,
+        eventType: hudEvent?.type,
+        sourceEventId: hudEvent?.eventId,
+      },
+      {
+        id: "logs",
+        label: "Logs",
+        value:
+          roleEventValue(logEvent, projection?.logTimeline[0]?.message ?? "") ||
+          "Waiting for runtime logs",
+        detail: logEvent
+          ? `Role event ${logEvent.eventId} is mirrored in logs.`
+          : projection?.logTimeline[0]?.occurredAt ||
+            `${projection?.logTimeline.length ?? 0} runtime log entries`,
+        status: roleEventProjectionStatus(logEvent, "pending"),
+        roleState: logEvent?.presenceState,
+        eventType: logEvent?.type,
+        sourceEventId: logEvent?.eventId,
+      },
+      {
+        id: "browser",
+        label: "Browser",
+        value:
+          projection?.browserPreviewId ||
+          projection?.browserPreview.url ||
+          roleEventValue(browserEvent, "Waiting for browser role event"),
+        detail: browserEvent
+          ? `Role event ${browserEvent.eventId} keeps browser preview aligned.`
+          : projection?.browserPreview.url ||
+            projection?.browserPreview.summary ||
+            projection?.browserPreview.title ||
+            "No browser preview role event yet.",
+        status: roleEventProjectionStatus(
+          browserEvent,
+          projection?.browserPreviewId || projection?.browserPreview.url
+            ? "ready"
+            : "pending"
+        ),
+        roleState: browserEvent?.presenceState,
+        eventType: browserEvent?.type,
+        sourceEventId: browserEvent?.eventId,
+      },
+      {
+        id: "spec",
+        label: "SPEC UI",
+        value: roleEventValue(specEvent ?? latestEvent, "Waiting for SPEC role event"),
+        detail: specEvent
+          ? `Role event ${specEvent.eventId} is visible in SPEC UI.`
+          : latestEvent
+            ? `Latest role event ${latestEvent.eventId} is visible in SPEC UI.`
+            : "No role event stream entries yet.",
+        status: roleEventProjectionStatus(specEvent ?? latestEvent, "pending"),
+        roleState: (specEvent ?? latestEvent)?.presenceState,
+        eventType: (specEvent ?? latestEvent)?.type,
+        sourceEventId: (specEvent ?? latestEvent)?.eventId,
+      },
+    ],
+  };
+}
+
+function roleEventProjectionLogEntries(
+  roleEventProjection: BlueprintRoleEventProjection
+): BlueprintEffectPreviewLogEntry[] {
+  return roleEventProjection.items
+    .filter(item => item.sourceEventId)
+    .map((item, index) => ({
+      id: `role-event-log-${item.sourceEventId ?? index + 1}`,
+      level:
+        item.status === "reviewing" || item.status === "active"
+          ? "success"
+          : "info",
+      message: `${item.label}: ${item.value}`,
+      occurredAt: roleEventProjection.latestEvent?.occurredAt ?? "",
+      sourceDocumentIds: [],
+    }));
+}
+
+function previewRecord(
+  preview: BlueprintEffectPreview | null | undefined
+): BlueprintEffectPreviewWithVersionSync | null {
+  return (preview as BlueprintEffectPreviewWithVersionSync | null | undefined) ?? null;
+}
+
+function previewString(value: unknown, fallback = ""): string {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function previewVersionValue(value: unknown): string {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return previewString(value);
+}
+
+function previewStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map(item => previewString(item)).filter(Boolean);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value
+      .split(/\r?\n|,|;/)
+      .map(item => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function previewStatusLabel(value: unknown): string {
+  return artifactTokenLabel(previewString(value, "current"), "Current");
+}
+
+function previewNodeProgressLabel(
+  preview: BlueprintEffectPreview | null | undefined
+): string {
+  const record = previewRecord(preview);
+  const nodeProgress =
+    record?.nodeProgress ??
+    record?.node_progress ??
+    ((record?.nodeStatus ??
+      record?.node_status ??
+      record?.nodeCompletion ??
+      record?.node_completion) !== undefined
+      ? {
+          status: record?.nodeStatus ?? record?.node_status,
+          completion: record?.nodeCompletion ?? record?.node_completion,
+        }
+      : undefined);
+
+  if (!nodeProgress || typeof nodeProgress !== "object") {
+    return "Node progress pending";
+  }
+
+  const progress = nodeProgress as {
+    status?: unknown;
+    completion?: unknown;
+    completionPercent?: unknown;
+    completion_percent?: unknown;
+    percent?: unknown;
+  };
+  const status = previewString(progress.status, "pending");
+  const completion = previewVersionValue(
+    progress.completion ??
+      progress.completionPercent ??
+      progress.completion_percent ??
+      progress.percent
+  );
+
+  return completion
+    ? `${previewStatusLabel(status)} / ${completion}%`
+    : previewStatusLabel(status);
+}
+
+function EffectPreviewVersionSync({
+  preview,
+}: {
+  preview: BlueprintEffectPreview | null;
+}) {
+  const record = previewRecord(preview);
+  const version = previewVersionValue(record?.version) || "draft";
+  const versionStatus =
+    record?.versionStatus ?? record?.version_status ?? record?.status;
+  const specTreeVersion =
+    previewVersionValue(
+      record?.refreshedFromSpecTreeVersion ??
+        record?.refreshed_from_spec_tree_version
+    ) || "pending";
+  const refreshedAt = previewString(record?.refreshedAt ?? record?.refreshed_at);
+  const dependencyOrder = previewStringArray(
+    record?.dependencyOrder ?? record?.dependency_order
+  );
+  const preservedPreviewIds = previewStringArray(
+    record?.preservedPreviewIds ?? record?.preserved_preview_ids
+  );
+  const previousPreviewIds = previewStringArray(
+    record?.previousPreviewIds ?? record?.previous_preview_ids
+  );
+  const sourceSnapshotHash = previewString(
+    record?.sourceSnapshotHash ?? record?.source_snapshot_hash
+  );
+
+  return (
+    <div
+      className="mt-3 rounded-[14px] border border-slate-200 bg-slate-50 px-3 py-3"
+      data-testid="effect-preview-version-sync"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge
+          variant="outline"
+          className="rounded-full border-[#0f766e]/25 bg-white text-[10px] font-black text-[#0f766e]"
+        >
+          Version {blueprintCopy(version)}
+        </Badge>
+        <Badge
+          variant="outline"
+          className="rounded-full border-slate-200 bg-white text-[10px] font-black text-slate-500"
+        >
+          {previewStatusLabel(versionStatus)}
+        </Badge>
+        <Badge
+          variant="outline"
+          className="rounded-full border-slate-200 bg-white text-[10px] font-black text-slate-500"
+        >
+          SpecTree {blueprintCopy(specTreeVersion)}
+        </Badge>
+        <Badge
+          variant="outline"
+          className="rounded-full border-slate-200 bg-white text-[10px] font-black text-slate-500"
+        >
+          Preserved {preservedPreviewIds.length}
+        </Badge>
+      </div>
+      <div className="mt-2 grid gap-2 md:grid-cols-3">
+        <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-2">
+          <div className="text-[10px] font-black uppercase tracking-normal text-slate-400">
+            Node
+          </div>
+          <div className="mt-1 truncate text-xs font-bold text-slate-700">
+            {blueprintCopy(previewNodeProgressLabel(preview))}
+          </div>
+        </div>
+        <div
+          className="rounded-[12px] border border-slate-200 bg-white px-3 py-2"
+          data-testid="effect-preview-dependency-order"
+        >
+          <div className="text-[10px] font-black uppercase tracking-normal text-slate-400">
+            Dependency Order
+          </div>
+          <div className="mt-1 truncate text-xs font-bold text-slate-700">
+            {dependencyOrder.length
+              ? blueprintCopy(dependencyOrder.join(" -> "))
+              : "No dependency order"}
+          </div>
+        </div>
+        <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-2">
+          <div className="text-[10px] font-black uppercase tracking-normal text-slate-400">
+            Previous Versions
+          </div>
+          <div className="mt-1 truncate text-xs font-bold text-slate-700">
+            {previousPreviewIds.length
+              ? `${previousPreviewIds.length} previous / ${preservedPreviewIds.length} preserved`
+              : `${preservedPreviewIds.length} preserved`}
+          </div>
+        </div>
+      </div>
+      {refreshedAt || sourceSnapshotHash ? (
+        <div className="mt-2 truncate text-[10px] font-black uppercase tracking-normal text-slate-400">
+          {refreshedAt ? `Refreshed ${formatEffectPreviewDate(refreshedAt)}` : "Refreshed"}
+          {sourceSnapshotHash ? ` / ${sourceSnapshotHash}` : ""}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function readRuntimeProjection(
+  preview: BlueprintEffectPreview | null | undefined
+): unknown {
+  const candidate = preview as BlueprintEffectPreviewWithProjection | null | undefined;
+  return (
+    candidate?.runtimeProjection ??
+    candidate?.runtime_projection ??
+    candidate?.projection
+  );
+}
+
+function normalizeRuntimeProjection(
+  preview: BlueprintEffectPreview | null | undefined,
+  value: unknown
+): BlueprintEffectPreviewRuntimeProjection {
+  return normalizeBlueprintEffectPreviewRuntimeProjection(value, {
+    previewId: preview?.id,
+    jobId: preview?.jobId,
+    treeId: preview?.treeId,
+    nodeId: preview?.nodeId,
+    title: preview?.title,
+    summary: preview?.summary,
+    status: preview?.status,
+  });
+}
+
+function runtimeProjectionHasSignal(
+  projection: BlueprintEffectPreviewRuntimeProjection
+): boolean {
+  return Boolean(
+    projection.sceneSnapshotId ||
+      projection.browserPreviewId ||
+      projection.browserPreview.url ||
+      projection.logTimeline.length > 0 ||
+      projection.hudState.progressPercent > 0 ||
+      projection.hudState.badges.length > 0
+  );
+}
+
+function runtimeProjectionValue(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function RuntimeProjectionCard({
+  label,
+  value,
+  detail,
+  status,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  status: string;
+}) {
+  return (
+    <div
+      className="rounded-[12px] border border-slate-200 bg-slate-50 px-3 py-3"
+      data-testid="runtime-projection-card"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] font-black uppercase tracking-normal text-slate-400">
+            {label}
+          </div>
+          <div className="mt-1 truncate text-sm font-black text-slate-900">
+            {blueprintCopy(value)}
+          </div>
+        </div>
+        <Badge
+          variant="outline"
+          className={cn(
+            "shrink-0 rounded-full text-[10px] font-black",
+            status === "ready" || status === "completed"
+              ? "border-[#0f766e]/30 bg-[#0f766e]/10 text-[#0f766e]"
+              : "border-slate-200 bg-white text-slate-500"
+          )}
+        >
+          {artifactTokenLabel(status, "State")}
+        </Badge>
+      </div>
+      <div className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-slate-500">
+        {blueprintCopy(detail)}
+      </div>
+    </div>
+  );
+}
+
+function EffectPreviewRuntimeProjection({
+  preview,
+  roleEventProjection,
+}: {
+  preview: BlueprintEffectPreview | null;
+  roleEventProjection?: BlueprintRoleEventProjection;
+}) {
+  const projection = useMemo(
+    () => normalizeRuntimeProjection(preview, readRuntimeProjection(preview)),
+    [preview]
+  );
+  const projectedLogs = useMemo(
+    () =>
+      projection.logTimeline.length
+        ? projection.logTimeline
+        : roleEventProjection
+          ? roleEventProjectionLogEntries(roleEventProjection)
+          : [],
+    [projection.logTimeline, roleEventProjection]
+  );
+  const latestLog = projection.logTimeline[0];
+  const latestProjectedLog = projectedLogs[0];
+  const hasScene = Boolean(projection.sceneSnapshotId);
+  const hasHud = Boolean(
+    projection.hudState.title ||
+      projection.hudState.summary ||
+      projection.hudState.badges.length ||
+      projection.hudState.progressPercent > 0
+  );
+  const hasLogs = projectedLogs.length > 0;
+  const hasBrowser = Boolean(
+    projection.browserPreviewId || projection.browserPreview.url
+  );
+  const roleItemsById = useMemo(
+    () =>
+      new Map(
+        (roleEventProjection?.items ?? []).map(item => [item.id, item])
+      ),
+    [roleEventProjection]
+  );
+  const sceneRoleItem = roleItemsById.get("scene");
+  const hudRoleItem = roleItemsById.get("hud");
+  const logsRoleItem = roleItemsById.get("logs");
+  const browserRoleItem = roleItemsById.get("browser");
+
+  return (
+    <div
+      className="rounded-[16px] border border-slate-200 bg-white p-4"
+      data-testid="effect-preview-runtime-projection"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-normal text-slate-500">
+            <PlayCircle className="size-3.5" aria-hidden="true" />
+            Runtime Projection
+          </div>
+          <h4 className="mt-2 truncate text-base font-black text-slate-950">
+            {blueprintCopy(projection.hudState.title || "Runtime capability projection")}
+          </h4>
+        </div>
+        <Badge
+          variant="outline"
+          className="rounded-full border-slate-200 bg-slate-50 text-[10px] font-black text-slate-500"
+        >
+          {projection.hudState.progressPercent}%
+        </Badge>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        <RuntimeProjectionCard
+          label="3D Scene"
+          value={runtimeProjectionValue(
+            projection.sceneSnapshotId || sceneRoleItem?.value,
+            "Waiting for scene snapshot"
+          )}
+          detail={
+            sceneRoleItem?.detail ||
+            (projection.sceneSnapshotId
+              ? "Scene snapshot is linked."
+              : "No scene snapshot yet.")
+          }
+          status={sceneRoleItem?.status ?? (hasScene ? "ready" : "pending")}
+        />
+        <RuntimeProjectionCard
+          label="HUD"
+          value={runtimeProjectionValue(
+            projection.hudState.summary || hudRoleItem?.value,
+            projection.hudState.title || "Waiting for HUD state"
+          )}
+          detail={
+            hudRoleItem?.detail ??
+            (projection.hudState.badges.length
+              ? projection.hudState.badges.join(" / ")
+              : `${artifactTokenLabel(projection.hudState.status, "preview")} status`)
+          }
+          status={hudRoleItem?.status ?? (hasHud ? projection.hudState.status : "pending")}
+        />
+        <RuntimeProjectionCard
+          label="Logs"
+          value={runtimeProjectionValue(
+            latestLog?.message || latestProjectedLog?.message || logsRoleItem?.value,
+            "Waiting for runtime logs"
+          )}
+          detail={
+            logsRoleItem?.detail ||
+            latestProjectedLog?.occurredAt ||
+            `${projectedLogs.length} runtime log entries`
+          }
+          status={logsRoleItem?.status ?? (hasLogs ? latestProjectedLog?.level ?? "ready" : "pending")}
+        />
+        <RuntimeProjectionCard
+          label="Browser"
+          value={runtimeProjectionValue(
+            projection.browserPreviewId || browserRoleItem?.value,
+            projection.browserPreview.url || "Waiting for browser preview"
+          )}
+          detail={
+            browserRoleItem?.detail ||
+            projection.browserPreview.url ||
+            projection.browserPreview.summary ||
+            projection.browserPreview.title ||
+            "No browser preview link yet."
+          }
+          status={browserRoleItem?.status ?? (hasBrowser ? "ready" : "pending")}
+        />
+      </div>
+    </div>
+  );
+}
+
 const ENGINEERING_RUN_STATUS_OPTIONS: Array<{
   id: BlueprintEngineeringRunStatus;
   label: string;
@@ -756,16 +1696,292 @@ function EffectPreviewList({
   );
 }
 
+function BlueprintAgentCrewSurface({
+  agentCrew,
+  capabilities,
+  invocations,
+  evidence,
+  roleEventProjection,
+}: {
+  agentCrew: BlueprintAgentCrewSnapshot | null;
+  capabilities: BlueprintRuntimeCapability[];
+  invocations: BlueprintCapabilityInvocation[];
+  evidence: BlueprintCapabilityEvidence[];
+  roleEventProjection?: BlueprintRoleEventProjection;
+}) {
+  const roleTimelines = agentCrew?.roleTimelines ?? agentCrew?.presence ?? [];
+  const capabilityById = useMemo(
+    () => new Map(capabilities.map(capability => [capability.id, capability])),
+    [capabilities]
+  );
+  const invocationById = useMemo(
+    () => new Map(invocations.map(invocation => [invocation.id, invocation])),
+    [invocations]
+  );
+  const evidenceById = useMemo(
+    () => new Map(evidence.map(item => [item.id, item])),
+    [evidence]
+  );
+  const stateCounts = useMemo(
+    () =>
+      roleTimelines.reduce(
+        (counts, role) => {
+          counts[role.state] += 1;
+          return counts;
+        },
+        { active: 0, watching: 0, reviewing: 0, sleeping: 0 }
+      ),
+    [roleTimelines]
+  );
+  const streamEventCount =
+    roleEventProjection?.eventCount ??
+    roleTimelines.reduce((count, role) => count + (role.entries?.length ?? 0), 0);
+
+  if (!agentCrew && roleTimelines.length === 0) return null;
+
+  return (
+    <div
+      className="mt-4 rounded-[20px] border border-slate-200 bg-white px-4 py-4"
+      data-testid="blueprint-agent-crew-surface"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-normal text-slate-500">
+            <Layers3 className="size-3.5" aria-hidden="true" />
+            Agent Crew
+          </div>
+          <h3 className="mt-2 text-lg font-black text-slate-950">
+            Companion role surface
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
+            {agentCrew?.stage
+              ? `${artifactTokenLabel(agentCrew.stage, "runtime_capability")} companion roles are aligned with runtime capabilities, logs, browser preview artifacts, and evidence.`
+              : "Companion roles are aligned with runtime capabilities, logs, browser preview artifacts, and evidence."}
+          </p>
+        </div>
+        <Badge
+          variant="outline"
+          className="rounded-full border-slate-200 bg-slate-50 text-[10px] font-black text-slate-500"
+        >
+          {roleTimelines.length} roles / {streamEventCount} events
+        </Badge>
+      </div>
+
+      {roleEventProjection ? (
+        <div
+          className="mt-4 grid gap-2 md:grid-cols-5"
+          data-testid="agent-crew-event-stream-consumers"
+        >
+          {roleEventProjection.items.map(item => (
+            <div
+              key={item.id}
+              className="rounded-[12px] border border-slate-200 bg-slate-50 px-3 py-2"
+              data-testid="agent-crew-event-stream-consumer"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="truncate text-[10px] font-black uppercase tracking-normal text-slate-400">
+                  {item.label}
+                </div>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "shrink-0 rounded-full text-[10px] font-black",
+                    agentRoleStateClass(item.roleState ?? item.status)
+                  )}
+                >
+                  {agentRoleStateLabel(item.roleState ?? item.status)}
+                </Badge>
+              </div>
+              <div className="mt-1 truncate text-xs font-bold text-slate-700">
+                {blueprintCopy(item.value)}
+              </div>
+              <div className="mt-1 truncate text-[10px] font-bold uppercase tracking-normal text-slate-400">
+                {item.sourceEventId
+                  ? blueprintCopy(`${item.sourceEventId} / ${item.eventType ?? "role.event"}`)
+                  : "Waiting for role event"}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-4">
+        {(["active", "watching", "reviewing", "sleeping"] as const).map(
+          state => (
+            <SummaryTile
+              key={state}
+              label={agentRoleStateLabel(state)}
+              value={stateCounts[state]}
+              detail={agentRoleStateDetail(state)}
+            />
+          )
+        )}
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        {roleTimelines.length ? (
+          roleTimelines.map(role => {
+            const latestCapability =
+              role.latestCapability ||
+              role.capabilityIds
+                .map(
+                  capabilityId =>
+                    capabilityById.get(capabilityId)?.label ?? capabilityId
+                )
+                .find(Boolean) ||
+              role.capabilityLabels[0] ||
+              "No capability bound";
+            const latestArtifact = latestAgentRoleItem(
+              role.artifactIds,
+              role.latestArtifact,
+              "No artifact yet"
+            );
+            const latestEvidenceId = latestAgentRoleItem(
+              role.evidenceIds,
+              role.latestEvidence,
+              "No evidence yet"
+            );
+            const latestEvidence =
+              evidenceById.get(latestEvidenceId)?.title ?? latestEvidenceId;
+            const relatedInvocation = invocations.find(
+              invocation =>
+                invocation.roleId === role.roleId ||
+                role.capabilityIds.includes(invocation.capabilityId)
+            );
+            const latestLog =
+              relatedInvocation?.logs[0] ??
+              (relatedInvocation
+                ? invocationById.get(relatedInvocation.id)?.outputSummary
+                : "");
+            const latestEvent = role.entries?.at(-1);
+
+            return (
+              <div
+                key={role.id}
+                className="rounded-[16px] border border-slate-200 bg-slate-50 px-4 py-3"
+                data-testid="blueprint-agent-role-row"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-black text-slate-950">
+                        {blueprintCopy(role.displayLabel || role.displayName)}
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "rounded-full text-[10px] font-black",
+                          agentRoleStateClass(role.state)
+                        )}
+                      >
+                        {agentRoleStateLabel(role.state)}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="rounded-full border-slate-200 bg-white text-[10px] font-black text-slate-500"
+                      >
+                        {artifactTokenLabel(role.group, "Role")}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                      {blueprintCopy(role.currentAction)}
+                    </div>
+                  </div>
+                  <div className="text-right text-[10px] font-black uppercase tracking-normal text-slate-400">
+                    {artifactTokenLabel(role.stage, "runtime_capability")}
+                  </div>
+                </div>
+
+                <div className="mt-3 grid gap-2 md:grid-cols-4">
+                  <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-2">
+                    <div className="text-[10px] font-black uppercase tracking-normal text-slate-400">
+                      Capability
+                    </div>
+                    <div className="mt-1 truncate text-xs font-bold text-slate-700">
+                      {blueprintCopy(latestCapability)}
+                    </div>
+                  </div>
+                  <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-2">
+                    <div className="text-[10px] font-black uppercase tracking-normal text-slate-400">
+                      Artifact
+                    </div>
+                    <div className="mt-1 truncate text-xs font-bold text-slate-700">
+                      {blueprintCopy(latestArtifact)}
+                    </div>
+                  </div>
+                  <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-2">
+                    <div className="text-[10px] font-black uppercase tracking-normal text-slate-400">
+                      Evidence
+                    </div>
+                    <div className="mt-1 truncate text-xs font-bold text-slate-700">
+                      {blueprintCopy(latestEvidence)}
+                    </div>
+                  </div>
+                  <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-2">
+                    <div className="text-[10px] font-black uppercase tracking-normal text-slate-400">
+                      Log / Preview
+                    </div>
+                    <div className="mt-1 truncate text-xs font-bold text-slate-700">
+                      {blueprintCopy(
+                        latestLog ||
+                          latestEvent?.summary ||
+                          "Awaiting runtime log"
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {latestEvent ? (
+                  <div
+                    className="mt-2 rounded-[12px] border border-slate-200 bg-white px-3 py-2"
+                    data-testid="agent-crew-role-event-source"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-[10px] font-black uppercase tracking-normal text-slate-400">
+                        Role Event Source
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="rounded-full border-slate-200 bg-slate-50 text-[10px] font-black text-slate-500"
+                      >
+                        {blueprintCopy(latestEvent.type)}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 truncate text-xs font-bold text-slate-700">
+                      {blueprintCopy(
+                        `${latestEvent.eventId} / ${agentRoleStateLabel(
+                          latestEvent.presenceState
+                        )}`
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })
+        ) : (
+          <div className="rounded-[14px] border border-dashed border-slate-300 bg-slate-50 px-3 py-6 text-sm font-semibold leading-6 text-slate-500">
+            Agent Crew companion roles will appear after the runtime capability
+            bridge returns crew presence.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function EffectPreviewWorkbenchPanel({
   specTree,
   jobId,
   documents,
   initialPreviews,
+  agentCrew,
 }: {
   specTree: BlueprintSpecTree;
   jobId?: string | null;
   documents: BlueprintSpecDocument[];
   initialPreviews?: BlueprintEffectPreview[];
+  agentCrew?: BlueprintAgentCrewSnapshot | null;
 }) {
   const acceptedDocuments = useMemo(
     () =>
@@ -836,6 +2052,14 @@ function EffectPreviewWorkbenchPanel({
       previews[0] ??
       null,
     [previews, selectedPreviewId]
+  );
+  const activeRuntimeProjection = useMemo(
+    () => normalizeRuntimeProjection(activePreview, readRuntimeProjection(activePreview)),
+    [activePreview]
+  );
+  const roleEventProjection = useMemo(
+    () => buildRoleEventProjection(agentCrew, activeRuntimeProjection),
+    [activeRuntimeProjection, agentCrew]
   );
   const canGenerate = Boolean(jobId) && acceptedDocuments.length > 0;
 
@@ -1080,6 +2304,7 @@ function EffectPreviewWorkbenchPanel({
                 ? blueprintCopy(activePreview.summary)
                 : "工作台已连接，正在等待后端预演内容。"}
             </p>
+            <EffectPreviewVersionSync preview={activePreview} />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
@@ -1092,6 +2317,11 @@ function EffectPreviewWorkbenchPanel({
               items={activePreview?.prototypeNotes ?? []}
             />
           </div>
+
+          <EffectPreviewRuntimeProjection
+            preview={activePreview}
+            roleEventProjection={roleEventProjection}
+          />
 
           <div className="rounded-[16px] border border-slate-200 bg-white p-4">
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-normal text-slate-500">
@@ -1578,18 +2808,22 @@ function RuntimeCapabilityBridgeWorkbenchPanel({
   specTree,
   jobId,
   initialCapabilities,
+  initialAgentCrew,
   initialInvocations,
   initialEvidence,
   onCapabilitiesChange,
+  onAgentCrewChange,
   onInvocationsChange,
   onEvidenceChange,
 }: {
   specTree: BlueprintSpecTree;
   jobId?: string | null;
   initialCapabilities?: BlueprintRuntimeCapability[];
+  initialAgentCrew?: BlueprintAgentCrewSnapshot | null;
   initialInvocations?: BlueprintCapabilityInvocation[];
   initialEvidence?: BlueprintCapabilityEvidence[];
   onCapabilitiesChange?: (capabilities: BlueprintRuntimeCapability[]) => void;
+  onAgentCrewChange?: (agentCrew: BlueprintAgentCrewSnapshot | null) => void;
   onInvocationsChange?: (invocations: BlueprintCapabilityInvocation[]) => void;
   onEvidenceChange?: (evidence: BlueprintCapabilityEvidence[]) => void;
 }) {
@@ -1599,6 +2833,9 @@ function RuntimeCapabilityBridgeWorkbenchPanel({
   const [jobCapabilities, setJobCapabilities] = useState<
     BlueprintRuntimeCapability[]
   >(initialCapabilities ?? []);
+  const [agentCrew, setAgentCrew] = useState<BlueprintAgentCrewSnapshot | null>(
+    initialAgentCrew ?? null
+  );
   const [invocations, setInvocations] = useState<BlueprintCapabilityInvocation[]>(
     initialInvocations ?? []
   );
@@ -1629,6 +2866,10 @@ function RuntimeCapabilityBridgeWorkbenchPanel({
         : initialCapabilities?.[0]?.id ?? ""
     );
   }, [initialCapabilities]);
+
+  useEffect(() => {
+    setAgentCrew(initialAgentCrew ?? null);
+  }, [initialAgentCrew]);
 
   useEffect(() => {
     setInvocations(initialInvocations ?? []);
@@ -1721,17 +2962,27 @@ function RuntimeCapabilityBridgeWorkbenchPanel({
 
       if (registryResult.ok) {
         setRegistryCapabilities(registryResult.data.capabilities);
+        if (registryResult.data.agentCrew) {
+          setAgentCrew(registryResult.data.agentCrew);
+          onAgentCrewChange?.(registryResult.data.agentCrew);
+        }
       } else if (registryResult.error.status !== 404) {
         setError(registryResult.error);
       }
 
       if (jobResult.ok) {
         setJobCapabilities(jobResult.data.capabilities);
+        setAgentCrew(jobResult.data.agentCrew ?? null);
+        onAgentCrewChange?.(jobResult.data.agentCrew ?? null);
       } else if (jobResult.error.status !== 404) {
         setError(jobResult.error);
       }
 
       if (invocationsResult.ok) {
+        if (invocationsResult.data.agentCrew) {
+          setAgentCrew(invocationsResult.data.agentCrew);
+          onAgentCrewChange?.(invocationsResult.data.agentCrew);
+        }
         publishInvocations(invocationsResult.data.invocations);
       } else if (invocationsResult.error.status !== 404) {
         setError(invocationsResult.error);
@@ -1745,7 +2996,7 @@ function RuntimeCapabilityBridgeWorkbenchPanel({
     } finally {
       setLoading(false);
     }
-  }, [jobId, publishEvidence, publishInvocations]);
+  }, [jobId, onAgentCrewChange, publishEvidence, publishInvocations]);
 
   const handleInvoke = useCallback(async () => {
     if (!jobId || !activeCapability) return;
@@ -1765,6 +3016,8 @@ function RuntimeCapabilityBridgeWorkbenchPanel({
       });
 
       if (result.ok) {
+        setAgentCrew(result.data.agentCrew ?? agentCrew);
+        onAgentCrewChange?.(result.data.agentCrew ?? agentCrew);
         setRegistryCapabilities(current => [
           result.data.capability,
           ...current.filter(
@@ -1795,11 +3048,13 @@ function RuntimeCapabilityBridgeWorkbenchPanel({
     }
   }, [
     activeCapability,
+    agentCrew,
     approved,
     evidence,
     evidenceTags,
     invocations,
     jobId,
+    onAgentCrewChange,
     publishEvidence,
     publishInvocations,
     requestedBy,
@@ -3718,6 +4973,8 @@ export function BlueprintProgressPanel({
   initialEffectPreviews = null,
   initialPromptPackages = null,
   initialCapabilities = null,
+  initialAgentCrew = null,
+  initialClarificationSession = null,
   initialCapabilityInvocations = null,
   initialCapabilityEvidence = null,
   initialEngineeringLandingPlans = null,
@@ -3767,6 +5024,13 @@ export function BlueprintProgressPanel({
   const [capabilities, setCapabilities] = useState<
     BlueprintRuntimeCapability[]
   >(initialCapabilities ?? []);
+  const [agentCrew, setAgentCrew] = useState<BlueprintAgentCrewSnapshot | null>(
+    initialAgentCrew
+  );
+  const [clarificationSession, setClarificationSession] =
+    useState<BlueprintClarificationStrategySession | null>(
+      initialClarificationSession
+    );
   const [capabilityInvocations, setCapabilityInvocations] = useState<
     BlueprintCapabilityInvocation[]
   >(initialCapabilityInvocations ?? []);
@@ -3824,6 +5088,8 @@ export function BlueprintProgressPanel({
         setEffectPreviews(readLatestEffectPreviews(latestResult.data));
         setPromptPackages(readLatestPromptPackages(latestResult.data));
         setCapabilities(readLatestCapabilities(latestResult.data));
+        setAgentCrew(readLatestAgentCrew(latestResult.data));
+        setClarificationSession(readLatestClarificationSession(latestResult.data));
         setCapabilityInvocations(
           readLatestCapabilityInvocations(latestResult.data)
         );
@@ -3875,6 +5141,8 @@ export function BlueprintProgressPanel({
           setEffectPreviews(readLatestEffectPreviews(latestResult.data));
           setPromptPackages(readLatestPromptPackages(latestResult.data));
           setCapabilities(readLatestCapabilities(latestResult.data));
+          setAgentCrew(readLatestAgentCrew(latestResult.data));
+          setClarificationSession(readLatestClarificationSession(latestResult.data));
           setCapabilityInvocations(
             readLatestCapabilityInvocations(latestResult.data)
           );
@@ -3932,6 +5200,8 @@ export function BlueprintProgressPanel({
         setEffectPreviews([]);
         setPromptPackages([]);
         setCapabilities([]);
+        setAgentCrew(null);
+        setClarificationSession(result.data.clarificationSession ?? null);
         setCapabilityInvocations([]);
         setCapabilityEvidence([]);
         setEngineeringLandingPlans([]);
@@ -4000,6 +5270,8 @@ export function BlueprintProgressPanel({
         setEffectPreviews([]);
         setPromptPackages([]);
         setCapabilities([]);
+        setAgentCrew(null);
+        setClarificationSession(null);
         setCapabilityInvocations([]);
         setCapabilityEvidence([]);
         setEngineeringLandingPlans([]);
@@ -4159,6 +5431,8 @@ export function BlueprintProgressPanel({
         </div>
       ) : null}
 
+      <BlueprintClarificationStrategySummary session={clarificationSession} />
+
       {showRouteGeneration && routeSet ? (
         <RouteSetPreview
           routeSet={routeSet}
@@ -4197,6 +5471,7 @@ export function BlueprintProgressPanel({
           jobId={latestJob?.id}
           documents={specDocuments}
           initialPreviews={effectPreviews}
+          agentCrew={agentCrew}
         />
       ) : null}
 
@@ -4211,14 +5486,34 @@ export function BlueprintProgressPanel({
         />
       ) : null}
 
+      {showRuntimeCapabilityBridgeWorkbench && agentCrew ? (
+        <BlueprintAgentCrewSurface
+          agentCrew={agentCrew}
+          capabilities={capabilities}
+          invocations={capabilityInvocations}
+          evidence={capabilityEvidence}
+          roleEventProjection={buildRoleEventProjection(
+            agentCrew,
+            effectPreviews[0]
+              ? normalizeRuntimeProjection(
+                  effectPreviews[0],
+                  readRuntimeProjection(effectPreviews[0])
+                )
+              : null
+          )}
+        />
+      ) : null}
+
       {showRuntimeCapabilityBridgeWorkbench && specTree ? (
         <RuntimeCapabilityBridgeWorkbenchPanel
           specTree={specTree}
           jobId={latestJob?.id}
           initialCapabilities={capabilities}
+          initialAgentCrew={agentCrew}
           initialInvocations={capabilityInvocations}
           initialEvidence={capabilityEvidence}
           onCapabilitiesChange={setCapabilities}
+          onAgentCrewChange={setAgentCrew}
           onInvocationsChange={setCapabilityInvocations}
           onEvidenceChange={setCapabilityEvidence}
         />

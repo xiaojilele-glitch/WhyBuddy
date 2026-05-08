@@ -4,9 +4,11 @@ export type BlueprintGenerationStage =
   | "route_generation"
   | "spec_tree"
   | "spec_docs"
+  | "preview"
   | "effect_preview"
   | "prompt_packaging"
   | "runtime_capability"
+  | "engineering_handoff"
   | "engineering_landing";
 
 export type BlueprintGenerationStatus =
@@ -45,6 +47,22 @@ export type BlueprintRuntimeCapabilityStatus =
   | "available"
   | "disabled"
   | "requires_approval";
+export type BlueprintAgentRoleGroup =
+  | "decision"
+  | "planning"
+  | "execution"
+  | "audit"
+  | "presentation"
+  | "memory";
+export type BlueprintRolePresenceState =
+  | "active"
+  | "watching"
+  | "reviewing"
+  | "sleeping";
+export type BlueprintRoleActivationOverrideKind =
+  | "risk"
+  | "cost"
+  | "complexity";
 export type BlueprintCapabilityInvocationStatus =
   | "queued"
   | "running"
@@ -62,6 +80,51 @@ export type BlueprintCapabilityEvidenceStatus =
   | "recorded"
   | "blocked"
   | "failed";
+export type BlueprintGenerationEventFamily =
+  | "job"
+  | "crew"
+  | "role"
+  | "capability"
+  | "preview"
+  | "prompt"
+  | "mission"
+  | "sandbox";
+export type BlueprintGenerationNextActionType =
+  | "answer_clarification"
+  | "select_route"
+  | "review_spec_tree"
+  | "review_spec_documents"
+  | "review_preview"
+  | "review_prompt_package"
+  | "review_runtime_capability"
+  | "review_engineering_handoff"
+  | "none";
+export type BlueprintGenerationNextActionId =
+  | "confirm_spec_tree"
+  | "fine_tune_spec_tree"
+  | "reselect_route"
+  | "merge_route"
+  | "enter_downstream_menus";
+export type BlueprintGenerationStagePayloadKind =
+  | "input"
+  | "clarification"
+  | "route_set"
+  | "spec_tree"
+  | "spec_documents"
+  | "preview"
+  | "prompt_package"
+  | "runtime_capability"
+  | "engineering_handoff"
+  | "engineering_landing";
+export type BlueprintSandboxDerivationExecutionMode =
+  | "sequential"
+  | "parallel";
+export type BlueprintSandboxDerivationJobStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "blocked";
 export type BlueprintSpecTreeStatus = "draft" | "reviewing" | "accepted";
 export type BlueprintSpecTreeNodeStatus =
   | "seed"
@@ -139,15 +202,62 @@ export type BlueprintEngineeringVerificationStatus =
 export interface BlueprintClarificationAnswer {
   questionId: string;
   answer: string;
+  answeredAt?: string;
+  answeredBy?: string;
+  source?: BlueprintClarificationAnswerSource;
+  provenance?: BlueprintClarificationAnswerProvenance;
 }
 
+export type BlueprintClarificationStrategyId =
+  | "target_first"
+  | "repository_first"
+  | "risk_first"
+  | "document_first"
+  | "preview_first"
+  | "fast_execution";
+export type BlueprintClarificationRouteDimension =
+  | "goal"
+  | "audience"
+  | "risk"
+  | "repository"
+  | "domain"
+  | "document"
+  | "preview"
+  | "output"
+  | "execution"
+  | "handoff";
+export type BlueprintClarificationReadinessSignalId =
+  | "goal_defined"
+  | "audience_defined"
+  | "constraints_defined"
+  | "repository_context"
+  | "domain_assets"
+  | "document_intent"
+  | "preview_intent"
+  | "output_preference"
+  | "risk_review"
+  | "fast_path";
+export type BlueprintClarificationAnswerSource =
+  | "user"
+  | "strategy_default"
+  | "intake"
+  | "system";
+export interface BlueprintClarificationAnswerProvenance {
+  strategyId?: BlueprintClarificationStrategyId;
+  templateId?: string;
+  routeDimension?: BlueprintClarificationRouteDimension;
+  readinessSignal?: BlueprintClarificationReadinessSignalId;
+}
 export type BlueprintGithubSourceKind = "repository";
 export type BlueprintClarificationQuestionKind =
   | "goal"
   | "audience"
   | "constraint"
   | "github"
-  | "domain";
+  | "domain"
+  | "document"
+  | "preview"
+  | "execution";
 export type BlueprintClarificationReadinessStatus =
   | "needs_answers"
   | "ready";
@@ -236,6 +346,13 @@ export interface BlueprintClarificationQuestion {
   required: boolean;
   sourceIds: string[];
   evidenceIds: string[];
+  routeDimension?: BlueprintClarificationRouteDimension;
+  readinessSignal?: BlueprintClarificationReadinessSignalId;
+  templateId?: string;
+  strategyId?: BlueprintClarificationStrategyId;
+  settledByStrategy?: boolean;
+  settledReason?: string;
+  defaultAnswer?: string;
 }
 
 export interface BlueprintClarificationReadiness {
@@ -244,12 +361,20 @@ export interface BlueprintClarificationReadiness {
   answeredRequired: number;
   requiredTotal: number;
   missingQuestionIds: string[];
+  readinessSignals?: BlueprintClarificationReadinessSignalId[];
+  settledQuestionIds?: string[];
+  routeDimensions?: BlueprintClarificationRouteDimension[];
 }
 
 export interface BlueprintClarificationSession {
   id: string;
   intakeId: string;
   projectId?: string;
+  strategyId?: BlueprintClarificationStrategyId;
+  strategyLabel?: string;
+  templateId?: string;
+  routeReadySummary?: string;
+  readinessSignals?: BlueprintClarificationReadinessSignalId[];
   questions: BlueprintClarificationQuestion[];
   answers: BlueprintClarificationAnswer[];
   readiness: BlueprintClarificationReadiness;
@@ -302,6 +427,135 @@ export interface BlueprintRuntimeCapability {
   projectScoped: boolean;
 }
 
+export interface BlueprintAgentRole {
+  id: string;
+  name: string;
+  group: BlueprintAgentRoleGroup;
+  responsibility: string;
+  defaultStages: BlueprintGenerationStage[];
+  permissions: string[];
+  displayName: string;
+  displayLabelZh: string;
+}
+
+export interface BlueprintRoleCapability {
+  id: string;
+  roleId: string;
+  capabilityId: string;
+  nodeId?: string;
+  applicableStages: BlueprintGenerationStage[];
+  inputSchema: string;
+  outputSchema: string;
+  tools: string[];
+  requiresSandbox: boolean;
+  producesArtifacts: boolean;
+  auditRules: string[];
+}
+
+export interface BlueprintCapabilityBinding extends BlueprintRoleCapability {
+  capabilityLabel: string;
+  capabilityKind: BlueprintRuntimeCapabilityKind;
+  roleDisplayName: string;
+}
+
+export interface BlueprintRoleActivationOverride {
+  kind: BlueprintRoleActivationOverrideKind;
+  level:
+    | BlueprintRouteRiskLevel
+    | BlueprintRouteCostLevel
+    | BlueprintRouteComplexity;
+  roleId: string;
+  state: BlueprintRolePresenceState;
+  reason: string;
+}
+
+export interface BlueprintStageActivationPolicy {
+  stage: BlueprintGenerationStage;
+  activeRoleIds: string[];
+  watchingRoleIds: string[];
+  reviewingRoleIds: string[];
+  sleepingRoleIds: string[];
+  overrides: BlueprintRoleActivationOverride[];
+}
+
+export interface BlueprintRolePresence {
+  roleId: string;
+  stage: BlueprintGenerationStage;
+  state: BlueprintRolePresenceState;
+  currentAction: string;
+  capabilityIds: string[];
+  artifactIds: string[];
+  evidenceIds: string[];
+}
+
+export interface BlueprintAgentCrew {
+  id: string;
+  jobId: string;
+  createdAt: string;
+  updatedAt: string;
+  stage: BlueprintGenerationStage;
+  roles: BlueprintAgentRole[];
+  capabilityMatrix: BlueprintCapabilityBinding[];
+  activationPolicies: BlueprintStageActivationPolicy[];
+  presence: BlueprintRolePresence[];
+  sourceIds: Partial<BlueprintArtifactSourceIds>;
+}
+
+export interface BlueprintRoleTimelineEntry {
+  id: string;
+  eventId: string;
+  jobId: string;
+  projectId?: string;
+  crewId?: string;
+  stage: BlueprintGenerationStage;
+  roleId: string;
+  presenceState: BlueprintRolePresenceState;
+  type: BlueprintGenerationEventType;
+  occurredAt: string;
+  summary: string;
+  currentAction?: string;
+  capabilityId?: string;
+  invocationId?: string;
+  evidenceId?: string;
+  artifactId?: string;
+  routeId?: string;
+  selectionId?: string;
+  specTreeId?: string;
+  nodeId?: string;
+  sourceIds: Partial<BlueprintArtifactSourceIds>;
+}
+
+export interface BlueprintRoleTimeline {
+  id: string;
+  jobId: string;
+  projectId?: string;
+  crewId?: string;
+  roleId: string;
+  roleDisplayName?: string;
+  roleDisplayLabelZh?: string;
+  latestStage: BlueprintGenerationStage;
+  latestPresenceState: BlueprintRolePresenceState;
+  latestAction?: string;
+  latestCapabilityId?: string;
+  latestArtifactId?: string;
+  latestEvidenceId?: string;
+  startedAt: string;
+  updatedAt: string;
+  entryCount: number;
+  entries: BlueprintRoleTimelineEntry[];
+}
+
+export interface BlueprintRoleTimelineCollection {
+  id: string;
+  jobId: string;
+  projectId?: string;
+  createdAt: string;
+  updatedAt: string;
+  latestStage: BlueprintGenerationStage;
+  timelines: BlueprintRoleTimeline[];
+  sourceIds: Partial<BlueprintArtifactSourceIds>;
+}
+
 export interface BlueprintCapabilitySafetyGate {
   status: BlueprintCapabilitySafetyGateStatus;
   reason: string;
@@ -312,6 +566,7 @@ export interface BlueprintCapabilitySafetyGate {
 
 export interface BlueprintCapabilityInvocationRequest {
   capabilityId: string;
+  roleId?: string;
   routeId?: string;
   nodeId?: string;
   input?: string;
@@ -320,10 +575,16 @@ export interface BlueprintCapabilityInvocationRequest {
   evidenceTags?: string[];
 }
 
+export interface BlueprintSandboxDerivationCapabilityRequest
+  extends BlueprintCapabilityInvocationRequest {
+  crewId?: string;
+}
+
 export interface BlueprintCapabilityInvocation {
   id: string;
   jobId: string;
   capabilityId: string;
+  roleId?: string;
   capabilityLabel: string;
   kind: BlueprintRuntimeCapabilityKind;
   status: BlueprintCapabilityInvocationStatus;
@@ -347,6 +608,7 @@ export interface BlueprintCapabilityInvocation {
     routeId?: string;
     specTreeId?: string;
     nodeId?: string;
+    roleId?: string;
     targetText?: string;
     githubUrls: string[];
   };
@@ -384,6 +646,78 @@ export interface BlueprintCapabilityEvidence {
   };
 }
 
+export interface BlueprintSandboxRoutePath {
+  id: string;
+  title: string;
+  summary: string;
+  routeId?: string;
+  nodeId?: string;
+  capabilityIds: string[];
+  invocationIds: string[];
+  evidenceIds: string[];
+}
+
+export interface BlueprintSandboxEvaluationMetric {
+  id: string;
+  label: string;
+  score: number;
+  summary: string;
+}
+
+export interface BlueprintSandboxDerivationAggregate {
+  routeOutline: string;
+  mainPath: BlueprintSandboxRoutePath;
+  alternatePaths: BlueprintSandboxRoutePath[];
+  evaluation: BlueprintSandboxEvaluationMetric[];
+  outputSummary: string;
+}
+
+export interface BlueprintSandboxDerivationJobRequest {
+  roleId?: string;
+  crewId?: string;
+  stage?: BlueprintGenerationStage;
+  projectId?: string;
+  routeId?: string;
+  nodeId?: string;
+  executionMode?: BlueprintSandboxDerivationExecutionMode;
+  capabilities: BlueprintSandboxDerivationCapabilityRequest[];
+}
+
+export interface BlueprintSandboxDerivationJob {
+  id: string;
+  jobId: string;
+  roleId?: string;
+  crewId?: string;
+  stage: BlueprintGenerationStage;
+  projectId?: string;
+  routeId?: string;
+  nodeId?: string;
+  executionMode: BlueprintSandboxDerivationExecutionMode;
+  status: BlueprintSandboxDerivationJobStatus;
+  createdAt: string;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  capabilityIds: string[];
+  invocationIds: string[];
+  evidenceIds: string[];
+  aggregate: BlueprintSandboxDerivationAggregate;
+  logs: string[];
+  provenance: {
+    jobId: string;
+    projectId?: string;
+    sourceId?: string;
+    routeSetId?: string;
+    routeId?: string;
+    specTreeId?: string;
+    nodeId?: string;
+    roleId?: string;
+    crewId?: string;
+    targetText?: string;
+    githubUrls: string[];
+  };
+}
+
 export interface BlueprintRouteCandidate {
   id: string;
   kind: BlueprintRouteKind;
@@ -415,6 +749,15 @@ export interface BlueprintRouteSet {
     sourceId?: string;
     targetText?: string;
     githubUrls: string[];
+    clarificationSessionId?: string;
+    clarificationStrategyId?: BlueprintClarificationStrategyId;
+    clarificationTemplateId?: string;
+    clarificationReadinessSignals?: BlueprintClarificationReadinessSignalId[];
+    clarificationRouteDimensions?: BlueprintClarificationRouteDimension[];
+    clarificationAnsweredQuestionIds?: string[];
+    clarificationEvidenceIds?: string[];
+    clarificationSourceIds?: string[];
+    clarificationRouteReadySummary?: string;
   };
 }
 
@@ -429,6 +772,7 @@ export interface BlueprintRouteSelection {
   id: string;
   routeSetId: string;
   routeId: string;
+  selectedPathId?: string;
   routeTitle: string;
   selectedAt: string;
   selectedBy?: string;
@@ -462,6 +806,7 @@ export interface BlueprintSpecTree {
   id: string;
   routeSetId: string;
   selectionId: string;
+  selectedPathId?: string;
   selectedRouteId: string;
   rootNodeId: string;
   version: number;
@@ -474,8 +819,17 @@ export interface BlueprintSpecTree {
     jobId: string;
     projectId?: string;
     sourceId?: string;
+    routeSetId?: string;
+    routeId?: string;
+    selectionId?: string;
+    selectedPathId?: string;
+    specTreeId?: string;
     targetText?: string;
     githubUrls: string[];
+    artifactLinks?: BlueprintGenerationArtifactLink[];
+    reusedRoleFindingIds?: string[];
+    reusedRoleIds?: string[];
+    reusedEvidenceIds?: string[];
   };
 }
 
@@ -582,6 +936,9 @@ export interface BlueprintSpecDocument {
     nodeSummary: string;
     dependencies: string[];
     outputs: string[];
+    reusedRoleFindingIds?: string[];
+    reusedRoleIds?: string[];
+    reusedEvidenceIds?: string[];
   };
 }
 
@@ -654,11 +1011,100 @@ export interface BlueprintEffectPreviewNode {
   prototypeCues: BlueprintEffectPreviewPrototypeCue[];
 }
 
+export interface BlueprintEffectPreviewHudState {
+  id: string;
+  status: BlueprintEffectPreviewStatus;
+  stage: BlueprintGenerationStage;
+  title: string;
+  summary: string;
+  progressPercent: number;
+  activeNodeId: string;
+  badges: string[];
+}
+
+export interface BlueprintEffectPreviewLogEntry {
+  id: string;
+  level: "info" | "warning" | "success";
+  message: string;
+  occurredAt: string;
+  sourceDocumentIds: string[];
+}
+
+export interface BlueprintEffectPreviewBrowserPreview {
+  id: string;
+  title: string;
+  summary: string;
+  routeId?: string;
+  nodeId: string;
+  url: string;
+}
+
+export interface BlueprintEffectPreviewRuntimeProjection {
+  id: string;
+  jobId: string;
+  projectId?: string;
+  routeSetId: string;
+  routeId?: string;
+  specTreeId: string;
+  nodeId: string;
+  effectPreviewId: string;
+  sceneSnapshotId: string;
+  hudState: BlueprintEffectPreviewHudState;
+  logTimeline: BlueprintEffectPreviewLogEntry[];
+  browserPreviewId: string;
+  browserPreview: BlueprintEffectPreviewBrowserPreview;
+  sourceIds: Partial<BlueprintArtifactSourceIds>;
+}
+
+export type BlueprintEffectPreviewVersionStatus =
+  | "current"
+  | "archived"
+  | "accepted"
+  | "rejected";
+
+export interface BlueprintEffectPreviewNodeProgress {
+  nodeId: string;
+  status: BlueprintSpecTreeNodeStatus;
+  completionPercent: number;
+  dependencyIds: string[];
+  outputIds: string[];
+  updatedFromTreeVersion: number;
+}
+
+export interface BlueprintEffectPreviewDependencyOrderEntry {
+  nodeId: string;
+  title: string;
+  status: BlueprintSpecTreeNodeStatus;
+  order: number;
+  dependencyIds: string[];
+}
+
+export interface BlueprintEffectPreviewVersionSync {
+  version?: number;
+  versionStatus?: BlueprintEffectPreviewVersionStatus;
+  supersedesPreviewId?: string;
+  previousPreviewIds?: string[];
+  preservedPreviewIds?: string[];
+  refreshedFromSpecTreeVersion?: number;
+  refreshedAt?: string;
+  sourceSnapshotHash?: string;
+  nodeProgress: BlueprintEffectPreviewNodeProgress;
+  dependencyOrder: BlueprintEffectPreviewDependencyOrderEntry[];
+}
+
 export interface BlueprintEffectPreview {
   id: string;
   jobId: string;
   treeId: string;
   nodeId: string;
+  version: number;
+  versionStatus: BlueprintEffectPreviewVersionStatus;
+  supersedesPreviewId?: string;
+  previousPreviewIds: string[];
+  preservedPreviewIds: string[];
+  refreshedFromSpecTreeVersion: number;
+  refreshedAt: string;
+  sourceSnapshotHash: string;
   sourceDocumentIds: string[];
   status: BlueprintEffectPreviewStatus;
   createdAt: string;
@@ -668,6 +1114,10 @@ export interface BlueprintEffectPreview {
   prototypeNotes: string[];
   progressPlan: BlueprintEffectPreviewMilestone[];
   nodes: BlueprintEffectPreviewNode[];
+  runtimeProjection: BlueprintEffectPreviewRuntimeProjection;
+  nodeProgress?: BlueprintEffectPreviewNodeProgress;
+  dependencyOrder?: BlueprintEffectPreviewDependencyOrderEntry[];
+  versionSync?: BlueprintEffectPreviewVersionSync;
   provenance: {
     jobId: string;
     projectId?: string;
@@ -878,8 +1328,11 @@ export type BlueprintGenerationArtifactType =
   | "effect_preview"
   | "prompt_pack"
   | "capability_registry"
+  | "agent_crew"
+  | "role_timeline"
   | "capability_invocation"
   | "capability_evidence"
+  | "sandbox_derivation_job"
   | "engineering_plan"
   | "engineering_run"
   | "replay"
@@ -894,14 +1347,122 @@ export interface BlueprintGenerationArtifact {
   payload?: unknown;
 }
 
+export interface BlueprintGenerationArtifactLink {
+  artifactId: string;
+  artifactType: BlueprintGenerationArtifactType;
+  relation:
+    | "source"
+    | "selection"
+    | "handoff"
+    | "evidence"
+    | "derived";
+  title?: string;
+}
+
+export interface BlueprintGenerationNextActionOption {
+  id: BlueprintGenerationNextActionId;
+  type: BlueprintGenerationNextActionType;
+  label: string;
+  stage: BlueprintGenerationStage;
+  required: boolean;
+  artifactId?: string;
+  routeId?: string;
+  selectionId?: string;
+  selectedPathId?: string;
+  specTreeId?: string;
+  nodeId?: string;
+}
+
+export interface BlueprintReviewHandoffState {
+  id: string;
+  stage: BlueprintGenerationStage;
+  status: BlueprintGenerationStatus;
+  confirmable: boolean;
+  editable: boolean;
+  resumable: boolean;
+  routeId: string;
+  selectionId: string;
+  selectedPathId: string;
+  specTreeId: string;
+  nodeId?: string;
+  artifactId?: string;
+  artifactLinks: BlueprintGenerationArtifactLink[];
+  downstreamMenus: BlueprintGenerationStage[];
+  provenance: {
+    jobId: string;
+    projectId?: string;
+    sourceId?: string;
+    routeSetId: string;
+    routeId: string;
+    selectionId: string;
+    selectedPathId: string;
+    specTreeId: string;
+  };
+}
+
+export interface BlueprintGenerationNextAction {
+  type: BlueprintGenerationNextActionType;
+  label: string;
+  stage: BlueprintGenerationStage;
+  artifactId?: string;
+  routeId?: string;
+  selectionId?: string;
+  specTreeId?: string;
+  nodeId?: string;
+  required: boolean;
+  actions?: BlueprintGenerationNextActionOption[];
+  handoff?: BlueprintReviewHandoffState;
+}
+
+export interface BlueprintGenerationStageState {
+  stage: BlueprintGenerationStage;
+  status: BlueprintGenerationStatus;
+  payloadKind: BlueprintGenerationStagePayloadKind;
+  artifactIds: string[];
+  nextAction?: BlueprintGenerationNextAction;
+}
+
+export type BlueprintGenerationEventType =
+  | "job.created"
+  | "job.stage"
+  | "job.completed"
+  | "job.failed"
+  | "crew.context.updated"
+  | "capability.invoked"
+  | "capability.completed"
+  | "capability.failed"
+  | "role.activated"
+  | "role.watching"
+  | "role.capability_invoked"
+  | "role.review_started"
+  | "role.review_completed"
+  | "role.completed"
+  | "preview.generated"
+  | "prompt.packaged"
+  | "mission.handoff"
+  | "sandbox.job.started"
+  | "sandbox.job.completed"
+  | "sandbox.job.failed";
+
 export interface BlueprintGenerationEvent {
   id: string;
   jobId: string;
-  type: "job.created" | "job.stage" | "job.completed" | "job.failed";
+  projectId?: string;
+  type: BlueprintGenerationEventType;
+  family: BlueprintGenerationEventFamily;
   stage: BlueprintGenerationStage;
   status: BlueprintGenerationStatus;
   message: string;
   occurredAt: string;
+  routeId?: string;
+  selectionId?: string;
+  specTreeId?: string;
+  nodeId?: string;
+  artifactId?: string;
+  roleId?: string;
+  presenceState?: BlueprintRolePresenceState;
+  capabilityId?: string;
+  evidenceId?: string;
   payload?: unknown;
 }
 
@@ -918,6 +1479,8 @@ export interface BlueprintGenerationJob {
   completedAt?: string;
   artifacts: BlueprintGenerationArtifact[];
   events: BlueprintGenerationEvent[];
+  stageState?: BlueprintGenerationStageState;
+  nextAction?: BlueprintGenerationNextAction;
   error?: {
     code: string;
     message: string;
@@ -930,8 +1493,10 @@ export type BlueprintArtifactMemoryType =
   | "event";
 
 export interface BlueprintArtifactSourceIds {
+  projectId?: string;
   routeSetId?: string;
   specTreeId?: string;
+  nodeIds: string[];
   specDocumentIds: string[];
   effectPreviewIds: string[];
   promptPackageIds: string[];
@@ -940,6 +1505,8 @@ export interface BlueprintArtifactSourceIds {
   landingPlanIds: string[];
   engineeringRunIds: string[];
   capabilityIds: string[];
+  roleIds: string[];
+  crewIds: string[];
 }
 
 export type BlueprintArtifactPayloadSummary = Record<
@@ -981,16 +1548,130 @@ export interface BlueprintArtifactLineageEdge {
   sourceId: string;
   sourceType:
     | "route_set"
+    | "project"
     | "spec_tree"
+    | "spec_node"
     | "spec_document"
     | "effect_preview"
     | "prompt_package"
     | "capability_registry"
+    | "agent_crew"
+    | "role"
+    | "crew"
+    | "role_timeline"
     | "capability_invocation"
     | "capability_evidence"
+    | "sandbox_derivation_job"
     | "landing_plan"
     | "engineering_run";
   relation: "derived_from" | "records" | "references";
+}
+
+export interface BlueprintArtifactEvolutionRouteSet {
+  routeSetId: string;
+  routeCount: number;
+  primaryRouteId?: string;
+  selectedRouteId?: string;
+  selectedPathId?: string;
+  selectionId?: string;
+  selectedBy?: string;
+  reason?: string;
+  mergedAlternativeRouteIds: string[];
+  createdAt?: string;
+  selectedAt?: string;
+}
+
+export interface BlueprintArtifactEvolutionSpecTree {
+  specTreeId: string;
+  selectionId?: string;
+  selectedPathId?: string;
+  routeId?: string;
+  version: number;
+  status: BlueprintSpecTreeStatus;
+  rootNodeId: string;
+  nodeCount: number;
+  updatedAt: string;
+  versionId?: string;
+}
+
+export interface BlueprintArtifactEvolutionSpecDocument {
+  documentId: string;
+  sourceDocumentId?: string;
+  nodeId: string;
+  type: BlueprintSpecDocumentType;
+  version: number;
+  status: BlueprintSpecDocumentStatus;
+  updatedAt: string;
+  reviewedBy?: string;
+  reviewNote?: string;
+  acceptedAt?: string;
+  rejectedAt?: string;
+  versionId?: string;
+}
+
+export interface BlueprintArtifactEvolutionEffectPreview {
+  previewId: string;
+  nodeId: string;
+  version: number;
+  versionStatus: BlueprintEffectPreviewVersionStatus;
+  status: BlueprintEffectPreviewStatus;
+  sourceDocumentIds: string[];
+  sourceSnapshotHash: string;
+  refreshedFromSpecTreeVersion: number;
+  updatedAt: string;
+  previousPreviewIds: string[];
+  preservedPreviewIds: string[];
+}
+
+export interface BlueprintArtifactEvolutionPromptPackage {
+  promptPackageId: string;
+  targetPlatform: BlueprintImplementationPromptTargetPlatform;
+  nodeIds: string[];
+  sourceDocumentIds: string[];
+  sourcePreviewIds: string[];
+  sectionKinds: BlueprintImplementationPromptSectionKind[];
+  createdAt: string;
+}
+
+export interface BlueprintArtifactEvolutionReplay {
+  routeSets: BlueprintArtifactEvolutionRouteSet[];
+  specTrees: BlueprintArtifactEvolutionSpecTree[];
+  specDocuments: BlueprintArtifactEvolutionSpecDocument[];
+  effectPreviews: BlueprintArtifactEvolutionEffectPreview[];
+  promptPackages: BlueprintArtifactEvolutionPromptPackage[];
+}
+
+export interface BlueprintArtifactReplayConfirmationDecision {
+  id: string;
+  kind: "route_selection" | "spec_tree_version" | "spec_document_review" | "spec_document_version";
+  artifactId?: string;
+  routeId?: string;
+  selectedPathId?: string;
+  selectionId?: string;
+  specTreeId?: string;
+  documentId?: string;
+  status?: string;
+  decidedBy?: string;
+  note?: string;
+  occurredAt: string;
+}
+
+export interface BlueprintArtifactReplayHandoffDecision {
+  id: string;
+  kind: "prompt_package" | "engineering_plan" | "mission_handoff" | "engineering_run";
+  artifactId?: string;
+  eventId?: string;
+  promptPackageIds: string[];
+  landingPlanIds: string[];
+  platform?: BlueprintImplementationPromptTargetPlatform;
+  status?: string;
+  occurredAt: string;
+  summary: string;
+}
+
+export interface BlueprintArtifactDecisionReplay {
+  confirmations: BlueprintArtifactReplayConfirmationDecision[];
+  handoffs: BlueprintArtifactReplayHandoffDecision[];
 }
 
 export interface BlueprintArtifactReplaySnapshot {
@@ -1000,6 +1681,8 @@ export interface BlueprintArtifactReplaySnapshot {
   timelineEntries: BlueprintArtifactReplayTimelineEntry[];
   stageCounts: Record<BlueprintGenerationStage, number>;
   lineageEdges: BlueprintArtifactLineageEdge[];
+  artifactEvolution?: BlueprintArtifactEvolutionReplay;
+  decisions?: BlueprintArtifactDecisionReplay;
 }
 
 export interface BlueprintArtifactDiff {
@@ -1035,6 +1718,7 @@ export interface BlueprintArtifactLedgerResponse {
 
 export interface BlueprintCapabilityRegistryResponse {
   capabilities: BlueprintRuntimeCapability[];
+  agentCrew: BlueprintAgentCrew;
 }
 
 export interface BlueprintCapabilityInvocationsResponse {
@@ -1042,6 +1726,7 @@ export interface BlueprintCapabilityInvocationsResponse {
   routeSet?: BlueprintRouteSet;
   specTree?: BlueprintSpecTree;
   capabilities: BlueprintRuntimeCapability[];
+  agentCrew?: BlueprintAgentCrew;
   invocations: BlueprintCapabilityInvocation[];
 }
 
@@ -1057,8 +1742,55 @@ export interface BlueprintInvokeCapabilityResponse {
   routeSet?: BlueprintRouteSet;
   specTree?: BlueprintSpecTree;
   capability: BlueprintRuntimeCapability;
+  agentCrew?: BlueprintAgentCrew;
   invocation: BlueprintCapabilityInvocation;
   evidence: BlueprintCapabilityEvidence;
+}
+
+export interface BlueprintSandboxDerivationJobResponse {
+  job: BlueprintGenerationJob;
+  routeSet?: BlueprintRouteSet;
+  specTree?: BlueprintSpecTree;
+  agentCrew?: BlueprintAgentCrew;
+  sandboxDerivationJob: BlueprintSandboxDerivationJob;
+  invocations: BlueprintCapabilityInvocation[];
+  evidence: BlueprintCapabilityEvidence[];
+}
+
+export interface BlueprintSandboxDerivationJobsResponse {
+  job: BlueprintGenerationJob;
+  routeSet?: BlueprintRouteSet;
+  specTree?: BlueprintSpecTree;
+  sandboxDerivationJobs: BlueprintSandboxDerivationJob[];
+}
+
+export interface BlueprintAgentCrewResponse {
+  job: BlueprintGenerationJob;
+  routeSet?: BlueprintRouteSet;
+  specTree?: BlueprintSpecTree;
+  agentCrew: BlueprintAgentCrew;
+  roleTimelines?: BlueprintRoleTimeline[];
+}
+
+export interface BlueprintRoleTimelineFilters {
+  jobId?: string;
+  roleId?: string;
+  stage?: BlueprintGenerationStage;
+  routeId?: string;
+  nodeId?: string;
+  artifactId?: string;
+  capabilityId?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface BlueprintRoleTimelinesResponse {
+  job: BlueprintGenerationJob;
+  routeSet?: BlueprintRouteSet;
+  specTree?: BlueprintSpecTree;
+  agentCrew?: BlueprintAgentCrew;
+  roleTimelines: BlueprintRoleTimeline[];
+  filters?: BlueprintRoleTimelineFilters;
 }
 
 export interface BlueprintFetchCapabilityInvocationsRequest {
@@ -1127,6 +1859,19 @@ export interface BlueprintCreateGenerationJobResponse {
 export interface BlueprintGenerationEventsResponse {
   job: BlueprintGenerationJob;
   events: BlueprintGenerationEvent[];
+  filters?: BlueprintGenerationEventFilters;
+}
+
+export interface BlueprintGenerationEventFilters {
+  jobId?: string;
+  stage?: BlueprintGenerationStage;
+  family?: BlueprintGenerationEventFamily;
+  routeId?: string;
+  nodeId?: string;
+  artifactId?: string;
+  roleId?: string;
+  capabilityId?: string;
+  evidenceId?: string;
 }
 
 export interface BlueprintSelectRouteResponse {
@@ -1244,8 +1989,11 @@ export interface BlueprintLatestGenerationJobResponse {
   effectPreviews?: BlueprintEffectPreview[];
   promptPackages?: BlueprintImplementationPromptPackage[];
   capabilities?: BlueprintRuntimeCapability[];
+  agentCrew?: BlueprintAgentCrew;
+  roleTimelines?: BlueprintRoleTimeline[];
   capabilityInvocations?: BlueprintCapabilityInvocation[];
   capabilityEvidence?: BlueprintCapabilityEvidence[];
+  sandboxDerivationJobs?: BlueprintSandboxDerivationJob[];
   engineeringLandingPlans?: BlueprintEngineeringLandingPlan[];
   engineeringRuns?: BlueprintEngineeringRun[];
   artifactLedgerEntries?: BlueprintArtifactMemoryEntry[];
