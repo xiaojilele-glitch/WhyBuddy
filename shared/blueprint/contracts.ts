@@ -625,6 +625,27 @@ export interface BlueprintCapabilityInvocation {
     roleId?: string;
     targetText?: string;
     githubUrls: string[];
+    // —— Docker 桥 spec 预留字段（本 spec 添加，Docker 桥 spec 合并时复用） ——
+    executionMode?: "real" | "simulated_fallback";
+    containerId?: string;
+    artifactUrl?: string;
+    logDigest?: string;
+    error?: string;
+    // —— MCP 桥 spec 预留字段（本 spec 添加，MCP 桥 spec 合并时复用） ——
+    executionPath?: "mcp" | "http";
+    repoUrl?: string;
+    commitSha?: string;
+    fetchedAt?: string;
+    defaultBranch?: string;
+    apiResponseDigest?: string;
+    mcpToolName?: string;
+    // —— AIGC Spec Node 桥 spec 新增字段 ——
+    promptId?: string;
+    model?: string;
+    responseDigest?: string;
+    tokenCount?: number;
+    structuredPayloadDigest?: string;
+    promptFingerprint?: string;
   };
 }
 
@@ -657,6 +678,32 @@ export interface BlueprintCapabilityEvidence {
     nodeId?: string;
     targetText?: string;
     githubUrls: string[];
+    // —— Docker 桥 spec 预留字段（本 spec 添加，Docker 桥 spec 合并时复用） ——
+    executionMode?: "real" | "simulated_fallback";
+    containerId?: string;
+    artifactUrl?: string;
+    logDigest?: string;
+    error?: string;
+    // —— MCP 桥 spec 预留字段（本 spec 添加，MCP 桥 spec 合并时复用） ——
+    executionPath?: "mcp" | "http";
+    repoUrl?: string;
+    commitSha?: string;
+    fetchedAt?: string;
+    defaultBranch?: string;
+    apiResponseDigest?: string;
+    mcpToolName?: string;
+    // —— AIGC Spec Node 桥 spec 新增字段 ——
+    promptId?: string;
+    model?: string;
+    responseDigest?: string;
+    tokenCount?: number;
+    structuredPayloadDigest?: string;
+    promptFingerprint?: string;
+    structuredPayload?: {
+      digest: string;
+      byteSize: number;
+      summary: string;
+    };
   };
 }
 

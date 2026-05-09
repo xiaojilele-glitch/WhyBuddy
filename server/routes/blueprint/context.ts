@@ -33,6 +33,14 @@ import type {
   BlueprintProjectDomainContext,
 } from "../../../shared/blueprint/index.js";
 import { createBlueprintEventBus } from "./event-bus.js";
+import {
+  createAigcSpecNodeCapabilityBridge,
+  type AigcSpecNodeCapabilityBridge,
+} from "./aigc-spec-node/bridge.js";
+import {
+  createDefaultAigcSpecNodeCapabilityPolicy,
+  type AigcSpecNodeCapabilityPolicy,
+} from "./aigc-spec-node/policy.js";
 
 /**
  * 纯内存 Map 三件套：存放尚未进入 jobStore 的 intake / clarification / project context。
@@ -190,6 +198,26 @@ export interface BlueprintServiceContext {
   eventBus: BlueprintEventBus;
   specsRoot: string;
   logger: BlueprintLogger;
+  /**
+   * AIGC Spec Node capability policy. Defaults are wired by
+   * {@link buildBlueprintServiceContext}; callers may override for tests.
+   *
+   * Task 15 now default-wires this via
+   * `createDefaultAigcSpecNodeCapabilityPolicy()`. The field stays optional so
+   * custom {@link BlueprintServiceContext} shapes assembled directly (without
+   * {@link buildBlueprintServiceContext}) remain backwards compatible.
+   */
+  aigcSpecNodeCapabilityPolicy?: AigcSpecNodeCapabilityPolicy;
+  /**
+   * AIGC Spec Node capability bridge. Defaults to
+   * `createAigcSpecNodeCapabilityBridge(ctx)` when not provided.
+   *
+   * The bridge performs its own tier-1 early-exit when
+   * `BLUEPRINT_AIGC_NODE_CAPABILITY_BRIDGE_ENABLED !== "true"` or when the
+   * resolved apiKey is empty, so always wiring a bridge instance does not
+   * incur LLM traffic in default deployments.
+   */
+  aigcSpecNodeCapabilityBridge?: AigcSpecNodeCapabilityBridge;
 }
 
 /**
@@ -211,6 +239,20 @@ export interface BlueprintServiceContextDeps {
   specsRoot?: string;
   jobStoreFile?: string;
   logger?: BlueprintLogger;
+  /**
+   * Optional override for the AIGC Spec Node policy. When omitted,
+   * {@link buildBlueprintServiceContext} wires
+   * {@link createDefaultAigcSpecNodeCapabilityPolicy}.
+   */
+  aigcSpecNodeCapabilityPolicy?: AigcSpecNodeCapabilityPolicy;
+  /**
+   * Optional override for the AIGC Spec Node bridge. When omitted,
+   * {@link buildBlueprintServiceContext} wires
+   * {@link createAigcSpecNodeCapabilityBridge} using the fully-constructed
+   * context (so the bridge sees the same `llm` / `logger` / `now` /
+   * `aigcSpecNodeCapabilityPolicy` that the rest of the app uses).
+   */
+  aigcSpecNodeCapabilityBridge?: AigcSpecNodeCapabilityBridge;
 }
 
 /**
@@ -256,7 +298,14 @@ export function buildBlueprintServiceContext(
   deps: BlueprintServiceContextDeps = {}
 ): BlueprintServiceContext {
   const jobStore = deps.jobStore ?? getDefaultJobStore(deps.jobStoreFile);
-  return {
+  // Resolve logger / now / llm first (existing order preserved), then wire
+  // the AIGC policy (pure data, dependency-free), and finally the bridge —
+  // which depends on a fully-assembled ctx (policy + llm + logger + now).
+  const policy =
+    deps.aigcSpecNodeCapabilityPolicy ??
+    createDefaultAigcSpecNodeCapabilityPolicy();
+
+  const ctx: BlueprintServiceContext = {
     now: deps.now ?? (() => new Date()),
     blueprintStores: deps.blueprintStores ?? createDefaultBlueprintStores(),
     jobStore,
@@ -272,7 +321,18 @@ export function buildBlueprintServiceContext(
     specsRoot:
       deps.specsRoot ?? path.resolve(process.cwd(), ".kiro", "specs"),
     logger: deps.logger ?? createSilentBlueprintLogger(),
+    aigcSpecNodeCapabilityPolicy: policy,
   };
+
+  // The bridge factory reads `ctx.aigcSpecNodeCapabilityPolicy` /
+  // `ctx.llm` / `ctx.logger` / `ctx.now`, so it must be constructed after the
+  // base context object exists. We assign to the already-returned object so
+  // the bridge closes over the same `ctx` instance downstream code sees.
+  ctx.aigcSpecNodeCapabilityBridge =
+    deps.aigcSpecNodeCapabilityBridge ??
+    createAigcSpecNodeCapabilityBridge(ctx);
+
+  return ctx;
 }
 
 /**

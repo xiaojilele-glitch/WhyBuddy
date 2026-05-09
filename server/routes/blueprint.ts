@@ -9,6 +9,7 @@ import { callLLMJson } from "../core/llm-client.js";
 import { defaultPreviewClarificationQuestions } from "./nl-command.js";
 import { projectHandoffOntoJob } from "./blueprint/routeset/handoff-projection.js";
 import { BlueprintEventName } from "../../shared/blueprint/events.js";
+import type { BlueprintServiceContext } from "./blueprint/context.js";
 import type {
   BlueprintArtifactDiff,
   BlueprintArtifactDiffRequest,
@@ -546,7 +547,7 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
     res.json({ context });
   });
 
-  const handleCreateGenerationJob = (req: Request, res: Response) => {
+  const handleCreateGenerationJob = async (req: Request, res: Response) => {
     const parsed = parseGenerationRequest(req.body);
     if (!parsed.ok) {
       res.status(400).json({
@@ -565,15 +566,22 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
       return;
     }
 
-    const result = createGenerationJob(resolved.request, {
-      now: deps.now,
-      store: jobStore,
-      context: resolved.context,
-      intake: resolved.intake,
-      clarificationSession: resolved.clarificationSession,
-    });
+    try {
+      const result = await createGenerationJob(resolved.request, {
+        now: deps.now,
+        store: jobStore,
+        context: resolved.context,
+        intake: resolved.intake,
+        clarificationSession: resolved.clarificationSession,
+      });
 
-    res.status(201).json(result);
+      res.status(201).json(result);
+    } catch (error) {
+      res.status(500).json({
+        error: "Failed to create blueprint generation job.",
+        message: errorMessage(error),
+      });
+    }
   };
 
   const handleJobDetails = (req: Request, res: Response) => {
@@ -1828,6 +1836,17 @@ interface CreateGenerationJobOptions {
   context?: BlueprintProjectDomainContext;
   intake?: BlueprintIntake;
   clarificationSession?: BlueprintClarificationSession;
+  /**
+   * AIGC Spec Node / 未来其它 capability-bridge 所需的 `BlueprintServiceContext`.
+   *
+   * 可选。调用方（router handler）未显式注入时，`createGenerationJob` 在内部懒构造
+   * 默认 context（通过 `buildBlueprintServiceContext({ now, jobStore: store })`），
+   * 保证既有调用点（尤其是测试 fixture）不需要一次性改签名即可继续工作。
+   *
+   * Threaded through to `createRouteGenerationSandboxDerivation(ctx, ...)` so the
+   * aigc-spec-node bridge can reach `ctx.llm.callJson` / `ctx.aigcSpecNodeCapabilityBridge`.
+   */
+  ctx?: BlueprintServiceContext;
 }
 
 type ParseIntakeRequestResult =
@@ -2241,12 +2260,41 @@ function parseGenerationRequest(body: unknown): ParseGenerationRequestResult {
   };
 }
 
-export function createGenerationJob(
+/**
+ * Lazy default {@link BlueprintServiceContext} resolver for `createGenerationJob`.
+ *
+ * The import is dynamic to avoid a circular import between
+ * `server/routes/blueprint.ts` and `server/routes/blueprint/context.ts`
+ * (context.ts already imports `createFileBlueprintJobStore` from blueprint.ts).
+ */
+async function resolveDefaultBlueprintServiceContext(deps: {
+  now?: () => Date;
+  jobStore: BlueprintJobStore;
+}): Promise<BlueprintServiceContext> {
+  const contextModule = await import("./blueprint/context.js");
+  return contextModule.buildBlueprintServiceContext({
+    now: deps.now,
+    jobStore: deps.jobStore,
+  });
+}
+
+export async function createGenerationJob(
   request: BlueprintGenerationRequest,
   options: CreateGenerationJobOptions
-): BlueprintCreateGenerationJobResponse {
+): Promise<BlueprintCreateGenerationJobResponse> {
   const createdAt = (options.now?.() ?? new Date()).toISOString();
   const jobId = createId("blueprint-job");
+  // Resolve ctx lazily: if the caller (router handler) passed one, reuse it;
+  // otherwise build a default context so downstream bridges (e.g. aigc-spec-node)
+  // still have `ctx.llm.callJson` / `ctx.aigcSpecNodeCapabilityBridge` available.
+  // The default bridge auto-early-exits into fallback when the env flag is off,
+  // so this does not introduce LLM traffic for existing callers.
+  const ctx: BlueprintServiceContext =
+    options.ctx ??
+    (await resolveDefaultBlueprintServiceContext({
+      now: options.now,
+      jobStore: options.store,
+    }));
   const events: BlueprintGenerationEvent[] = [
     createGenerationEvent({
       jobId,
@@ -2295,14 +2343,18 @@ export function createGenerationJob(
     createdAt,
     payload: agentCrew,
   };
-  const routeSandboxDerivation = createRouteGenerationSandboxDerivation({
-    jobId,
-    request,
-    routeSet,
-    agentCrew,
-    capabilities: getDefaultRuntimeCapabilities(),
-    createdAt,
-  });
+  const routeSandboxDerivation = await createRouteGenerationSandboxDerivation(
+    ctx,
+    {
+      jobId,
+      request,
+      routeSet,
+      agentCrew,
+      capabilities: getDefaultRuntimeCapabilities(),
+      createdAt,
+      clarificationSession: options.clarificationSession,
+    }
+  );
   const contextArtifacts = buildGenerationContextArtifacts({
     createdAt,
     intake: options.intake,
@@ -2863,14 +2915,18 @@ interface RouteGenerationSandboxDerivationResult {
   artifacts: BlueprintGenerationArtifact[];
 }
 
-function createRouteGenerationSandboxDerivation(input: {
-  jobId: string;
-  request: BlueprintGenerationRequest;
-  routeSet: BlueprintRouteSet;
-  agentCrew: BlueprintAgentCrew;
-  capabilities: BlueprintRuntimeCapability[];
-  createdAt: string;
-}): RouteGenerationSandboxDerivationResult {
+async function createRouteGenerationSandboxDerivation(
+  ctx: BlueprintServiceContext,
+  input: {
+    jobId: string;
+    request: BlueprintGenerationRequest;
+    routeSet: BlueprintRouteSet;
+    agentCrew: BlueprintAgentCrew;
+    capabilities: BlueprintRuntimeCapability[];
+    createdAt: string;
+    clarificationSession?: BlueprintClarificationSession;
+  }
+): Promise<RouteGenerationSandboxDerivationResult> {
   const capabilityIds = uniqueStrings(
     input.routeSet.routes.flatMap(route =>
       route.capabilities.map(capability => capability.id)
@@ -2910,62 +2966,91 @@ function createRouteGenerationSandboxDerivation(input: {
     artifacts: [],
     events: [],
   };
-  const invocations = routeGenerationCapabilities.map((capability, index) => {
-    const route = input.routeSet.routes[index] ?? primaryRoute;
-    const invocationRoleId = resolveRouteSandboxCapabilityRoleId(capability);
-    const invocationInput = `Derive route candidate ${route.title} with ${capability.label}.`;
-    const invocation: BlueprintCapabilityInvocation = {
-      id: createId("blueprint-capability-invocation"),
-      jobId: input.jobId,
-      capabilityId: capability.id,
-      roleId: invocationRoleId,
-      capabilityLabel: capability.label,
-      kind: capability.kind,
-      status: "completed",
-      securityLevel: capability.securityLevel,
-      safetyGate: {
-        status: "allowed",
-        reason: capability.requiresApproval
-          ? `${capability.label} approved for deterministic route generation sandbox derivation.`
-          : `${capability.label} allowed for deterministic route generation sandbox derivation.`,
-        requiresApproval: capability.requiresApproval,
-        approved: capability.requiresApproval,
-        securityLevel: capability.securityLevel,
-      },
-      requestedAt: input.createdAt,
-      completedAt: input.createdAt,
-      requestedBy: "route-generation-sandbox-derivation",
-      routeId: route.id,
-      input: invocationInput,
-      outputSummary: buildCapabilityOutputSummary({
-        capability,
-        routeTitle: route.title,
-        input: invocationInput,
-      }),
-      logs: [],
-      evidenceIds: [],
-      durationMs: deterministicCapabilityDuration(capability, {
+  const invocations = await Promise.all(
+    routeGenerationCapabilities.map(async (capability, index) => {
+      const route = input.routeSet.routes[index] ?? primaryRoute;
+      const invocationRoleId = resolveRouteSandboxCapabilityRoleId(capability);
+      const invocationId = createId("blueprint-capability-invocation");
+
+      // ---- AIGC Spec Node bridge branch (Task 17) --------------------------
+      // When the aigc-spec-node capability is up for invocation and a bridge
+      // is wired on ctx, delegate the invocation construction to the bridge.
+      // The bridge returns both the invocation (real or simulated_fallback)
+      // and a free-standing `executionMode` marker the outer code uses to
+      // resolve event-payload `adapter` strings. Sister capabilities remain
+      // on the templated path below.
+      if (
+        capability.id === "aigc-spec-node" &&
+        ctx.aigcSpecNodeCapabilityBridge
+      ) {
+        const bridgeResult = await ctx.aigcSpecNodeCapabilityBridge({
+          capability,
+          route,
+          jobId: input.jobId,
+          request: input.request,
+          routeSet: input.routeSet,
+          clarificationSession: input.clarificationSession,
+          createdAt: input.createdAt,
+          invocationId,
+          roleId: invocationRoleId,
+        });
+        return bridgeResult.invocation;
+      }
+
+      const invocationInput = `Derive route candidate ${route.title} with ${capability.label}.`;
+      const invocation: BlueprintCapabilityInvocation = {
+        id: invocationId,
+        jobId: input.jobId,
         capabilityId: capability.id,
         roleId: invocationRoleId,
+        capabilityLabel: capability.label,
+        kind: capability.kind,
+        status: "completed",
+        securityLevel: capability.securityLevel,
+        safetyGate: {
+          status: "allowed",
+          reason: capability.requiresApproval
+            ? `${capability.label} approved for deterministic route generation sandbox derivation.`
+            : `${capability.label} allowed for deterministic route generation sandbox derivation.`,
+          requiresApproval: capability.requiresApproval,
+          approved: capability.requiresApproval,
+          securityLevel: capability.securityLevel,
+        },
+        requestedAt: input.createdAt,
+        completedAt: input.createdAt,
+        requestedBy: "route-generation-sandbox-derivation",
         routeId: route.id,
         input: invocationInput,
-      }),
-      provenance: {
-        jobId: input.jobId,
-        projectId: input.request.projectId,
-        sourceId: input.request.sourceId,
-        routeSetId: input.routeSet.id,
-        routeId: route.id,
-        roleId: invocationRoleId,
-        targetText: input.request.targetText,
-        githubUrls: input.request.githubUrls ?? [],
-      },
-    };
-    return {
-      ...invocation,
-      logs: buildCapabilityInvocationLogs(capability, invocation.outputSummary),
-    };
-  });
+        outputSummary: buildCapabilityOutputSummary({
+          capability,
+          routeTitle: route.title,
+          input: invocationInput,
+        }),
+        logs: [],
+        evidenceIds: [],
+        durationMs: deterministicCapabilityDuration(capability, {
+          capabilityId: capability.id,
+          roleId: invocationRoleId,
+          routeId: route.id,
+          input: invocationInput,
+        }),
+        provenance: {
+          jobId: input.jobId,
+          projectId: input.request.projectId,
+          sourceId: input.request.sourceId,
+          routeSetId: input.routeSet.id,
+          routeId: route.id,
+          roleId: invocationRoleId,
+          targetText: input.request.targetText,
+          githubUrls: input.request.githubUrls ?? [],
+        },
+      };
+      return {
+        ...invocation,
+        logs: buildCapabilityInvocationLogs(capability, invocation.outputSummary),
+      };
+    })
+  );
   const evidenceItems = invocations.map(invocation => {
     const capability = routeGenerationCapabilities.find(
       item => item.id === invocation.capabilityId
@@ -2991,6 +3076,32 @@ function createRouteGenerationSandboxDerivation(input: {
       evidenceIds: evidence ? [evidence.id] : [],
     };
   });
+  // ---- Task 18.1: resolve real adapter for aigc-spec-node capability ----
+  // For the aigc-spec-node capability, the `adapter` string surfaced in
+  // downstream event payloads distinguishes the real LLM path from the
+  // simulated templated fallback. Sister capabilities (docker / mcp / role /
+  // skill) will add their own branches when their respective bridge specs
+  // land; today they continue to use the capability's declared adapter.
+  const aigcInvocation = invocations.find(
+    invocation => invocation.capabilityId === "aigc-spec-node"
+  );
+  const aigcExecutionMode = aigcInvocation?.provenance.executionMode;
+  const aigcAdapter: string =
+    aigcExecutionMode === "real"
+      ? "blueprint.runtime.aigc.spec-node.llm"
+      : routeGenerationCapabilities.find(
+          capability => capability.id === "aigc-spec-node"
+        )?.adapter ?? "blueprint.runtime.aigc.spec-node.simulated";
+  const adapterForCapability = (capabilityId: string): string => {
+    if (capabilityId === "aigc-spec-node") {
+      return aigcAdapter;
+    }
+    return (
+      routeGenerationCapabilities.find(
+        capability => capability.id === capabilityId
+      )?.adapter ?? ""
+    );
+  };
   const totalDurationMs = invocationsWithEvidence.reduce(
     (total, invocation) => total + invocation.durationMs,
     0
@@ -3109,6 +3220,7 @@ function createRouteGenerationSandboxDerivation(input: {
   };
   const capabilityEvents = invocationsWithEvidence.flatMap(invocation => {
     const evidence = evidenceItems.find(item => item.invocationId === invocation.id);
+    const capabilityAdapter = adapterForCapability(invocation.capabilityId);
     return [
       createGenerationEvent({
         jobId: input.jobId,
@@ -3129,6 +3241,7 @@ function createRouteGenerationSandboxDerivation(input: {
           evidence,
           roleId,
           crewId,
+          adapter: capabilityAdapter,
         }),
       }),
       createGenerationEvent({
@@ -3150,6 +3263,7 @@ function createRouteGenerationSandboxDerivation(input: {
           evidence,
           roleId,
           crewId,
+          adapter: capabilityAdapter,
         }),
       }),
     ];
@@ -3213,6 +3327,10 @@ function createRouteGenerationSandboxDerivation(input: {
         executionMode: sandboxDerivationJob.executionMode,
         capabilityIds: sandboxDerivationJob.capabilityIds,
         routeSetId: input.routeSet.id,
+        // Task 18.2: surface the resolved aigc adapter so downstream
+        // consumers can distinguish real LLM execution vs simulated fallback
+        // without inspecting every invocation.
+        aigcAdapter,
         sourceIds: {
           projectId: input.request.projectId,
           routeSetId: input.routeSet.id,
@@ -3241,6 +3359,9 @@ function createRouteGenerationSandboxDerivation(input: {
         evidenceIds: sandboxDerivationJob.evidenceIds,
         durationMs: sandboxDerivationJob.durationMs,
         routeSetId: input.routeSet.id,
+        // Task 18.2: mirror aigc adapter on completion so real-vs-fallback
+        // readers do not need to correlate with the `started` event.
+        aigcAdapter,
         sourceIds: {
           projectId: input.request.projectId,
           routeSetId: input.routeSet.id,
@@ -3337,8 +3458,17 @@ function buildRouteSandboxCapabilityEventPayload(input: {
   evidence?: BlueprintCapabilityEvidence;
   roleId: string;
   crewId: string;
+  /**
+   * Optional per-capability adapter string. When the aigc-spec-node bridge
+   * reports a real LLM path, the outer caller passes the `.llm` adapter here
+   * so downstream consumers can distinguish real vs simulated execution.
+   * Non-aigc capabilities pass the statically declared adapter; field is
+   * additive so existing subscribers do not break.
+   */
+  adapter?: string;
 }): Record<string, unknown> {
-  return {
+  const provenance = input.invocation.provenance;
+  const payload: Record<string, unknown> = {
     capabilityId: input.invocation.capabilityId,
     roleId: input.invocation.roleId ?? input.roleId,
     crewId: input.crewId,
@@ -3357,6 +3487,30 @@ function buildRouteSandboxCapabilityEventPayload(input: {
       capabilityEvidenceIds: input.evidence ? [input.evidence.id] : [],
     },
   };
+  // Task 18.3: additive optional fields surfaced from invocation.provenance.
+  // When the bridge executes in real mode these fields carry the prompt /
+  // model / digest breadcrumbs; in fallback mode the `error` field surfaces
+  // the redacted reason string. Consumers that do not know these keys are
+  // unaffected thanks to JSON's additive shape.
+  if (input.adapter !== undefined && input.adapter !== "") {
+    payload.adapter = input.adapter;
+  }
+  if (provenance.executionMode !== undefined) {
+    payload.executionMode = provenance.executionMode;
+  }
+  if (typeof provenance.promptId === "string") {
+    payload.promptId = provenance.promptId;
+  }
+  if (typeof provenance.model === "string") {
+    payload.model = provenance.model;
+  }
+  if (typeof provenance.error === "string") {
+    payload.error = provenance.error;
+  }
+  if (typeof provenance.structuredPayloadDigest === "string") {
+    payload.structuredPayloadDigest = provenance.structuredPayloadDigest;
+  }
+  return payload;
 }
 
 function resolveRouteSandboxCapabilityRoleId(
@@ -10214,7 +10368,7 @@ function evaluateCapabilitySafetyGate(
   };
 }
 
-function buildCapabilityOutputSummary(input: {
+export function buildCapabilityOutputSummary(input: {
   capability: BlueprintRuntimeCapability;
   routeTitle?: string;
   nodeTitle?: string;
@@ -10228,7 +10382,7 @@ function buildCapabilityOutputSummary(input: {
   return `${input.capability.label} simulated ${input.capability.kind} execution for ${target} using ${normalizedInput}.`;
 }
 
-function buildCapabilityInvocationLogs(
+export function buildCapabilityInvocationLogs(
   capability: BlueprintRuntimeCapability,
   outputSummary: string
 ): string[] {
@@ -10240,7 +10394,7 @@ function buildCapabilityInvocationLogs(
   ];
 }
 
-function deterministicCapabilityDuration(
+export function deterministicCapabilityDuration(
   capability: BlueprintRuntimeCapability,
   request: BlueprintCapabilityInvocationRequest
 ): number {
@@ -10260,6 +10414,29 @@ function buildCapabilityEvidence(input: {
   const kind = mapCapabilityEvidenceKind(input.capability);
   const title = `Capability evidence: ${input.capability.label}`;
   const summary = `${input.capability.label} recorded ${kind} evidence for invocation ${input.invocation.id}.`;
+
+  // Task 18.4 / 18.5: inherit the AIGC-spec-node / Docker / MCP bridge
+  // provenance fields that land on the invocation side, and for the aigc
+  // real path materialise the `structuredPayload` summary object using the
+  // internal `__aigcStructuredPayloadRef` breadcrumb the bridge attached.
+  //
+  // The side-field is read once here and then stripped so it does not leak
+  // via downstream `JSON.stringify(invocation)` into artifact payloads or
+  // event bus subscribers. Stripping keeps the public invocation shape
+  // free of `__`-prefixed keys.
+  const invocationProvenance = input.invocation.provenance;
+  type StructuredPayloadRef = {
+    digest: string;
+    byteSize: number;
+    summary: string;
+  };
+  const invocationWithSideField = input.invocation as unknown as {
+    __aigcStructuredPayloadRef?: StructuredPayloadRef;
+  };
+  const structuredPayloadRef = invocationWithSideField.__aigcStructuredPayloadRef;
+  if (structuredPayloadRef) {
+    delete invocationWithSideField.__aigcStructuredPayloadRef;
+  }
 
   return {
     id: createId("blueprint-capability-evidence"),
@@ -10302,6 +10479,26 @@ function buildCapabilityEvidence(input: {
       nodeId: input.invocation.nodeId,
       targetText: input.job.request.targetText,
       githubUrls: input.job.request.githubUrls ?? [],
+      // Task 18.4: inherit optional bridge-provided provenance fields. These
+      // are all additive; non-bridge capabilities simply leave them
+      // undefined and the JSON shape remains compatible.
+      executionMode: invocationProvenance.executionMode,
+      error: invocationProvenance.error,
+      promptId: invocationProvenance.promptId,
+      model: invocationProvenance.model,
+      responseDigest: invocationProvenance.responseDigest,
+      tokenCount: invocationProvenance.tokenCount,
+      structuredPayloadDigest: invocationProvenance.structuredPayloadDigest,
+      promptFingerprint: invocationProvenance.promptFingerprint,
+      // Task 18.5: materialise structuredPayload for aigc-spec-node real
+      // path. Only when the bridge attached a ref AND the invocation is in
+      // real execution mode — fallback path stays undefined.
+      structuredPayload:
+        structuredPayloadRef &&
+        input.capability.id === "aigc-spec-node" &&
+        invocationProvenance.executionMode === "real"
+          ? structuredPayloadRef
+          : undefined,
     },
   };
 }

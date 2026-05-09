@@ -2260,21 +2260,62 @@ export function normalizeBlueprintCapabilityInvocation(
       record.evidenceIds ?? record.evidence_ids ?? record.evidence
     ),
     durationMs: asNumber(record.durationMs ?? record.duration_ms, 0),
-    provenance: {
-      jobId: asString(record.jobId ?? record.job_id, fallbackJobId),
-      projectId: asString(record.projectId ?? record.project_id) || undefined,
-      sourceId: asString(record.sourceId ?? record.source_id) || undefined,
-      routeSetId:
-        asString(record.routeSetId ?? record.route_set_id) || undefined,
-      routeId: routeId || undefined,
-      specTreeId:
-        asString(record.specTreeId ?? record.spec_tree_id) || undefined,
-      nodeId: nodeId || undefined,
-      roleId: asString(record.roleId ?? record.role_id) || undefined,
-      targetText:
-        asString(record.targetText ?? record.target_text) || undefined,
-      githubUrls: asStringArray(record.githubUrls ?? record.github_urls),
-    },
+    provenance: (() => {
+      const nested = asRecord(record.provenance) ?? {};
+      const executionModeRaw = asString(
+        nested.executionMode ?? (nested as any).execution_mode
+      );
+      const executionMode: "real" | "simulated_fallback" | undefined =
+        executionModeRaw === "real" || executionModeRaw === "simulated_fallback"
+          ? executionModeRaw
+          : undefined;
+      const promptId =
+        asString(nested.promptId ?? (nested as any).prompt_id) || undefined;
+      const model = asString(nested.model) || undefined;
+      const responseDigest =
+        asString(nested.responseDigest ?? (nested as any).response_digest) ||
+        undefined;
+      const structuredPayloadDigest =
+        asString(
+          nested.structuredPayloadDigest ??
+            (nested as any).structured_payload_digest
+        ) || undefined;
+      const promptFingerprint =
+        asString(
+          nested.promptFingerprint ?? (nested as any).prompt_fingerprint
+        ) || undefined;
+      const tokenCountRaw =
+        nested.tokenCount ?? (nested as any).token_count;
+      const tokenCount =
+        typeof tokenCountRaw === "number" ? tokenCountRaw : undefined;
+      const error = asString(nested.error) || undefined;
+      return {
+        jobId: asString(record.jobId ?? record.job_id, fallbackJobId),
+        projectId: asString(record.projectId ?? record.project_id) || undefined,
+        sourceId: asString(record.sourceId ?? record.source_id) || undefined,
+        routeSetId:
+          asString(record.routeSetId ?? record.route_set_id) || undefined,
+        routeId: routeId || undefined,
+        specTreeId:
+          asString(record.specTreeId ?? record.spec_tree_id) || undefined,
+        nodeId: nodeId || undefined,
+        roleId: asString(record.roleId ?? record.role_id) || undefined,
+        targetText:
+          asString(record.targetText ?? record.target_text) || undefined,
+        githubUrls: asStringArray(record.githubUrls ?? record.github_urls),
+        // Task 21 — 6 optional provenance fields surfaced from the bridge.
+        // Additive: undefined when the upstream invocation didn't produce
+        // them (templated path, docker path, mcp path, etc.).
+        ...(executionMode ? { executionMode } : {}),
+        ...(promptId ? { promptId } : {}),
+        ...(model ? { model } : {}),
+        ...(responseDigest ? { responseDigest } : {}),
+        ...(structuredPayloadDigest ? { structuredPayloadDigest } : {}),
+        ...(promptFingerprint ? { promptFingerprint } : {}),
+        ...(tokenCount !== undefined ? { tokenCount } : {}),
+        ...(error ? { error } : {}),
+      };
+    })(),
   };
 }
 
@@ -2360,20 +2401,75 @@ export function normalizeBlueprintCapabilityEvidence(
     payloadSummary: (asRecord(
       record.payloadSummary ?? record.payload_summary
     ) ?? {}) as BlueprintCapabilityEvidence["payloadSummary"],
-    provenance: {
-      jobId: asString(record.jobId ?? record.job_id, fallbackJobId),
-      projectId: asString(record.projectId ?? record.project_id) || undefined,
-      sourceId: asString(record.sourceId ?? record.source_id) || undefined,
-      routeSetId:
-        asString(record.routeSetId ?? record.route_set_id) || undefined,
-      routeId: routeId || undefined,
-      specTreeId:
-        asString(record.specTreeId ?? record.spec_tree_id) || undefined,
-      nodeId: nodeId || undefined,
-      targetText:
-        asString(record.targetText ?? record.target_text) || undefined,
-      githubUrls: asStringArray(record.githubUrls ?? record.github_urls),
-    },
+    provenance: (() => {
+      const nested = asRecord(record.provenance) ?? {};
+      const executionModeRaw = asString(
+        nested.executionMode ?? (nested as any).execution_mode
+      );
+      const executionMode: "real" | "simulated_fallback" | undefined =
+        executionModeRaw === "real" || executionModeRaw === "simulated_fallback"
+          ? executionModeRaw
+          : undefined;
+      const promptId =
+        asString(nested.promptId ?? (nested as any).prompt_id) || undefined;
+      const model = asString(nested.model) || undefined;
+      const responseDigest =
+        asString(nested.responseDigest ?? (nested as any).response_digest) ||
+        undefined;
+      const structuredPayloadDigest =
+        asString(
+          nested.structuredPayloadDigest ??
+            (nested as any).structured_payload_digest
+        ) || undefined;
+      const promptFingerprint =
+        asString(
+          nested.promptFingerprint ?? (nested as any).prompt_fingerprint
+        ) || undefined;
+      const tokenCountRaw =
+        nested.tokenCount ?? (nested as any).token_count;
+      const tokenCount =
+        typeof tokenCountRaw === "number" ? tokenCountRaw : undefined;
+      const error = asString(nested.error) || undefined;
+      const structuredPayloadRecord = asRecord(
+        nested.structuredPayload ?? (nested as any).structured_payload
+      );
+      const structuredPayload = structuredPayloadRecord
+        ? {
+            digest: asString(structuredPayloadRecord.digest),
+            byteSize: asNumber(
+              structuredPayloadRecord.byteSize ??
+                (structuredPayloadRecord as any).byte_size,
+              0
+            ),
+            summary: asString(structuredPayloadRecord.summary),
+          }
+        : undefined;
+      return {
+        jobId: asString(record.jobId ?? record.job_id, fallbackJobId),
+        projectId: asString(record.projectId ?? record.project_id) || undefined,
+        sourceId: asString(record.sourceId ?? record.source_id) || undefined,
+        routeSetId:
+          asString(record.routeSetId ?? record.route_set_id) || undefined,
+        routeId: routeId || undefined,
+        specTreeId:
+          asString(record.specTreeId ?? record.spec_tree_id) || undefined,
+        nodeId: nodeId || undefined,
+        targetText:
+          asString(record.targetText ?? record.target_text) || undefined,
+        githubUrls: asStringArray(record.githubUrls ?? record.github_urls),
+        // Task 21 — 6 optional provenance fields + structuredPayload? object
+        // surfaced from the bridge-produced evidence. All additive / undefined-safe.
+        ...(executionMode ? { executionMode } : {}),
+        ...(promptId ? { promptId } : {}),
+        ...(model ? { model } : {}),
+        ...(responseDigest ? { responseDigest } : {}),
+        ...(structuredPayloadDigest ? { structuredPayloadDigest } : {}),
+        ...(promptFingerprint ? { promptFingerprint } : {}),
+        ...(tokenCount !== undefined ? { tokenCount } : {}),
+        ...(error ? { error } : {}),
+        ...(structuredPayload ? { structuredPayload } : {}),
+      };
+    })(),
   };
 }
 
