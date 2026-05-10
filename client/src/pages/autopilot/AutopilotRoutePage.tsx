@@ -61,6 +61,10 @@ import type {
 } from "@shared/blueprint/contracts";
 
 import BlueprintProgressPanel from "../specs/BlueprintProgressPanel";
+// Spec 1 scaffolding reference（`autopilot-cockpit-right-rail-convergence`）：
+// 只做 type 级引用以验证 `AutopilotRightRailProps` 契约可被主页面消费；本 spec 不接管渲染，
+// 真实搬运由 Spec 2 / 3 / 4 / 5 承接。前缀 `_` 避免 lint 警告 unused。
+import type { AutopilotRightRailProps as _AutopilotRightRailProps } from "./right-rail";
 
 const GITHUB_URL_PATTERN = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+/i;
 
