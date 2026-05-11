@@ -310,7 +310,7 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
     agentCrew,
   });
   const activeSubStage: AutopilotRailSubStage | undefined =
-    currentSubStageFromProps ?? computedSubStage;
+    currentSubStageFromProps ?? computedSubStage ?? (currentStage === "fabric" ? RAIL_SUB_STAGE_ORDER[0] : undefined);
 
   // -------------------------------------------------------------------------
   // Spec 5 Task 3 — 步骤驱动自动滚动
