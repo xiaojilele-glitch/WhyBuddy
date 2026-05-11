@@ -27,6 +27,8 @@
 
 import { useEffect, useRef, useState, type FC } from "react";
 
+import { Pin, PinOff } from "lucide-react";
+
 import {
   readPrefersReducedMotion,
   resolveKeyboardIntent,
@@ -106,6 +108,74 @@ const KEYBOARD_HINT_COPY: Record<
     hint: "Shortcuts: [ / ] switch sub-stage, Shift + P toggle pin, Esc close drawer",
     dismiss: "Hide",
     dismissLabel: "Hide keyboard shortcut hint",
+  },
+};
+
+/**
+ * Sticky toggle 文案（Task 6）。
+ *
+ * pinned 状态：文案「已暂停跟随 / Pinned」；非 pinned：「跟随进度 / Following」。
+ * `aria-label` 取 `labelLong`，提供人类可读描述。
+ */
+const STICKY_TOGGLE_COPY: Record<
+  AutopilotRightRailProps["locale"],
+  { pinnedShort: string; pinnedLong: string; followingShort: string; followingLong: string }
+> = {
+  "zh-CN": {
+    pinnedShort: "已暂停跟随",
+    pinnedLong: "当前已暂停跟随进度，点击以恢复跟随",
+    followingShort: "跟随进度",
+    followingLong: "当前跟随进度推进，点击以暂停跟随",
+  },
+  "en-US": {
+    pinnedShort: "Pinned",
+    pinnedLong: "Currently pinned; click to resume following progress",
+    followingShort: "Following",
+    followingLong: "Following progress; click to pin current sub-stage",
+  },
+};
+
+/**
+ * 8 个 sub-stage 的 tab 标签文案（Task 6）。
+ *
+ * sub-stage 的内部 key 与 `RAIL_SUB_STAGE_ORDER` 对齐；此表同时提供 sr-announcer 使用的
+ * 完整句式（`announce`）。
+ */
+const SUB_STAGE_LABELS: Record<
+  AutopilotRailSubStage,
+  Record<AutopilotRightRailProps["locale"], { short: string; announce: string }>
+> = {
+  agent_crew_fabric: {
+    "zh-CN": { short: "智能体矩阵", announce: "已切换到智能体矩阵" },
+    "en-US": { short: "Agent crew", announce: "Switched to agent crew fabric" },
+  },
+  spec_tree: {
+    "zh-CN": { short: "Spec 树", announce: "已切换到 Spec 树" },
+    "en-US": { short: "Spec tree", announce: "Switched to spec tree" },
+  },
+  spec_documents: {
+    "zh-CN": { short: "Spec 文档", announce: "已切换到 Spec 文档" },
+    "en-US": { short: "Spec docs", announce: "Switched to spec documents" },
+  },
+  effect_preview: {
+    "zh-CN": { short: "效果预演", announce: "已切换到效果预演" },
+    "en-US": { short: "Effect preview", announce: "Switched to effect preview" },
+  },
+  prompt_package: {
+    "zh-CN": { short: "Prompt 包", announce: "已切换到 Prompt 包" },
+    "en-US": { short: "Prompt package", announce: "Switched to prompt package" },
+  },
+  runtime_capability: {
+    "zh-CN": { short: "运行时能力", announce: "已切换到运行时能力" },
+    "en-US": { short: "Runtime capability", announce: "Switched to runtime capability" },
+  },
+  engineering_handoff: {
+    "zh-CN": { short: "工程交付", announce: "已切换到工程交付" },
+    "en-US": { short: "Engineering handoff", announce: "Switched to engineering handoff" },
+  },
+  artifact_memory: {
+    "zh-CN": { short: "证据记忆", announce: "已切换到证据记忆" },
+    "en-US": { short: "Artifact memory", announce: "Switched to artifact memory" },
   },
 };
 
@@ -226,6 +296,7 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
     capabilityEvidence,
     effectPreviews,
     locale,
+    onSubStageChange,
   } = props;
 
   // 本地 resolver 的结果；props 值优先，保证 Spec 4 / 5 的 URL / pin-state 覆盖链路无缝接管。
@@ -335,6 +406,22 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
   // 键盘提示 session-scope dismiss state（Requirement 8.5）。
   const [keyboardHintDismissed, setKeyboardHintDismissed] = useState<boolean>(false);
 
+  // -------------------------------------------------------------------------
+  // Spec 5 Task 6 — sr-announcer：activeSubStage 变化时写入 i18n 文案
+  // -------------------------------------------------------------------------
+  const srAnnouncerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!srAnnouncerRef.current) {
+      return;
+    }
+    if (currentStage !== "fabric" || !activeSubStage) {
+      srAnnouncerRef.current.textContent = "";
+      return;
+    }
+    const copy = SUB_STAGE_LABELS[activeSubStage]?.[locale] ?? SUB_STAGE_LABELS[activeSubStage]?.["en-US"];
+    srAnnouncerRef.current.textContent = copy?.announce ?? "";
+  }, [currentStage, activeSubStage, locale]);
+
   return (
     <aside
       role="complementary"
@@ -343,6 +430,14 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
       data-autopilot-stage={currentStage}
       data-autopilot-sub-stage={activeSubStage ?? ""}
     >
+      {/* Task 6 — sr-announcer: 由 effect 写入 i18n 文案；fabric 阶段外为空 */}
+      <div
+        ref={srAnnouncerRef}
+        data-testid="autopilot-right-rail-sr-announcer"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      />
       {TIMELINE_STAGE_ORDER.map((stage) => {
         const labels = TIMELINE_STAGE_LABELS[stage];
         const label = labels[locale] ?? labels["en-US"];
@@ -363,6 +458,8 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
 
         // fabric 分支：包裹 scroll container + 8 个 anchor <section>。
         const hintCopy = KEYBOARD_HINT_COPY[locale] ?? KEYBOARD_HINT_COPY["en-US"];
+        const stickyCopy = STICKY_TOGGLE_COPY[locale] ?? STICKY_TOGGLE_COPY["en-US"];
+        const isPinned = subStageContext.isPinned;
         return (
           <div
             key={stage}
@@ -370,6 +467,64 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
             data-active={isActive ? "true" : "false"}
           >
             <div>{label}</div>
+            {/* Task 6 — 8 个子阶段 tab + Sticky_Toggle */}
+            <div
+              role="tablist"
+              aria-label={
+                locale === "zh-CN" ? "子阶段导航" : "Sub-stage navigation"
+              }
+              className="flex items-center justify-between gap-2"
+            >
+              <div className="flex flex-wrap gap-1">
+                {RAIL_SUB_STAGE_ORDER.map((subStage) => {
+                  const isTabActive = subStage === activeSubStage;
+                  const tabCopy =
+                    SUB_STAGE_LABELS[subStage][locale] ??
+                    SUB_STAGE_LABELS[subStage]["en-US"];
+                  return (
+                    <button
+                      key={subStage}
+                      type="button"
+                      role="tab"
+                      data-testid={`autopilot-right-rail-sub-stage-tab-${subStage}`}
+                      aria-current={isTabActive ? "location" : undefined}
+                      aria-selected={isTabActive}
+                      onClick={() => {
+                        // Spec 1 冻结：onSubStageChange 由 parent 解读。Task 7 会把它
+                        // 接到 Sub_Stage_State_Hook 的 setPinnedSubStage。
+                        onSubStageChange(subStage);
+                      }}
+                      className={
+                        isTabActive
+                          ? "rounded border border-primary px-2 py-0.5 text-xs font-medium"
+                          : "rounded border border-transparent px-2 py-0.5 text-xs text-muted-foreground hover:border-border"
+                      }
+                    >
+                      {tabCopy.short}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                data-testid="autopilot-right-rail-sticky-toggle"
+                aria-pressed={isPinned}
+                aria-label={
+                  isPinned ? stickyCopy.pinnedLong : stickyCopy.followingLong
+                }
+                onClick={() => subStageContext.togglePin()}
+                className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs"
+              >
+                {isPinned ? (
+                  <Pin aria-hidden="true" className="h-3 w-3" />
+                ) : (
+                  <PinOff aria-hidden="true" className="h-3 w-3" />
+                )}
+                <span>
+                  {isPinned ? stickyCopy.pinnedShort : stickyCopy.followingShort}
+                </span>
+              </button>
+            </div>
             {keyboardHintDismissed ? null : (
               <div
                 data-testid="autopilot-right-rail-keyboard-hint"

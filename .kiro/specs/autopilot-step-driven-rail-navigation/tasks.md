@@ -94,7 +94,7 @@
   - **验收**：三档响应式切换正确；`<HoloDrawer>` 现有签名未扩展；drawer 内不渲染 5 阶段时间线；非 fabric 阶段 trigger / collapse toggle 不可见
   - _需求：Requirement 5.1、5.2、5.3、5.4、5.5、5.6、5.7、Requirement 9.1（drawer-trigger / drawer / collapse-toggle testid）_
 
-- [ ] 6. 实现 Sticky_Toggle UI + sr-announcer + tab aria-current
+- [x] 6. 实现 Sticky_Toggle UI + sr-announcer + tab aria-current
   - 在 `<AutopilotRightRail>` header（8 子阶段 tab 栏右侧）渲染 `<button data-testid="autopilot-right-rail-sticky-toggle" aria-pressed={isPinned} aria-label={...} onClick={togglePin}>`
   - 文案 i18n：pinned 态 `"已暂停跟随" / "Pinned"`；非 pinned 态 `"跟随进度" / "Following"`；使用项目现有 `t(locale, zh, en)` helper（从 `AutopilotRightRailProps.locale` 读）
   - 图标使用 `lucide-react` 的 `Pin` / `PinOff`（或等价图标）
