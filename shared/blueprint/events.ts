@@ -85,6 +85,23 @@ export type BlueprintGenerationEventType =
   | "role.review_completed"
   | "role.sleeping"
   | "role.completed"
+  // Role container loader（`autopilot-role-container-loader` spec Task 1）：
+  // 角色容器 loader 的 4 条生命周期事件。仍归入 `role` 家族，不扩展 12 家族目录。
+  | "role.container.provisioning"
+  | "role.container.ready"
+  | "role.container.teardown"
+  | "role.container.failed"
+  // Agent reasoning stream（`autopilot-agent-reasoning-stream` spec Task 2）：
+  // Agent ReAct 循环对外暴露的 7 条事件。仍归入 `role` 家族，不扩展 12 家族目录；
+  // `resolveBlueprintEventFamily` 按首段 `.` 截取，会自动把 `role.agent.thinking`
+  // 这种带两个 `.` 的事件归入 `"role"`。
+  | "role.agent.iteration_started"
+  | "role.agent.thinking"
+  | "role.agent.acting"
+  | "role.agent.observing"
+  | "role.agent.iteration_completed"
+  | "role.agent.error"
+  | "role.agent.completed"
   // Runtime capability
   | "capability.invoked"
   | "capability.completed"
@@ -141,6 +158,19 @@ export const BlueprintEventName = {
   RoleReviewCompleted: "role.review_completed",
   RoleSleeping: "role.sleeping",
   RoleCompleted: "role.completed",
+  // Role container loader（`autopilot-role-container-loader` spec Task 1）
+  RoleContainerProvisioning: "role.container.provisioning",
+  RoleContainerReady: "role.container.ready",
+  RoleContainerTeardown: "role.container.teardown",
+  RoleContainerFailed: "role.container.failed",
+  // Agent reasoning stream（`autopilot-agent-reasoning-stream` spec Task 2）
+  RoleAgentIterationStarted: "role.agent.iteration_started",
+  RoleAgentThinking: "role.agent.thinking",
+  RoleAgentActing: "role.agent.acting",
+  RoleAgentObserving: "role.agent.observing",
+  RoleAgentIterationCompleted: "role.agent.iteration_completed",
+  RoleAgentError: "role.agent.error",
+  RoleAgentCompleted: "role.agent.completed",
   // Runtime capability
   CapabilityInvoked: "capability.invoked",
   CapabilityCompleted: "capability.completed",

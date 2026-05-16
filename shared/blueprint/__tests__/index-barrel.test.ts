@@ -67,6 +67,39 @@ describe("shared/blueprint/index.ts barrel", () => {
 });
 
 
+describe("RoleCapabilityPackage barrel re-export（autopilot-role-container-loader Task 2.3）", () => {
+  it("可从 @shared/blueprint 直接拿到 RoleCapabilityPackage 类型", () => {
+    // 纯类型断言：让 TS 校验 barrel 可以解析到 RoleCapabilityPackage 符号。
+    // 若任务 2 的 re-export 丢失，本文件会在 compile 期失败。
+    const pkg: import("../index.js").RoleCapabilityPackage = {
+      alwaysBound: [{ kind: "mcp", id: "github" }],
+      onDemand: {
+        aigcNodes: [{ kind: "aigc_node", id: "summary-gen" }],
+      },
+      resourceBudget: {
+        provisionTimeoutMs: 20_000,
+        maxConcurrentAigcNodes: 2,
+        orchestrationMode: "serial",
+      },
+      containerImage: "lobster-executor:ai",
+    };
+    const binding: import("../index.js").RoleCapabilityPackageBinding = {
+      kind: "skill",
+      id: "summarize",
+      optional: true,
+    };
+    const budget: import("../index.js").RoleResourceBudget = {
+      memoryMiB: 1024,
+    };
+
+    // 运行期 smoke：字段可读且 shape 稳定。
+    expect(pkg.alwaysBound?.[0]?.id).toBe("github");
+    expect(pkg.onDemand?.aigcNodes?.[0]?.kind).toBe("aigc_node");
+    expect(binding.optional).toBe(true);
+    expect(budget.memoryMiB).toBe(1024);
+  });
+});
+
 describe("BlueprintHandoffState / BlueprintReviewingHandoff", () => {
   it("BlueprintHandoffState 覆盖 5 个显式值", () => {
     const expected: import("../index.js").BlueprintHandoffState[] = [

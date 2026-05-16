@@ -1,3 +1,14 @@
+// `autopilot-role-container-loader` spec Task 2：角色容器能力包类型从独立子模块
+// 引入，避免把大块类型定义堆进 contracts.ts（保持既有契约稳定）。
+import type { RoleCapabilityPackage } from "./role-container/types.js";
+import type { RoleAgentConfig } from "./agent-config.js";
+
+export type {
+  RoleCapabilityPackage,
+  RoleCapabilityPackageBinding,
+  RoleResourceBudget,
+} from "./role-container/types.js";
+
 export type BlueprintGenerationStage =
   | "input"
   | "clarification"
@@ -451,6 +462,24 @@ export interface BlueprintAgentRole {
   permissions: string[];
   displayName: string;
   displayLabelZh: string;
+  /**
+   * 可选：角色容器能力包。
+   *
+   * 由 `autopilot-role-container-loader` spec Task 2 引入（需求 1.1 / 1.2 /
+   * 1.5 / 1.6 / 1.7）。未设置时 loader 会优先从静态目录按 `id` 解析，
+   * 仍为空则返回空包（不阻塞 role.* 事件 emit）。
+   *
+   * 字段 shape 定义在 `shared/blueprint/role-container/types.ts`，保持
+   * `BlueprintAgentRole` 既有 8 个字段严格不变，仅追加这一条可选字段
+   * 以维持既有 contract 回归兼容（需求 10.1 / 10.2）。
+   */
+  capabilityPackage?: RoleCapabilityPackage;
+  /**
+   * `autopilot-role-autonomous-agent` spec Task 1.6：角色 Agent 配置。
+   * 定义该角色作为自主 Agent 运行时的系统提示词、预算、工具类别等参数。
+   * 未设置时角色不以 Agent 模式运行（走现有 callLLMJson 路径）。
+   */
+  agentConfig?: RoleAgentConfig;
 }
 
 export interface BlueprintRoleCapability {
@@ -1768,6 +1797,31 @@ export interface BlueprintGenerationEvent {
   presenceState?: BlueprintRolePresenceState;
   capabilityId?: string;
   evidenceId?: string;
+  /**
+   * `autopilot-agent-reasoning-stream` spec Task 2.5 新增的 12 个可选顶层字段。
+   *
+   * 设计要点：
+   * - 这些字段只在 `role.agent.*` 事件上由 Agent_Reasoning_Bridge 显式填充，
+   *   其它 11 个家族的现有事件继续保持 shape 不变（不传即等价于 `undefined`）。
+   * - 全部声明为 `optional`，避免破坏既有 51 条 blueprint-routes 测试断言与
+   *   5140+ 个 server 测试中对该结构的字面量构造（不需要在历史测试里补 `undefined`）。
+   * - 不引入 `discriminated union`：现有大量消费方按 `event.type` 字符串分支，
+   *   union narrowing 改造会扩大 TS 基线 113 个错误的影响面；改为开放可选字段
+   *   是 Layer 4 view model（`buildEntryFromSocketEvent`）已经预期的形态。
+   * - 字段语义详见 `shared/blueprint/agent-reasoning.ts`，与 `AgentReasoningEntry`
+   *   保持 1:1 对齐，仅新增 `roleId`/`stageId`（已存在 `roleId`，故只补 `stageId`）。
+   */
+  iteration?: number;
+  stageId?: string;
+  thought?: string;
+  actionToolId?: string;
+  observationSuccess?: boolean;
+  observationSummary?: string;
+  error?: string;
+  degraded?: boolean;
+  reason?: string;
+  tokensUsed?: number;
+  budgetRemaining?: number;
   payload?: unknown;
 }
 

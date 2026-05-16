@@ -34,3 +34,20 @@ export type * from "./artifact-memory/types.js";
 
 // Role System Architecture 纯类型（与 server 侧 zod schema z.infer 等价）。
 export type { AgentRoleEntry, RoleArchitectureResponse } from "./role-architecture.js";
+
+// Role container loader 纯类型（`autopilot-role-container-loader` spec Task 2）。
+// 下游可通过 `import type { RoleCapabilityPackage } from "@shared/blueprint";` 获取。
+export type {
+  RoleCapabilityPackage,
+  RoleCapabilityPackageBinding,
+  RoleResourceBudget,
+} from "./role-container/types.js";
+
+// Autonomous Agent 类型（`autopilot-role-autonomous-agent` spec Task 1）
+export type * from "./agent-tool.js";
+export type * from "./agent-budget.js";
+export type * from "./agent-state.js";
+export type * from "./agent-job.js";
+export type * from "./agent-events.js";
+export type * from "./agent-config.js";
+export type * from "./agent-delegator.js";

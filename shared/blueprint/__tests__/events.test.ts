@@ -59,6 +59,14 @@ describe("BlueprintEventName", () => {
     expect(BlueprintEventName.RoleSleeping).toBe("role.sleeping");
   });
 
+  it("`role.agent.thinking` 仍按首段 `.` 归入 role 家族", () => {
+    // `autopilot-agent-reasoning-stream` spec Task 2.4：单独一条聚焦断言，
+    // 防止后续把 `resolveBlueprintEventFamily` 改成字面量映射时漏掉
+    // 带两个 `.` 的子家族事件，导致 `BlueprintSocketRelay.DEFAULT_RELAY_FAMILIES`
+    // 过滤出错。
+    expect(resolveBlueprintEventFamily("role.agent.thinking")).toBe("role");
+  });
+
   it("resolveBlueprintEventFamily 返回事件名的首段", () => {
     const samples: Array<{ type: BlueprintGenerationEventType; family: BlueprintGenerationEventFamily }> = [
       { type: BlueprintEventName.JobCreated, family: "job" },
@@ -75,6 +83,22 @@ describe("BlueprintEventName", () => {
       { type: BlueprintEventName.CrewContextUpdated, family: "crew" },
       { type: BlueprintEventName.SandboxJobCompleted, family: "sandbox" },
       { type: BlueprintEventName.RoleSleeping, family: "role" },
+      // `autopilot-role-container-loader` spec Task 1.4：新增 4 条角色容器
+      // 生命周期事件，仍归入 `role` 家族，不扩展 12 家族目录。
+      { type: BlueprintEventName.RoleContainerProvisioning, family: "role" },
+      { type: BlueprintEventName.RoleContainerReady, family: "role" },
+      { type: BlueprintEventName.RoleContainerTeardown, family: "role" },
+      { type: BlueprintEventName.RoleContainerFailed, family: "role" },
+      // `autopilot-agent-reasoning-stream` spec Task 2.4：新增 7 条 Agent ReAct
+      // 事件，按首段 `.` 截取仍归入 `role` 家族；这里逐条断言以防 family
+      // resolver 改动后悄悄把它们漂移到其它家族。
+      { type: BlueprintEventName.RoleAgentIterationStarted, family: "role" },
+      { type: BlueprintEventName.RoleAgentThinking, family: "role" },
+      { type: BlueprintEventName.RoleAgentActing, family: "role" },
+      { type: BlueprintEventName.RoleAgentObserving, family: "role" },
+      { type: BlueprintEventName.RoleAgentIterationCompleted, family: "role" },
+      { type: BlueprintEventName.RoleAgentError, family: "role" },
+      { type: BlueprintEventName.RoleAgentCompleted, family: "role" },
     ];
 
     for (const sample of samples) {
