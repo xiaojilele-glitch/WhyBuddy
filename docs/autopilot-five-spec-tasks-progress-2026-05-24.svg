@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" role="img" aria-labelledby="title desc">
+  <title id="title">Autopilot Five-Spec Progress</title>
+  <desc id="desc">Progress chart based on tasks.md checkbox execution counts for five Autopilot specs. Total progress is 219 of 219 tasks done, with 0 unchecked tasks remaining.</desc>
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .bg { fill: #f8fafc; }
+      .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1; filter: url(#shadow); }
+      .subpanel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1; }
+      .title { fill: #0f172a; font: 700 34px "Segoe UI", Arial, sans-serif; }
+      .subtitle { fill: #475569; font: 500 17px "Segoe UI", Arial, sans-serif; }
+      .metric { fill: #0f172a; font: 700 30px "Segoe UI", Arial, sans-serif; }
+      .metric-small { fill: #334155; font: 600 18px "Segoe UI", Arial, sans-serif; }
+      .label { fill: #0f172a; font: 650 17px "Segoe UI", Arial, sans-serif; }
+      .muted { fill: #64748b; font: 500 14px "Segoe UI", Arial, sans-serif; }
+      .tiny { fill: #64748b; font: 500 12px "Segoe UI", Arial, sans-serif; }
+      .section-title { fill: #0f172a; font: 700 20px "Segoe UI", Arial, sans-serif; }
+      .done { fill: #0f766e; }
+      .remaining { fill: #f59e0b; }
+      .track { fill: #e2e8f0; }
+      .badge { fill: #ecfeff; stroke: #0891b2; stroke-width: 1; }
+      .badge-text { fill: #155e75; font: 700 20px "Segoe UI", Arial, sans-serif; }
+      .warn { fill: #fff7ed; stroke: #fdba74; stroke-width: 1; }
+      .warn-text { fill: #9a3412; font: 650 14px "Segoe UI", Arial, sans-serif; }
+      .ok-dot { fill: #0f766e; }
+      .todo-dot { fill: #f59e0b; }
+      .note-dot { fill: #64748b; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1280" height="900"/>
+
+  <rect class="panel" x="40" y="32" width="1200" height="194" rx="8"/>
+  <text class="title" x="72" y="78">Autopilot Five-Spec Progress</text>
+  <text class="subtitle" x="72" y="112">Metric: tasks.md checkbox execution progress. This is not document-sync status and not a runtime pass/fail score.</text>
+
+  <rect class="badge" x="1028" y="54" width="152" height="46" rx="8"/>
+  <text class="badge-text" x="1053" y="84">100% done</text>
+
+  <text class="metric" x="72" y="162">219 / 219</text>
+  <text class="metric-small" x="240" y="160">tasks checked</text>
+  <text class="metric-small" x="450" y="160">0 unchecked tasks remain</text>
+  <rect class="warn" x="820" y="134" width="360" height="40" rx="8"/>
+  <text class="warn-text" x="842" y="159">All checklist tasks are checked after live validation.</text>
+
+  <rect class="track" x="72" y="185" width="820" height="18" rx="9"/>
+  <rect class="done" x="72" y="185" width="820" height="18" rx="9"/>
+  <rect class="remaining" x="892" y="185" width="0" height="18" rx="9"/>
+  <text class="tiny" x="72" y="216">Done: 219</text>
+  <text class="tiny" x="814" y="216">Remaining: 0</text>
+
+  <rect class="panel" x="40" y="250" width="1200" height="338" rx="8"/>
+  <text class="section-title" x="72" y="290">Per-Spec Checklist Progress</text>
+  <text class="muted" x="72" y="316">Source files: .kiro/specs/*/tasks.md, recounted on 2026-05-24 Asia/Shanghai.</text>
+
+  <text class="label" x="72" y="358">Asset Staleness Model</text>
+  <text class="muted" x="72" y="380">45 done / 0 remaining / 45 total</text>
+  <rect class="track" x="360" y="347" width="680" height="18" rx="9"/>
+  <rect class="done" x="360" y="347" width="680" height="18" rx="9"/>
+  <rect class="remaining" x="1040" y="347" width="0" height="18" rx="9"/>
+  <text class="label" x="1075" y="362">100%</text>
+
+  <text class="label" x="72" y="414">Replan + Branch Action</text>
+  <text class="muted" x="72" y="436">42 done / 0 remaining / 42 total</text>
+  <rect class="track" x="360" y="403" width="680" height="18" rx="9"/>
+  <rect class="done" x="360" y="403" width="680" height="18" rx="9"/>
+  <rect class="remaining" x="1040" y="403" width="0" height="18" rx="9"/>
+  <text class="label" x="1075" y="418">100%</text>
+
+  <text class="label" x="72" y="470">Stage Edit Mode</text>
+  <text class="muted" x="72" y="492">49 done / 0 remaining / 49 total</text>
+  <rect class="track" x="360" y="459" width="680" height="18" rx="9"/>
+  <rect class="done" x="360" y="459" width="680" height="18" rx="9"/>
+  <rect class="remaining" x="1040" y="459" width="0" height="18" rx="9"/>
+  <text class="label" x="1075" y="474">100%</text>
+
+  <text class="label" x="72" y="526">Stage Version History</text>
+  <text class="muted" x="72" y="548">40 done / 0 remaining / 40 total</text>
+  <rect class="track" x="360" y="515" width="680" height="18" rx="9"/>
+  <rect class="done" x="360" y="515" width="680" height="18" rx="9"/>
+  <rect class="remaining" x="1040" y="515" width="0" height="18" rx="9"/>
+  <text class="label" x="1075" y="530">100%</text>
+
+  <text class="label" x="72" y="582">Stage State Coordination</text>
+  <text class="muted" x="72" y="604">43 done / 0 remaining / 43 total</text>
+  <rect class="track" x="360" y="571" width="680" height="18" rx="9"/>
+  <rect class="done" x="360" y="571" width="680" height="18" rx="9"/>
+  <rect class="remaining" x="1040" y="571" width="0" height="18" rx="9"/>
+  <text class="label" x="1075" y="586">100%</text>
+
+  <rect class="panel" x="40" y="620" width="575" height="214" rx="8"/>
+  <text class="section-title" x="72" y="662">Validation Evidence</text>
+  <text class="muted" x="72" y="688">Separate from the percentage above; included as implementation confidence.</text>
+  <circle class="ok-dot" cx="82" cy="720" r="5"/>
+  <text class="label" x="98" y="725">Client focus: 27 files / 171 tests passed</text>
+  <circle class="ok-dot" cx="82" cy="752" r="5"/>
+  <text class="label" x="98" y="757">Server focus: 17 files / 70 tests passed</text>
+  <circle class="ok-dot" cx="82" cy="784" r="5"/>
+  <text class="label" x="98" y="789">Live CDP: runtime -> spec -> input back chain</text>
+  <circle class="ok-dot" cx="82" cy="816" r="5"/>
+  <text class="label" x="98" y="821">History panel ready: 3 family jobs, close restores latest</text>
+
+  <rect class="panel" x="665" y="620" width="575" height="214" rx="8"/>
+  <text class="section-title" x="697" y="662">Runtime Scope Covered</text>
+  <text class="muted" x="697" y="688">Task 9.3 is now checked with dev:all-style local runtime evidence.</text>
+  <circle class="ok-dot" cx="707" cy="720" r="5"/>
+  <text class="label" x="723" y="725">Replan branch + in-place events verified in family history</text>
+  <circle class="ok-dot" cx="707" cy="752" r="5"/>
+  <text class="label" x="723" y="757">History count no longer falls back to fake parent count</text>
+  <circle class="ok-dot" cx="707" cy="784" r="5"/>
+  <text class="label" x="723" y="789">Spec page back returns to input / clarification / route</text>
+  <circle class="ok-dot" cx="707" cy="816" r="5"/>
+  <text class="label" x="723" y="821">Rollback/error toast covered by coordinator focused tests</text>
+
+  <rect class="subpanel" x="40" y="852" width="1200" height="30" rx="8"/>
+  <circle class="ok-dot" cx="64" cy="867" r="5"/>
+  <text class="tiny" x="78" y="871">Green/teal = checked tasks</text>
+  <circle class="todo-dot" cx="238" cy="867" r="5"/>
+  <text class="tiny" x="252" y="871">Amber = unchecked tasks; none remain in this recount</text>
+  <circle class="note-dot" cx="432" cy="867" r="5"/>
+  <text class="tiny" x="446" y="871">Generated from current local tasks.md recount; runtime evidence is shown separately from checklist progress.</text>
+</svg>

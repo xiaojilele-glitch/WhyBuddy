@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2300" viewBox="0 0 1600 2300" role="img" aria-labelledby="title desc">
+  <title id="title">Autopilot 返回导航修复详细操作记录 - 2026-05-24</title>
+  <desc id="desc">记录 Codex 本轮对 Autopilot 返回导航问题的实际开发、测试与浏览器验证路径，包含命令、结果、判断和落点。</desc>
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="9" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#64748b"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1; filter: url(#shadow); }
+      .band { fill: #f1f5f9; stroke: #cbd5e1; stroke-width: 1; }
+      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1; }
+      .blue { fill: #eff6ff; stroke: #93c5fd; stroke-width: 1; }
+      .red { fill: #fff1f2; stroke: #fda4af; stroke-width: 1; }
+      .green { fill: #ecfdf5; stroke: #86efac; stroke-width: 1; }
+      .amber { fill: #fffbeb; stroke: #fcd34d; stroke-width: 1; }
+      .violet { fill: #f5f3ff; stroke: #c4b5fd; stroke-width: 1; }
+      .gray { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1; }
+      .line { fill: none; stroke: #64748b; stroke-width: 2.2; marker-end: url(#arrow); }
+      .title { fill: #0f172a; font: 700 36px "Microsoft YaHei", "Segoe UI", Arial, sans-serif; }
+      .subtitle { fill: #475569; font: 500 17px "Microsoft YaHei", "Segoe UI", Arial, sans-serif; }
+      .section { fill: #0f172a; font: 700 24px "Microsoft YaHei", "Segoe UI", Arial, sans-serif; }
+      .step { fill: #0f172a; font: 700 18px "Microsoft YaHei", "Segoe UI", Arial, sans-serif; }
+      .body { fill: #334155; font: 500 14px "Microsoft YaHei", "Segoe UI", Arial, sans-serif; }
+      .small { fill: #64748b; font: 500 12px "Microsoft YaHei", "Segoe UI", Arial, sans-serif; }
+      .mono { fill: #334155; font: 600 12px Consolas, "Segoe UI Mono", monospace; }
+      .ok { fill: #047857; font: 700 14px "Microsoft YaHei", "Segoe UI", Arial, sans-serif; }
+      .warn { fill: #b45309; font: 700 14px "Microsoft YaHei", "Segoe UI", Arial, sans-serif; }
+      .fail { fill: #be123c; font: 700 14px "Microsoft YaHei", "Segoe UI", Arial, sans-serif; }
+      .tag { fill: #0f172a; }
+      .tag-text { fill: #ffffff; font: 700 12px "Microsoft YaHei", "Segoe UI", Arial, sans-serif; }
+      .num { fill: #ffffff; font: 700 14px "Microsoft YaHei", "Segoe UI", Arial, sans-serif; }
+      .num-bg { fill: #0f172a; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="2300"/>
+
+  <rect class="panel" x="52" y="34" width="1496" height="146" rx="10"/>
+  <text class="title" x="88" y="84">Autopilot 返回导航修复：详细操作记录</text>
+  <text class="subtitle" x="88" y="116">目标：解决“效果预览返回到 SPEC 后，再返回输入/澄清/路线时，左侧和 console 仍像 runtime 页”的错乱感。</text>
+  <text class="subtitle" x="88" y="146">记录口径：本图记录真实操作路径、命令、结果与判断；不是 tasks.md 进度图，也不是文档同步图。</text>
+  <rect class="tag" x="1284" y="62" width="210" height="38" rx="8"/>
+  <text class="tag-text" x="1310" y="86">2026-05-24 实际开发与验证</text>
+
+  <rect class="panel" x="52" y="210" width="1496" height="178" rx="10"/>
+  <text class="section" x="88" y="252">0. 输入背景与成功标准</text>
+  <text class="body" x="88" y="286">用户要求：不要只修表面，要实际开发、实际测试；项目已由 npm run dev:all 启动；Docker 用户侧认为已开启。</text>
+  <text class="body" x="88" y="314">问题现象：用户在效果预览页返回一次应到 SPEC 树 + 规格文档，再返回一次应到输入 + 澄清 + 路线。</text>
+  <text class="body" x="88" y="342">实际痛点：URL 和右栏会变化，但左侧大屏、顶部 badge、console 仍读取 raw latestJob，所以还显示 runtime_capability。</text>
+  <text class="body" x="88" y="370">成功标准：后端真实 job 保留 runtime 状态；用户当前回看的页面必须按第 1/2/3 页投影显示。</text>
+
+  <rect class="panel" x="52" y="424" width="1496" height="298" rx="10"/>
+  <text class="section" x="88" y="466">1. 环境与仓库现状探测</text>
+
+  <rect class="blue" x="88" y="496" width="440" height="190" rx="8"/>
+  <circle class="num-bg" cx="114" cy="522" r="14"/>
+  <text class="num" x="110" y="527">1</text>
+  <text class="step" x="140" y="526">读取当前工作区状态</text>
+  <text class="mono" x="110" y="556">git status --short</text>
+  <text class="body" x="110" y="584">结果：工作区已有大量修改与未跟踪文件。</text>
+  <text class="body" x="110" y="612">判断：不能重置，不能覆盖无关改动。</text>
+  <text class="body" x="110" y="640">策略：只触碰本轮相关前端文件和 docs SVG。</text>
+
+  <rect class="blue" x="580" y="496" width="440" height="190" rx="8"/>
+  <circle class="num-bg" cx="606" cy="522" r="14"/>
+  <text class="num" x="602" y="527">2</text>
+  <text class="step" x="632" y="526">定位返回与显示相关代码</text>
+  <text class="mono" x="602" y="556">rg resolveActiveAutopilotPage</text>
+  <text class="mono" x="602" y="578">rg buildConsoleLines AutopilotVisualStage</text>
+  <text class="body" x="602" y="606">读到：activeAutopilotPage 已能映射回第 1/2 页。</text>
+  <text class="body" x="602" y="634">问题集中在显示层仍用 latestJob。</text>
+
+  <rect class="amber" x="1072" y="496" width="420" height="190" rx="8"/>
+  <circle class="num-bg" cx="1098" cy="522" r="14"/>
+  <text class="num" x="1094" y="527">3</text>
+  <text class="step" x="1124" y="526">探测运行面</text>
+  <text class="mono" x="1094" y="556">Invoke-WebRequest :3000/autopilot</text>
+  <text class="mono" x="1094" y="578">Invoke-WebRequest :3001/api/blueprint/jobs/latest</text>
+  <text class="ok" x="1094" y="606">结果：前端 200，后端 200，CDP :9222 可连。</text>
+  <text class="warn" x="1094" y="634">docker ps：当前无运行容器。</text>
+
+  <path class="line" d="M528 590 H580"/>
+  <path class="line" d="M1020 590 H1072"/>
+
+  <rect class="panel" x="52" y="758" width="1496" height="372" rx="10"/>
+  <text class="section" x="88" y="800">2. 真实页面复现与根因判断</text>
+
+  <rect class="violet" x="88" y="832" width="440" height="250" rx="8"/>
+  <circle class="num-bg" cx="114" cy="858" r="14"/>
+  <text class="num" x="110" y="863">4</text>
+  <text class="step" x="140" y="862">获取真实 latest job 基线</text>
+  <text class="mono" x="110" y="894">GET /api/blueprint/jobs/latest</text>
+  <text class="mono" x="110" y="918">jobId: ce621090-4088-4d9e-8607-2456c0c44c8b</text>
+  <text class="mono" x="110" y="942">stage: runtime_capability</text>
+  <text class="mono" x="110" y="966">status: reviewing</text>
+  <text class="body" x="110" y="996">判断：后端真实状态不应被回退按钮直接改掉。</text>
+  <text class="body" x="110" y="1024">需要的是“显示投影”，不是“修改 job”。</text>
+
+  <rect class="amber" x="580" y="832" width="440" height="250" rx="8"/>
+  <circle class="num-bg" cx="606" cy="858" r="14"/>
+  <text class="num" x="602" y="863">5</text>
+  <text class="step" x="632" y="862">第一次真实点击回退</text>
+  <text class="mono" x="602" y="894">/autopilot?sub=runtime_capability</text>
+  <text class="mono" x="602" y="918">点击 Back to previous step</text>
+  <text class="mono" x="602" y="942">URL -> /autopilot?sub=spec_tree</text>
+  <text class="body" x="602" y="972">右栏能回到 SPEC 页，但左侧和 console 之前仍可透出 runtime。</text>
+  <text class="body" x="602" y="1000">这说明“按钮失效”不是唯一问题。</text>
+
+  <rect class="amber" x="1072" y="832" width="420" height="250" rx="8"/>
+  <circle class="num-bg" cx="1098" cy="858" r="14"/>
+  <text class="num" x="1094" y="863">6</text>
+  <text class="step" x="1124" y="862">第二次真实点击回退</text>
+  <text class="mono" x="1094" y="894">点击 Back to previous step</text>
+  <text class="mono" x="1094" y="918">URL -> /autopilot</text>
+  <text class="body" x="1094" y="948">页面主体进入输入/澄清/路线。</text>
+  <text class="body" x="1094" y="976">但如果左侧仍写 runtime，就会让用户感觉“没返回”。</text>
+  <text class="ok" x="1094" y="1004">根因：页面层级和 raw latestJob 显示状态没有分离。</text>
+
+  <path class="line" d="M528 956 H580"/>
+  <path class="line" d="M1020 956 H1072"/>
+
+  <rect class="panel" x="52" y="1166" width="1496" height="380" rx="10"/>
+  <text class="section" x="88" y="1208">3. TDD：先写失败测试，再实现</text>
+
+  <rect class="red" x="88" y="1240" width="440" height="256" rx="8"/>
+  <circle class="num-bg" cx="114" cy="1266" r="14"/>
+  <text class="num" x="110" y="1271">7</text>
+  <text class="step" x="140" y="1270">写入 RED 测试</text>
+  <text class="mono" x="110" y="1302">AutopilotRoutePage.test.tsx</text>
+  <text class="body" x="110" y="1330">新增测试 1：第 1 页投影为 route_generation。</text>
+  <text class="body" x="110" y="1358">要求：清空 specTree、agentCrew、runtime capability、effectPreviews。</text>
+  <text class="body" x="110" y="1386">新增测试 2：第 2 页投影为 spec_tree / spec_docs。</text>
+  <text class="body" x="110" y="1414">要求：保留 SPEC 树和文档相关 artifacts，隐藏 effect/runtime。</text>
+  <text class="small" x="110" y="1450">这是为了防止回退逻辑再次退化成按 backend step 回退。</text>
+
+  <rect class="red" x="580" y="1240" width="440" height="256" rx="8"/>
+  <circle class="num-bg" cx="606" cy="1266" r="14"/>
+  <text class="num" x="602" y="1271">8</text>
+  <text class="step" x="632" y="1270">确认 RED 真的失败</text>
+  <text class="mono" x="602" y="1302">npx vitest run client/src/pages/autopilot/AutopilotRoutePage.test.tsx</text>
+  <text class="fail" x="602" y="1330">结果：2 failed，23 passed。</text>
+  <text class="mono" x="602" y="1358">resolveAutopilotPageProjection is not a function</text>
+  <text class="body" x="602" y="1390">判断：测试失败原因正确，是功能缺失，不是测试写错。</text>
+  <text class="body" x="602" y="1418">这一步锁定了需要新增的稳定接口。</text>
+
+  <rect class="green" x="1072" y="1240" width="420" height="256" rx="8"/>
+  <circle class="num-bg" cx="1098" cy="1266" r="14"/>
+  <text class="num" x="1094" y="1271">9</text>
+  <text class="step" x="1124" y="1270">实现页面投影</text>
+  <text class="mono" x="1094" y="1302">resolveAutopilotPageProjection</text>
+  <text class="body" x="1094" y="1330">第 1 页：visualJob.stage = route_generation。</text>
+  <text class="body" x="1094" y="1358">第 2 页：visualJob.stage = spec_tree。</text>
+  <text class="body" x="1094" y="1386">第 3 页：继续使用 raw latestJob。</text>
+  <text class="body" x="1094" y="1414">关键边界：不改后端 job，不清历史链。</text>
+  <text class="ok" x="1094" y="1450">只修“当前页面的展示投影”。</text>
+
+  <path class="line" d="M528 1368 H580"/>
+  <path class="line" d="M1020 1368 H1072"/>
+
+  <rect class="panel" x="52" y="1582" width="1496" height="358" rx="10"/>
+  <text class="section" x="88" y="1624">4. 代码接入与自动化验证</text>
+
+  <rect class="green" x="88" y="1656" width="440" height="236" rx="8"/>
+  <circle class="num-bg" cx="114" cy="1682" r="14"/>
+  <text class="num" x="110" y="1687">10</text>
+  <text class="step" x="140" y="1686">接入真实渲染路径</text>
+  <text class="mono" x="110" y="1718">AutopilotRoutePage.tsx</text>
+  <text class="body" x="110" y="1746">顶部 Badge 改为 readAutopilotJobStatus(pageProjection.visualJob)。</text>
+  <text class="body" x="110" y="1774">AutopilotVisualStage 改为使用 visualJob、visualSpecTree。</text>
+  <text class="body" x="110" y="1802">buildConsoleLines 改为吃 projected consoleJob 和投影后的数组。</text>
+  <text class="body" x="110" y="1830">右栏、history、family、replan 仍使用 raw latestJob。</text>
+
+  <rect class="green" x="580" y="1656" width="440" height="236" rx="8"/>
+  <circle class="num-bg" cx="606" cy="1682" r="14"/>
+  <text class="num" x="602" y="1687">11</text>
+  <text class="step" x="632" y="1686">单文件 GREEN</text>
+  <text class="mono" x="602" y="1718">npx vitest run client/src/pages/autopilot/AutopilotRoutePage.test.tsx</text>
+  <text class="ok" x="602" y="1746">结果：1 file passed，25 tests passed。</text>
+  <text class="body" x="602" y="1774">判断：RED 测试已被最小实现修复。</text>
+  <text class="body" x="602" y="1802">覆盖：page 1 不泄漏 runtime/effect；page 2 保留 SPEC。</text>
+
+  <rect class="green" x="1072" y="1656" width="420" height="236" rx="8"/>
+  <circle class="num-bg" cx="1098" cy="1682" r="14"/>
+  <text class="num" x="1094" y="1687">12</text>
+  <text class="step" x="1124" y="1686">相关回归套件</text>
+  <text class="mono" x="1094" y="1718">AutopilotRoutePage + right-rail cards</text>
+  <text class="mono" x="1094" y="1742">replan + version-history + coordination</text>
+  <text class="ok" x="1094" y="1770">结果：27 files passed，173 tests passed。</text>
+  <text class="body" x="1094" y="1798">判断：右栏回退、replan、历史树、协调层未被打坏。</text>
+  <text class="body" x="1094" y="1826">没有跑 repo-wide typecheck，避免混入无关历史噪声。</text>
+
+  <path class="line" d="M528 1774 H580"/>
+  <path class="line" d="M1020 1774 H1072"/>
+
+  <rect class="panel" x="52" y="1976" width="1496" height="254" rx="10"/>
+  <text class="section" x="88" y="2018">5. Chrome CDP 真实点击复验</text>
+
+  <rect class="gray" x="88" y="2050" width="440" height="136" rx="8"/>
+  <text class="step" x="110" y="2080">起点：runtime 页面</text>
+  <text class="mono" x="110" y="2110">/autopilot?sub=runtime_capability</text>
+  <text class="body" x="110" y="2138">railSubStage: runtime_capability</text>
+  <text class="body" x="110" y="2166">visualStage: runtime_capability</text>
+
+  <rect class="green" x="580" y="2050" width="440" height="136" rx="8"/>
+  <text class="step" x="602" y="2080">点击返回 1 次：进入 SPEC 合并页</text>
+  <text class="mono" x="602" y="2110">/autopilot?sub=spec_tree</text>
+  <text class="body" x="602" y="2138">railSubStage: spec_tree，stageKey: spec_documents</text>
+  <text class="ok" x="602" y="2166">hasEffectWorkbench: false，console 无 runtime/effect。</text>
+
+  <rect class="green" x="1072" y="2050" width="420" height="136" rx="8"/>
+  <text class="step" x="1094" y="2080">点击返回 2 次：进入输入/路线页</text>
+  <text class="mono" x="1094" y="2110">/autopilot</text>
+  <text class="body" x="1094" y="2138">step: autopilot-step-input，visualStage: route_generation</text>
+  <text class="ok" x="1094" y="2166">返回按钮消失，console 无 runtime/effect。</text>
+
+  <path class="line" d="M528 2118 H580"/>
+  <path class="line" d="M1020 2118 H1072"/>
+
+  <rect class="panel" x="52" y="2250" width="1496" height="34" rx="8"/>
+  <text class="small" x="88" y="2272">结论：真实 job 仍可处于 runtime_capability；用户回看的页面通过 pageProjection 投影为当前页状态。改动文件：AutopilotRoutePage.tsx、AutopilotRoutePage.test.tsx、本 SVG。</text>
+</svg>

@@ -1,0 +1,214 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1180" viewBox="0 0 1680 1180" role="img" aria-labelledby="title desc">
+  <title id="title">Autopilot 右栏完整回退逻辑 - 2026-05-23</title>
+  <desc id="desc">展示 Autopilot 右栏返回上一步的完整状态来源、resolver 决策、点击后的状态写入，以及当前疑似卡住点。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#dc2626"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.4; rx: 16; }
+      .panel-soft { fill: #f1f5f9; stroke: #cbd5e1; stroke-width: 1.2; rx: 14; }
+      .blue { fill: #eff6ff; stroke: #60a5fa; stroke-width: 1.5; rx: 14; }
+      .teal { fill: #f0fdfa; stroke: #14b8a6; stroke-width: 1.5; rx: 14; }
+      .amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 14; }
+      .rose { fill: #fff1f2; stroke: #fb7185; stroke-width: 1.5; rx: 14; }
+      .green { fill: #ecfdf5; stroke: #22c55e; stroke-width: 1.5; rx: 14; }
+      .ink { fill: #0f172a; }
+      .muted { fill: #475569; }
+      .weak { fill: #64748b; }
+      .danger { fill: #b91c1c; }
+      .ok { fill: #047857; }
+      .title { fill: #0f172a; font: 800 34px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .subtitle { fill: #475569; font: 15px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .h1 { fill: #0f172a; font: 800 21px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .h2 { fill: #0f172a; font: 800 17px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .text { fill: #334155; font: 14px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .small { fill: #64748b; font: 12px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .code { fill: #0f172a; font: 13px Consolas, "Courier New", monospace; }
+      .code-small { fill: #334155; font: 11px Consolas, "Courier New", monospace; }
+      .label { fill: #334155; font: 800 12px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .line { fill: none; stroke: #334155; stroke-width: 2; marker-end: url(#arrow); }
+      .line-soft { fill: none; stroke: #94a3b8; stroke-width: 1.6; marker-end: url(#arrow); }
+      .line-dash { fill: none; stroke: #94a3b8; stroke-width: 1.4; stroke-dasharray: 6 5; marker-end: url(#arrow); }
+      .line-red { fill: none; stroke: #dc2626; stroke-width: 2.3; marker-end: url(#arrow-red); }
+      .chip { fill: #e2e8f0; stroke: #cbd5e1; rx: 8; }
+      .chip-red { fill: #fee2e2; stroke: #fca5a5; rx: 8; }
+      .chip-green { fill: #dcfce7; stroke: #86efac; rx: 8; }
+      .chip-blue { fill: #dbeafe; stroke: #93c5fd; rx: 8; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1680" height="1180"/>
+  <text class="title" x="44" y="56">Autopilot 右栏完整回退逻辑</text>
+  <text class="subtitle" x="44" y="86">当前代码真实路径：项目级返回、Workbench 视觉步骤返回、Rail 子阶段返回是三套状态，不能混在一起判断。</text>
+  <text class="subtitle" x="44" y="110">本图重点标出你截图里的现象：STEP 04 SPEC TREE 仍渲染规格文档工作台，并且手动回退到 spec_tree 后会命中 no-op 保护分支。</text>
+
+  <!-- Legend -->
+  <rect class="panel" x="1190" y="34" width="438" height="116"/>
+  <text class="h2" x="1214" y="66">图例</text>
+  <rect class="chip-blue" x="1214" y="82" width="82" height="24"/>
+  <text class="small" x="1226" y="99">状态来源</text>
+  <rect class="chip-green" x="1310" y="82" width="82" height="24"/>
+  <text class="small" x="1322" y="99">正常路径</text>
+  <rect class="chip-red" x="1406" y="82" width="82" height="24"/>
+  <text class="small" x="1418" y="99">疑似断点</text>
+  <text class="small" x="1214" y="129">Code anchors: AutopilotRightRail.tsx, StageHeader.tsx, use-right-rail-sub-stage-state.ts</text>
+
+  <!-- Section A -->
+  <rect class="panel" x="44" y="150" width="1592" height="262"/>
+  <text class="h1" x="70" y="184">A. 当前页面显示状态怎么来的</text>
+
+  <rect class="blue" x="70" y="214" width="260" height="136"/>
+  <text class="h2" x="92" y="244">1. 后端 job.stage</text>
+  <text class="text" x="92" y="274">例如：runtime_capability</text>
+  <text class="text" x="92" y="300">通过 resolveRailSubStage</text>
+  <text class="code" x="92" y="326">job.stage -> resolvedSubStage</text>
+
+  <rect class="blue" x="370" y="214" width="288" height="136"/>
+  <text class="h2" x="392" y="244">2. URL / sticky pin</text>
+  <text class="text" x="392" y="274">?sub=spec_tree 会成为 pin</text>
+  <text class="text" x="392" y="300">setPinnedSubStage 会 replaceState</text>
+  <text class="code" x="392" y="326">effective = pinned ?? resolved</text>
+
+  <path class="line" d="M330 282 L370 282"/>
+
+  <rect class="teal" x="700" y="214" width="294" height="136"/>
+  <text class="h2" x="722" y="244">3. activeSubStage</text>
+  <text class="text" x="722" y="274">AutopilotRightRail 接收 effective</text>
+  <text class="text" x="722" y="300">旧 agent_crew_fabric 会被规整</text>
+  <text class="code" x="722" y="326">requested -> activeSubStage</text>
+
+  <path class="line" d="M658 282 L700 282"/>
+
+  <rect class="amber" x="1036" y="214" width="330" height="136"/>
+  <text class="h2" x="1058" y="244">4. activeStageKey</text>
+  <text class="text" x="1058" y="274">优先 manual override</text>
+  <text class="text" x="1058" y="300">其次 job.stage === spec_docs</text>
+  <text class="code" x="1058" y="326">else mapSubStageToStageIndex()</text>
+
+  <path class="line" d="M994 282 L1036 282"/>
+
+  <rect class="green" x="1406" y="214" width="198" height="136"/>
+  <text class="h2" x="1428" y="244">5. StageHeader</text>
+  <text class="text" x="1428" y="274">显示 STEP 文案</text>
+  <text class="text" x="1428" y="300">有 action 才显示左箭头</text>
+  <text class="code" x="1428" y="326">previousAction != none</text>
+
+  <path class="line" d="M1366 282 L1406 282"/>
+
+  <rect class="rose" x="1020" y="360" width="584" height="34"/>
+  <text class="small danger" x="1038" y="382">注意：当前代码里 activeStageKey 为 spec_tree 或 spec_documents 时，都渲染 StreamingDocRenderer，所以视觉上很像同一页。</text>
+
+  <!-- Section B -->
+  <rect class="panel" x="44" y="442" width="1592" height="330"/>
+  <text class="h1" x="70" y="476">B. 顶部左箭头 resolveManualPreviousAction 的完整分支</text>
+
+  <rect class="panel-soft" x="70" y="510" width="246" height="76"/>
+  <text class="h2" x="92" y="538">入口</text>
+  <text class="code" x="92" y="564">StageHeader.onClick</text>
+
+  <path class="line" d="M316 548 L358 548"/>
+
+  <rect class="amber" x="358" y="500" width="290" height="96"/>
+  <text class="h2" x="382" y="528">先算 previousAction</text>
+  <text class="code" x="382" y="554">activeStageKey</text>
+  <text class="code" x="382" y="576">activeSubStage</text>
+
+  <path class="line" d="M648 548 L704 548"/>
+
+  <rect class="panel-soft" x="704" y="500" width="270" height="96"/>
+  <text class="h2" x="728" y="528">通用禁用</text>
+  <text class="code" x="728" y="554">viewingCompletedStage</text>
+  <text class="code" x="728" y="576">或 activeSubStage 缺失</text>
+  <text class="small" x="728" y="596">结果：none，不显示按钮</text>
+
+  <path class="line-soft" d="M974 548 L1030 548"/>
+
+  <rect class="rose" x="1030" y="494" width="536" height="108"/>
+  <text class="h2 danger" x="1054" y="522">疑似断点：手动 spec_tree 停止保护</text>
+  <text class="code" x="1054" y="548">manualOverride === true</text>
+  <text class="code" x="1054" y="570">activeStageKey === "spec_tree"</text>
+  <text class="code" x="1054" y="592">activeSubStage === "spec_tree" -> none</text>
+
+  <path class="line-red" d="M1298 602 L1298 638"/>
+  <rect class="rose" x="1072" y="638" width="452" height="86"/>
+  <text class="h2 danger" x="1094" y="668">你截图里的“再点没反应”很可能在这里</text>
+  <text class="text" x="1094" y="694">STEP 04 / SPEC TREE 已经是手动回退后的 spec_tree，resolver 直接返回 none。</text>
+
+  <rect class="green" x="70" y="632" width="318" height="96"/>
+  <text class="h2" x="94" y="660">SPEC Documents 返回</text>
+  <text class="code" x="94" y="686">stage=spec_documents</text>
+  <text class="code" x="94" y="708">sub=spec_tree -> previousStage spec_tree</text>
+
+  <rect class="green" x="426" y="632" width="336" height="96"/>
+  <text class="h2" x="450" y="660">STEP 06 折叠返回</text>
+  <text class="code" x="450" y="686">stage=effect_preview</text>
+  <text class="code" x="450" y="708">sub in folded -> spec_documents + spec_tree</text>
+
+  <rect class="teal" x="800" y="632" width="236" height="96"/>
+  <text class="h2" x="824" y="660">普通 rail 返回</text>
+  <text class="code" x="824" y="686">stepSubStage(sub, "prev")</text>
+  <text class="small" x="824" y="708">例如：spec_tree -> agent_crew_fabric</text>
+
+  <path class="line-dash" d="M503 596 L274 632"/>
+  <path class="line-dash" d="M546 596 L566 632"/>
+  <path class="line-dash" d="M590 596 L870 632"/>
+
+  <!-- Section C -->
+  <rect class="panel" x="44" y="802" width="1592" height="226"/>
+  <text class="h1" x="70" y="836">C. 点击后真正写了什么状态</text>
+
+  <rect class="panel-soft" x="70" y="866" width="262" height="108"/>
+  <text class="h2" x="92" y="894">action: none</text>
+  <text class="code" x="92" y="920">return</text>
+  <text class="text" x="92" y="948">不会 set state，不写 URL</text>
+
+  <rect class="green" x="380" y="866" width="404" height="108"/>
+  <text class="h2" x="402" y="894">action: workbench-stage</text>
+  <text class="code" x="402" y="920">setManualWorkbenchStageOverride(previousStage)</text>
+  <text class="code" x="402" y="944">如果带 previousSubStage -> onSubStageChange()</text>
+
+  <rect class="teal" x="834" y="866" width="358" height="108"/>
+  <text class="h2" x="856" y="894">action: sub-stage</text>
+  <text class="code" x="856" y="920">setManualWorkbenchStageOverride(null)</text>
+  <text class="code" x="856" y="944">onSubStageChange(previousSubStage)</text>
+
+  <rect class="blue" x="1242" y="866" width="330" height="108"/>
+  <text class="h2" x="1264" y="894">父级 hook 写 URL</text>
+  <text class="code" x="1264" y="920">setPinnedSubStage(next)</text>
+  <text class="code" x="1264" y="944">window.history.replaceState(...?sub=next)</text>
+
+  <path class="line" d="M784 920 L834 920"/>
+  <path class="line" d="M1192 920 L1242 920"/>
+  <path class="line-dash" d="M582 974 L582 1004 L1406 1004 L1406 974"/>
+  <text class="small" x="610" y="998">workbench-stage 如果带 previousSubStage，也会落到同一套 URL pin 机制</text>
+
+  <rect class="blue" x="70" y="988" width="520" height="34"/>
+  <text class="code-small" x="92" y="1010">页面顶部返回：autopilot-back-to-project-space -> pushState(PROJECTS_PATH)</text>
+  <path class="line-soft" d="M590 1005 L638 1005"/>
+  <rect class="panel-soft" x="642" y="988" width="196" height="34"/>
+  <text class="code-small" x="664" y="1010">离开 /autopilot</text>
+
+  <!-- Section D -->
+  <rect class="panel" x="44" y="1052" width="1592" height="94"/>
+  <text class="h1" x="70" y="1084">D. 当前可见回退链路，按用户感知排序</text>
+
+  <rect class="chip-green" x="70" y="1102" width="324" height="28"/>
+  <text class="code-small" x="84" y="1120">STEP 06 EFFECT PREVIEW / runtime_capability</text>
+  <path class="line-soft" d="M398 1116 L438 1116"/>
+  <rect class="chip-green" x="442" y="1102" width="258" height="28"/>
+  <text class="code-small" x="456" y="1120">STEP 05 SPEC DOCUMENTS / spec_tree</text>
+  <path class="line-soft" d="M704 1116 L744 1116"/>
+  <rect class="chip-red" x="748" y="1102" width="292" height="28"/>
+  <text class="code-small" x="762" y="1120">STEP 04 SPEC TREE / spec_tree</text>
+  <path class="line-red" d="M1044 1116 L1084 1116"/>
+  <rect class="chip-red" x="1088" y="1102" width="168" height="28"/>
+  <text class="code-small" x="1102" y="1120">none, 看起来没反应</text>
+
+  <text class="small" x="1290" y="1114">补充：如果不是 manual override 的 spec_tree，普通分支会继续退到 agent_crew_fabric。</text>
+  <text class="small" x="1290" y="1134">但从 SPEC Documents 手动退到 spec_tree 后，当前保护分支阻止继续退。</text>
+</svg>

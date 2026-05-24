@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="880" viewBox="0 0 1500 880" role="img" aria-labelledby="title desc">
+  <title id="title">Autopilot 页面级回退逻辑 - 2026-05-23</title>
+  <desc id="desc">Autopilot 当前页面不是按 STEP 一一展示，回退应按页面分组执行。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .card { fill: #fff; stroke: #cbd5e1; stroke-width: 1.4; rx: 16; }
+      .page1 { fill: #eff6ff; stroke: #60a5fa; stroke-width: 1.6; rx: 16; }
+      .page2 { fill: #f0fdfa; stroke: #14b8a6; stroke-width: 1.6; rx: 16; }
+      .page3 { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.6; rx: 16; }
+      .bad { fill: #fff1f2; stroke: #fb7185; stroke-width: 1.6; rx: 16; }
+      .ok { fill: #ecfdf5; stroke: #22c55e; stroke-width: 1.6; rx: 16; }
+      .title { fill: #0f172a; font: 800 34px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .sub { fill: #475569; font: 15px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .h { fill: #0f172a; font: 800 22px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .t { fill: #334155; font: 15px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .small { fill: #64748b; font: 13px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .code { fill: #0f172a; font: 13px Consolas, "Courier New", monospace; }
+      .danger { fill: #b91c1c; font: 800 14px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .success { fill: #047857; font: 800 14px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .line { fill: none; stroke: #334155; stroke-width: 2; marker-end: url(#arrow); }
+      .dash { fill: none; stroke: #94a3b8; stroke-width: 1.5; stroke-dasharray: 6 5; marker-end: url(#arrow); }
+      .chip { fill: #e2e8f0; stroke: #cbd5e1; rx: 8; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1500" height="880"/>
+  <text class="title" x="44" y="58">Autopilot 页面级回退逻辑</text>
+  <text class="sub" x="44" y="88">修正点：右栏展示不是 6 个 STEP 对应 6 个页面，回退必须按“用户当前看到的页面”走。</text>
+
+  <rect class="page1" x="70" y="148" width="360" height="210"/>
+  <text class="h" x="98" y="188">页面 1：前置决策页</text>
+  <text class="t" x="98" y="226">包含 STEP 01 输入</text>
+  <text class="t" x="98" y="254">包含 STEP 02 澄清</text>
+  <text class="t" x="98" y="282">包含 STEP 03 路线 / Agent Crew</text>
+  <text class="code" x="98" y="326">rail sub: agent_crew_fabric</text>
+
+  <rect class="page2" x="570" y="148" width="360" height="210"/>
+  <text class="h" x="598" y="188">页面 2：SPEC 合并页</text>
+  <text class="t" x="598" y="226">包含 STEP 04 SPEC TREE</text>
+  <text class="t" x="598" y="254">包含 STEP 05 SPEC DOCUMENTS</text>
+  <text class="t" x="598" y="282">同一个 StreamingDocRenderer 工作区</text>
+  <text class="code" x="598" y="326">rail sub: spec_tree</text>
+
+  <rect class="page3" x="1070" y="148" width="360" height="210"/>
+  <text class="h" x="1098" y="188">页面 3：效果与后续页</text>
+  <text class="t" x="1098" y="226">包含 STEP 06 EFFECT PREVIEW</text>
+  <text class="t" x="1098" y="254">折叠 prompt/runtime/handoff/memory</text>
+  <text class="t" x="1098" y="282">标题可能仍显示 STEP 06</text>
+  <text class="code" x="1098" y="326">rail sub: effect_preview...</text>
+
+  <path class="line" d="M1068 248 L932 248"/>
+  <text class="success" x="966" y="226">返回</text>
+  <text class="code" x="948" y="276">page3 -> page2</text>
+
+  <path class="line" d="M568 248 L432 248"/>
+  <text class="success" x="466" y="226">返回</text>
+  <text class="code" x="444" y="276">page2 -> page1</text>
+
+  <rect class="bad" x="140" y="426" width="530" height="160"/>
+  <text class="h" x="168" y="466">旧逻辑的问题</text>
+  <text class="t" x="168" y="506">把 STEP 当成页面：STEP 05 返回 STEP 04。</text>
+  <text class="t" x="168" y="536">但 STEP 04 和 STEP 05 实际上是同一个 SPEC 合并页。</text>
+  <text class="danger" x="168" y="568">所以用户看到的是“点了返回但还在同一页”。</text>
+
+  <rect class="ok" x="830" y="426" width="530" height="160"/>
+  <text class="h" x="858" y="466">新逻辑</text>
+  <text class="t" x="858" y="506">SPEC 合并页的返回直接到上一页 Route。</text>
+  <text class="code" x="858" y="536">spec_documents/spec_tree -> route</text>
+  <text class="code" x="858" y="562">previousSubStage = agent_crew_fabric</text>
+
+  <rect class="card" x="140" y="640" width="1220" height="150"/>
+  <text class="h" x="168" y="678">当前实现对应</text>
+  <text class="code" x="168" y="714">resolveManualPreviousAction(effect_preview folded) -> workbench-stage spec_documents + spec_tree</text>
+  <text class="code" x="168" y="744">resolveManualPreviousAction(spec_documents + spec_tree) -> workbench-stage route + agent_crew_fabric</text>
+  <text class="code" x="168" y="774">?sub=agent_crew_fabric 不再被 runtime_capability 强制改回 spec_tree</text>
+
+  <text class="small" x="44" y="842">Code anchors: client/src/pages/autopilot/right-rail/AutopilotRightRail.tsx, use-right-rail-sub-stage-state.ts, StageHeader.tsx</text>
+</svg>

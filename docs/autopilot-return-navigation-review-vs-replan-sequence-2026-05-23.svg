@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1120" viewBox="0 0 1600 1120" role="img" aria-labelledby="title desc">
+  <title id="title">Autopilot 返回上一步与重新规划时序图</title>
+  <desc id="desc">展示 Autopilot 从效果预览回看 SPEC、回看输入澄清路线页，以及显式重新规划时清理下游资产的推荐时序。</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155" />
+    </marker>
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.12" />
+    </filter>
+    <style>
+      .bg { fill: #f6f8fb; }
+      .panel { fill: #ffffff; stroke: #dbe4ee; stroke-width: 1.5; filter: url(#softShadow); }
+      .band-current { fill: #eef6ff; stroke: #bfdbfe; stroke-width: 1.2; }
+      .band-review { fill: #f8fafc; stroke: #d7dee8; stroke-width: 1.2; }
+      .band-replan { fill: #fff7ed; stroke: #fed7aa; stroke-width: 1.2; }
+      .band-reset { fill: #ecfdf5; stroke: #a7f3d0; stroke-width: 1.2; }
+      .participant { fill: #0f172a; }
+      .participant-text { fill: #ffffff; font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; font-size: 17px; font-weight: 800; }
+      .label { fill: #0f172a; font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; font-size: 18px; font-weight: 800; }
+      .small { fill: #475569; font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; font-size: 14px; font-weight: 600; }
+      .note { fill: #64748b; font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; font-size: 14px; font-weight: 600; }
+      .message { fill: #1e293b; font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; font-size: 14px; font-weight: 700; }
+      .title { fill: #0f172a; font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; font-size: 30px; font-weight: 900; }
+      .subtitle { fill: #475569; font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; font-size: 16px; font-weight: 650; }
+      .lifeline { stroke: #cbd5e1; stroke-width: 2; stroke-dasharray: 7 8; }
+      .arrow { stroke: #334155; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .arrow-soft { stroke: #64748b; stroke-width: 2; fill: none; marker-end: url(#arrow); stroke-dasharray: 6 6; }
+      .activation { fill: #e2e8f0; stroke: #94a3b8; stroke-width: 1; }
+      .chip { fill: #e0f2fe; stroke: #7dd3fc; stroke-width: 1; }
+      .chip-warn { fill: #ffedd5; stroke: #fdba74; stroke-width: 1; }
+      .chip-green { fill: #dcfce7; stroke: #86efac; stroke-width: 1; }
+      .legend-text { fill: #334155; font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; font-size: 13px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="1120" />
+  <rect class="panel" x="44" y="34" width="1512" height="1048" rx="18" />
+
+  <text class="title" x="80" y="82">Autopilot 返回上一步 vs 从这里重新规划</text>
+  <text class="subtitle" x="80" y="113">核心规则：返回上一步只是回看上游页面；重新规划或修改上游，才清理下游 SPEC / 预览 / 运行时结果。</text>
+
+  <g transform="translate(80 136)">
+    <rect class="chip" x="0" y="0" width="148" height="30" rx="8" />
+    <text class="legend-text" x="14" y="20">蓝色：恢复最新进度</text>
+    <rect class="chip" x="168" y="0" width="150" height="30" rx="8" />
+    <text class="legend-text" x="182" y="20">灰色：回看不删除</text>
+    <rect class="chip-warn" x="338" y="0" width="170" height="30" rx="8" />
+    <text class="legend-text" x="352" y="20">橙色：显式重新规划</text>
+    <rect class="chip-green" x="528" y="0" width="160" height="30" rx="8" />
+    <text class="legend-text" x="542" y="20">绿色：下游失效重建</text>
+  </g>
+
+  <!-- Participants -->
+  <g>
+    <rect class="participant" x="86" y="188" width="136" height="44" rx="10" />
+    <text class="participant-text" x="154" y="216" text-anchor="middle">用户</text>
+
+    <rect class="participant" x="288" y="188" width="178" height="44" rx="10" />
+    <text class="participant-text" x="377" y="216" text-anchor="middle">外层页面</text>
+
+    <rect class="participant" x="520" y="188" width="176" height="44" rx="10" />
+    <text class="participant-text" x="608" y="216" text-anchor="middle">右栏</text>
+
+    <rect class="participant" x="744" y="188" width="184" height="44" rx="10" />
+    <text class="participant-text" x="836" y="216" text-anchor="middle">前端状态 / URL</text>
+
+    <rect class="participant" x="980" y="188" width="176" height="44" rx="10" />
+    <text class="participant-text" x="1068" y="216" text-anchor="middle">后端 Job</text>
+
+    <rect class="participant" x="1220" y="188" width="222" height="44" rx="10" />
+    <text class="participant-text" x="1331" y="216" text-anchor="middle">下游资产</text>
+  </g>
+
+  <!-- Lifelines -->
+  <line class="lifeline" x1="154" y1="232" x2="154" y2="1036" />
+  <line class="lifeline" x1="377" y1="232" x2="377" y2="1036" />
+  <line class="lifeline" x1="608" y1="232" x2="608" y2="1036" />
+  <line class="lifeline" x1="836" y1="232" x2="836" y2="1036" />
+  <line class="lifeline" x1="1068" y1="232" x2="1068" y2="1036" />
+  <line class="lifeline" x1="1331" y1="232" x2="1331" y2="1036" />
+
+  <!-- Phase 1 -->
+  <rect class="band-current" x="70" y="258" width="1460" height="188" rx="14" />
+  <text class="label" x="92" y="286">1. 进入页面：按最新 Job 恢复到最远进度</text>
+  <text class="note" x="92" y="311">用户打开 /autopilot 时，页面不从第一步开始，而是根据 latestJob.stage 直接恢复到当前最远阶段。</text>
+
+  <line class="arrow" x1="154" y1="342" x2="377" y2="342" />
+  <text class="message" x="265" y="333" text-anchor="middle">打开 /autopilot</text>
+
+  <line class="arrow" x1="377" y1="374" x2="1068" y2="374" />
+  <text class="message" x="722" y="365" text-anchor="middle">fetchLatestGenerationJob()</text>
+
+  <line class="arrow" x1="1068" y1="406" x2="377" y2="406" />
+  <text class="message" x="722" y="397" text-anchor="middle">latestJob.stage = runtime_capability</text>
+
+  <line class="arrow" x1="377" y1="430" x2="836" y2="430" />
+  <text class="message" x="606" y="421" text-anchor="middle">resolveRailSubStage(runtime_capability)</text>
+
+  <rect class="activation" x="601" y="380" width="14" height="46" rx="4" />
+  <rect class="activation" x="829" y="420" width="14" height="28" rx="4" />
+  <text class="small" x="1010" y="431">页面展示：效果预览 / STEP 06</text>
+
+  <!-- Phase 2 -->
+  <rect class="band-review" x="70" y="472" width="1460" height="200" rx="14" />
+  <text class="label" x="92" y="501">2. 返回上一步：回看 SPEC 合并页，不删除资产</text>
+  <text class="note" x="92" y="526">这一步是浏览式返回，只改变当前可见页面和 URL pin；旧 SPEC、预览、运行时资产仍保留。</text>
+
+  <line class="arrow" x1="154" y1="558" x2="608" y2="558" />
+  <text class="message" x="381" y="549" text-anchor="middle">点击「返回上一步」</text>
+
+  <line class="arrow" x1="608" y1="592" x2="836" y2="592" />
+  <text class="message" x="722" y="583" text-anchor="middle">setPinnedSubStage(spec_tree)</text>
+
+  <line class="arrow" x1="836" y1="626" x2="608" y2="626" />
+  <text class="message" x="722" y="617" text-anchor="middle">currentSubStage = spec_tree</text>
+
+  <line class="arrow-soft" x1="608" y1="650" x2="1331" y2="650" />
+  <text class="message" x="970" y="641" text-anchor="middle">只读取旧资产，不清理</text>
+  <text class="small" x="1010" y="591">页面展示：SPEC 树 + SPEC 规格文档 / STEP 05</text>
+  <text class="small" x="1010" y="620">返回按钮目标：workflow-stage=input</text>
+
+  <!-- Phase 3 -->
+  <rect class="band-review" x="70" y="698" width="1460" height="176" rx="14" />
+  <text class="label" x="92" y="727">3. 再返回上一步：回到外层输入 / 澄清 / 路线页，仍然不删除</text>
+  <text class="note" x="92" y="752">此时右栏卸载，外层页面展示 preflight 时间线；latestJob 仍可保持 runtime_capability。</text>
+
+  <line class="arrow" x1="154" y1="786" x2="608" y2="786" />
+  <text class="message" x="381" y="777" text-anchor="middle">点击「返回上一步」</text>
+
+  <line class="arrow" x1="608" y1="820" x2="377" y2="820" />
+  <text class="message" x="492" y="811" text-anchor="middle">onNavigateWorkflowStage(input)</text>
+
+  <line class="arrow" x1="377" y1="846" x2="836" y2="846" />
+  <text class="message" x="606" y="837" text-anchor="middle">resetPin()，清掉 ?sub</text>
+
+  <text class="small" x="1010" y="808">页面展示：目标输入 / 输入记录 / 澄清 / 路线</text>
+  <text class="small" x="1010" y="835">下游资产仍保留，用户只是回看上游</text>
+
+  <!-- Phase 4 -->
+  <rect class="band-replan" x="70" y="900" width="1460" height="158" rx="14" />
+  <text class="label" x="92" y="929">4. 推荐新增：从这里重新规划，才清掉下游并重建</text>
+  <text class="note" x="92" y="954">这是显式破坏性动作，适合用户要重新输入目的地、重新澄清、重新选路线时使用。</text>
+
+  <line class="arrow" x1="154" y1="988" x2="377" y2="988" />
+  <text class="message" x="265" y="979" text-anchor="middle">点击「从这里重新规划」</text>
+
+  <line class="arrow" x1="377" y1="1018" x2="1331" y2="1018" />
+  <text class="message" x="854" y="1009" text-anchor="middle">invalidateDownstream(): 清 specTree / specDocs / preview / prompt / runtime</text>
+
+  <line class="arrow" x1="377" y1="1046" x2="1068" y2="1046" />
+  <text class="message" x="722" y="1037" text-anchor="middle">create new job 或创建新版本链路</text>
+
+  <!-- Side rule cards -->
+  <g transform="translate(88 1066)">
+    <rect class="band-reset" x="0" y="0" width="1390" height="36" rx="10" />
+    <text class="small" x="16" y="23">规则：返回上一步 = 回看，不删除。重新规划 / 修改目标 / 重新澄清 / 换路线 = 使下游失效并重建。</text>
+  </g>
+</svg>

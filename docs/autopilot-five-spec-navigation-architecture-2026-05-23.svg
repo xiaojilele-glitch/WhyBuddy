@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1180" viewBox="0 0 1680 1180" role="img" aria-labelledby="title desc">
+  <title id="title">Autopilot five spec navigation architecture</title>
+  <desc id="desc">Architecture diagram showing the five autopilot specs and their relation to review back, replan, inline edit, version switching, and coordination.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7f8f5; }
+      .ink { fill: #172026; }
+      .muted { fill: #5d6970; }
+      .tiny { font: 500 18px "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; }
+      .small { font: 600 21px "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; }
+      .body { font: 500 23px "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; }
+      .body2 { font: 500 20px "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; }
+      .head { font: 800 34px "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; }
+      .section { font: 800 27px "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; }
+      .label { font: 800 19px "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; letter-spacing: 0; }
+      .mono { font: 600 18px Consolas, "Microsoft YaHei", monospace; }
+      .panel { fill: #ffffff; stroke: #c8d0cd; stroke-width: 2; }
+      .soft { fill: #fbfcfa; stroke: #d8dedb; stroke-width: 2; }
+      .spec1 { fill: #e5f4eb; stroke: #4f8f68; }
+      .spec2 { fill: #fff0d2; stroke: #c47a2c; }
+      .spec3 { fill: #e8f1ff; stroke: #487fbd; }
+      .spec4 { fill: #f7e6ef; stroke: #b46686; }
+      .spec5 { fill: #e8f3f2; stroke: #41837c; }
+      .changed { fill: #fff7e6; stroke: #c47a2c; }
+      .unchanged { fill: #edf5ef; stroke: #62906b; }
+      .danger { fill: #ffe8e2; stroke: #c75f4a; }
+      .ok { fill: #e8f4ec; stroke: #4d8d61; }
+      .arrow { stroke: #405159; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .arrow-soft { stroke: #78868a; stroke-width: 2.5; fill: none; marker-end: url(#arrowSoft); stroke-dasharray: 8 7; }
+      .no-delete { stroke: #4d8d61; stroke-width: 3; fill: none; marker-end: url(#arrowGreen); }
+      .destructive { stroke: #c75f4a; stroke-width: 3; fill: none; marker-end: url(#arrowRed); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#405159"/>
+    </marker>
+    <marker id="arrowSoft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#78868a"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4d8d61"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c75f4a"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1680" height="1180"/>
+
+  <text class="head ink" x="60" y="70">Autopilot 返回/重规/编辑五份 Spec 架构图</text>
+  <text class="body2 muted" x="60" y="108">生成时间：2026-05-23；目标：让“返回上一步”保持回看语义，让“从这里重新规划”和“直接编辑上游”承担真正的下游失效或新分支。</text>
+
+  <rect class="panel" x="50" y="140" rx="14" ry="14" width="680" height="830"/>
+  <text class="section ink" x="82" y="184">五份 spec 的职责和这次调整</text>
+
+  <g transform="translate(82,220)">
+    <rect class="spec1" x="0" y="0" rx="12" ry="12" width="610" height="110" stroke-width="2.5"/>
+    <text class="label ink" x="24" y="34">Spec 1: asset-staleness-model</text>
+    <text class="body2 ink" x="24" y="67">保持：staleSince / invalidatedBy / staleArtifactIds</text>
+    <text class="body2 muted" x="24" y="94">只标记下游过期，不删除、不隐藏、不自动重生成</text>
+  </g>
+
+  <g transform="translate(82,350)">
+    <rect class="spec2" x="0" y="0" rx="12" ry="12" width="610" height="128" stroke-width="2.5"/>
+    <text class="label ink" x="24" y="34">Spec 2: replan-and-branch-action</text>
+    <text class="body2 ink" x="24" y="67">已改：Backend_Job_Stage 是最新进度，不是当前视口</text>
+    <text class="body2 muted" x="24" y="94">spec 5 落地后 replan 的 pin / override / store / toast</text>
+    <text class="body2 muted" x="24" y="119">统一走 Coordination_Layer 原子提交</text>
+  </g>
+
+  <g transform="translate(82,498)">
+    <rect class="spec3" x="0" y="0" rx="12" ry="12" width="610" height="124" stroke-width="2.5"/>
+    <text class="label ink" x="24" y="34">Spec 3: stage-edit-mode</text>
+    <text class="body2 ink" x="24" y="67">保持：只在页面 1 开放 input / clarification / route 编辑</text>
+    <text class="body2 muted" x="24" y="94">成功后调用 invalidation，停留原页面</text>
+    <text class="body2 muted" x="24" y="119">不 resetPin，不改 workflowStageOverride，不创建 branch</text>
+  </g>
+
+  <g transform="translate(82,642)">
+    <rect class="spec4" x="0" y="0" rx="12" ry="12" width="610" height="132" stroke-width="2.5"/>
+    <text class="label ink" x="24" y="34">Spec 4: stage-version-history</text>
+    <text class="body2 ink" x="24" y="67">已改：Switch_Active 只改前端导航状态，不写 backend job</text>
+    <text class="body2 muted" x="24" y="94">spec 5 未落地：保留直接写兼容路径</text>
+    <text class="body2 muted" x="24" y="121">spec 5 落地后：通过 coordinator 原子提交</text>
+  </g>
+
+  <g transform="translate(82,796)">
+    <rect class="spec5" x="0" y="0" rx="12" ry="12" width="610" height="138" stroke-width="2.5"/>
+    <text class="label ink" x="24" y="34">Spec 5: stage-state-coordination</text>
+    <text class="body2 ink" x="24" y="67">已改重点：合法回看态 Review_Override_State 不修正</text>
+    <text class="body2 muted" x="24" y="94">STAGE_TO_PAGE: 页面 1 / 2 / 3 做 UI 回退</text>
+    <text class="body2 muted" x="24" y="121">spec_tree 和 spec_docs 同属页面 2，不算回退一步</text>
+  </g>
+
+  <rect class="panel" x="780" y="140" rx="14" ry="14" width="850" height="430"/>
+  <text class="section ink" x="812" y="184">用户路径：三种动作必须分清</text>
+
+  <g transform="translate(820,220)">
+    <rect class="ok" x="0" y="0" rx="12" ry="12" width="220" height="92" stroke-width="2.5"/>
+    <text class="label ink" x="22" y="34">返回上一步</text>
+    <text class="body2 ink" x="22" y="66">Review only</text>
+    <text class="tiny muted" x="22" y="88">不删资产</text>
+  </g>
+  <g transform="translate(1088,220)">
+    <rect class="soft" x="0" y="0" rx="12" ry="12" width="220" height="92"/>
+    <text class="label ink" x="22" y="34">前端 pin/override</text>
+    <text class="body2 ink" x="22" y="66">允许指向上游页</text>
+    <text class="tiny muted" x="22" y="88">合法回看态</text>
+  </g>
+  <g transform="translate(1360,220)">
+    <rect class="soft" x="0" y="0" rx="12" ry="12" width="220" height="92"/>
+    <text class="label ink" x="22" y="34">Backend stage</text>
+    <text class="body2 ink" x="22" y="66">保留最新进度</text>
+    <text class="tiny muted" x="22" y="88">不被回看改写</text>
+  </g>
+  <path class="no-delete" d="M1040 266 C1060 266 1068 266 1088 266"/>
+  <path class="no-delete" d="M1308 266 C1328 266 1340 266 1360 266"/>
+
+  <g transform="translate(820,344)">
+    <rect class="danger" x="0" y="0" rx="12" ry="12" width="220" height="100" stroke-width="2.5"/>
+    <text class="label ink" x="22" y="34">从这里重新规划</text>
+    <text class="body2 ink" x="22" y="66">Explicit replan</text>
+    <text class="tiny muted" x="22" y="90">stale 或新 branch</text>
+  </g>
+  <g transform="translate(1088,344)">
+    <rect class="changed" x="0" y="0" rx="12" ry="12" width="220" height="100" stroke-width="2.5"/>
+    <text class="label ink" x="22" y="34">Spec 2</text>
+    <text class="body2 ink" x="22" y="66">in_place / branch</text>
+    <text class="tiny muted" x="22" y="90">可改 Backend_Job_Stage</text>
+  </g>
+  <g transform="translate(1360,344)">
+    <rect class="spec5" x="0" y="0" rx="12" ry="12" width="220" height="100" stroke-width="2.5"/>
+    <text class="label ink" x="22" y="34">Spec 5</text>
+    <text class="body2 ink" x="22" y="66">原子提交</text>
+    <text class="tiny muted" x="22" y="90">store / URL / toast</text>
+  </g>
+  <path class="destructive" d="M1040 394 C1060 394 1068 394 1088 394"/>
+  <path class="arrow" d="M1308 394 C1328 394 1340 394 1360 394"/>
+
+  <g transform="translate(820,476)">
+    <rect class="spec3" x="0" y="0" rx="12" ry="12" width="220" height="66" stroke-width="2.5"/>
+    <text class="label ink" x="22" y="29">直接编辑上游</text>
+    <text class="tiny muted" x="22" y="53">页面 1 字段 edit</text>
+  </g>
+  <g transform="translate(1088,476)">
+    <rect class="spec1" x="0" y="0" rx="12" ry="12" width="220" height="66" stroke-width="2.5"/>
+    <text class="label ink" x="22" y="29">Spec 1 引擎</text>
+    <text class="tiny muted" x="22" y="53">invalidateDownstream</text>
+  </g>
+  <g transform="translate(1360,476)">
+    <rect class="soft" x="0" y="0" rx="12" ry="12" width="220" height="66"/>
+    <text class="label ink" x="22" y="29">下游 stale</text>
+    <text class="tiny muted" x="22" y="53">保留旧产物，可读可标</text>
+  </g>
+  <path class="arrow" d="M1040 509 C1060 509 1068 509 1088 509"/>
+  <path class="arrow" d="M1308 509 C1328 509 1340 509 1360 509"/>
+
+  <rect class="panel" x="780" y="610" rx="14" ry="14" width="850" height="360"/>
+  <text class="section ink" x="812" y="654">页面级回退：不是按内部 step 数字倒退</text>
+
+  <g transform="translate(830,704)">
+    <rect class="soft" x="0" y="0" rx="14" ry="14" width="220" height="118"/>
+    <text class="label ink" x="24" y="36">页面 3</text>
+    <text class="body2 ink" x="24" y="70">效果预览 / runtime</text>
+    <text class="tiny muted" x="24" y="96">preview / effect / handoff</text>
+  </g>
+  <g transform="translate(1135,704)">
+    <rect class="soft" x="0" y="0" rx="14" ry="14" width="220" height="118"/>
+    <text class="label ink" x="24" y="36">页面 2</text>
+    <text class="body2 ink" x="24" y="70">SPEC 树 + 规格文档</text>
+    <text class="tiny muted" x="24" y="96">spec_tree / spec_docs</text>
+  </g>
+  <g transform="translate(1440,704)">
+    <rect class="soft" x="0" y="0" rx="14" ry="14" width="150" height="118"/>
+    <text class="label ink" x="24" y="36">页面 1</text>
+    <text class="body2 ink" x="24" y="70">输入 / 澄清</text>
+    <text class="tiny muted" x="24" y="96">route</text>
+  </g>
+  <path class="arrow" d="M1050 763 C1075 763 1105 763 1135 763"/>
+  <path class="arrow" d="M1355 763 C1384 763 1410 763 1440 763"/>
+  <text class="tiny muted" x="1066" y="744">返回</text>
+  <text class="tiny muted" x="1371" y="744">返回</text>
+
+  <rect class="ok" x="830" y="858" rx="12" ry="12" width="760" height="72" stroke-width="2.5"/>
+  <text class="body2 ink" x="858" y="889">核心修正：用户在页面 3 回看页面 2 或页面 1 时，ThreeLayerConsistencyChecker 不能自动 resetPin，也不能把 workflowStageOverride 拉回 runtime。</text>
+  <text class="tiny muted" x="858" y="916">只有未知 pin、跨 job 脏状态、不可展示 stage 才触发 coordination.three_layer_mismatch。</text>
+
+  <rect class="panel" x="50" y="1004" rx="14" ry="14" width="1580" height="116"/>
+  <text class="section ink" x="82" y="1048">一句话总结</text>
+  <text class="body ink" x="82" y="1086">返回上一步 = 回看，不删除；从这里重新规划 = 显式重来；直接编辑上游 = 自动标记下游 stale；版本切换 = 只改前端 active job；状态协调 = 保留合法回看态，只修坏状态。</text>
+</svg>

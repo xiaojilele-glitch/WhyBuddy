@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="660" viewBox="0 0 1180 660" role="img" aria-labelledby="title desc">
+  <title id="title">Autopilot 返回逻辑简图 - 2026-05-22</title>
+  <desc id="desc">当前 Autopilot 返回逻辑分为三条路径：顶部返回项目空间、右栏普通子阶段返回、右栏规格文档视觉返回。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { fill: #0f172a; font: 800 32px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .sub { fill: #475569; font: 15px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .card { fill: #fff; stroke: #cbd5e1; stroke-width: 1.5; rx: 14; }
+      .blue { fill: #eff6ff; stroke: #60a5fa; }
+      .teal { fill: #f0fdfa; stroke: #14b8a6; }
+      .amber { fill: #fffbeb; stroke: #f59e0b; }
+      .rose { fill: #fff1f2; stroke: #fb7185; }
+      .h { fill: #0f172a; font: 800 21px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .t { fill: #334155; font: 15px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .small { fill: #64748b; font: 13px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .code { fill: #0f172a; font: 13px Consolas, "Courier New", monospace; }
+      .ok { fill: #065f46; font: 800 15px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; }
+      .line { fill: none; stroke: #334155; stroke-width: 2.1; marker-end: url(#arrow); }
+      .dash { fill: none; stroke: #94a3b8; stroke-width: 1.4; stroke-dasharray: 5 5; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1180" height="660"/>
+  <text class="title" x="44" y="58">Autopilot 返回逻辑简图</text>
+  <text class="sub" x="44" y="86">现在不要把所有“返回”都当成改 URL：规格文档返回 SPEC 树是视觉 stage 切换，普通子阶段才写 ?sub。</text>
+
+  <rect class="card blue" x="44" y="125" width="250" height="145"/>
+  <text class="h" x="66" y="162">1. 返回上一级</text>
+  <text class="t" x="66" y="197">入口：顶部左箭头</text>
+  <text class="code" x="66" y="224">autopilot-back-to-project-space</text>
+  <text class="ok" x="66" y="252">结果：离开 /autopilot 到 /projects</text>
+
+  <rect class="card teal" x="334" y="125" width="310" height="145"/>
+  <text class="h" x="356" y="162">2. 普通右栏返回</text>
+  <text class="t" x="356" y="197">入口：右栏 StageHeader 左箭头</text>
+  <text class="code" x="356" y="224">resolveManualPreviousAction()</text>
+  <text class="ok" x="356" y="252">结果：onSubStageChange(prev) 写 ?sub</text>
+
+  <rect class="card amber" x="684" y="125" width="450" height="145"/>
+  <text class="h" x="706" y="162">3. 规格文档的特殊返回</text>
+  <text class="t" x="706" y="197">当前看到：SPEC DOCUMENTS，但 rail sub-stage 仍是 spec_tree</text>
+  <text class="code" x="706" y="224">spec_documents -> spec_tree</text>
+  <text class="ok" x="706" y="252">结果：停在可重新生成的 SPEC 树层，不写 URL，不再链式回 route</text>
+
+  <path class="line" d="M489 300 L489 348"/>
+  <rect class="card" x="304" y="348" width="370" height="90"/>
+  <text class="h" x="330" y="382">按钮显示条件</text>
+  <text class="t" x="330" y="412">有 previous action 才显示；第一步和回看状态不显示。</text>
+
+  <path class="line" d="M909 300 L909 348"/>
+  <rect class="card" x="724" y="348" width="370" height="90"/>
+  <text class="h" x="750" y="382">效果预览返回</text>
+  <text class="code" x="750" y="412">effect_preview -> spec_documents</text>
+
+  <path class="dash" d="M724 393 L674 393"/>
+  <path class="dash" d="M304 393 L244 393"/>
+  <rect class="card rose" x="44" y="348" width="200" height="90"/>
+  <text class="h" x="66" y="382">边界</text>
+  <text class="t" x="66" y="412">不会制造浏览器后退历史</text>
+
+  <rect class="card" x="44" y="492" width="1090" height="100"/>
+  <text class="h" x="70" y="527">本次修正点</text>
+  <text class="t" x="70" y="558">以前：返回目标只按 RAIL_SUB_STAGE_ORDER 算，SPEC 文档页会算成 agent_crew_fabric，或被后端 stage 强制回去，看起来像无反应。</text>
+  <text class="t" x="70" y="584">现在：先按用户看到的 Workbench stage 算；SPEC 文档返回 SPEC 树生成层并停止，旧 ?sub=agent_crew_fabric 也会收敛回这里。</text>
+
+  <text class="small" x="44" y="632">Code anchors: AutopilotRightRail.tsx / StageHeader.tsx / use-right-rail-sub-stage-state.ts</text>
+</svg>
