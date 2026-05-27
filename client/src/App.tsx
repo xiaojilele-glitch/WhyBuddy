@@ -28,7 +28,7 @@ import { useAuthStore } from "./lib/auth-store";
 import { IS_GITHUB_PAGES } from "./lib/deploy-target";
 import { useProjectStore } from "./lib/project-store";
 import { useAppStore } from "./lib/store";
-import Home from "./pages/Home";
+import ProjectCockpitHome from "./pages/ProjectCockpitHome";
 import {
   AdminAuditPage,
   AdminFailuresPage,
@@ -53,7 +53,7 @@ function Router() {
   return (
     <Switch>
       <Route path={"/"}>{() => <RedirectRoute to={PROJECTS_PATH} />}</Route>
-      <Route path={PROJECTS_PATH}>{() => <Home />}</Route>
+      <Route path={PROJECTS_PATH}>{() => <ProjectCockpitHome />}</Route>
       <Route path={AUTOPILOT_PATH} component={AutopilotRoutePage} />
       <Route path={`${PROJECTS_PATH}/:projectId/tasks/:taskId`}>
         {params => (

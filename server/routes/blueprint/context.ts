@@ -103,6 +103,22 @@ import {
 } from "./effect-preview/policy.js";
 import type { EffectPreviewLlmService } from "./effect-preview/service.js";
 import { createEffectPreviewLlmService } from "./effect-preview/service.js";
+// `autopilot-image-rendering-and-visual-system` spec Task 7.1：
+// Stage C 出图链路装配。`ImageService` 是 sibling 服务，与上文的
+// `EffectPreviewLlmService` 并列暴露在 ctx 上；前者负责 raster 出图 + SVG 草图，
+// 后者负责 LLM 内容字段。两者解耦，互不污染既有 60+ effect-preview 测试。
+import {
+  createImageApiClient,
+} from "./effect-preview/image-api-client.js";
+import { createPromptTemplateLibrary } from "./effect-preview/prompt-template-library.js";
+import { createSvgArchitectureDrafter } from "./effect-preview/svg-architecture-drafter.js";
+import { createEffectPreviewScheduler } from "./effect-preview/scheduler.js";
+import {
+  createImageService,
+  type ImageService as EffectPreviewImageService,
+} from "./effect-preview/image-service.js";
+import { createCostTrackerAdapter } from "./effect-preview/cost-tracker-adapter.js";
+import type { CostTracker } from "../../core/cost-tracker.js";
 import type { AgentCrewStageActivationPolicy } from "./agent-crew-stage-activation/policy.js";
 import { createDefaultAgentCrewStageActivationPolicy } from "./agent-crew-stage-activation/policy.js";
 import type { AgentCrewStageActivationDriver } from "./agent-crew-stage-activation/driver.js";
@@ -533,6 +549,24 @@ export interface BlueprintServiceContext {
    */
   effectPreviewLlmService?: EffectPreviewLlmService;
   /**
+   * `autopilot-image-rendering-and-visual-system` spec Task 7.1：
+   * Stage C 出图链路服务。与 {@link effectPreviewLlmService} 并列存在，
+   * 不替换、也不修改既有 LLM 内容字段服务。`runStageC` 输入 SPEC 文档 +
+   * 依赖顺序 + 架构 notes，按 4 步串行流水线（prompt template → SVG draft
+   * → schedule → 串行 raster）输出 SVG 草图、按节点 base64 raster 与文本
+   * 兜底。永不抛错；任何 fallback 都会通过 progressPlan / textOnlyEffectPreview
+   * 字段对外暴露（design §"ImageService" / 需求 1.x / 4.x / 6.x）。
+   *
+   * 默认装配在 {@link buildBlueprintServiceContext} 中完成；测试可通过
+   * {@link BlueprintServiceContextDeps.effectPreviewImageService} 注入 fake。
+   * 字段保持可选语义以兼容直接装配 ctx 的旧调用路径（与
+   * `effectPreviewLlmService` 一致）。
+   *
+   * 装配出来的实例在 env-disabled / key-missing 等档位下走 6 级降级，零
+   * outgoing 请求；既有 60+ effect-preview 测试不感知该字段。
+   */
+  effectPreviewImageService?: EffectPreviewImageService;
+  /**
    * Agent Crew Stage Activation policy (pure data, stateless).
    * Controls event suppression, idempotence, redaction rules and schema
    * version allow-list. Defaults to `createDefaultAgentCrewStageActivationPolicy()`
@@ -808,6 +842,32 @@ export interface BlueprintServiceContextDeps {
    * @see design §2.D1 / §2.D2 / §4.2 / §4.6
    */
   effectPreviewLlmService?: EffectPreviewLlmService;
+  /**
+   * Optional override for the Effect Preview Stage C ImageService.
+   * When omitted, {@link buildBlueprintServiceContext} wires
+   * {@link createImageService} with the default 4-dependency factory chain
+   * (`createImageApiClient` / `createPromptTemplateLibrary` /
+   * `createSvgArchitectureDrafter` / `createEffectPreviewScheduler`).
+   *
+   * @see `.kiro/specs/autopilot-image-rendering-and-visual-system/design.md` §"ImageService"
+   */
+  effectPreviewImageService?: EffectPreviewImageService;
+  /**
+   * Phase 4 Task 33.4 test-injection point: pass a fresh
+   * `new CostTracker(tmpHistoryPath)` to swap the production singleton out
+   * of the default `createCostTrackerAdapter(...)` call. Has no effect when
+   * `effectPreviewImageService` is also provided (caller built the service
+   * themselves and is responsible for its `costTracker`).
+   *
+   * Production callers should leave this `undefined`; the adapter then
+   * defaults to `server/core/cost-tracker.ts`'s exported singleton. This
+   * field exists exclusively so context-level integration tests can prove
+   * the real `createCostTrackerAdapter(...)` is wired into the default
+   * assembly without depending on the singleton's in-memory state.
+   *
+   * @see `server/routes/blueprint/__tests__/context.image-cost-tracking.test.ts`
+   */
+  effectPreviewImageCostTracker?: CostTracker;
   /**
    * Optional override for the Agent Crew Stage Activation policy.
    * When omitted, {@link buildBlueprintServiceContext} wires
@@ -1332,6 +1392,10 @@ export function buildBlueprintServiceContext(
     effectPreviewLlmPolicy:
       deps.effectPreviewLlmPolicy ?? createDefaultEffectPreviewLlmPolicy(),
     effectPreviewLlmService: deps.effectPreviewLlmService,
+    // Effect Preview Stage C ImageService: late-bound below after ctx
+    // body is finalized (see `autopilot-image-rendering-and-visual-system`
+    // spec Task 7.1).
+    effectPreviewImageService: deps.effectPreviewImageService,
     // Agent Crew Stage Activation: policy eagerly resolved, driver NOT
     // default-assembled (per-job lifecycle; design §2.D2).
     agentCrewStageActivationPolicy,
@@ -1410,6 +1474,39 @@ export function buildBlueprintServiceContext(
   // does not incur LLM traffic in default deployments.
   if (!ctx.effectPreviewLlmService) {
     ctx.effectPreviewLlmService = createEffectPreviewLlmService(ctx);
+  }
+
+  // `autopilot-image-rendering-and-visual-system` spec Task 7.1 + Phase 4
+  // Task 33.3：Effect Preview Stage C ImageService 默认装配。组装 4 条
+  // stateless 依赖并注入 `createImageService(...)`，挂到 ctx 的 sibling
+  // 字段上。与 `effectPreviewLlmService` 解耦，不修改 LLM 内容字段服务的形状。
+  //
+  // - `imageApiClient` 在工厂内部一次性读取 `IMAGE_GEN_*` env，所有调用
+  //   共享冻结快照；env-disabled / key-missing 等档位短路在客户端内部处理，
+  //   零 outgoing 请求（image-api-client.ts 已实现 6 级 fallback）。
+  // - 其余 3 个工厂为纯函数 / stateless：模板库、SVG 草图器、调度器。
+  // - `costTracker` 由 Phase 4 Task 33.3 接入：`createCostTrackerAdapter()`
+  //   包装 `server/core/cost-tracker.ts` 的生产单例，把 Stage C 的
+  //   `BlueprintCostTrackerLike.record(...)` 调用翻译为完整的 `CostRecord`
+  //   并写入成本追踪链路。Phase 5 task 43 之后：image actualCost 来自
+  //   `runRasterPipeline` 上游计算的 `lookupImagePricing(model)`（基于
+  //   `shared/cost.ts` 的 IMAGE_PRICING_TABLE per-call 静态估算）；
+  //   PRICING_TABLE / DEFAULT_PRICING 只用于填 `CostRecord` 的 token
+  //   `unitPriceIn` / `unitPriceOut` schema 列（image 域 tokensIn/Out 固
+  //   定为 0）；`tier` 命中时写入 `error` 字段，degraded calls 保留可审计
+  //   fallback 原因。
+  if (!ctx.effectPreviewImageService) {
+    ctx.effectPreviewImageService = createImageService({
+      imageApiClient: createImageApiClient(),
+      promptTemplateLibrary: createPromptTemplateLibrary(),
+      svgArchitectureDrafter: createSvgArchitectureDrafter(),
+      scheduler: createEffectPreviewScheduler(),
+      costTracker: createCostTrackerAdapter(
+        deps.effectPreviewImageCostTracker !== undefined
+          ? { tracker: deps.effectPreviewImageCostTracker }
+          : undefined,
+      ),
+    });
   }
 
   // RouteSet LLM generator late-bind: the default generator needs the fully

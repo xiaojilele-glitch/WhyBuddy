@@ -30,6 +30,52 @@ export const PRICING_TABLE: Record<string, ModelPricing> = {
 /** 未知模型的兜底定价 */
 export const DEFAULT_PRICING: ModelPricing = { input: 0.001, output: 0.002 };
 
+// ---------------------------------------------------------------------------
+// 图像模型定价（per-call）
+// ---------------------------------------------------------------------------
+
+/**
+ * 单次图像生成的预估单价（USD per call）。**注意这是静态估算值，不是
+ * 真实账单数据**；当 OpenAI / Google 的权威 per-call billing 数据下来
+ * 时应当刷新。
+ *
+ * Sources（last refreshed 2026-05-24）:
+ * - `gpt-image-2` —— 参考 OpenAI 公开页面对 `gpt-image-1` 标准 1024×1024
+ *   档位的 ≈ $0.04/image 报价（2025-11 公开口径），作为 `gpt-image-2`
+ *   未公布 list price 之前的保守基线。
+ * - `gemini-2.5-flash-image` —— 参考 Google AI Studio "Image output"
+ *   ≈ $0.039/image 报价（2025 公开口径），保守取整为同档位。
+ * - `gemini-3.1-flash-image-preview` / `gemini-3-pro-image-preview` ——
+ *   preview 阶段未公开 list price，沿用同档位 $0.04/image 作为
+ *   defense-in-depth 估值，避免成功 call 的 `actualCost` 仍为 0。
+ *
+ * 设计目的（autopilot-image-rendering-and-visual-system spec, Phase 5
+ * Task 43.1）是让 successful billable 的 image generation 在 cost
+ * dashboard 上以 **non-zero** actualCost 出现，而**不**追求精度。真实
+ * per-call 成本受输出尺寸 / 重试次数 / 服务商 surcharge 影响；residual
+ * risk 在 spec `tasks.md` Task 45.2 第 4 条单独列出。
+ */
+export const IMAGE_PRICING_TABLE: Readonly<
+  Record<string, { readonly perCall: number }>
+> = Object.freeze({
+  'gpt-image-2': { perCall: 0.04 },
+  'gemini-2.5-flash-image': { perCall: 0.039 },
+  'gemini-3.1-flash-image-preview': { perCall: 0.04 },
+  'gemini-3-pro-image-preview': { perCall: 0.04 },
+});
+
+/**
+ * 查询某个图像模型的静态 per-call 估算成本（USD）。未知模型返回 `0` ——
+ * 调用侧应在 success path 把 `0` 视作「定价缺失」信号，**不要**当成
+ * 「该次调用真的免费」。
+ *
+ * 与 {@link estimateCost} 不同，本函数不接受 token 数量参数：图像生成
+ * 是 per-call 计费，token 概念在该域不适用。
+ */
+export function lookupImagePricing(model: string): number {
+  return IMAGE_PRICING_TABLE[model]?.perCall ?? 0;
+}
+
 /**
  * 费用预估纯函数
  *

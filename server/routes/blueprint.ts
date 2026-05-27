@@ -202,6 +202,7 @@ import type {
   BlueprintRecordEngineeringRunResponse,
   BlueprintUpdateSpecTreeNodeRequest,
   BlueprintUpdateSpecTreeNodeResponse,
+  NodeImageRecord,
 } from "../../shared/blueprint/contracts.js";
 
 export type BlueprintSpecStatus = "ready" | "partial" | "empty";
@@ -402,6 +403,8 @@ export {
   type BlueprintJobStore,
 } from "./blueprint/job-store.js";
 
+import { createImageSettingsHandler } from "./blueprint/image-settings.js";
+
 export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
   const router = Router();
   const jobStore = deps.jobStore ?? defaultJobStore;
@@ -553,6 +556,18 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
       res.status(500).json({ error: "diagnostics unavailable" });
     }
   });
+
+  // Phase 4 / Task 35.1（spec: autopilot-image-rendering-and-visual-system）：
+  //
+  // 暴露 `IMAGE_GEN_*` 环境变量的当前生效快照（脱敏后），用于让
+  // autopilot 右栏 `AutopilotImageSettingsPanel` 在不直连 `process.env`
+  // 的前提下展示 image generation 配置。
+  //
+  // 安全约束：原始 `IMAGE_GEN_API_KEY` MUST NEVER 出现在响应体里；
+  // handler 内部把 `getResolvedConfig().apiKey` 就地用 `maskApiKey()`
+  // 转成 `maskedApiKey: string | null`，参见
+  // `./blueprint/image-settings.ts` 的实现说明。
+  router.get("/image-settings", createImageSettingsHandler());
 
   router.post("/intake", (req, res) => {
     const parsed = parseIntakeRequest(req.body);
@@ -13463,6 +13478,108 @@ async function buildEffectPreview(
     provenanceExtras.generationSource = "template";
   }
 
+  // ---- Invoke Effect Preview Stage C ImageService (task 7.1) ---------
+  // `autopilot-image-rendering-and-visual-system` spec Task 7.1：
+  //
+  // Stage C 出图链路与上文的 LLM 内容字段服务并列存在，互不干扰：
+  //
+  // - 上文 `serviceResult` 决定 `summary` / `architectureNotes` /
+  //   `prototypeNotes` / `progressPlan` 等内容字段；
+  // - 下面 `imageStageCResult` 决定 `architectureSvgDraft` / `imageBase64ByNodeId`
+  //   / `textOnlyEffectPreview`，并按节点把 `fallbackTier` / `startedAt` /
+  //   `endedAt` / `errorSummary` 合并到与当前节点对齐的 milestones 上。
+  //
+  // 调用永不抛错（image-service.ts 在 try/catch 里把异常翻成
+  // `textOnlyEffectPreview = { active: true, reason: "upstream-failure" }`），
+  // 这里再加一层防御 try/catch 与 `serviceResult` 一致：任何意外异常都被
+  // 吞掉，落回模板路径，不影响现有 60+ effect-preview 测试。
+  let imageStageCResult:
+    | Awaited<
+        ReturnType<NonNullable<typeof ctx.effectPreviewImageService>["runStageC"]>
+      >
+    | undefined;
+  try {
+    imageStageCResult = await ctx.effectPreviewImageService?.runStageC({
+      missionId: input.job.id,
+      specDocuments: input.documents,
+      // task 32.x: raster targets vs timeline contract split.
+      // -----------------------------------------------------------------
+      // - `rasterTargets` is the EXPLICIT generate-call list. We only ever
+      //   want to raster the current preview node (singleton). The whole
+      //   `generateEffectPreviews` outer loop already invokes this
+      //   `buildEffectPreview` once per target node, so the per-target cost
+      //   is O(1) generate call rather than O(M) where M is the dependency
+      //   chain length. Without this split, batch generation of N target
+      //   nodes amplifies to O(N × M) imageApiClient.generate calls — a
+      //   measurable regression for any non-trivial spec tree.
+      // - `dependencyOrder` is timeline-only metadata. Scheduler.plan still
+      //   consumes it to produce a progressPlan that the right-rail
+      //   schedule timeline / progress panel can render, but it does NOT
+      //   trigger raster calls anymore.
+      // -----------------------------------------------------------------
+      rasterTargets: [input.node.id],
+      // dependencyOrder 在 buildEffectPreview 内部已是 BlueprintEffectPreviewDependencyOrderEntry[]，
+      // ImageService.runStageC 仅消费拓扑顺序的 nodeId 数组，所以这里映射出 nodeId。
+      dependencyOrder: dependencyOrder.map(entry => entry.nodeId),
+      architectureNotes,
+    });
+  } catch {
+    imageStageCResult = undefined;
+  }
+
+  // 把 Stage C 结果合并回 BlueprintEffectPreview 字段。Stage C 的
+  // `progressPlan` 是按节点 keyed 的（与 dependencyOrder 同序），而当前
+  // preview 的 `progressPlan` 是 3 条通用 milestone。本节点（input.node.id）
+  // 在 Stage C progressPlan 中对应的 entry 决定了 fallbackTier / startedAt /
+  // endedAt / errorSummary —— 把这 4 个字段叠加到当前 preview 的所有 milestones
+  // 上（同节点 preview，3 条 milestone 共享降级状态）。
+  let mergedProgressPlan = progressPlan;
+  let mergedImageBase64ByNodeId: Record<string, NodeImageRecord> | undefined;
+  let mergedArchitectureSvgDraft: string | undefined;
+  let mergedTextOnlyEffectPreview:
+    | BlueprintEffectPreview["textOnlyEffectPreview"]
+    | undefined;
+  if (imageStageCResult) {
+    if (typeof imageStageCResult.architectureSvgDraft === "string") {
+      mergedArchitectureSvgDraft = imageStageCResult.architectureSvgDraft;
+    }
+    if (imageStageCResult.imageBase64ByNodeId) {
+      mergedImageBase64ByNodeId = imageStageCResult.imageBase64ByNodeId;
+    }
+    if (imageStageCResult.textOnlyEffectPreview) {
+      mergedTextOnlyEffectPreview = imageStageCResult.textOnlyEffectPreview;
+    }
+    const stageCEntry = imageStageCResult.progressPlan.find(
+      entry => entry.nodeId === input.node.id,
+    );
+    if (stageCEntry) {
+      const mergePatch: {
+        fallbackTier?: typeof stageCEntry.fallbackTier;
+        startedAt?: string;
+        endedAt?: string;
+        errorSummary?: string;
+      } = {};
+      if (stageCEntry.fallbackTier !== undefined) {
+        mergePatch.fallbackTier = stageCEntry.fallbackTier;
+      }
+      if (stageCEntry.startedAt !== undefined) {
+        mergePatch.startedAt = stageCEntry.startedAt;
+      }
+      if (stageCEntry.endedAt !== undefined) {
+        mergePatch.endedAt = stageCEntry.endedAt;
+      }
+      if (stageCEntry.errorSummary !== undefined) {
+        mergePatch.errorSummary = stageCEntry.errorSummary;
+      }
+      if (Object.keys(mergePatch).length > 0) {
+        mergedProgressPlan = progressPlan.map(milestone => ({
+          ...milestone,
+          ...mergePatch,
+        }));
+      }
+    }
+  }
+
   return {
     id: previewId,
     jobId: input.job.id,
@@ -13483,12 +13600,25 @@ async function buildEffectPreview(
     summary,
     architectureNotes,
     prototypeNotes,
-    progressPlan,
+    progressPlan: mergedProgressPlan,
     nodes: [previewNode],
     runtimeProjection,
     nodeProgress,
     dependencyOrder,
     versionSync,
+    // `autopilot-image-rendering-and-visual-system` spec Task 7.1：
+    // Stage C 制品分离不变量 — `architectureSvgDraft` / `imageBase64ByNodeId`
+    // / `textOnlyEffectPreview` 三类制品在 BlueprintEffectPreview 上各占独立
+    // 字段，禁止混入同一字段（design §"Data Models" / Property 5 第四条）。
+    ...(mergedArchitectureSvgDraft !== undefined
+      ? { architectureSvgDraft: mergedArchitectureSvgDraft }
+      : {}),
+    ...(mergedImageBase64ByNodeId !== undefined
+      ? { imageBase64ByNodeId: mergedImageBase64ByNodeId }
+      : {}),
+    ...(mergedTextOnlyEffectPreview !== undefined
+      ? { textOnlyEffectPreview: mergedTextOnlyEffectPreview }
+      : {}),
     provenance: {
       jobId: input.job.id,
       projectId: input.job.projectId,

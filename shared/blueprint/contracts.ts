@@ -1180,6 +1180,30 @@ export interface BlueprintEffectPreviewMilestone {
   summary: string;
   target: string;
   sourceDocumentIds: string[];
+  /**
+   * `autopilot-image-rendering-and-visual-system` spec Task 1.1：
+   * Stage C 出图调度的 6 级降级层级。仅在节点失败时写入；成功或仍 pending
+   * 的节点保持 undefined，保证既有消费方对 progressPlan 的解读不被破坏
+   * （需求 4.3 / 6.4）。
+   */
+  fallbackTier?: FallbackTier;
+  /**
+   * `autopilot-image-rendering-and-visual-system` spec Task 1.1：
+   * 节点进入 raster 调用的起始时间（ISO8601）。仅在 ImageService 串行处理
+   * 该节点时写入；既有 progressPlan 消费方未读该字段，保持 optional 可向
+   * 后兼容（需求 4.3）。
+   */
+  startedAt?: string;
+  /**
+   * `autopilot-image-rendering-and-visual-system` spec Task 1.1：
+   * 节点处理完成或失败时间（ISO8601）。与 `startedAt` 配对使用。
+   */
+  endedAt?: string;
+  /**
+   * `autopilot-image-rendering-and-visual-system` spec Task 1.1：
+   * 节点失败时的可读摘要，配合 `fallbackTier` 写入；不含密钥或原始 prompt。
+   */
+  errorSummary?: string;
 }
 
 export interface BlueprintEffectPreviewPrototypeCue {
@@ -1283,6 +1307,37 @@ export interface BlueprintEffectPreviewVersionSync {
   dependencyOrder: BlueprintEffectPreviewDependencyOrderEntry[];
 }
 
+/**
+ * `autopilot-image-rendering-and-visual-system` spec Task 1.1：
+ * Stage C effect preview 出图链路的 6 级降级层级，按优先级顺序排列。
+ * 任意层级一旦命中后续层级不再判定，且高优先级 tier 永远不会被低优先级
+ * tier 覆盖（设计文档 §Tier 优先级 / 需求 6.1）。
+ */
+export type FallbackTier =
+  | "env-disabled"
+  | "key-missing"
+  | "timeout"
+  | "quota"
+  | "moderation"
+  | "upstream-failure";
+
+/**
+ * `autopilot-image-rendering-and-visual-system` spec Task 1.1：
+ * 单节点最近一次成功生成的 base64 图像记录。base64 数据持久化到
+ * `BlueprintEffectPreview.imageBase64ByNodeId` 字段，而非浏览器
+ * `localStorage`（需求 8.1）。
+ */
+export interface NodeImageRecord {
+  /** Image bytes encoded as base64 (no `data:` prefix). */
+  b64: string;
+  /** MIME type returned by the upstream image API, e.g. `"image/png"`. */
+  mimeType: string;
+  /** The exact prompt string that was sent to the image API for this node. */
+  promptUsed: string;
+  /** ISO8601 timestamp when the image was generated. */
+  generatedAt: string;
+}
+
 export interface BlueprintEffectPreview {
   id: string;
   jobId: string;
@@ -1309,6 +1364,39 @@ export interface BlueprintEffectPreview {
   nodeProgress?: BlueprintEffectPreviewNodeProgress;
   dependencyOrder?: BlueprintEffectPreviewDependencyOrderEntry[];
   versionSync?: BlueprintEffectPreviewVersionSync;
+  /**
+   * `autopilot-image-rendering-and-visual-system` spec Task 1.1：
+   * Stage C 第 2 步生成的 SVG 架构草图字符串，独立于 raster 图像存储。
+   * 字段缺失表示 SVG 阶段未产出有效草图（被跳过或失败降级）。
+   * 设计要求该字段与 `imageBase64ByNodeId` 在同一 preview 上严格分离
+   * （需求 3.3）。
+   */
+  architectureSvgDraft?: string;
+  /**
+   * `autopilot-image-rendering-and-visual-system` spec Task 1.1：
+   * 节点 ID → 该节点最近一次成功生成的 base64 图像记录映射。
+   * 字段缺失或键不存在表示该节点尚未成功出图（pending、失败或
+   * `textOnlyEffectPreview` 兜底）。
+   * 仅服务端 `ImageService` 写入，浏览器侧不直接修改（需求 1.3 / 8.1）。
+   */
+  imageBase64ByNodeId?: Record<string, NodeImageRecord>;
+  /**
+   * `autopilot-image-rendering-and-visual-system` spec Task 1.1：
+   * 任意 fallback 触发或 `specDocuments` 为空时写入；与
+   * `progressPlan[].fallbackTier` 配合，构成 effect preview 的最终
+   * textOnly 兜底视图（需求 1.2 / 6.4）。
+   */
+  textOnlyEffectPreview?: {
+    /** 是否已退化为纯文本预览。任意 fallback 触发后置为 `true`。 */
+    active: boolean;
+    /**
+     * 触发文本兜底的原因。`"empty-spec"` 表示 spec_documents 缺失或为空，
+     * 直接跳过 Stage C；其余值映射到 6 级降级 `FallbackTier`。
+     */
+    reason: FallbackTier | "empty-spec";
+    /** 可读错误摘要；不含密钥、原始 prompt 或浏览器侧 PII。 */
+    errorSummary?: string;
+  };
   provenance: {
     jobId: string;
     projectId?: string;

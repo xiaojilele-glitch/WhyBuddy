@@ -11,6 +11,7 @@
     "dev:advanced": "node scripts/dev-all.mjs",
     "dev:stop": "node scripts/dev-stop.mjs",
     "lint": "prettier --check \"package.json\" \"README.md\" \".github/workflows/*.yml\" \".kiro/specs/release-stability-guardrails-v2/*.md\" \".kiro/steering/execution-plan.md\"",
+    "lint:autopilot-colors": "node scripts/lint-autopilot-colors.mjs",
     "typecheck": "node --run check",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "build:pages": "node scripts/build-pages.mjs",

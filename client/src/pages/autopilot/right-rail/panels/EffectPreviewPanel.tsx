@@ -58,7 +58,20 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  AutopilotImageSettingsPanel,
+  type ImageSettingsViewModel,
+} from "@/components/autopilot/AutopilotImageSettingsPanel";
+import {
+  EffectPreviewImagePanel,
+  type NodeImageRecord as EffectPreviewNodeImageRecord,
+  type ProgressPlanEntry as EffectPreviewProgressPlanEntry,
+  type ProgressPlanState as EffectPreviewProgressPlanState,
+} from "@/components/autopilot/EffectPreviewImagePanel";
+import { EffectPreviewScheduleTimeline } from "@/components/autopilot/EffectPreviewScheduleTimeline";
 import type { ApiRequestError } from "@/lib/api-client";
+import { visualTokens } from "@/lib/autopilot/visual-tokens-placeholder";
+import { mapImageSettingsResponseToViewModel } from "@/lib/autopilot/image-settings-mapper";
 import { blueprintCopy as translateBlueprintCopy } from "@/lib/blueprint-copy";
 import type { AppLocale } from "@/lib/locale";
 import { cn } from "@/lib/utils";
@@ -110,6 +123,20 @@ export type EffectPreviewPanelProps = Pick<
   initialPreviews?: BlueprintEffectPreviewSnapshot[];
   /** 原 local function 支持的 onPreviewsChange 回调 */
   onPreviewsChange?: (previews: BlueprintEffectPreviewSnapshot[]) => void;
+  /**
+   * Phase 4 Task 35.4：测试专用注入点。
+   *
+   * 生产链路 **从不** 传该字段；面板会在挂载时从
+   * `GET /api/blueprint/image-settings` 拉取真实配置。但 SSR 路径下
+   * `useEffect` 不会触发（仓库测试用 `react-dom/server` 的
+   * `renderToStaticMarkup`），因此测试通过这个 prop 直接注入「ready」
+   * 视图模型来验证 masked key / model / timeout 字段的渲染。
+   *
+   * 设计模式与 `initialPreviews` 保持一致：当传入时跳过 fetch，把
+   * `imageSettings` 初始化为该值，`imageSettingsState` 直接置为
+   * `"ready"`。
+   */
+  initialImageSettings?: ImageSettingsViewModel | null;
 };
 
 // region Helpers: locale-aware copy 工具
@@ -267,6 +294,78 @@ function deriveStaleEffectPreviewsById(
   }
   return map;
 }
+
+// region Helpers: per-node progress plan adaptation for Stage C image components
+//
+// `EffectPreviewImagePanel` 与 `EffectPreviewScheduleTimeline` 消费的
+// `progressPlan` 是「每节点状态」(`ProgressPlanEntry[]` with `nodeId` +
+// `state`)；而 `BlueprintEffectPreviewSnapshot.progressPlan` 是 3 条通用
+// milestone (`BlueprintEffectPreviewMilestone[]` with `id` / `title` /
+// `summary` / `target`)。两者字段集互不兼容（详见
+// `server/routes/blueprint/effect-preview/scheduler.ts` 顶部 §「本地化
+// 实体」注释）。
+//
+// 为不破坏现有 milestone 区块（Task 31.3 regression 断言
+// `data-testid="effect-preview-progress-plan"` 仍可见），本面板在挂载
+// Stage C 图像 + 调度组件时，从 `dependencyOrder` + `imageBase64ByNodeId`
+// 派生一份 per-node 视图：
+// - `nodeId` 来自 `dependencyOrder` 的字符串数组顺序
+// - `state`：有 `imageBase64ByNodeId[nodeId]` 记录 → `"completed"`；否则 `"pending"`
+// - `title`：尽可能从 `specTree.nodes` 找到对应 node title，缺失时回退 `nodeId`
+//
+// 若服务端后续把 per-node 进度直接写入 snapshot（例如新增
+// `progressPlanByNode` 字段），可在这里替换派生为直接读取，保持组件契约不变。
+function derivePerNodeProgressPlan(args: {
+  dependencyOrder: ReadonlyArray<string>;
+  imageBase64ByNodeId: Record<string, EffectPreviewNodeImageRecord> | undefined;
+  nodeTitleById?: ReadonlyMap<string, string>;
+}): ReadonlyArray<EffectPreviewProgressPlanEntry> {
+  const records = args.imageBase64ByNodeId ?? {};
+  return args.dependencyOrder.map(nodeId => {
+    const state: EffectPreviewProgressPlanState =
+      records[nodeId] !== undefined ? "completed" : "pending";
+    const title = args.nodeTitleById?.get(nodeId);
+    const entry: EffectPreviewProgressPlanEntry = title
+      ? { nodeId, state, title }
+      : { nodeId, state };
+    return entry;
+  });
+}
+
+/**
+ * 浏览器侧 base64 → Blob 下载（fire-and-forget）。
+ *
+ * 仅在用户点击「下载图像」按钮时触发，永不在 SSR 阶段调用。失败被静默吞掉，
+ * 与 `EffectPreviewImagePanel` 内部缓存写入同样的 fail-silent 风格一致。
+ */
+function downloadEffectPreviewImage(
+  filename: string,
+  b64: string,
+  mimeType: string,
+): void {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
+  try {
+    const byteString = atob(b64);
+    const bytes = new Uint8Array(byteString.length);
+    for (let i = 0; i < byteString.length; i += 1) {
+      bytes[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  } catch {
+    /* swallow download errors silently */
+  }
+}
+// endregion
 
 // region Helpers: role event projection
 function uniqueBlueprintStrings(values: Array<string | undefined>): string[] {
@@ -1068,6 +1167,7 @@ export const EffectPreviewPanel: FC<EffectPreviewPanelProps> = props => {
     locale,
     initialPreviews,
     onPreviewsChange,
+    initialImageSettings,
   } = props;
   const documents: BlueprintSpecDocument[] =
     props.documents ??
@@ -1089,6 +1189,7 @@ export const EffectPreviewPanel: FC<EffectPreviewPanelProps> = props => {
       locale={locale}
       initialPreviews={initialPreviews}
       onPreviewsChange={onPreviewsChange}
+      initialImageSettings={initialImageSettings}
     />
   );
 };
@@ -1102,6 +1203,7 @@ function EffectPreviewPanelInner({
   agentCrew,
   onPreviewsChange,
   locale,
+  initialImageSettings,
 }: {
   specTree: BlueprintSpecTree;
   jobId?: string | null;
@@ -1111,6 +1213,7 @@ function EffectPreviewPanelInner({
   agentCrew?: BlueprintAgentCrewSnapshot | null;
   onPreviewsChange?: (previews: BlueprintEffectPreviewSnapshot[]) => void;
   locale: AppLocale;
+  initialImageSettings?: ImageSettingsViewModel | null;
 }) {
   const acceptedDocuments = useMemo(
     () =>
@@ -1151,6 +1254,25 @@ function EffectPreviewPanelInner({
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<ApiRequestError | null>(null);
+
+  // Phase 4 Task 35.3：从 `GET /api/blueprint/image-settings` 拉取
+  // image generation 配置快照，并在右栏 milestone 上方挂出
+  // `<AutopilotImageSettingsPanel>` 作为只读诊断视图。
+  //
+  // 行为：
+  // - 测试通过 `initialImageSettings` 直接注入 view model（绕过 fetch）
+  // - 生产链路 `initialImageSettings === undefined`，挂载后异步 fetch
+  // - SSR 守卫：`typeof window === "undefined"` 时不 fetch（panel 经
+  //   `renderToStaticMarkup` 渲染于 SSR / 测试上下文）
+  // - 失败（throw / 非 2xx）→ `imageSettingsState = "error"`，渲染小型
+  //   `data-testid="autopilot-image-settings-panel-error"` 提示
+  const [imageSettings, setImageSettings] =
+    useState<ImageSettingsViewModel | null>(
+      initialImageSettings !== undefined ? initialImageSettings : null
+    );
+  const [imageSettingsState, setImageSettingsState] = useState<
+    "loading" | "ready" | "error"
+  >(initialImageSettings !== undefined ? "ready" : "loading");
 
   useEffect(() => {
     setPreviews(initialPreviews ?? []);
@@ -1198,6 +1320,54 @@ function EffectPreviewPanelInner({
     () => deriveStaleEffectPreviewsById(job?.artifacts ?? []),
     [job?.artifacts]
   );
+  // Phase 4 Task 31.1：派生 Stage C 图像 + 调度组件需要的 per-node 视图。
+  // 详见上方 `derivePerNodeProgressPlan` 注释 — `BlueprintEffectPreviewSnapshot.progressPlan`
+  // 是「3 条通用 milestone」，新组件需要的是「每节点状态」，两者字段集互不兼容。
+  const effectPreviewDependencyOrderNodeIds = useMemo<ReadonlyArray<string>>(
+    () => {
+      const order = activePreview?.dependencyOrder;
+      if (!Array.isArray(order)) return [];
+      return order
+        .map(entry => {
+          if (typeof entry === "string") return entry;
+          if (entry && typeof entry === "object" && "nodeId" in entry) {
+            const nodeId = (entry as { nodeId?: unknown }).nodeId;
+            return typeof nodeId === "string" ? nodeId : "";
+          }
+          return "";
+        })
+        .filter((nodeId): nodeId is string => nodeId.length > 0);
+    },
+    [activePreview]
+  );
+  const effectPreviewNodeTitleById = useMemo<ReadonlyMap<string, string>>(
+    () => new Map(specTree.nodes.map(node => [node.id, node.title])),
+    [specTree.nodes]
+  );
+  const effectPreviewPerNodeProgressPlan = useMemo<
+    ReadonlyArray<EffectPreviewProgressPlanEntry>
+  >(
+    () =>
+      derivePerNodeProgressPlan({
+        dependencyOrder: effectPreviewDependencyOrderNodeIds,
+        imageBase64ByNodeId: activePreview?.imageBase64ByNodeId,
+        nodeTitleById: effectPreviewNodeTitleById,
+      }),
+    [
+      activePreview?.imageBase64ByNodeId,
+      effectPreviewDependencyOrderNodeIds,
+      effectPreviewNodeTitleById,
+    ]
+  );
+  const effectPreviewVersionNumber = useMemo<number>(() => {
+    const raw = activePreview?.version;
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+    if (typeof raw === "string") {
+      const parsed = Number.parseInt(raw, 10);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return 1;
+  }, [activePreview]);
   const canGenerate = Boolean(jobId) && acceptedDocuments.length > 0;
 
   const publishPreviews = useCallback(
@@ -1258,6 +1428,67 @@ function EffectPreviewPanelInner({
     if (!jobId || previews.length > 0) return;
     void handleRefresh();
   }, [handleRefresh, jobId, previews.length]);
+
+  // Phase 4 Task 35.3：mount-once fetch of `/api/blueprint/image-settings`.
+  //
+  // 不 depend 于任何 prop（生产链路只想拉一次配置快照），并通过
+  // `initialImageSettings !== undefined` 跳过 fetch 路径，保持测试
+  // 注入语义。SSR 守卫确保 `renderToStaticMarkup` 路径下不会调用 fetch。
+  useEffect(() => {
+    if (initialImageSettings !== undefined) {
+      // 测试注入路径：直接使用注入的 view model，跳过网络
+      return;
+    }
+    if (typeof window === "undefined") {
+      // SSR / `renderToStaticMarkup` 环境：保持 loading 占位，不 fetch
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/blueprint/image-settings");
+        if (!response.ok) {
+          if (!cancelled) {
+            setImageSettings(null);
+            setImageSettingsState("error");
+          }
+          return;
+        }
+        const body: unknown = await response.json();
+        if (cancelled) return;
+        // Phase 5 Task 42.1：把响应 → view model 的字段复制下放到纯 helper
+        // (`mapImageSettingsResponseToViewModel`)。Helper 在
+        // `client/src/lib/autopilot/image-settings-mapper.ts`，
+        // 由独立单测覆盖（`__tests__/image-settings-mapper.test.ts`）。
+        // helper 返回 `null` 表示响应字段缺失或类型不匹配，此时与 fetch
+        // 失败一样把面板切到 error 态。
+        // 服务端响应中 `apiKey` 已被脱敏成 `maskedApiKey`；客户端面板的
+        // `apiKey` prop 设计上接收 raw key，但 helper 传入已脱敏的字符串：
+        // 面板的 `maskApiKey` 算法对已经满足脱敏长度并由相同 fill 字符
+        // (`U+2022 BULLET`) 构成中段的字符串是 idempotent 的（slice(0,8)
+        // + 中间 bullet × (length - 14) + slice(-6) 还原同字串）。
+        // 真值 key 永远不会出现在 response body 中（参见
+        // server/routes/blueprint/image-settings.ts 的 sentinel-leak 测试）。
+        const viewModel = mapImageSettingsResponseToViewModel(body);
+        if (viewModel === null) {
+          setImageSettings(null);
+          setImageSettingsState("error");
+          return;
+        }
+        setImageSettings(viewModel);
+        setImageSettingsState("ready");
+      } catch {
+        if (!cancelled) {
+          setImageSettings(null);
+          setImageSettingsState("error");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div
@@ -1484,6 +1715,89 @@ function EffectPreviewPanelInner({
             roleEventProjection={roleEventProjection}
             locale={locale}
           />
+
+          {activePreview ? (
+            <>
+              {/*
+                Phase 4 Task 31.1：把 Stage C 图像画廊与调度时间线挂在
+                现有的 milestone 区块上方，使后端写入的
+                `imageBase64ByNodeId` / `dependencyOrder` 能在右侧 rail
+                可见。
+
+                Phase 4 Tasks 31.2 + 34.4：`architectureSvgDraft` 现在直接
+                透传 `activePreview.architectureSvgDraft`。服务端
+                `server/routes/blueprint/effect-preview/svg-architecture-drafter.ts`
+                的 `draftSvgArchitecture` 已在 Task 34.1 末尾接入
+                whitelist sanitizer（`sanitizeSvgArchitectureDraft`），
+                会在 SVG 字符串落到 `BlueprintEffectPreview.architectureSvgDraft`
+                之前去除 `<script>` / `<foreignObject>` / `on*=` 事件处理器 /
+                `javascript:` URL / 外部 `<a>` `<image>` href，因此
+                `EffectPreviewImagePanel` 通过 `dangerouslySetInnerHTML`
+                挂载 SVG 时已是 defense-in-depth 后的安全字符串。
+              */}
+              <EffectPreviewImagePanel
+                missionId={
+                  activePreview.id ?? activePreview.jobId ?? jobId ?? ""
+                }
+                activeStageKey="effect_preview"
+                progressPlan={effectPreviewPerNodeProgressPlan}
+                imageBase64ByNodeId={activePreview.imageBase64ByNodeId ?? {}}
+                architectureSvgDraft={activePreview.architectureSvgDraft}
+                visualTokens={visualTokens}
+                onDownload={downloadEffectPreviewImage}
+                version={effectPreviewVersionNumber}
+                theme="light"
+              />
+              <EffectPreviewScheduleTimeline
+                activeStageKey="effect_preview"
+                progressPlan={effectPreviewPerNodeProgressPlan}
+                dependencyOrder={effectPreviewDependencyOrderNodeIds}
+                visualTokens={visualTokens}
+                theme="light"
+              />
+            </>
+          ) : null}
+
+          {/*
+            Phase 4 Task 35.3：image generation 配置只读面板。
+            位于 Stage C 调度时间线下方、milestone 区块上方 —— 它是
+            诊断 / 配置类视图，次于画廊与时间线。挂载策略：
+            - `imageSettingsState === "loading"`：渲染 loading 占位
+            - `imageSettingsState === "error"`：渲染小型内联提示
+            - `imageSettingsState === "ready" && imageSettings !== null`：
+              渲染真实 `<AutopilotImageSettingsPanel>`
+            理由：fetch 失败或仍在 in-flight 时不挂载真实面板，避免
+            空 view model 触发 panel 内部的「未配置」状态把视觉重心
+            压在调度时间线下面。
+          */}
+          {imageSettingsState === "loading" ? (
+            <div
+              data-testid="autopilot-image-settings-panel-loading"
+              className="rounded-[16px] border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500"
+            >
+              {panelText(
+                "正在读取图像服务配置…",
+                "Loading image service settings…",
+                locale
+              )}
+            </div>
+          ) : null}
+          {imageSettingsState === "error" ? (
+            <div
+              data-testid="autopilot-image-settings-panel-error"
+              className="rounded-[16px] border border-dashed border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700"
+            >
+              无法读取图像服务配置
+            </div>
+          ) : null}
+          {imageSettingsState === "ready" && imageSettings !== null ? (
+            <div className="rounded-[16px] border border-slate-200 bg-white p-4">
+              <AutopilotImageSettingsPanel
+                settings={imageSettings}
+                theme="light"
+              />
+            </div>
+          ) : null}
 
           <div className="rounded-[16px] border border-slate-200 bg-white p-4">
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-normal text-slate-500">
