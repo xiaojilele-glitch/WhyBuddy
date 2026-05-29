@@ -1044,6 +1044,9 @@ async function startServer() {
     })
   );
 
+  const { createSkillRouter } = await import("./routes/skill.js");
+  app.use("/api/skill", createSkillRouter());
+
   // ── Agent Permission Model ──
   const { RoleStore } = await import("./permission/role-store.js");
   const { PolicyStore } = await import("./permission/policy-store.js");
