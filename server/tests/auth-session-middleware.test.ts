@@ -1,10 +1,12 @@
 import express from "express";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { createAuthMiddleware } from "../auth/middleware.js";
 import type { SessionLookupResult, SessionService } from "../auth/session-service.js";
+
+const originalSoloTraeBypassAuth = process.env.SOLO_TRAE_BYPASS_AUTH;
 
 async function withServer(
   service: Pick<SessionService, "readSessionToken" | "resolveCurrentUser" | "clearCookie">,
@@ -49,6 +51,14 @@ function service(
 }
 
 describe("auth middleware", () => {
+  afterEach(() => {
+    if (originalSoloTraeBypassAuth === undefined) {
+      delete process.env.SOLO_TRAE_BYPASS_AUTH;
+      return;
+    }
+    process.env.SOLO_TRAE_BYPASS_AUTH = originalSoloTraeBypassAuth;
+  });
+
   it("returns 401 when a required session is missing", async () => {
     await withServer(service(null), async (baseUrl) => {
       const response = await fetch(`${baseUrl}/required`);
@@ -104,5 +114,32 @@ describe("auth middleware", () => {
         expect(response.status).toBe(403);
       },
     );
+  });
+
+  it("bypasses required auth in Solo Trae sandbox mode", async () => {
+    process.env.SOLO_TRAE_BYPASS_AUTH = "true";
+
+    await withServer(service(null), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/required`);
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        user: {
+          id: "solo-trae-sandbox",
+          role: "super_admin",
+        },
+      });
+    });
+  });
+
+  it("bypasses admin auth in Solo Trae sandbox mode", async () => {
+    process.env.SOLO_TRAE_BYPASS_AUTH = "true";
+
+    await withServer(service(null), async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/admin`);
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({ ok: true });
+    });
   });
 });
