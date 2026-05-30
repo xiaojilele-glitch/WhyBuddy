@@ -23,6 +23,7 @@ import type {
   BlueprintSelectRouteResponse,
   BlueprintSpecDocument,
   BlueprintSpecDocumentsResponse,
+  BlueprintSpecTree,
 } from "../../shared/blueprint/index.js";
 
 export type SkillSessionStatus =
@@ -87,6 +88,7 @@ interface BlueprintSkillState {
   job: BlueprintGenerationJob | null;
   routeSet: BlueprintRouteSet | null;
   selection: BlueprintRouteSelection | null;
+  specTree: BlueprintSpecTree | null;
   documents: BlueprintSpecDocument[];
   effectPreviews: BlueprintEffectPreview[];
   promptPackages: BlueprintImplementationPromptPackage[];
@@ -209,6 +211,7 @@ function buildEmptyState(): BlueprintSkillState {
     job: null,
     routeSet: null,
     selection: null,
+    specTree: null,
     documents: [],
     effectPreviews: [],
     promptPackages: [],
@@ -238,6 +241,7 @@ function normalizeAgentStatus(state: string | undefined): SkillAgentStatus {
 function toSkillStage(record: SkillSessionRecord): string {
   if (record.result) return "completed";
   if (record.decision?.stepId === "route-selection") return "route_selection";
+  if (record.decision?.stepId === "review-spec-tree") return "spec_tree";
   if (record.decision) return "clarification";
 
   switch (record.state.job?.stage) {
@@ -297,6 +301,31 @@ function buildRouteSelectionDecision(routeSet: BlueprintRouteSet): SkillDecision
       label: route.title,
       description: route.summary,
     })),
+  };
+}
+
+function buildSpecTreeReviewDecision(specTree: BlueprintSpecTree): SkillDecision {
+  const rootNode = specTree.nodes.find(node => node.id === specTree.rootNodeId);
+  return {
+    stepId: "review-spec-tree",
+    type: "single_select",
+    title: rootNode
+      ? `请审阅 SPEC Tree：${rootNode.title}`
+      : "请审阅生成的 SPEC Tree",
+    description: "确认树结构后，才继续生成规格文档、预演和实现提示词。",
+    required: true,
+    options: [
+      {
+        id: "confirm",
+        label: "确认进入文档生成",
+        description: "当前 SPEC Tree 可接受，继续生成规格文档和提示词。",
+      },
+      {
+        id: "need-adjustment",
+        label: "需要调整",
+        description: "先停在 SPEC Tree 审阅阶段，稍后再继续。",
+      },
+    ],
   };
 }
 
@@ -404,6 +433,18 @@ function buildAgents(record: SkillSessionRecord): SkillAgentCard[] {
     ];
   }
 
+  if (record.decision?.stepId === "review-spec-tree") {
+    return [
+      createFallbackAgent(
+        "architect",
+        "架构师",
+        "architect",
+        "blocked",
+        "SPEC Tree 已生成，等待用户审阅后继续。",
+      ),
+    ];
+  }
+
   if (record.state.clarificationSession) {
     return [
       createFallbackAgent(
@@ -436,6 +477,10 @@ function buildSummary(record: SkillSessionRecord): string {
   if (record.decision?.stepId === "route-selection") {
     const count = record.state.routeSet?.routes.length ?? 0;
     return `规划师已生成 ${count} 条候选路线，等待用户选择。`;
+  }
+  if (record.decision?.stepId === "review-spec-tree") {
+    const count = record.state.specTree?.nodes.length ?? 0;
+    return `SPEC Tree 已生成，包含 ${count} 个节点，等待用户审阅。`;
   }
   if (record.decision) {
     return "澄清问题已生成，等待用户回答。";
@@ -525,12 +570,23 @@ function buildResultPackage(record: SkillSessionRecord): SkillResultPackage {
         }
       : null,
     specTree: {
-      title: record.state.documents[0]?.title ?? record.input,
-      nodes: record.state.documents.map(document => ({
-        id: document.nodeId,
-        title: document.title,
-        type: document.type,
-      })),
+      title:
+        record.state.specTree?.nodes.find(node => node.id === record.state.specTree?.rootNodeId)
+          ?.title ??
+        record.state.documents[0]?.title ??
+        record.input,
+      nodes:
+        record.state.specTree?.nodes.map(node => ({
+          id: node.id,
+          title: node.title,
+          type: node.type,
+          status: node.status,
+        })) ??
+        record.state.documents.map(document => ({
+          id: document.nodeId,
+          title: document.title,
+          type: document.type,
+        })),
     },
     specDocument,
     imagePrompts: buildImagePromptPayload(
@@ -583,6 +639,64 @@ async function safelyGenerateEffectPreviews(
   } catch {
     return null;
   }
+}
+
+async function continueFromApprovedSpecTree(
+  record: SkillSessionRecord,
+  client: SkillBlueprintClient,
+): Promise<void> {
+  if (!record.state.job) {
+    throw new SkillSessionOperationError(409, {
+      code: "STATE_CONFLICT",
+      message: "spec tree review is not ready yet",
+    }, record.sessionId);
+  }
+
+  const documentResponse = await client.generateSpecDocuments(record.state.job.id, {});
+  record.state.job = documentResponse.job;
+  record.state.documents = documentResponse.documents;
+
+  const previewResponse = await safelyGenerateEffectPreviews(client, record.state.job.id);
+  if (previewResponse) {
+    record.state.job = previewResponse.job;
+    record.state.effectPreviews = previewResponse.effectPreviews;
+  }
+
+  const promptPackageResponse = await client.generatePromptPackages(record.state.job.id, {
+    targetPlatforms: ["trae"],
+    includeDrafts: true,
+    includePreviewDrafts: true,
+  });
+  record.state.job = promptPackageResponse.job;
+  record.state.promptPackages = promptPackageResponse.promptPackages;
+  record.decision = null;
+  record.status = "completed";
+  record.result = buildResultPackage(record);
+  refreshProjection(record);
+  appendEvent(record, {
+    type: "agent_status",
+    stage: "spec_documents",
+    agent: {
+      id: "architect",
+      name: "架构师",
+      role: "architect",
+      status: "completed",
+    },
+    summary: `已生成 ${record.state.documents.length} 份规格文档。`,
+    waitingForUser: false,
+  });
+  appendEvent(record, {
+    type: "agent_status",
+    stage: "completed",
+    agent: {
+      id: "packager",
+      name: "打包器",
+      role: "packager",
+      status: "completed",
+    },
+    summary: "完整产物包已生成。",
+    waitingForUser: false,
+  });
 }
 
 export function createBlueprintBackedSkillSessionStore(deps: {
@@ -678,63 +792,74 @@ export function createBlueprintBackedSkillSessionStore(deps: {
         record.state.job = selectionResponse.job;
         record.state.routeSet = selectionResponse.routeSet;
         record.state.selection = selectionResponse.selection;
-
-        const documentResponse = await deps.client.generateSpecDocuments(
-          selectionResponse.job.id,
-          {},
-        );
-        record.state.job = documentResponse.job;
-        record.state.documents = documentResponse.documents;
-
-        const previewResponse = await safelyGenerateEffectPreviews(
-          deps.client,
-          selectionResponse.job.id,
-        );
-        if (previewResponse) {
-          record.state.job = previewResponse.job;
-          record.state.effectPreviews = previewResponse.effectPreviews;
-        }
-
-        const promptPackageResponse = await deps.client.generatePromptPackages(
-          selectionResponse.job.id,
-          {
-            targetPlatforms: ["trae"],
-            includeDrafts: true,
-            includePreviewDrafts: true,
-          },
-        );
-        record.state.job = promptPackageResponse.job;
-        record.state.promptPackages = promptPackageResponse.promptPackages;
-
-        record.decision = null;
-        record.status = "completed";
-        record.result = buildResultPackage(record);
+        record.state.specTree = selectionResponse.specTree;
+        record.decision = buildSpecTreeReviewDecision(selectionResponse.specTree);
+        record.status = "waiting_for_user";
+        record.result = null;
         refreshProjection(record);
         appendEvent(record, {
           type: "agent_status",
-          stage: "spec_documents",
+          stage: "spec_tree",
           agent: {
             id: "architect",
             name: "架构师",
             role: "architect",
-            status: "completed",
+            status: "working",
           },
-          summary: `已生成 ${record.state.documents.length} 份规格文档。`,
+          summary: "已生成 SPEC Tree，等待用户审阅。",
           waitingForUser: false,
         });
         appendEvent(record, {
-          type: "agent_status",
-          stage: "completed",
+          type: "decision_required",
+          stage: "spec_tree",
           agent: {
-            id: "packager",
-            name: "打包器",
-            role: "packager",
-            status: "completed",
+            id: "architect",
+            name: "架构师",
+            role: "architect",
+            status: "blocked",
           },
-          summary: "完整产物包已生成。",
-          waitingForUser: false,
+          summary: record.snapshot.summary,
+          waitingForUser: true,
         });
 
+        return record;
+      }
+
+      if (stepId === "review-spec-tree") {
+        if (!record.state.specTree) {
+          throw new SkillSessionOperationError(409, {
+            code: "STATE_CONFLICT",
+            message: "spec tree review is not ready yet",
+          }, sessionId);
+        }
+
+        if (selected === "need-adjustment") {
+          record.status = "waiting_for_user";
+          record.result = null;
+          refreshProjection(record);
+          appendEvent(record, {
+            type: "decision_required",
+            stage: "spec_tree",
+            agent: {
+              id: "architect",
+              name: "架构师",
+              role: "architect",
+              status: "blocked",
+            },
+            summary: "当前 Skill facade 还未接入 SPEC Tree 在线调整，审阅保持打开。",
+            waitingForUser: true,
+          });
+          return record;
+        }
+
+        if (selected !== "confirm") {
+          throw new SkillSessionOperationError(400, {
+            code: "INVALID_ANSWER",
+            message: "review-spec-tree only accepts confirm or need-adjustment",
+          }, sessionId);
+        }
+
+        await continueFromApprovedSpecTree(record, deps.client);
         return record;
       }
 

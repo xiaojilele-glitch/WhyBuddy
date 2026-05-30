@@ -701,7 +701,7 @@ describe("skill session routes", () => {
     });
   });
 
-  it("accepts a route selection and returns the completed artifact package", async () => {
+  it("requires spec tree review after route selection", async () => {
     await withSessionServer(createFakeBlueprintClient(), async baseUrl => {
       const startResponse = await fetch(`${baseUrl}/api/skill/session/start`, {
         method: "POST",
@@ -736,13 +736,79 @@ describe("skill session routes", () => {
       const routeBody = await routeResponse.json();
 
       expect(routeResponse.status).toBe(200);
-      expect(routeBody.status).toBe("completed");
-      expect(routeBody.result.selectedRoute).toEqual({
+      expect(routeBody.status).toBe("waiting_for_user");
+      expect(routeBody.snapshot.stage).toBe("spec_tree");
+      expect(routeBody.decision.stepId).toBe("review-spec-tree");
+      expect(routeBody.decision.options).toEqual([
+        {
+          id: "confirm",
+          label: "确认进入文档生成",
+          description: "当前 SPEC Tree 可接受，继续生成规格文档和提示词。",
+        },
+        {
+          id: "need-adjustment",
+          label: "需要调整",
+          description: "先停在 SPEC Tree 审阅阶段，稍后再继续。",
+        },
+      ]);
+      expect(routeBody.result).toBeNull();
+      expect(routeBody.snapshot.summary).toContain("SPEC Tree");
+    });
+  });
+
+  it("completes artifact generation after spec tree approval", async () => {
+    await withSessionServer(createFakeBlueprintClient(), async baseUrl => {
+      const startResponse = await fetch(`${baseUrl}/api/skill/session/start`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ input: "测试 respond" }),
+      });
+      const startBody = await startResponse.json();
+
+      const clarificationResponse = await fetch(
+        `${baseUrl}/api/skill/session/respond`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sessionId: startBody.sessionId,
+            stepId: "clarify-target-user",
+            answer: { selected: "consumer" },
+          }),
+        },
+      );
+      const clarificationBody = await clarificationResponse.json();
+
+      const routeResponse = await fetch(`${baseUrl}/api/skill/session/respond`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: startBody.sessionId,
+          stepId: clarificationBody.decision.stepId,
+          answer: { selected: "route-full" },
+        }),
+      });
+      const routeBody = await routeResponse.json();
+
+      const reviewResponse = await fetch(`${baseUrl}/api/skill/session/respond`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: startBody.sessionId,
+          stepId: routeBody.decision.stepId,
+          answer: { selected: "confirm" },
+        }),
+      });
+      const reviewBody = await reviewResponse.json();
+
+      expect(reviewResponse.status).toBe(200);
+      expect(reviewBody.status).toBe("completed");
+      expect(reviewBody.result.selectedRoute).toEqual({
         id: "route-full",
         label: "完整规格路线",
       });
-      expect(routeBody.result.specDocument.markdown).toContain("首页体验设计");
-      expect(routeBody.result.imagePrompts).toEqual([
+      expect(reviewBody.result.specDocument.markdown).toContain("首页体验设计");
+      expect(reviewBody.result.imagePrompts).toEqual([
         {
           id: "preview-1:node-root",
           label: "首页体验",
