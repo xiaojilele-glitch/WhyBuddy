@@ -1045,7 +1045,24 @@ async function startServer() {
   );
 
   const { createSkillRouter } = await import("./routes/skill.js");
+  const {
+    createBlueprintBackedSkillSessionStore,
+    createBlueprintHttpClient,
+    createSkillSessionRouter,
+  } = await import("./routes/skill-session.js");
   app.use("/api/skill", createSkillRouter());
+  app.use(
+    "/api/skill/session",
+    createSkillSessionRouter({
+      store: createBlueprintBackedSkillSessionStore({
+        client: createBlueprintHttpClient({
+          baseUrl:
+            process.env.SKILL_BRIDGE_BASE_URL ??
+            `http://127.0.0.1:${process.env.PORT ?? "3001"}`,
+        }),
+      }),
+    }),
+  );
 
   // ── Agent Permission Model ──
   const { RoleStore } = await import("./permission/role-store.js");
