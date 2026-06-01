@@ -2,7 +2,7 @@
 
 ## 简介
 
-本 spec 是 Cube Pets Office autopilot blueprint 流系列 5 个 spec 中的**第三个**，建立在系列 spec 1（`autopilot-asset-staleness-model`，规划 `staleSince` / `invalidatedBy` 字段、依赖图、`invalidateDownstream` 引擎与 `GET /stale-artifacts` 端点）与系列 spec 2（`autopilot-replan-and-branch-action`，规划 `POST /replan` 端点与确认弹窗交互模式）之上。
+本 spec 是 WhyBuddy autopilot blueprint 流系列 5 个 spec 中的**第三个**，建立在系列 spec 1（`autopilot-asset-staleness-model`，规划 `staleSince` / `invalidatedBy` 字段、依赖图、`invalidateDownstream` 引擎与 `GET /stale-artifacts` 端点）与系列 spec 2（`autopilot-replan-and-branch-action`，规划 `POST /replan` 端点与确认弹窗交互模式）之上。
 
 > **重要前置假设**：本 spec **假设 spec 1 / spec 2 先于本 spec 落地**。spec 1 与 spec 2 在仓库中目前**仅为需求文档（requirements-only）**，尚未落地代码。本 spec 在需求层把 spec 1 的引擎与字段、spec 2 的 modal 与 replan 事件视为"将要存在的纯函数 / 端点 / 类型 / 组件"使用，但 SHALL NOT 主张它们已经在仓库代码中落地。如果落地顺序倒置，本 spec 的实施可临时桩接 spec 1 / spec 2 的接线点位，但合并到主线时仍须以 spec 1 / spec 2 已落地为前提。
 

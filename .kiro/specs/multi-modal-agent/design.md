@@ -2,7 +2,7 @@
 
 ## 概述
 
-本设计在 multi-modal-vision（图片理解）基础上，为 Cube Pets Office 平台增加 TTS（语音输出）和 STT（语音输入）能力，并将 Vision + Voice 统一编排为完整的多模态 Agent 体验。核心思路：
+本设计在 multi-modal-vision（图片理解）基础上，为 WhyBuddy 平台增加 TTS（语音输出）和 STT（语音输入）能力，并将 Vision + Voice 统一编排为完整的多模态 Agent 体验。核心思路：
 
 1. 新增 TTS/STT 引擎抽象层，统一浏览器 Web Speech API 和服务端语音服务的调用接口
 2. 在 ChatPanel/WorkflowPanel 中集成语音控件（麦克风按钮、TTS 开关、播放按钮）

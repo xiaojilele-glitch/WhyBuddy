@@ -131,7 +131,7 @@ function toSourceApp(
     return fromInput.trim();
   }
 
-  return mission?.topicId ? "cube-pets-office" : null;
+  return mission?.topicId ? "whybuddy" : null;
 }
 
 function toStartTime(workflow: WorkflowRecord, mission?: MissionRecord): string {

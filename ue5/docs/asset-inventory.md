@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档列出 Cube Pets Office UE5 项目中的所有资产，包括静态网格体、材质实例、贴图、蓝图和关卡。所有资产遵循 `ue5/docs/naming-conventions.md` 中定义的命名规范，存放在 `Content/CubePets/` 目录下。
+本文档列出 WhyBuddy UE5 项目中的所有资产，包括静态网格体、材质实例、贴图、蓝图和关卡。所有资产遵循 `ue5/docs/naming-conventions.md` 中定义的命名规范，存放在 `Content/CubePets/` 目录下。
 
 ---
 

@@ -6,7 +6,7 @@ inclusion: manual
 
 ## 文档目的
 
-这份说明文档用于澄清平台定位。目标不是声称 GitHub 上完全没有类似开源平台，而是明确 Cube Pets Office 真正还能形成差异化的位置。
+这份说明文档用于澄清平台定位。目标不是声称 GitHub 上完全没有类似开源平台，而是明确 WhyBuddy 真正还能形成差异化的位置。
 
 ## 市场现实
 
@@ -23,7 +23,7 @@ inclusion: manual
 
 ## Cube 仍然可以形成的差异化
 
-Cube Pets Office 可以占据一个更少见的组合位置：
+WhyBuddy 可以占据一个更少见的组合位置：
 
 - 图式编排能力 + mission-native 执行模型
 - 内建 replay、audit、lineage 与 operator control

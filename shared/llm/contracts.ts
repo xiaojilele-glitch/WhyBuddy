@@ -3,7 +3,7 @@
  *
  * 从 rbac-system-pc/backend/src/ai/llm/ 迁移并改造。
  * 原版基于 class + Sequelize 配置，此版改为纯接口 + 函数式注册，
- * 适配 cube-pets-office 的 .env 配置和浏览器/服务端双运行时。
+ * 适配 whybuddy 的 .env 配置和浏览器/服务端双运行时。
  *
  * 使用场景：
  * - plugin-skill-system: Skill 可声明需要特定提供商

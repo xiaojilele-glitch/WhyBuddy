@@ -2,7 +2,7 @@
 
 ## Introduction
 
-本 spec 定义一套对齐 MiroFish 极简视觉风格的设计令牌体系与迁移路径。MiroFish 的视觉 DNA 以纯黑白 + 单色强调、无圆角无阴影、高信息密度、等宽字体度量为核心特征，与 cube-pets-office 当前的 OKLCH 多色系 + 大圆角 + 重阴影 + spring 动效风格存在显著差距。
+本 spec 定义一套对齐 MiroFish 极简视觉风格的设计令牌体系与迁移路径。MiroFish 的视觉 DNA 以纯黑白 + 单色强调、无圆角无阴影、高信息密度、等宽字体度量为核心特征，与 whybuddy 当前的 OKLCH 多色系 + 大圆角 + 重阴影 + spring 动效风格存在显著差距。
 
 本 spec 的范围是：
 1. 定义一套 "MiroFish-aligned" CSS 变量令牌集（颜色、间距、排版、边框）

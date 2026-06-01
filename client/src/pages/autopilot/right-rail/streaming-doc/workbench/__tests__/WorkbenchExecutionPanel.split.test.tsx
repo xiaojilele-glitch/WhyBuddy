@@ -147,7 +147,7 @@ describe("WorkbenchExecutionPanel split layout", () => {
           reasoningEntries: [
             {
               id: "preview-1",
-              jobId: "job-1",
+              jobId: "job-next-stage",
               iteration: 1,
               iterationLabel: "#1",
               phase: "thinking",

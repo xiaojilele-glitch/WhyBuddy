@@ -13,7 +13,7 @@ spec_documents → prompt template → SVG architecture draft → schedule plan 
 - 图像生成不再是与 `intake → clarification → route` 平级的独立能力，也不是 effect preview 内部的某个可选子模块，而是 spec 文档完整后才允许进入的、orchestrator 严格 gate 的下游阶段。
 - Stage A `input → clarification → route` 与 Stage B `spec_tree → spec_documents` 是 Stage C 的 hard prerequisite。Stage C 的 orchestrator（`ImageService`）不接受空 spec 输入：`spec_documents` 缺失或为空时，整段 Stage C 直接降级为 `TextOnlyEffectPreview`，不发起任何网络调用。
 - Stage C 内部四步是结构化制品流水线：每一步都把上一步的结构化输出作为输入，并把自己的中间制品写到 `BlueprintEffectPreview` 的不同字段，避免「prompt 模板字符串」「SVG 草图字符串」「raster base64」三类制品混入同一字段。
-- raster 调用是 Stage C 的最末一步，也是唯一一处真正访问外部图像模型代理域的步骤。前三步都在 cube-pets-office server 内部完成，浏览器侧不持有任何 image API 凭证。
+- raster 调用是 Stage C 的最末一步，也是唯一一处真正访问外部图像模型代理域的步骤。前三步都在 whybuddy server 内部完成，浏览器侧不持有任何 image API 凭证。
 - 单节点串行：`n` 强制为 `1`，单次只为单个节点出图；批量出图、image edit 多部分上传 `/v1/image/edit`、retry-per-image UI chips 都不在本 spec 范围内。
 
 Phase 2 视觉令牌系统与 Phase 3 主链时间线 / 调度时间线 / 能力角标在数据上不依赖 Phase 1 的图像数据，但在视觉上反过来要求 Phase 1 的客户端组件最终消费 Phase 2 的 `VisualTokens` 取色（见 §「Cross-phase Dependencies & Soft Coupling」）。
@@ -26,7 +26,7 @@ Phase 2 视觉令牌系统与 Phase 3 主链时间线 / 调度时间线 / 能力
 
 ```mermaid
 graph TB
-  subgraph Server["cube-pets-office server (server/)"]
+  subgraph Server["whybuddy server (server/)"]
     subgraph EffectPreviewModule["server/routes/blueprint/effect-preview/"]
       ImageService["ImageService<br/>(image-service.ts)"]
       PromptTemplateLibrary["PromptTemplateLibrary<br/>(prompt-template-library.ts)"]
@@ -94,7 +94,7 @@ graph TB
 client (browser)
    │  REST + Socket.IO (no IMAGE_GEN_API_KEY on the wire)
    ▼
-cube-pets-office server (server/)
+whybuddy server (server/)
    │  ImageApiClient holds IMAGE_GEN_API_KEY
    │  Authorization: Bearer ${IMAGE_GEN_API_KEY}
    ▼

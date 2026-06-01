@@ -1239,7 +1239,7 @@ git commit -m "feat: add admin console shell"
 - Modify: `.kiro/specs/personal-project-ownership-and-isolation/tasks.md`
 - Modify: `.kiro/specs/admin-console-and-global-role-gate/tasks.md`
 - Modify: `docs/toc-auth-project-admin-spec-progress-overview-2026-04-30.svg`
-- Optionally modify: `docs/cube-pets-office-toc-login-architecture-2026-04-30.svg`
+- Optionally modify: `docs/whybuddy-toc-login-architecture-2026-04-30.svg`
 
 - [x] **Step 1: Update checkboxes**
 
@@ -1267,7 +1267,7 @@ Write-Output "XML_OK docs\toc-auth-project-admin-spec-progress-overview-2026-04-
 - [ ] **Step 4: Commit**
 
 ```powershell
-git add .kiro/specs/consumer-email-auth-and-account/tasks.md .kiro/specs/personal-project-ownership-and-isolation/tasks.md .kiro/specs/admin-console-and-global-role-gate/tasks.md docs/toc-auth-project-admin-spec-progress-overview-2026-04-30.svg docs/cube-pets-office-toc-login-architecture-2026-04-30.svg
+git add .kiro/specs/consumer-email-auth-and-account/tasks.md .kiro/specs/personal-project-ownership-and-isolation/tasks.md .kiro/specs/admin-console-and-global-role-gate/tasks.md docs/toc-auth-project-admin-spec-progress-overview-2026-04-30.svg docs/whybuddy-toc-login-architecture-2026-04-30.svg
 git commit -m "docs: update toc auth progress"
 ```
 
@@ -1299,14 +1299,14 @@ npx tsx scripts/persistence-smoke.mjs
 Expected:
 
 ```text
-MYSQL_OK database=cube_pets_office applied=0 skippedSecond=1
+MYSQL_OK database=whybuddy applied=0 skippedSecond=1
 REDIS_OK db=2 prefix=cube:pets:office:
 ```
 
 Actual after adding `002_project_resources`:
 
 ```text
-MYSQL_OK database=cube_pets_office applied=1 skippedSecond=2
+MYSQL_OK database=whybuddy applied=1 skippedSecond=2
 REDIS_OK db=2 prefix=cube:pets:office:
 ```
 

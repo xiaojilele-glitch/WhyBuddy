@@ -2,7 +2,7 @@
 
 ## 简介
 
-本特性将 Cube Pets Office 的任务驾驶舱（Task Cockpit）数据架构从"Mission + Workflow 投影层"双源模式迁移为 Mission 原生单源模式。迁移后，tasks-store 将完全从 MissionRecord 及 /api/planets 端点获取数据，消除对 WorkflowRecord 的依赖，简化数据流并降低维护成本。
+本特性将 WhyBuddy 的任务驾驶舱（Task Cockpit）数据架构从"Mission + Workflow 投影层"双源模式迁移为 Mission 原生单源模式。迁移后，tasks-store 将完全从 MissionRecord 及 /api/planets 端点获取数据，消除对 WorkflowRecord 的依赖，简化数据流并降低维护成本。
 
 ## 术语表
 

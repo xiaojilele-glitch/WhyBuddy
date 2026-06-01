@@ -2,7 +2,7 @@
 
 ## Overview
 
-本设计文档定义了将 MiroFish 极简视觉风格对齐到 cube-pets-office 项目的技术方案。核心策略是通过 CSS 自定义属性令牌集 + CSS cascade layer + `data-theme` 属性作用域，实现渐进式视觉迁移，首个目标为 AutopilotRoutePage。
+本设计文档定义了将 MiroFish 极简视觉风格对齐到 whybuddy 项目的技术方案。核心策略是通过 CSS 自定义属性令牌集 + CSS cascade layer + `data-theme` 属性作用域，实现渐进式视觉迁移，首个目标为 AutopilotRoutePage。
 
 设计原则：
 - **渐进采用**：通过 CSS 变量层叠和作用域选择器，允许页面逐步迁移

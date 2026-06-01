@@ -4,7 +4,7 @@
  * 该测试覆盖需求 5.1 / 5.2 / 5.3 / 5.5：
  * - WHILE `job.stage === "spec_tree"` 时，无论 `job.status` 取 `running | reviewing
  *   | completed`，`useAutoAdvance` 的 effect 都不会调用 `generateBlueprintSpecDocuments`。
- * - 仅当用户点击 `timeline-confirm-advance` 触发 `forceAdvance()` 时，spec_tree
+ * - 仅当用户点击 StageViewport CTA 触发 `forceAdvance()` 时，spec_tree
  *   分支才调用 `generateBlueprintSpecDocuments`。
  * - 当 `stage === "spec_docs" && status === "completed"` 时，spec_tree 的“手动”
  *   契约不影响下游自动推进：effect 会调用 `generateBlueprintEffectPreview`。

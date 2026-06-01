@@ -15,11 +15,11 @@ import type {
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2MB for search HTML
 const USER_AGENT =
-  "Mozilla/5.0 (compatible; CubePetsOffice/1.0; +https://github.com/nicepkg/cube-pets-office)";
+  "Mozilla/5.0 (compatible; WhyBuddy/1.0; +https://github.com/nicepkg/whybuddy)";
 
 const FALLBACK_RESULTS: WebSearchResultItem[] = [
   {
-    title: "Cube Pets Office Web Search Mock Overview",
+    title: "WhyBuddy Web Search Mock Overview",
     url: "https://example.test/web-search/cube-overview",
     snippet:
       "Cube Web Search mock result describing how search output can feed web QA and static webpage reading nodes.",

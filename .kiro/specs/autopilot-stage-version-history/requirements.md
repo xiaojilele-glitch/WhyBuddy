@@ -2,7 +2,7 @@
 
 ## 简介
 
-本 spec 是 Cube Pets Office autopilot blueprint 流"返回 / 重新规划 / 内联编辑"生命周期 5 个 spec 系列中的**第四个**，负责把前三份 spec 留下来但未对用户暴露的 job 家族数据浮到 UI 层：版本树、parent / branch 切换、跨 job 比较、replan 时间线。
+本 spec 是 WhyBuddy autopilot blueprint 流"返回 / 重新规划 / 内联编辑"生命周期 5 个 spec 系列中的**第四个**，负责把前三份 spec 留下来但未对用户暴露的 job 家族数据浮到 UI 层：版本树、parent / branch 切换、跨 job 比较、replan 时间线。
 
 系列概览：
 

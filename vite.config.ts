@@ -151,8 +151,8 @@ function vitePluginManusDebugCollector(): Plugin {
 const plugins = [react(), tailwindcss(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
 
 export default defineConfig(() => {
-  const repository = process.env.GITHUB_REPOSITORY || "opencroc/cube-pets-office";
-  const repositoryName = repository.split("/")[1] || "cube-pets-office";
+  const repository = process.env.GITHUB_REPOSITORY || "opencroc/whybuddy";
+  const repositoryName = repository.split("/")[1] || "whybuddy";
   const repositoryUrl = `https://github.com/${repository}`;
   const isGitHubPagesBuild =
     process.env.GITHUB_PAGES === "true" ||

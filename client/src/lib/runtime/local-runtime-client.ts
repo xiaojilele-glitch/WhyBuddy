@@ -14,7 +14,7 @@ import type {
   WorkflowInfo,
 } from "./types";
 
-const STORAGE_KEY = "cube-pets-office.browser-runtime.v1";
+const STORAGE_KEY = "whybuddy.browser-runtime.v1";
 
 type WorkerRequestType =
   | "init"

@@ -23,6 +23,9 @@ import {
   createBlueprintRouter,
   createFileBlueprintJobStore,
   createMemoryBlueprintJobStore,
+  emitSpecTreeShapeAnalysis,
+  summarizeRouteSetShape,
+  summarizeSpecTreeShape,
   type BlueprintRouterDeps,
   type BlueprintJobStore,
 } from "../routes/blueprint.js";
@@ -6744,6 +6747,465 @@ describe("blueprint spec-tree LLM generation — e2e", () => {
       expect(rootNode).toBeTruthy();
       expect(rootNode.title).toMatch(/^SPEC asset tree: /);
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // reasoning-detail Wave 2（whybuddy-3d-real-role-driven-scene-2026-05-29 /
+  // 2026-05-31）：route_generation 与 spec_tree 各自第二轮 ReAct 的回归。
+  //
+  // 锁住四件事：
+  // 1) 非空数据 → 第二轮 thinking/acting/observing 全到位（事件级 e2e）；
+  // 2) acting.actionToolId 命中真实 toolId 标签；
+  // 3) observing.summary 携带真实聚合事实（route kind / complexity / cost
+  //    或 SPEC 树根分支数 / 最大深度）；
+  // 4) 空数据保护：路线集 0 / SPEC 树根分支 0 时不发 *.analyze 事件。
+  //
+  // 回归策略：
+  // - **summarizeRouteSetShape / summarizeSpecTreeShape** 从 route handler
+  //   抽出为纯函数后单测覆盖（点 1+3+4），不依赖 BUILD_TARGET=test 短路与
+  //   生成器 fallback 链路；
+  // - 仅保留一条 e2e happy-path（route_generation Wave 2）作为"事件确实
+  //   走到了 eventBus.emit"的最小集成证据，其它路径由纯函数测试守护。
+  // -------------------------------------------------------------------------
+
+  type CapturedEvent = {
+    type: string;
+    jobId: string;
+    payload?: Record<string, unknown>;
+  };
+
+  function captureRoleAgentEvents(
+    ctx: BlueprintServiceContext
+  ): {
+    events: CapturedEvent[];
+    forIteration(iter: number): CapturedEvent[];
+    findActing(toolId: string): CapturedEvent | undefined;
+    findObservingFor(toolId: string): CapturedEvent | undefined;
+  } {
+    const events: CapturedEvent[] = [];
+    ctx.eventBus.subscribe(event => {
+      if (typeof event.type === "string" && event.type.startsWith("role.agent.")) {
+        events.push({
+          type: event.type,
+          jobId: event.jobId,
+          payload: (event as { payload?: Record<string, unknown> }).payload,
+        });
+      }
+    });
+    return {
+      events,
+      forIteration(iter: number) {
+        return events.filter(e => e.payload?.iteration === iter);
+      },
+      findActing(toolId: string) {
+        return events.find(
+          e =>
+            e.type === "role.agent.acting" &&
+            e.payload?.actionToolId === toolId
+        );
+      },
+      findObservingFor(toolId: string) {
+        // 找紧随 acting(toolId) 之后的同 iteration observing
+        const actingIdx = events.findIndex(
+          e =>
+            e.type === "role.agent.acting" &&
+            e.payload?.actionToolId === toolId
+        );
+        if (actingIdx < 0) return undefined;
+        const iter = events[actingIdx].payload?.iteration;
+        for (let i = actingIdx + 1; i < events.length; i++) {
+          const e = events[i];
+          if (
+            e.type === "role.agent.observing" &&
+            e.payload?.iteration === iter
+          ) {
+            return e;
+          }
+        }
+        return undefined;
+      },
+    };
+  }
+
+  // ── 纯函数单测：summarizeRouteSetShape ────────────────────────────────
+
+  it("summarizeRouteSetShape returns null for empty route array (no synthetic event protection)", () => {
+    expect(summarizeRouteSetShape([])).toBeNull();
+  });
+
+  it("summarizeRouteSetShape aggregates kind / complexity / cost from real routes", () => {
+    const routes = [
+      {
+        id: "r1",
+        kind: "primary",
+        title: "Standard route",
+        summary: "",
+        rationale: "",
+        riskLevel: "medium",
+        costLevel: "medium",
+        complexity: "balanced",
+        estimatedEffort: "",
+        capabilities: [],
+        steps: [],
+        outputs: [],
+      },
+      {
+        id: "r2",
+        kind: "alternative",
+        title: "Quick route",
+        summary: "",
+        rationale: "",
+        riskLevel: "low",
+        costLevel: "low",
+        complexity: "light",
+        estimatedEffort: "",
+        capabilities: [],
+        steps: [],
+        outputs: [],
+      },
+      {
+        id: "r3",
+        kind: "alternative",
+        title: "Deep route",
+        summary: "",
+        rationale: "",
+        riskLevel: "high",
+        costLevel: "high",
+        complexity: "balanced",
+        estimatedEffort: "",
+        capabilities: [],
+        steps: [],
+        outputs: [],
+      },
+    ] as unknown as BlueprintRouteCandidate[];
+
+    const summary = summarizeRouteSetShape(routes);
+    expect(summary).not.toBeNull();
+    // 主路线 + cost 标签
+    expect(summary).toContain("主路线「Standard route」");
+    expect(summary).toContain("cost=medium");
+    // 备选数量
+    expect(summary).toContain("2 条备选");
+    // 复杂度分布按出现频次降序
+    expect(summary).toContain("balanced×2");
+    expect(summary).toContain("light×1");
+    // 不应包含 deep（数据里没有）
+    expect(summary).not.toContain("deep×");
+  });
+
+  // ── 纯函数单测：summarizeSpecTreeShape ────────────────────────────────
+
+  it("summarizeSpecTreeShape returns null when root has no children (no synthetic event protection)", () => {
+    const nodesRootOnly = [
+      {
+        id: "root",
+        title: "Root only",
+        summary: "",
+        type: "root",
+        status: "draft",
+        priority: 0,
+        dependencies: [],
+        outputs: [],
+        children: [],
+      },
+    ] as unknown as BlueprintSpecTreeNode[];
+    expect(summarizeSpecTreeShape("root", nodesRootOnly)).toBeNull();
+    // 整个 nodes 为空也返回 null
+    expect(summarizeSpecTreeShape("root", [])).toBeNull();
+  });
+
+  it("summarizeSpecTreeShape reports real branch count + titles + max depth", () => {
+    // root → a, b, c; b → b1; b1 → b1a (深度 = 3)
+    const nodes = [
+      {
+        id: "root",
+        title: "Root",
+        summary: "",
+        type: "root",
+        status: "draft",
+        priority: 0,
+        dependencies: [],
+        outputs: [],
+        children: ["a", "b", "c"],
+      },
+      {
+        id: "a",
+        parentId: "root",
+        title: "Branch A",
+        summary: "",
+        type: "route_step",
+        status: "seed",
+        priority: 1,
+        dependencies: [],
+        outputs: [],
+        children: [],
+      },
+      {
+        id: "b",
+        parentId: "root",
+        title: "Branch B",
+        summary: "",
+        type: "route_step",
+        status: "seed",
+        priority: 2,
+        dependencies: [],
+        outputs: [],
+        children: ["b1"],
+      },
+      {
+        id: "c",
+        parentId: "root",
+        title: "Branch C",
+        summary: "",
+        type: "spec_document",
+        status: "seed",
+        priority: 3,
+        dependencies: [],
+        outputs: [],
+        children: [],
+      },
+      {
+        id: "b1",
+        parentId: "b",
+        title: "B grandchild",
+        summary: "",
+        type: "route_step",
+        status: "seed",
+        priority: 4,
+        dependencies: [],
+        outputs: [],
+        children: ["b1a"],
+      },
+      {
+        id: "b1a",
+        parentId: "b1",
+        title: "B great-grandchild",
+        summary: "",
+        type: "route_step",
+        status: "seed",
+        priority: 5,
+        dependencies: [],
+        outputs: [],
+        children: [],
+      },
+    ] as unknown as BlueprintSpecTreeNode[];
+
+    const summary = summarizeSpecTreeShape("root", nodes);
+    expect(summary).not.toBeNull();
+    expect(summary).toContain("根节点下 3 条主分支");
+    expect(summary).toContain("Branch A");
+    expect(summary).toContain("Branch B");
+    expect(summary).toContain("Branch C");
+    // root=0, a=1, b=1, c=1, b1=2, b1a=3 → 最大深度 3
+    expect(summary).toContain("最大深度 3 层");
+  });
+
+  it("summarizeSpecTreeShape collapses overflow when root has > 6 branches", () => {
+    const branches = Array.from({ length: 8 }, (_, i) => ({
+      id: `b${i}`,
+      parentId: "root",
+      title: `Branch ${i}`,
+      summary: "",
+      type: "route_step",
+      status: "seed",
+      priority: i,
+      dependencies: [],
+      outputs: [],
+      children: [],
+    }));
+    const nodes = [
+      {
+        id: "root",
+        title: "Root",
+        summary: "",
+        type: "root",
+        status: "draft",
+        priority: 0,
+        dependencies: [],
+        outputs: [],
+        children: branches.map(b => b.id),
+      },
+      ...branches,
+    ] as unknown as BlueprintSpecTreeNode[];
+
+    const summary = summarizeSpecTreeShape("root", nodes);
+    expect(summary).toContain("根节点下 8 条主分支");
+    expect(summary).toContain("（共 8 条分支）");
+    // 仅显示前 6 个标题
+    expect(summary).toContain("Branch 0");
+    expect(summary).toContain("Branch 5");
+    expect(summary).not.toContain("Branch 6");
+  });
+
+  it("emitSpecTreeShapeAnalysis emits the second-iteration spec_tree analyze chain", () => {
+    const nodes = [
+      {
+        id: "root",
+        title: "Root",
+        summary: "",
+        type: "root",
+        status: "draft",
+        priority: 0,
+        dependencies: [],
+        outputs: [],
+        children: ["a", "b"],
+      },
+      {
+        id: "a",
+        parentId: "root",
+        title: "Branch A",
+        summary: "",
+        type: "route_step",
+        status: "seed",
+        priority: 1,
+        dependencies: [],
+        outputs: [],
+        children: ["a1"],
+      },
+      {
+        id: "b",
+        parentId: "root",
+        title: "Branch B",
+        summary: "",
+        type: "spec_document",
+        status: "seed",
+        priority: 2,
+        dependencies: [],
+        outputs: [],
+        children: [],
+      },
+      {
+        id: "a1",
+        parentId: "a",
+        title: "A child",
+        summary: "",
+        type: "spec_document",
+        status: "seed",
+        priority: 3,
+        dependencies: [],
+        outputs: [],
+        children: [],
+      },
+    ] as unknown as BlueprintSpecTreeNode[];
+    const expectedSummary = summarizeSpecTreeShape("root", nodes);
+    expect(expectedSummary).not.toBeNull();
+
+    const calls: Array<{ type: string; args: unknown[] }> = [];
+    const emitter = {
+      nextIteration: vi.fn(() => calls.push({ type: "nextIteration", args: [] })),
+      thinking: vi.fn((thought: string) =>
+        calls.push({ type: "thinking", args: [thought] })
+      ),
+      acting: vi.fn((toolId: string) =>
+        calls.push({ type: "acting", args: [toolId] })
+      ),
+      observing: vi.fn((success: boolean, summary: string) =>
+        calls.push({ type: "observing", args: [success, summary] })
+      ),
+    };
+
+    const emitted = emitSpecTreeShapeAnalysis(emitter, "root", nodes);
+
+    expect(emitted).toBe(true);
+    expect(emitter.nextIteration).toHaveBeenCalledTimes(1);
+    expect(emitter.thinking).toHaveBeenCalledWith(expect.any(String));
+    expect(emitter.acting).toHaveBeenCalledWith("blueprint.spec_tree.analyze");
+    expect(emitter.observing).toHaveBeenCalledWith(true, expectedSummary);
+    expect(calls.map(call => call.type)).toEqual([
+      "nextIteration",
+      "thinking",
+      "acting",
+      "observing",
+    ]);
+  });
+
+  it("emitSpecTreeShapeAnalysis skips analyze events when root has no branches", () => {
+    const nodesRootOnly = [
+      {
+        id: "root",
+        title: "Root only",
+        summary: "",
+        type: "root",
+        status: "draft",
+        priority: 0,
+        dependencies: [],
+        outputs: [],
+        children: [],
+      },
+    ] as unknown as BlueprintSpecTreeNode[];
+    const emitter = {
+      nextIteration: vi.fn(),
+      thinking: vi.fn(),
+      acting: vi.fn(),
+      observing: vi.fn(),
+    };
+
+    const emitted = emitSpecTreeShapeAnalysis(emitter, "root", nodesRootOnly);
+
+    expect(emitted).toBe(false);
+    expect(emitter.nextIteration).not.toHaveBeenCalled();
+    expect(emitter.thinking).not.toHaveBeenCalled();
+    expect(emitter.acting).not.toHaveBeenCalled();
+    expect(emitter.observing).not.toHaveBeenCalled();
+  });
+
+  // ── e2e happy-path：route_generation Wave 2 真的发到 eventBus 上 ─────
+
+  it("route_generation Wave 2 emits second-iteration ReAct events to the real event bus", async () => {
+    vi.stubEnv("LLM_API_KEY", "sk-test-route-wave2-key");
+    vi.stubEnv("LLM_MODEL", "gpt-4-turbo");
+
+    // RouteSet LLM 走 fallback（templated 路线），路线集仍为非空，足以触发第二轮分析。
+    llmMocks.callLLMJson.mockResolvedValue(undefined);
+
+    const ctx = buildBlueprintServiceContext({
+      jobStore: createMemoryBlueprintJobStore(),
+      now: () => new Date("2026-05-31T00:00:00.000Z"),
+    });
+    const captured = captureRoleAgentEvents(ctx);
+
+    await withServerAndCtx(specsRoot, ctx, async baseUrl => {
+      const createResponse = await fetch(`${baseUrl}/api/blueprint/jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetText: "Plan a release dashboard.",
+          githubUrls: ["https://github.com/example/route-wave2"],
+        }),
+      });
+      expect(createResponse.status).toBe(201);
+      const created = (await createResponse.json()) as {
+        routeSet: { routes: Array<Record<string, unknown>> };
+      };
+      // sanity：fallback templated routes 也应非空
+      expect(created.routeSet.routes.length).toBeGreaterThan(0);
+    });
+
+    // 1) 第二轮存在 thinking / acting / observing
+    const iter2 = captured.forIteration(2);
+    expect(iter2.some(e => e.type === "role.agent.thinking")).toBe(true);
+    expect(iter2.some(e => e.type === "role.agent.acting")).toBe(true);
+    expect(iter2.some(e => e.type === "role.agent.observing")).toBe(true);
+
+    // 2) acting.actionToolId === "blueprint.route_set.analyze"
+    const acting = captured.findActing("blueprint.route_set.analyze");
+    expect(acting).toBeDefined();
+    expect(acting?.payload?.iteration).toBe(2);
+
+    // 3) observing.summary 携带 kind / complexity / cost 聚合事实
+    const observing = captured.findObservingFor("blueprint.route_set.analyze");
+    expect(observing).toBeDefined();
+    const summary = String(observing?.payload?.observationSummary ?? "");
+    expect(summary).toContain("路线集形态");
+    expect(summary).toMatch(/cost=/);
+    expect(summary).toMatch(/balanced|light|deep/);
+
+    // 4) 第一轮 NOT-发 role.agent.completed（completed 只在阶段终态发一次）
+    const completedEvents = captured.events.filter(
+      e => e.type === "role.agent.completed"
+    );
+    expect(completedEvents.length).toBe(1);
+    expect(completedEvents[0].payload?.iteration).toBe(2);
   });
 });
 

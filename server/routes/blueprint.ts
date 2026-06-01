@@ -37,7 +37,10 @@ import { fetchRepoContext } from "./blueprint/repo-context-fetcher.js";
 // 通过工厂注入既有 `extractSpecDocuments` + `jobStore.get` 拼装出
 // `getJob` / `listSpecDocuments` deps，永不引入 store 副作用。
 import { buildSpecExportArchive } from "./blueprint/spec-documents/export/spec-documents-export-archive.js";
-import { createStageProgressEmitter } from "./blueprint/stage-progress-emitter.js";
+import {
+  createStageProgressEmitter,
+  type StageProgressEmitter,
+} from "./blueprint/stage-progress-emitter.js";
 import { createSpecDocsProgressEmitter } from "./blueprint/spec-docs-progress-emitter.js";
 import { assembleSpecDocumentsFromLlmCache } from "./blueprint/assemble-spec-documents-from-llm-cache.js";
 import {
@@ -898,6 +901,7 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
         }
       }
 
+      // 第一轮：发起规划。承接 thinking → acting → observing(LLM 返回) → completed。
       routeEmitter?.thinking("正在基于仓库分析和澄清答案，规划候选路线...");
       routeEmitter?.acting("llm.route_generation");
 
@@ -914,8 +918,36 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
         locale: requestLocale,
       });
 
-      routeEmitter?.observing(true, `路线规划完成：生成了 ${result.routeSet?.routes?.length ?? 0} 条候选路线`);
-      routeEmitter?.completed("路线规划完成");
+      const generatedRoutes = result.routeSet?.routes ?? [];
+      // 真实路线名（不造数）：把候选路线标题折成可读列表，让观察行携带
+      // "生成了 N 条候选路线：主路线 / 保守路线 / ..." 而不是只报一个总数。
+      const routeTitles = generatedRoutes
+        .map(route => route.title)
+        .filter((title): title is string => typeof title === "string" && title.length > 0);
+      const routeTitleSummary =
+        routeTitles.length > 0 ? `：${routeTitles.join(" / ")}` : "";
+      routeEmitter?.observing(
+        true,
+        `路线规划完成：生成了 ${generatedRoutes.length} 条候选路线${routeTitleSummary}`,
+      );
+
+      // 第二轮：分析候选路线形态。reasoning-detail 2026-05-31 增量 —— 让用户在
+      // "规划完成"之后看到一段真实的"对路线集做评估"步骤，而不是直接 completed。
+      // 这一轮的事实来自 generatedRoutes 自身（kind / complexity / costLevel），
+      // 完全不造步骤、不造数据；如果路线集为空则跳过该轮，避免出现"空规划评估"。
+      const routeShapeSummary = summarizeRouteSetShape(generatedRoutes);
+      if (routeShapeSummary !== null) {
+        routeEmitter?.nextIteration();
+        routeEmitter?.thinking(
+          "正在评估候选路线的复杂度与成本分布，标记主路线和备选路线...",
+        );
+        routeEmitter?.acting("blueprint.route_set.analyze");
+        routeEmitter?.observing(true, routeShapeSummary);
+      }
+
+      routeEmitter?.completed(
+        `路线规划完成，共 ${generatedRoutes.length} 条候选路线`,
+      );
 
       res.status(201).json(result);
     } catch (error) {
@@ -11897,6 +11929,118 @@ function evaluateCapabilitySafetyGate(
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// reasoning-detail Wave 2（whybuddy-3d-real-role-driven-scene-2026-05-29 /
+// 2026-05-31）：route_generation 与 spec_tree 第二轮 ReAct 的"形态摘要"
+// 纯函数。提取出来便于单测直接锁住空数据保护与真实事实聚合，不依赖整个
+// route handler / LLM mock / 全局环境旗标，避免事件级回归被 BUILD_TARGET=test
+// 等全局短路屏蔽。
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * 把一个候选路线集（已过滤）折成"路线集形态"摘要。
+ *
+ * - 输入为空数组时返回 `null`，调用方据此**不发**第二轮 analyze 事件，
+ *   避免出现"空规划评估"假事件；
+ * - 非空时返回类似 `路线集形态：主路线「X」（balanced · cost=medium）；2 条备选；
+ *   复杂度分布 balanced×2 · light×1` 的字符串，事实直接来自
+ *   `routes[].kind / complexity / costLevel`，不造数。
+ */
+export function summarizeRouteSetShape(
+  routes: ReadonlyArray<BlueprintRouteCandidate>,
+): string | null {
+  if (!Array.isArray(routes) || routes.length === 0) return null;
+
+  const primaryRoute = routes.find(r => r.kind === "primary");
+  const alternativeCount = routes.filter(r => r.kind === "alternative").length;
+  const complexityCounts = new Map<string, number>();
+  for (const route of routes) {
+    const key =
+      typeof route.complexity === "string" ? route.complexity : "unknown";
+    complexityCounts.set(key, (complexityCounts.get(key) ?? 0) + 1);
+  }
+  const complexityBreakdown = Array.from(complexityCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([level, count]) => `${level}×${count}`)
+    .join(" · ");
+  const primarySummary = primaryRoute
+    ? `主路线「${primaryRoute.title}」（${primaryRoute.complexity ?? "unknown"} · cost=${primaryRoute.costLevel ?? "unknown"}）`
+    : "未识别到主路线";
+  return `路线集形态：${primarySummary}；${alternativeCount} 条备选；复杂度分布 ${complexityBreakdown || "n/a"}`;
+}
+
+/**
+ * 把一棵已派生的 SPEC 树折成"形态摘要"。
+ *
+ * - 通过 `parentId === rootNodeId` 找出根节点直接分支；空时返回 `null`，
+ *   调用方据此**不发**第二轮 analyze 事件；
+ * - 非空时返回类似 `SPEC 树形态：根节点下 3 条主分支：A / B / C；最大深度 1 层`，
+ *   事实直接来自 `nodes[].parentId / title`，深度通过 BFS-like 单遍传播算出，
+ *   不造数。
+ */
+export function summarizeSpecTreeShape(
+  rootNodeId: string,
+  nodes: ReadonlyArray<BlueprintSpecTreeNode>,
+): string | null {
+  if (!Array.isArray(nodes) || nodes.length === 0) return null;
+  const rootChildren = nodes.filter(node => node.parentId === rootNodeId);
+  if (rootChildren.length === 0) return null;
+
+  // 计算最大树深（root=0，逐层递增）。N 通常 ≤ 几十；spec_tree 派生是低频事件。
+  const depthByNode = new Map<string, number>();
+  depthByNode.set(rootNodeId, 0);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const node of nodes) {
+      if (depthByNode.has(node.id)) continue;
+      if (!node.parentId) continue;
+      const parentDepth = depthByNode.get(node.parentId);
+      if (parentDepth !== undefined) {
+        depthByNode.set(node.id, parentDepth + 1);
+        changed = true;
+      }
+    }
+  }
+  const maxDepth = Array.from(depthByNode.values()).reduce(
+    (max, depth) => (depth > max ? depth : max),
+    0,
+  );
+
+  const branchSummary = rootChildren
+    .slice(0, 6)
+    .map(child => child.title)
+    .filter(
+      (title): title is string => typeof title === "string" && title.length > 0,
+    )
+    .join(" / ");
+  const overflow =
+    rootChildren.length > 6 ? `（共 ${rootChildren.length} 条分支）` : "";
+  return `SPEC 树形态：根节点下 ${rootChildren.length} 条主分支${overflow}：${branchSummary || "n/a"}；最大深度 ${maxDepth} 层`;
+}
+
+type ShapeAnalysisEmitter = Pick<
+  StageProgressEmitter,
+  "nextIteration" | "thinking" | "acting" | "observing"
+>;
+
+export function emitSpecTreeShapeAnalysis(
+  emitter: ShapeAnalysisEmitter | undefined,
+  rootNodeId: string,
+  nodes: ReadonlyArray<BlueprintSpecTreeNode>,
+): boolean {
+  const summary = summarizeSpecTreeShape(rootNodeId, nodes);
+  if (summary === null || !emitter) return false;
+
+  emitter.nextIteration();
+  emitter.thinking(
+    `正在分析派生出的 SPEC 树结构（共 ${nodes.length} 个节点），统计根节点分支与最大深度...`,
+  );
+  emitter.acting("blueprint.spec_tree.analyze");
+  emitter.observing(true, summary);
+  return true;
+}
+
 export function buildCapabilityOutputSummary(input: {
   capability: BlueprintRuntimeCapability;
   routeTitle?: string;
@@ -14952,7 +15096,9 @@ async function buildSpecTreeFromRouteSet(
       ? createStageProgressEmitter(ctx.eventBus, input.job.id, "spec_tree", "planner")
       : undefined;
 
-    specTreeEmitter?.thinking("路线已选中，正在分析路线节点结构以派生 SPEC 树...");
+    specTreeEmitter?.thinking(
+      `路线「${input.selectedRoute.title}」已选中，正在分析路线节点结构以派生 SPEC 树...`,
+    );
     specTreeEmitter?.acting("llm.spec_tree_derivation");
 
     const derivationResult = await specTreeLlmDerivation.derive({
@@ -14966,11 +15112,34 @@ async function buildSpecTreeFromRouteSet(
       derivationResult.generationSource === "llm" &&
       derivationResult.tree !== undefined
     ) {
+      const derivedNodes = derivationResult.tree.nodes;
+      // 真实节点类型分布（不造数）：把 type → 数量折成 "route_step×4 · spec_document×26"
+      // 这种可读摘要，让观察行携带 SPEC 树的真实构成而不是只报一个总数。
+      const typeCounts = new Map<string, number>();
+      for (const node of derivedNodes) {
+        typeCounts.set(node.type, (typeCounts.get(node.type) ?? 0) + 1);
+      }
+      const typeBreakdown = Array.from(typeCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([type, count]) => `${type}×${count}`)
+        .join(" · ");
       specTreeEmitter?.observing(
         true,
-        `SPEC 树派生完成：${derivationResult.tree.nodes.length} 个节点（model=${derivationResult.model ?? "n/a"}）`,
+        `SPEC 树派生完成：${derivedNodes.length} 个节点（${typeBreakdown}；model=${derivationResult.model ?? "n/a"}）`,
       );
-      specTreeEmitter?.completed("SPEC 树派生完成");
+
+      // 第二轮：分析派生出来的 SPEC 树形态。reasoning-detail 2026-05-31 增量 ——
+      // 让用户在"派生完成"之后看到一段真实的"对树做结构分析"步骤。事实来自
+      // derivedTree 自身（rootNodeId 的直接子节点 + 树深度），不造步骤、不造数据。
+      emitSpecTreeShapeAnalysis(
+        specTreeEmitter,
+        derivationResult.tree.rootNodeId,
+        derivedNodes,
+      );
+
+      specTreeEmitter?.completed(
+        `SPEC 树派生完成，共 ${derivedNodes.length} 个节点`,
+      );
 
       // 成功路径：使用 LLM 推导的 nodes / rootNodeId 与 provenance 摘要，
       // 但保留外层 wrapper 的 selectionId / specTreeId / artifactLinks /

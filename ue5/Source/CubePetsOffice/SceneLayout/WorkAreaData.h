@@ -1,4 +1,4 @@
-// Copyright Cube Pets Office. All Rights Reserved.
+// Copyright WhyBuddy. All Rights Reserved.
 //
 // Work Area Data — UE5-compatible constants for the 4 pod work areas + CEO desk.
 // All values are in centimeters (cm) using UE5 Z-up coordinate system.

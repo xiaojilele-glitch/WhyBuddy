@@ -45,7 +45,7 @@ export interface WebSearchNodeAdapterDeps {
 
 const DEFAULT_WEB_SEARCH_RESULTS: WebSearchResultItem[] = [
   {
-    title: "Cube Pets Office Web Search Mock Overview",
+    title: "WhyBuddy Web Search Mock Overview",
     url: "https://example.test/web-search/cube-overview",
     snippet:
       "Cube Web Search mock result describing how search output can feed web QA and static webpage reading nodes.",

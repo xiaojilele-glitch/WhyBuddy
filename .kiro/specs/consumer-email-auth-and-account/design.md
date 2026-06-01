@@ -2,7 +2,7 @@
 
 ## 设计概述
 
-本 spec 建立 ToC 邮箱账号体系，作为 Project-first 个人工作台的身份底座。设计上参考 `web-main/backend` 的认证闭环、当前用户恢复接口、httpOnly cookie、`authenticate` 中间件和 `req.user` 注入；但 cube-pets-office 第一阶段采用 MySQL-backed opaque session，不把 JWT/header token 作为主要登录态，并去掉租户、部门、岗位、用户组和完整 RBAC。
+本 spec 建立 ToC 邮箱账号体系，作为 Project-first 个人工作台的身份底座。设计上参考 `web-main/backend` 的认证闭环、当前用户恢复接口、httpOnly cookie、`authenticate` 中间件和 `req.user` 注入；但 whybuddy 第一阶段采用 MySQL-backed opaque session，不把 JWT/header token 作为主要登录态，并去掉租户、部门、岗位、用户组和完整 RBAC。
 
 ## 认证模型
 

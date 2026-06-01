@@ -2,16 +2,16 @@
 
 ## 目标
 
-这份约定用于支撑 `cube-pets-office` 在多 `git worktree` 并行开发时，稳定参考 `openclaw-feishu-progress` 的已有实现，同时避免：
+这份约定用于支撑 `whybuddy` 在多 `git worktree` 并行开发时，稳定参考 `openclaw-feishu-progress` 的已有实现，同时避免：
 
 - 多个 worktree 同时争抢同一批目标文件
-- `cube-pets-office` 对兄弟仓库形成运行时依赖
+- `whybuddy` 对兄弟仓库形成运行时依赖
 - 迁移过程中把“参考代码”误当成“可直接复用的线上依赖”
 - 在并行阶段过早改动 `server/index.ts`、README、环境变量文档等高冲突文件
 
 本轮核心原则只有一句话：
 
-`openclaw-feishu-progress` 只作为“读源仓库”，`cube-pets-office` 才是“唯一落地仓库”。
+`openclaw-feishu-progress` 只作为“读源仓库”，`whybuddy` 才是“唯一落地仓库”。
 
 实际创建命令与开工检查项见 `docs/mission-worktree-bootstrap.md`。
 
@@ -19,7 +19,7 @@
 
 ### 目标仓库
 
-- 仓库：`C:\Users\wangchunji\Documents\cube-pets-office`
+- 仓库：`C:\Users\wangchunji\Documents\whybuddy`
 - 角色：唯一主控 Brain、唯一提交目标、唯一最终运行仓库
 - 本轮所有 mission / executor / feishu / tasks universe 的产出都必须落在这里
 
@@ -27,15 +27,15 @@
 
 - 仓库：`C:\Users\wangchunji\Documents\openclaw-feishu-progress`
 - 角色：桥接层、任务状态机、任务宇宙 UI、执行协调思想的参考源
-- 默认只读，不参与本轮 `cube-pets-office` 的业务提交
+- 默认只读，不参与本轮 `whybuddy` 的业务提交
 
 ## 路径约定
 
 建议所有新 worktree 都与两个主仓库并列放在 `C:\Users\wangchunji\Documents\` 下，例如：
 
-- `C:\Users\wangchunji\Documents\cube-pets-office-0-mission-contracts`
-- `C:\Users\wangchunji\Documents\cube-pets-office-A-mission-core`
-- `C:\Users\wangchunji\Documents\cube-pets-office-B-lobster-executor`
+- `C:\Users\wangchunji\Documents\whybuddy-0-mission-contracts`
+- `C:\Users\wangchunji\Documents\whybuddy-A-mission-core`
+- `C:\Users\wangchunji\Documents\whybuddy-B-lobster-executor`
 
 推荐编号映射：
 
@@ -47,7 +47,7 @@
 - `E` = tasks universe
 - `F` = mission integration
 
-这样从任何一个 `cube-pets-office-*` worktree 出发，都能用固定兄弟路径访问参考仓库：
+这样从任何一个 `whybuddy-*` worktree 出发，都能用固定兄弟路径访问参考仓库：
 
 ```powershell
 ..\openclaw-feishu-progress
@@ -55,8 +55,8 @@
 
 ## 总体铁律
 
-- 只在 `cube-pets-office` 的主仓或其 worktree 中提交代码；`openclaw-feishu-progress` 默认不提交任何改动。
-- 禁止在 `cube-pets-office` 代码中出现对 `..\openclaw-feishu-progress\**` 的运行时 `import`、动态加载、符号链接或包链接。
+- 只在 `whybuddy` 的主仓或其 worktree 中提交代码；`openclaw-feishu-progress` 默认不提交任何改动。
+- 禁止在 `whybuddy` 代码中出现对 `..\openclaw-feishu-progress\**` 的运行时 `import`、动态加载、符号链接或包链接。
 - 禁止把 `openclaw-feishu-progress` 当成本地 workspace 依赖写进 `package.json`、`tsconfig` path alias 或构建脚本。
 - 允许“参考 + 迁移 + 改写”，不允许“跨仓运行时耦合”。
 - 所有共享 mission 契约只允许 `Worktree 0` 改；其余 worktree 如果发现契约不够用，先回推到 `Worktree 0` 补契约，再继续实现。
@@ -79,12 +79,12 @@ git -C ..\openclaw-feishu-progress rev-parse HEAD
 ### 可以做的事
 
 - 读取 `openclaw-feishu-progress` 源码、测试、接口命名、状态流转、UI 组织方式
-- 把核心类型、状态机、路由结构、UI 交互改写后落回 `cube-pets-office`
-- 参考它的测试案例，为 `cube-pets-office` 新能力补测试
+- 把核心类型、状态机、路由结构、UI 交互改写后落回 `whybuddy`
+- 参考它的测试案例，为 `whybuddy` 新能力补测试
 
 ### 不应该做的事
 
-- 直接复制整仓目录到 `cube-pets-office`
+- 直接复制整仓目录到 `whybuddy`
 - 直接把 Fastify / raw WebSocket 方案原封不动搬入 Cube
 - 为了省事在 Cube 中写跨仓相对路径 import
 - 在多个 worktree 里同时改同一批 `shared/mission/**` 契约
@@ -324,4 +324,4 @@ git -C ..\openclaw-feishu-progress rev-parse HEAD
 
 ## 最后一条原则
 
-如果某段逻辑在 `openclaw-feishu-progress` 里“能跑”，但和 `cube-pets-office` 当前的 Express、Socket.IO、3D 页面结构、动态组织主线不一致，那么优先“适配 Cube”，而不是“保留 OpenClaw 原样”。
+如果某段逻辑在 `openclaw-feishu-progress` 里“能跑”，但和 `whybuddy` 当前的 Express、Socket.IO、3D 页面结构、动态组织主线不一致，那么优先“适配 Cube”，而不是“保留 OpenClaw 原样”。

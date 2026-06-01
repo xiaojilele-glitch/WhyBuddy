@@ -198,6 +198,13 @@ export const MiroFishCardStream: FC<MiroFishCardStreamProps> = ({
   const capabilityStatuses = useBlueprintRealtimeStore(
     s => s.capabilityStatuses
   );
+  const scopedAgentReasoning = useMemo(
+    () =>
+      job?.id
+        ? agentReasoning.filter(entry => entry.jobId === job.id)
+        : agentReasoning,
+    [agentReasoning, job?.id]
+  );
 
   // 从 latestJob.artifacts 派生 routeSet / routeSelection / specTree / artifacts
   const routeSelection = useMemo(
@@ -228,7 +235,7 @@ export const MiroFishCardStream: FC<MiroFishCardStreamProps> = ({
   const allEntries = useMemo(
     () =>
       deriveMiroFishStreamEntries({
-        agentReasoning,
+        agentReasoning: scopedAgentReasoning,
         capabilityStatuses,
         artifacts,
         routeSelection,
@@ -237,7 +244,7 @@ export const MiroFishCardStream: FC<MiroFishCardStreamProps> = ({
         specDocumentTreeStats,
       }),
     [
-      agentReasoning,
+      scopedAgentReasoning,
       capabilityStatuses,
       artifacts,
       routeSelection,

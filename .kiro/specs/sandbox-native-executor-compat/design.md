@@ -2,7 +2,7 @@
 
 ## Overview
 
-This archive spec captures the current runtime matrix for Cube Pets Office after the
+This archive spec captures the current runtime matrix for WhyBuddy after the
 sandbox-native executor work and the local `dev:all` fallback refinements.
 
 The implementation now has three clearly different environment paths:

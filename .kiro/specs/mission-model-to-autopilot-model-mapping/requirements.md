@@ -2,7 +2,7 @@
 
 ## 目标
 
-为 Cube Pets Office 当前已经存在的 `Mission / Workflow / Runtime State / Decision-HITL` 体系，定义一层面向“任务自动驾驶”产品叙事的上层映射模型，使系统可以在不破坏现有工程主干的前提下，对外表达为：
+为 WhyBuddy 当前已经存在的 `Mission / Workflow / Runtime State / Decision-HITL` 体系，定义一层面向“任务自动驾驶”产品叙事的上层映射模型，使系统可以在不破坏现有工程主干的前提下，对外表达为：
 
 - 用户输入的是“目的地”而不是单次 prompt
 - 系统生成的是“路线”而不是仅供工程使用的工作流定义

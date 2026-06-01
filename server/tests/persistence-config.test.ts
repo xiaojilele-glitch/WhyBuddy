@@ -11,7 +11,7 @@ describe("persistence config", () => {
       DATABASE_PROVIDER: "mysql",
       DB_HOST: "db.local",
       DB_PORT: "3307",
-      DB_NAME: "cube_pets_office",
+      DB_NAME: "whybuddy",
       DB_USER: "cube_user",
       DB_PASSWORD: "db-secret",
       DB_POOL_CONNECTION_LIMIT: "12",
@@ -32,7 +32,7 @@ describe("persistence config", () => {
     expect(config.database.provider).toBe("mysql");
     expect(config.database.mysql.host).toBe("db.local");
     expect(config.database.mysql.port).toBe(3307);
-    expect(config.database.mysql.database).toBe("cube_pets_office");
+    expect(config.database.mysql.database).toBe("whybuddy");
     expect(config.database.mysql.pool.connectionLimit).toBe(12);
     expect(config.session.cookieName).toBe("cube_session");
     expect(config.session.ttlDays).toBe(45);

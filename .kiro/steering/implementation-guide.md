@@ -17,7 +17,7 @@ inclusion: auto
 
 # 模块实现指南
 
-从 rbac-system-pc 的 90 个 AIGC 模块批量实现经验中提炼的方法论，适配 cube-pets-office 当前“主线已落地、以增量补完 spec 为主”的实现阶段。
+从 rbac-system-pc 的 90 个 AIGC 模块批量实现经验中提炼的方法论，适配 whybuddy 当前“主线已落地、以增量补完 spec 为主”的实现阶段。
 
 ## 一、实现前检查清单（每个模块必须执行）
 
@@ -62,7 +62,7 @@ inclusion: auto
 
 ## 三、共享能力注册制（从 rbac-system-pc 迁移的模式）
 
-cube-pets-office 中以下能力采用注册制，新模块只需注册独有配置：
+whybuddy 中以下能力采用注册制，新模块只需注册独有配置：
 
 ### 工作流阶段注册
 ```typescript

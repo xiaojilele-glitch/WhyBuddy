@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档指导如何将 Kenney Furniture Kit 的 GLTF/GLB 模型转换并导入 UE5 项目，用于重建 Cube Pets Office 办公室场景。Three.js 版本使用 GLB 格式直接加载模型，而 UE5 推荐使用 FBX 格式导入静态网格体。
+本文档指导如何将 Kenney Furniture Kit 的 GLTF/GLB 模型转换并导入 UE5 项目，用于重建 WhyBuddy 办公室场景。Three.js 版本使用 GLB 格式直接加载模型，而 UE5 推荐使用 FBX 格式导入静态网格体。
 
 ---
 

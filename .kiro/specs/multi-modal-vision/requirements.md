@@ -2,7 +2,7 @@
 
 ## 简介
 
-为 Cube Pets Office 平台的 Agent 增加视觉理解能力。Agent 能够接收图片（jpg/png/webp）和截图作为附件输入，通过 Vision LLM 进行视觉分析，并将分析结果注入工作流上下文，使 Agent 在回复中能够准确引用图片内容。同时在 3D 场景中展示"正在看图"状态动画，支持多图同时上传与分析，并在主模型不支持 Vision 时自动 fallback 到专用 Vision 模型。
+为 WhyBuddy 平台的 Agent 增加视觉理解能力。Agent 能够接收图片（jpg/png/webp）和截图作为附件输入，通过 Vision LLM 进行视觉分析，并将分析结果注入工作流上下文，使 Agent 在回复中能够准确引用图片内容。同时在 3D 场景中展示"正在看图"状态动画，支持多图同时上传与分析，并在主模型不支持 Vision 时自动 fallback 到专用 Vision 模型。
 
 ## 术语表
 

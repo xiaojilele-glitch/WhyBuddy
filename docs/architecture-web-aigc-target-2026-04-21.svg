@@ -6,9 +6,9 @@
   role="img"
   aria-labelledby="title desc"
 >
-  <title id="title">Cube Pets Office Web-AIGC 目标态架构图</title>
+  <title id="title">WhyBuddy Web-AIGC 目标态架构图</title>
   <desc id="desc">
-    这是基于 2026-04-21 版本 Cube Pets Office 与 web-aigc 58 个迁移 spec
+    这是基于 2026-04-21 版本 WhyBuddy 与 web-aigc 58 个迁移 spec
     全部执行完成后的目标态架构推演图。图中展示统一入口与工作台、图设计控制面、
     图运行控制面、52 节点能力层、Cube 原有智能与治理底座，以及执行与外部互联层
     之间的协作关系。
@@ -82,7 +82,7 @@
 
   <rect x="0" y="0" width="1440" height="1220" fill="url(#bg)" />
 
-  <text class="ttl" x="720" y="40" text-anchor="middle">Cube Pets Office x Web-AIGC 目标态架构图</text>
+  <text class="ttl" x="720" y="40" text-anchor="middle">WhyBuddy x Web-AIGC 目标态架构图</text>
   <text class="subttl" x="720" y="62" text-anchor="middle">
     推演日期：2026-04-21 · 假设 58 个迁移 spec 已全部完成并进入稳定运行阶段
   </text>
@@ -90,7 +90,7 @@
   <!-- 顶部说明 -->
   <rect x="40" y="84" width="1360" height="58" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="0.8" />
   <text class="ts" x="64" y="108" fill="#334155">
-    目标态判断：Cube Pets Office 不再只是 mission-first 办公壳，而是升级为“可设计、可发布、可观测、可回放、可治理”的 AI Agent 图编排平台。
+    目标态判断：WhyBuddy 不再只是 mission-first 办公壳，而是升级为“可设计、可发布、可观测、可回放、可治理”的 AI Agent 图编排平台。
   </text>
   <text class="sm" x="64" y="128" fill="#64748b">
     58 个 spec 的最终产物被收敛为 6 个平台层级：统一入口与工作台、图设计控制面、图运行控制面、52 节点能力层、智能与治理底座、执行与外部互联层。
@@ -378,7 +378,7 @@
   <rect x="40" y="1114" width="1360" height="74" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="0.7" />
   <text class="th" x="120" y="1140" fill="#0f172a">推演结论</text>
   <text class="ts" x="160" y="1140" fill="#334155">
-    如果这 58 个 spec 都执行完，`cube-pets-office` 的架构图会从“任务型 AI 办公产品”进化为“任务产品壳 + 图编排平台内核 + 节点能力市场 + 可观测治理体系”。
+    如果这 58 个 spec 都执行完，`whybuddy` 的架构图会从“任务型 AI 办公产品”进化为“任务产品壳 + 图编排平台内核 + 节点能力市场 + 可观测治理体系”。
   </text>
   <text class="sm" x="64" y="1162" fill="#64748b">
     真正的扩展性不来自文档数量本身，而来自：统一领域模型、统一节点协议、统一运行时、统一回放审计、统一治理门禁，以及 Mission / Graph 双视角共存。

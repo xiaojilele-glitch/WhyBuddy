@@ -2,7 +2,7 @@
 
 ## 简介
 
-本 spec 是 Cube Pets Office autopilot blueprint 流"返回 / 重新规划 / 内联编辑"生命周期 5 个 spec 系列中的**第五个**也是最后一个，负责把前四份 spec 落地后**跨组件状态切换**的视觉与时序问题统一处理：stage transition 动画、跨组件原子刷新、toast 序列协调、页面 3→2→1 视觉过渡，以及 URL Pin / `workflowStageOverride` / Backend_Job_Stage 三层状态在并发刷新场景下的一致性兜底。
+本 spec 是 WhyBuddy autopilot blueprint 流"返回 / 重新规划 / 内联编辑"生命周期 5 个 spec 系列中的**第五个**也是最后一个，负责把前四份 spec 落地后**跨组件状态切换**的视觉与时序问题统一处理：stage transition 动画、跨组件原子刷新、toast 序列协调、页面 3→2→1 视觉过渡，以及 URL Pin / `workflowStageOverride` / Backend_Job_Stage 三层状态在并发刷新场景下的一致性兜底。
 
 系列概览：
 

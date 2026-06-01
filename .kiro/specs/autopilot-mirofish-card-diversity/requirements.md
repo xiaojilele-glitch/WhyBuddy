@@ -24,10 +24,13 @@
 
 #### 验收标准
 
-1. THE ReasoningCard SHALL 在左侧展示 2px 宽的渐变色竖条（thinking 为蓝紫渐变，observing 为青绿渐变，acting 为橙黄渐变）
-2. THE ReasoningCard SHALL 使用 font-mono text-[11px] 展示推理文本内容，保持紧凑信息密度
+1. THE ReasoningCard SHALL 在左侧展示 2px 宽的实色竖条（thinking 为 #FF4500，observing 为 #666666，acting 为黑色）
+2. THE ReasoningCard SHALL 使用 font-mono 展示推理文本内容，保持紧凑信息密度
 3. WHEN ReasoningCard 首次进入视口时, THE MicroAnimation SHALL 使用 opacity 0→1 + translateY(4px→0) 的 CSS transition（duration 200ms）
 4. WHILE reasoning entry 处于 streaming 状态, THE ReasoningCard SHALL 在文本末尾展示闪烁光标指示器（CSS @keyframes blink）
+5. WHERE 一条 reasoning entry 同时携带多个语义字段（thought / actionToolId / observationSummary / reason / error 中的两个或以上）, THE ReasoningCard SHALL 把每个存在的字段各自渲染为独立一行（thought 为主黑字、`→ actionToolId` 为灰行、`✓/✗ observationSummary` 为成功黑 / 失败红行、reason 为浅灰次要行、error 为红行）, 而不是只 fallback 选择其中一个字段显示
+6. THE ReasoningCard SHALL 在标签行右侧展示该 entry 的 HH:MM:SS 时间戳（由 formatTimestampHHMMSS 折算）
+7. WHEN observationSummary 头部已含服务端塞入的 `✓ ` / `⚠ ` 前缀时, THE ReasoningCard SHALL 先剥除该前缀再追加自身的 `✓` / `✗` mark, 避免出现 `✓ ✓ ...` / `⚠ ✗ ...` 叠加
 
 ### 需求 2：Capability 调用卡片形态
 

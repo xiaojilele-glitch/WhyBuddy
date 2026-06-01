@@ -2,7 +2,7 @@
 
 ## Overview
 
-将 Cube Pets Office 的动态组织结构和十阶段工作流导出为 CrewAI / LangGraph / AutoGen 兼容格式。实现顺序：IR 类型定义 → IR 构建器 → 三个框架适配器 → ZIP 打包 → API 路由 → 前端 UI。
+将 WhyBuddy 的动态组织结构和十阶段工作流导出为 CrewAI / LangGraph / AutoGen 兼容格式。实现顺序：IR 类型定义 → IR 构建器 → 三个框架适配器 → ZIP 打包 → API 路由 → 前端 UI。
 
 ## Tasks
 

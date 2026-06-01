@@ -1,4 +1,4 @@
-// Copyright Cube Pets Office. All Rights Reserved.
+// Copyright WhyBuddy. All Rights Reserved.
 //
 // Lighting Preset Data — UE5-compatible constants for the office lighting
 // system, including directional light, rect lights, point lights, four

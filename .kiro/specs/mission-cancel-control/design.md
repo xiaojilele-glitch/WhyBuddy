@@ -228,7 +228,7 @@ POST /api/executor/jobs/:id/cancel
 
 #### 入口位置
 
-在 [TaskDetailView.tsx](c:/Users/2303670/Documents/cube-pets-office/client/src/components/tasks/TaskDetailView.tsx) 增加取消主操作按钮，优先放在任务头部状态区或主操作条。
+在 [TaskDetailView.tsx](c:/Users/2303670/Documents/whybuddy/client/src/components/tasks/TaskDetailView.tsx) 增加取消主操作按钮，优先放在任务头部状态区或主操作条。
 
 #### 交互规则
 

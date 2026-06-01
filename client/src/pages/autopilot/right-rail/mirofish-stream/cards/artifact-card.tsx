@@ -3,12 +3,16 @@
  *
  * 独立的产物创建卡片组件，展示文件/代码/文档等产物信息。
  *
- * 视觉特征：
- * - 文件图标 + 文件名 + 类型标签横向布局
- * - 类型色调映射（code=bg-blue-500/5, document=bg-emerald-500/5,
- *   image=bg-violet-500/5, data=bg-amber-500/5）
- * - 进入动画：animate-mirofish-slide-in
- * - 支持点击展开预览摘要
+ * 视觉特征（whybuddy-rebrand-and-stage3-unblock-2026-05-28 §D refinement
+ * 2026-05-29，对齐 mirofish-demo/console 的 .mock-file 模式）：
+ * - 卡片底色：#FAFAFA + 1px solid #EEEEEE，0 radius
+ * - 标题：Inter / Noto Sans SC，黑色，0.86rem
+ * - 类型徽章：JetBrains Mono 0.7rem，#666 (gray-text)
+ * - 展开按钮整体在 hover 时 file-name 变 #FF4500（mirofish hover 习惯）
+ * - 进入动画：animate-mirofish-slide-in（保留）
+ *
+ * 类型 → 强调线色保留 4 类区分（在卡片底部 1px 实色条），但所有色调都被
+ * 限制在 mirofish 调色板内（黑 / 灰 / 橙）以避免引入新的强调色。
  */
 
 import { useState, type FC } from "react";
@@ -18,12 +22,16 @@ import type { AppLocale } from "@/lib/locale";
 
 import type { MiroFishArtifactCreatedEntry } from "../mirofish-stream-types";
 
-/** 产物类型 → 背景色映射 */
-const ARTIFACT_BG: Record<string, string> = {
-  code: "bg-blue-500/5",
-  document: "bg-emerald-500/5",
-  image: "bg-violet-500/5",
-  data: "bg-amber-500/5",
+/**
+ * 产物类型 → 底部强调线（1px 实色条）。
+ * 用同一基底色（#FAFAFA + #EEE 边框）+ 底部 1px accent 区分类型，
+ * 而非整卡背景色，避免和 mirofish 的克制配色冲突。
+ */
+const ARTIFACT_BAR_BOTTOM: Record<string, string> = {
+  code: "bg-[#FF4500]",
+  document: "bg-black",
+  image: "bg-[#999]",
+  data: "bg-[#666]",
 };
 
 /** 产物类型 → 文件图标映射 */
@@ -55,7 +63,7 @@ export const ArtifactCard: FC<ArtifactCardProps> = ({
   const [expanded, setExpanded] = useState(false);
 
   const artType = entry.artifactType.toLowerCase();
-  const bgClass = ARTIFACT_BG[artType] ?? "bg-white/5";
+  const barClass = ARTIFACT_BAR_BOTTOM[artType] ?? "bg-[#E5E5E5]";
   const icon = ARTIFACT_ICON[artType] ?? "📦";
   const titleText = blueprintCopy(entry.title, locale);
 
@@ -65,37 +73,54 @@ export const ArtifactCard: FC<ArtifactCardProps> = ({
       data-tone={entry.tone}
       data-artifact-id={entry.artifactId}
       data-artifact-type={entry.artifactType}
-      className={`animate-mirofish-slide-in rounded-md border border-slate-200 ${bgClass}`}
+      className="animate-mirofish-slide-in relative bg-[#FAFAFA] border border-[#EEEEEE]"
+      style={{ borderRadius: "0px" }}
     >
-      {/* 主行：图标 + 文件名 + 类型标签 */}
+      {/* 主行：图标 + 文件名 + 类型徽章 — 复刻 mirofish .mock-file 行 */}
       <button
         type="button"
-        className="flex items-center gap-2 px-2.5 py-2 w-full text-left"
+        className="group flex items-center gap-3 px-4 py-3 w-full text-left"
         onClick={() => previewSummary && setExpanded(!expanded)}
         aria-expanded={expanded}
       >
         {/* 文件图标 */}
-        <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center text-sm text-slate-500" aria-hidden="true">
+        <span
+          className="flex-shrink-0 text-base text-[#666]"
+          aria-hidden="true"
+        >
           {icon}
         </span>
 
-        {/* 文件名 */}
-        <span className="text-[11px] font-medium text-slate-700 truncate flex-1">
+        {/* 文件名 — Inter / Noto Sans SC，hover → #FF4500（mirofish .file-name） */}
+        <span className="text-[13.6px] font-normal text-black truncate flex-1 transition-colors group-hover:text-[#FF4500]">
           {titleText}
         </span>
 
-        {/* 类型标签（兼容旧格式 "artifact · {type}"） */}
-        <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-mono flex-shrink-0">
+        {/* 类型徽章 — JetBrains Mono 0.7rem，#666 */}
+        <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#666] flex-shrink-0">
           {`artifact · ${entry.artifactType}`}
         </span>
+
+        {/* 展开图标按钮（28×28，1px solid #DDD，hover → 黑） */}
+        {previewSummary ? (
+          <span
+            className="flex-shrink-0 w-7 h-7 inline-flex items-center justify-center border border-[#DDD] text-[#666] transition-colors group-hover:border-black group-hover:text-black"
+            aria-hidden="true"
+          >
+            {expanded ? "−" : "+"}
+          </span>
+        ) : null}
       </button>
 
-      {/* 展开预览摘要 */}
+      {/* 展开预览摘要 — JetBrains Mono 11px #666 */}
       {expanded && previewSummary && (
-        <div className="px-2.5 pb-2 text-[10px] text-slate-500 leading-relaxed border-t border-slate-100 pt-1.5">
+        <div className="px-4 pb-3 pt-2 font-mono text-[11px] text-[#666] leading-[1.6] border-t border-[#EEEEEE] break-all">
           {previewSummary}
         </div>
       )}
+
+      {/* 底部 1px accent 条 — 区分 code / document / image / data 类型 */}
+      <div className={`h-[1px] w-full ${barClass}`} aria-hidden="true" />
     </div>
   );
 };

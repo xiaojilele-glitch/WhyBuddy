@@ -10,7 +10,7 @@
   <rect x="20" y="20" width="1160" height="110" fill="url(#hg)" rx="8"/>
   <text x="60" y="55" fill="#10b981" font-size="22" font-weight="700">AIGC 节点真实可用性审计</text>
   <text x="60" y="80" fill="#94a3b8" font-size="13">不是测试能不能跑，而是每个节点在 dev:all 模式下能不能产出有意义的结果</text>
-  <text x="60" y="105" fill="#64748b" font-size="11">Cube Pets Office · 2026-05-21 · 基于 server/index.ts 依赖注入链路审计</text>
+  <text x="60" y="105" fill="#64748b" font-size="11">WhyBuddy · 2026-05-21 · 基于 server/index.ts 依赖注入链路审计</text>
 
   <!-- Summary Cards -->
   <rect x="20" y="150" width="220" height="90" fill="#064e3b" rx="6" stroke="#10b981" stroke-width="1"/>

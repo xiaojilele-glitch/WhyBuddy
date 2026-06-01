@@ -2,7 +2,7 @@
 
 ## 概述
 
-Guest Agent 机制为 Cube Pets Office 引入临时外部代理参与能力。访客代理在单次任务（Mission）生命周期内存在，通过独立 LLM 配置执行工作，在 3D 场景中可视化呈现，并在任务结束后自动清理。
+Guest Agent 机制为 WhyBuddy 引入临时外部代理参与能力。访客代理在单次任务（Mission）生命周期内存在，通过独立 LLM 配置执行工作，在 3D 场景中可视化呈现，并在任务结束后自动清理。
 
 核心设计原则：
 - 最小侵入：复用现有 WorkflowOrganizationNode、RuntimeAgent、MessageBus 等基础设施

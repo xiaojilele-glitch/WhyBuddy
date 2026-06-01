@@ -121,12 +121,40 @@ describe("StoreObservabilityHud", () => {
     // 容器自身仍被渲染（只是一个透明壳子）
     expect(markup).toContain('data-testid="store-observability-hud"');
 
-    // 四个子组件的 testid 都不应该出现，因为切片为空时它们各自返回 null
+    // 子组件的 testid 都不应该出现，因为切片为空时它们各自返回 null。
+    // RoleStatusStrip 已从 HUD 移除（角色身份由 3D 真实角色承载）。
     expect(markup).not.toContain('data-testid="role-status-strip"');
     expect(markup).not.toContain('data-testid="capability-rail"');
     // autopilot-mirofish-stream 重构后 testid 改为 mirofish-card-stream
     expect(markup).not.toContain('data-testid="mirofish-card-stream"');
     expect(markup).not.toContain('data-testid="fleet-activation-log"');
+  });
+
+  it("no longer mounts RoleStatusStrip even when rolePhases has data (moved to 3D scene)", () => {
+    setMockedSlices({ rolePhases: { planner: "thinking" } });
+
+    const markup = renderToStaticMarkup(<StoreObservabilityHud />);
+
+    expect(markup).toContain('data-testid="store-observability-hud"');
+    // Role identity / phase is now carried by the real 3D agents, so the rail
+    // strip is no longer mounted here.
+    expect(markup).not.toContain('data-testid="role-status-strip"');
+  });
+
+  it("no longer renders the legacy capability pills row (moved to 3D role chips)", () => {
+    setMockedSlices({
+      capabilityStatuses: { "docker-analysis-sandbox": "invoking" },
+    });
+
+    const markup = renderToStaticMarkup(<StoreObservabilityHud />);
+
+    expect(markup).toContain('data-testid="store-observability-hud"');
+    // CapabilityRail no longer renders the top pills row; the capability status
+    // pills (data-testid="capability-rail") are carried by the 3D role chips.
+    // The detailed bridge panel is driven by useCapabilityBridgeState (not by
+    // capabilityStatuses alone), so it does not render from this slice here.
+    expect(markup).not.toContain('data-testid="capability-rail"');
+    expect(markup).not.toContain("data-capability-id");
   });
 
   it("mounts AgentReasoningSubTimeline when agentReasoning.entries has data", () => {
@@ -155,28 +183,6 @@ describe("StoreObservabilityHud", () => {
     // autopilot-mirofish-stream 重构后 testid 改为 mirofish-card-stream
     expect(markup).toContain('data-testid="mirofish-card-stream"');
     expect(markup).toContain("正在扫描 GitHub 仓库");
-  });
-
-  it("mounts RoleStatusStrip when rolePhases has data", () => {
-    setMockedSlices({ rolePhases: { planner: "thinking" } });
-
-    const markup = renderToStaticMarkup(<StoreObservabilityHud />);
-
-    expect(markup).toContain('data-testid="store-observability-hud"');
-    expect(markup).toContain('data-testid="role-status-strip"');
-    expect(markup).toContain("planner");
-  });
-
-  it("mounts CapabilityRail when capabilityStatuses has data", () => {
-    setMockedSlices({
-      capabilityStatuses: { "docker-analysis-sandbox": "invoking" },
-    });
-
-    const markup = renderToStaticMarkup(<StoreObservabilityHud />);
-
-    expect(markup).toContain('data-testid="store-observability-hud"');
-    expect(markup).toContain('data-testid="capability-rail"');
-    expect(markup).toContain("docker-analysis-sandbox");
   });
 
   it("mounts FleetActivationLog when agentProgress has data", () => {

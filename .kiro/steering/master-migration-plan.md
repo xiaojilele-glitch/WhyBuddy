@@ -2,11 +2,11 @@
 inclusion: manual
 ---
 
-# 总迁移计划：将 `web-aigc` 编排能力引入 Cube Pets Office
+# 总迁移计划：将 `web-aigc` 编排能力引入 WhyBuddy
 
 ## 目标
 
-建立一套迁移方案，把 `web-aigc` 中可迁移的编排运行时能力引入 Cube Pets Office，同时避免过早推翻 Cube 当前以 mission 为中心的运行架构。
+建立一套迁移方案，把 `web-aigc` 中可迁移的编排运行时能力引入 WhyBuddy，同时避免过早推翻 Cube 当前以 mission 为中心的运行架构。
 
 ## 迁移原则
 
@@ -24,7 +24,7 @@ inclusion: manual
 ### 阶段 0：清点与契约归一
 
 - 盘点 `web-aigc` 的编排、设计器、节点注册表、监控接口
-- 将接口逐项映射到 `cube-pets-office` 的 route / runtime / storage 落点
+- 将接口逐项映射到 `whybuddy` 的 route / runtime / storage 落点
 - 统一 graph、node、edge、instance、session、replay、operator action 等术语
 
 ### 阶段 1：运行时优先迁移

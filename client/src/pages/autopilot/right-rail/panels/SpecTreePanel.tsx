@@ -24,6 +24,7 @@ import type { FC } from "react";
 import SpecDocumentWorkbenchPanel from "@/pages/specs/SpecDocumentWorkbenchPanel";
 import SpecTreeWorkbenchPanel from "@/pages/specs/SpecTreeWorkbenchPanel";
 import type { AutopilotRightRailProps } from "@/pages/autopilot/right-rail/types";
+import type { BlueprintEffectPreviewsSnapshotResponse } from "@/lib/blueprint-api";
 import type {
   BlueprintSpecDocument,
   BlueprintSpecTree,
@@ -38,6 +39,10 @@ import type {
  * 私有字段由 `BlueprintProgressPanel` 组合时注入；`<AutopilotRightRail>` 在
  * fabric stage 调用本面板时留空，`SpecTreeWorkbenchPanel` 内部对 `undefined`
  * 有现成的降级路径（需求 2.9 / 设计文档「extra props 与 callback 的处理规则」）。
+ *
+ * whybuddy-stage3-unblock-2026-05-29 增补：`onEffectPreviewGenerated` 透传到
+ * 内嵌的 `SpecDocumentWorkbenchPanel`，使其底部新增的"进入效果预演"按钮
+ * 可以把后端响应抬到上层 latestJob，让右栏切换到 effect_preview 子阶段。
  */
 export type SpecTreePanelProps = Pick<
   AutopilotRightRailProps,
@@ -51,6 +56,9 @@ export type SpecTreePanelProps = Pick<
   showDocuments?: boolean;
   initialDocuments?: BlueprintSpecDocument[];
   onDocumentsChange?: (documents: BlueprintSpecDocument[]) => void;
+  onEffectPreviewGenerated?: (
+    response: BlueprintEffectPreviewsSnapshotResponse
+  ) => void;
 };
 
 /**
@@ -77,6 +85,7 @@ export const SpecTreePanel: FC<SpecTreePanelProps> = ({
   showDocuments = false,
   initialDocuments,
   onDocumentsChange,
+  onEffectPreviewGenerated,
 }) => {
   if (!specTree) {
     // 空态与 BlueprintProgressPanel 在 specTree === null 分支一致
@@ -101,6 +110,7 @@ export const SpecTreePanel: FC<SpecTreePanelProps> = ({
           jobId={jobId || undefined}
           initialDocuments={initialDocuments}
           onDocumentsChange={onDocumentsChange}
+          onEffectPreviewGenerated={onEffectPreviewGenerated}
         />
       ) : null}
     </>

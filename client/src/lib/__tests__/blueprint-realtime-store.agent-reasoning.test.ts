@@ -115,6 +115,73 @@ describe("BlueprintRealtimeStore — agentReasoning slice", () => {
     expect(state.agentReasoning.jobId).toBe("job-B");
   });
 
+  it("direct subscribe job switch clears previous job reasoning entries instead of resurrecting them", async () => {
+    const mockSocket = {
+      on: vi.fn(),
+      off: vi.fn(),
+      emit: vi.fn(),
+      connected: false,
+    };
+    __setSocket(mockSocket as any);
+    __setHydrateHistoricalEventsForTest(async () => []);
+
+    try {
+      const store = useBlueprintRealtimeStore.getState();
+      store.subscribe("job-A");
+      store.dispatchEvent(makeAgentEvent({
+        jobId: "job-A",
+        type: "role.agent.thinking",
+        payload: {
+          iteration: 1,
+          roleId: "generator",
+          stageId: "spec_docs",
+          thought: "old project document assembly",
+        },
+      }));
+
+      expect(useBlueprintRealtimeStore.getState().agentReasoning.entries).toHaveLength(1);
+
+      store.subscribe("job-B");
+
+      const state = useBlueprintRealtimeStore.getState();
+      expect(state.subscribedJobId).toBe("job-B");
+      expect(state.agentReasoning.jobId).toBe("job-B");
+      expect(state.agentReasoning.entries).toEqual([]);
+      expect(state.agentReasoning.currentIteration).toBe(0);
+      expect(state.agentReasoning.status).toBe("idle");
+    } finally {
+      __setHydrateHistoricalEventsForTest(null);
+      __setSocket(null as any);
+    }
+  });
+
+  it("ignores direct dispatch events for a different subscribed job", () => {
+    useBlueprintRealtimeStore.setState({
+      subscribedJobId: "job-current",
+      agentReasoning: {
+        jobId: "job-current",
+        entries: [],
+        currentIteration: 0,
+        status: "idle",
+      },
+    });
+
+    useBlueprintRealtimeStore.getState().dispatchEvent(makeAgentEvent({
+      jobId: "job-old",
+      type: "role.agent.thinking",
+      payload: {
+        iteration: 1,
+        roleId: "generator",
+        stageId: "spec_docs",
+        thought: "old project leaked event",
+      },
+    }));
+
+    const state = useBlueprintRealtimeStore.getState();
+    expect(state.agentReasoning.entries).toEqual([]);
+    expect(state.logEntries).toEqual([]);
+  });
+
   it("iteration_started → currentIteration 更新，status='streaming'", () => {
     const store = useBlueprintRealtimeStore.getState();
 

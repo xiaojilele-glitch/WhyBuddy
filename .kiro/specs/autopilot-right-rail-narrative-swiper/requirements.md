@@ -2,7 +2,7 @@
 
 ## Introduction
 
-本规格用于把 Cube Pets Office Autopilot 主壳右栏底部的“流式日志输出”从“黑白控制台框”升级为“阶段化叙事卡片流”。
+本规格用于把 WhyBuddy Autopilot 主壳右栏底部的“流式日志输出”从“黑白控制台框”升级为“阶段化叙事卡片流”。
 
 按第一性原理对当前体验的拆解结论是：右栏的真正核心是“输入、澄清、路线选择、SPEC 树、规格文档、效果预览”这 6 个产品对象，它们承载用户做决策所需的“主语”；而当前右栏底部的 AutopilotConsolePanel 把所有流式信号（reasoning、role status、capability、fleet activation）都堆成了同一种“黑底等宽字”控制台样式，与上方 6 个产品对象的叙事强度不匹配。
 
@@ -58,7 +58,7 @@
 
 ### Requirement 1: 阶段化视觉语境（Stage_Visual_Lane）
 
-**User Story:** 作为 Cube Pets Office 的演示者与日常用户，我想要让右栏底部叙事卡片在不同阶段呈现不同的视觉语境，以便于一眼判断“现在系统在做哪一件事”，而不是看一堆雷同的黑白控制台框。
+**User Story:** 作为 WhyBuddy 的演示者与日常用户，我想要让右栏底部叙事卡片在不同阶段呈现不同的视觉语境，以便于一眼判断“现在系统在做哪一件事”，而不是看一堆雷同的黑白控制台框。
 
 #### Acceptance Criteria
 

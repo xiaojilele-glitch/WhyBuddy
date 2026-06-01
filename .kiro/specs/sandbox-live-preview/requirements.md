@@ -2,7 +2,7 @@
 
 ## 简介
 
-Sandbox Live Preview 功能为 Cube Pets Office 平台增加实时沙箱预览能力。当 Docker 容器执行任务时，用户可以在 3D 办公场景中实时查看终端输出（stdout/stderr）和浏览器截图预览。该功能分为两个阶段：Phase 1 扩展执行器回调协议以支持日志流和截图事件；Phase 2 构建前端预览组件并集成到 3D 场景中。
+Sandbox Live Preview 功能为 WhyBuddy 平台增加实时沙箱预览能力。当 Docker 容器执行任务时，用户可以在 3D 办公场景中实时查看终端输出（stdout/stderr）和浏览器截图预览。该功能分为两个阶段：Phase 1 扩展执行器回调协议以支持日志流和截图事件；Phase 2 构建前端预览组件并集成到 3D 场景中。
 
 ## 术语表
 

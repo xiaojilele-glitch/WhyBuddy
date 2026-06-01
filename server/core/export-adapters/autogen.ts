@@ -160,7 +160,7 @@ function generateMainPy(ir: ExportIR): string {
   const agentKeys = ir.agents.map((a) => toSnakeCase(a.name));
   const teamKeys = ir.teams.map((t) => toSnakeCase(t.label));
 
-  lines.push(`"""Cube Pets Office — AutoGen Export"""`);
+  lines.push(`"""WhyBuddy — AutoGen Export"""`);
   lines.push(``);
   lines.push(`import json`);
   lines.push(``);

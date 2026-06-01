@@ -13,7 +13,6 @@ import { useWorkflowStore } from "@/lib/workflow-store";
 import { FUTURE_OFFICE_COLORS } from "@/lib/scene-theme";
 import {
   getSceneStageSignal,
-  getSceneZoneLabel,
   SCENE_FLOW_ZONES,
 } from "@/lib/scene-stage-flow";
 
@@ -29,27 +28,30 @@ function StageFlowSegment({
   color,
   phase,
   opacity,
+  floorHugging = false,
 }: {
   from: [number, number, number];
   to: [number, number, number];
   color: string;
   phase: number;
   opacity: number;
+  floorHugging?: boolean;
 }) {
   const particleRefs = useRef<Array<THREE.Mesh | null>>([]);
 
   const curve = useMemo(() => {
-    const start = new THREE.Vector3(from[0], 0.24, from[2]);
-    const end = new THREE.Vector3(to[0], 0.24, to[2]);
+    const flowY = floorHugging ? 0.055 : 0.24;
+    const start = new THREE.Vector3(from[0], flowY, from[2]);
+    const end = new THREE.Vector3(to[0], flowY, to[2]);
     const mid = start.clone().add(end).multiplyScalar(0.5);
     const distance = start.distanceTo(end);
 
-    mid.y += Math.max(0.5, distance * 0.12);
+    mid.y += floorHugging ? 0.02 : Math.max(0.5, distance * 0.12);
     mid.x += (end.z - start.z) * 0.03;
     mid.z += (start.x - end.x) * 0.03;
 
     return new THREE.QuadraticBezierCurve3(start, mid, end);
-  }, [from, to]);
+  }, [floorHugging, from, to]);
 
   const points = useMemo(() => curve.getPoints(34), [curve]);
 
@@ -66,12 +68,25 @@ function StageFlowSegment({
 
   return (
     <group>
+      {/*
+        whybuddy-spec-tree-progress-merge-2026-05-29 follow-up:
+        发光路线在亮地板上原本太弱（lineWidth=1.2 + opacity 0.22~0.42），
+        加宽到 2.6 + 抬高基线 opacity，叠加一根半透明粗光晕底层模拟 bloom，
+        让 stage flow 在 1920×1080 默认相机下肉眼可见。
+      */}
       <Line
         points={points}
         color={color}
-        lineWidth={1.2}
+        lineWidth={floorHugging ? 3.2 : 5.5}
         transparent
-        opacity={opacity}
+        opacity={floorHugging ? Math.min(0.18, opacity * 0.36) : Math.min(0.38, opacity * 0.7)}
+      />
+      <Line
+        points={points}
+        color={color}
+        lineWidth={floorHugging ? 1.45 : 2.6}
+        transparent
+        opacity={floorHugging ? Math.min(0.46, opacity * 0.7) : Math.min(0.92, opacity + 0.32)}
       />
       {[0, 1, 2].map(index => (
         <mesh
@@ -80,13 +95,13 @@ function StageFlowSegment({
             particleRefs.current[index] = mesh;
           }}
         >
-          <sphereGeometry args={[0.06, 16, 16]} />
+          <sphereGeometry args={[0.085, 16, 16]} />
           <meshStandardMaterial
             color={color}
             emissive={color}
-            emissiveIntensity={0.7}
+            emissiveIntensity={1.4}
             transparent
-            opacity={Math.min(0.94, opacity + 0.16)}
+            opacity={floorHugging ? Math.min(0.6, opacity * 0.86) : Math.min(0.98, opacity + 0.28)}
           />
         </mesh>
       ))}
@@ -98,12 +113,10 @@ function StageZonePulse({
   position,
   color,
   emphasized,
-  label,
 }: {
   position: [number, number, number];
   color: string;
   emphasized: boolean;
-  label: string;
 }) {
   return (
     <group position={position}>
@@ -127,18 +140,6 @@ function StageZonePulse({
         distance={2.8}
         decay={2}
       />
-      {emphasized ? (
-        <Html
-          position={[0, 0.75, 0]}
-          center
-          distanceFactor={10}
-          style={{ pointerEvents: "none" }}
-        >
-          <div className="rounded-full border border-white/15 bg-slate-950/75 px-3 py-1 text-[10px] font-black text-white/80 shadow-[0_6px_16px_rgba(2,6,23,0.3)] backdrop-blur-md">
-            {label}
-          </div>
-        </Html>
-      ) : null}
     </group>
   );
 }
@@ -233,7 +234,6 @@ export function SceneStageFlow({
           position={zone.floorPosition}
           color={signal.color}
           emphasized={index === zoneTrail.length - 1}
-          label={getSceneZoneLabel(zoneId, locale)}
         />
       ))}
 
@@ -243,42 +243,64 @@ export function SceneStageFlow({
           from={item.zone.floorPosition}
           to={zoneTrail[index + 1].zone.floorPosition}
           color={signal.color}
-          opacity={0.22 + index * 0.1}
+          // base 0.45 + 每段 0.08 提升，让首段也清晰可见，最深一段接近不透明
+          opacity={0.45 + index * 0.08}
           phase={index * 0.18}
+          floorHugging={mode === "blueprint"}
         />
       ))}
 
       <Html
-        position={[focusZone.zone.position[0], 1.4, focusZone.zone.position[2]]}
+        position={[focusZone.zone.position[0], 1.22, focusZone.zone.position[2]]}
         center
-        distanceFactor={11}
+        distanceFactor={10}
         style={{ pointerEvents: "none" }}
       >
-        <div className="min-w-[160px] max-w-[220px] rounded-[12px] border border-white/10 bg-slate-950/82 px-4 py-3 text-center shadow-[0_14px_34px_rgba(2,6,23,0.4)] backdrop-blur-xl">
-          <div
-            className="text-[10px] font-black uppercase tracking-[0.15em]"
-            style={{ color: signal.color }}
-          >
-            {signal.statusLabel}
+        <div
+          className="max-w-[180px] rounded-full bg-slate-950/45 px-2.5 py-1.5 text-left shadow-[0_8px_18px_rgba(2,6,23,0.24)] ring-1 ring-white/8 backdrop-blur-sm"
+          data-testid="blueprint-stage-hud-compact"
+          title={signal.summary ?? `${signal.statusLabel} · ${signal.stageLabel}`}
+        >
+          <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+            <span
+              className="inline-block size-1.5 shrink-0 rounded-full shadow-[0_0_10px_currentColor]"
+              style={{ backgroundColor: signal.color, color: signal.color }}
+              aria-hidden="true"
+            />
+            <span className="min-w-0 truncate text-[11px] font-black leading-4 text-white/92">
+              {signal.stageLabel}
+            </span>
+            <span className="shrink-0 text-[10px] font-bold leading-4 text-white/45">
+              ·
+            </span>
+            <span
+              className="min-w-0 truncate text-[10px] font-black leading-4"
+              style={{ color: signal.color }}
+            >
+              {signal.statusLabel}
+            </span>
           </div>
-          <div className="mt-1.5 text-[13px] font-black text-white">
-            {signal.stageLabel}
-          </div>
-          {signal.summary ? (
-            <div className="mt-1.5 line-clamp-2 text-[10px] leading-4 text-white/60">
-              {signal.summary}
-            </div>
-          ) : null}
           {signal.progress !== null ? (
-            <div className="mt-2.5 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="mt-1 h-0.5 overflow-hidden rounded-full bg-white/10"
+              aria-hidden="true"
+            >
               <div
-                className="h-1 rounded-full transition-[width] duration-500"
+                className="h-0.5 rounded-full transition-[width] duration-500"
                 style={{
                   width: `${Math.max(0, Math.min(100, signal.progress))}%`,
                   backgroundColor: signal.color,
                 }}
               />
             </div>
+          ) : null}
+          {signal.summary ? (
+            <span
+              className="sr-only"
+              data-testid="blueprint-stage-hud-summary"
+            >
+              {signal.summary}
+            </span>
           ) : null}
         </div>
       </Html>

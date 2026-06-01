@@ -86,8 +86,8 @@
 ### 1. 克隆仓库并安装依赖
 
 ```bash
-git clone <repo-url> cube-pets-office
-cd cube-pets-office
+git clone <repo-url> whybuddy
+cd whybuddy
 pnpm install
 ```
 

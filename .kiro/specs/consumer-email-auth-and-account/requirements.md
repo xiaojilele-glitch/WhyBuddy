@@ -2,11 +2,11 @@
 
 ## 目标
 
-为 ToC 形态的 Cube Pets Office 建立邮箱账号体系，让用户通过邮箱登录后进入自己的 Project-first 工作台。第一阶段只区分普通用户和管理员，不引入租户、部门、岗位、用户组或动态菜单权限。
+为 ToC 形态的 WhyBuddy 建立邮箱账号体系，让用户通过邮箱登录后进入自己的 Project-first 工作台。第一阶段只区分普通用户和管理员，不引入租户、部门、岗位、用户组或动态菜单权限。
 
 ## 背景
 
-当前 Project-first 主线已经让 `Project` 成为用户工作台中的第一层产品对象，但项目还没有真实账号归属。用户登录后应只看到自己的项目；管理员可以进入后台查看全局运营状态。`web-main/backend` 的认证闭环、httpOnly cookie、当前用户接口和 `req.user` 注入模式可作为实现参考，但 cube-pets-office 第一阶段采用 MySQL-backed opaque session，不以 JWT/header token 作为主要登录态；其中 `tenantCode`、多租户、部门岗位和完整 RBAC 矩阵不属于本阶段目标。
+当前 Project-first 主线已经让 `Project` 成为用户工作台中的第一层产品对象，但项目还没有真实账号归属。用户登录后应只看到自己的项目；管理员可以进入后台查看全局运营状态。`web-main/backend` 的认证闭环、httpOnly cookie、当前用户接口和 `req.user` 注入模式可作为实现参考，但 whybuddy 第一阶段采用 MySQL-backed opaque session，不以 JWT/header token 作为主要登录态；其中 `tenantCode`、多租户、部门岗位和完整 RBAC 矩阵不属于本阶段目标。
 
 ## 需求
 

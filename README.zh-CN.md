@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="./docs/assets/banner.png" alt="Cube Pets Office" width="100%" />
+  <img src="./docs/assets/banner.png" alt="WhyBuddy" width="100%" />
 </p>
 
-<h1 align="center">🏢 Cube Pets Office</h1>
+<h1 align="center">🏢 WhyBuddy</h1>
 
 <p align="center">
-  <strong>输入一个想法，推演出一个完整的产品。<br/>私有部署 · 全程可见 · 证据留痕。</strong>
+  <strong>WhyBuddy——一个由人工智能组成的团队，他们会对您的产品构想提出质疑，并在您着手开发之前对其进行演练。</strong>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://opencroc.github.io/cube-pets-office/"><img alt="demo" src="https://img.shields.io/badge/🌐_在线演示-blue?style=for-the-badge" /></a>
+  <a href="https://opencroc.github.io/whybuddy/"><img alt="demo" src="https://img.shields.io/badge/🌐_在线演示-blue?style=for-the-badge" /></a>
   <a href="./ROADMAP.md"><img alt="roadmap" src="https://img.shields.io/badge/🗺️_路线图-111827?style=for-the-badge" /></a>
   <a href="./CONTRIBUTING.md"><img alt="contribute" src="https://img.shields.io/badge/🤝_参与贡献-16a34a?style=for-the-badge" /></a>
 </p>
@@ -22,7 +22,7 @@
 <p align="center">
   <img alt="status" src="https://img.shields.io/badge/状态-早期测试-orange?style=flat-square" />
   <img alt="license" src="https://img.shields.io/badge/协议-MIT-111827?style=flat-square" />
-  <img alt="stars" src="https://img.shields.io/github/stars/opencroc/cube-pets-office?style=flat-square" />
+  <img alt="stars" src="https://img.shields.io/github/stars/opencroc/whybuddy?style=flat-square" />
   <img alt="ts" src="https://img.shields.io/badge/TypeScript-486k_行-2563eb?style=flat-square" />
   <img alt="tests" src="https://img.shields.io/badge/测试-7,771_用例-0f766e?style=flat-square" />
   <img alt="specs" src="https://img.shields.io/badge/规格-273_目录-7c3aed?style=flat-square" />
@@ -166,7 +166,7 @@ Markdown、ZIP 或在线预览。每次预演都是可分享的文档包。
 ## 🚀 快速开始
 
 ```bash
-git clone https://github.com/opencroc/cube-pets-office.git && cd cube-pets-office
+git clone https://github.com/opencroc/whybuddy.git && cd whybuddy
 pnpm install
 pnpm run dev:all          # 全栈：前端 + 服务端 + 执行器
 ```
@@ -178,7 +178,7 @@ pnpm run dev:all          # 全栈：前端 + 服务端 + 执行器
 pnpm run dev:frontend     # 打开 localhost:5173
 ```
 
-或直接访问 [在线演示](https://opencroc.github.io/cube-pets-office/)（GitHub Pages）。
+或直接访问 [在线演示](https://opencroc.github.io/whybuddy/)（GitHub Pages）。
 
 </details>
 
@@ -317,7 +317,7 @@ pnpm run dev:frontend     # 打开 localhost:5173
 
 > 引擎产出的每一份预演都是帮助他人发现可能性的内容。Star 这个仓库，帮助更多人找到它。
 
-[![Star History Chart](https://api.star-history.com/svg?repos=opencroc/cube-pets-office&type=Date)](https://star-history.com/#opencroc/cube-pets-office&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=opencroc/whybuddy&type=Date)](https://star-history.com/#opencroc/whybuddy&Date)
 
 ---
 

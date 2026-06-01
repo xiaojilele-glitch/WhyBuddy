@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="./docs/assets/banner.png" alt="Cube Pets Office banner" width="100%" />
+  <img src="./docs/assets/banner.png" alt="WhyBuddy banner" width="100%" />
 </p>
 
-<h1 align="center"><img src="./docs/assets/logo.png" alt="端云" height="44" align="absmiddle" />&nbsp;&nbsp;|&nbsp;&nbsp;Cube Pets Office</h1>
+<h1 align="center"><img src="./docs/assets/logo.png" alt="WhyBuddy" height="44" align="absmiddle" />&nbsp;&nbsp;|&nbsp;&nbsp;WhyBuddy</h1>
 
 <p align="center">
   <strong>输入一个想法，推演出一个完整的产品。私有部署、全程可见、证据留痕。</strong>
@@ -16,7 +16,7 @@
 <p align="center">
   <img alt="status" src="https://img.shields.io/badge/状态-早期测试-orange" />
   <img alt="license" src="https://img.shields.io/badge/协议-MIT-111827" />
-  <img alt="stars" src="https://img.shields.io/github/stars/opencroc/cube-pets-office?style=flat" />
+  <img alt="stars" src="https://img.shields.io/github/stars/opencroc/whybuddy?style=flat" />
   <img alt="version" src="https://img.shields.io/badge/版本-v1.0.0-2563eb" />
   <img alt="frontend" src="https://img.shields.io/badge/React%2019-Vite-2563eb" />
   <img alt="3d" src="https://img.shields.io/badge/3D-Three.js-f97316" />
@@ -50,7 +50,7 @@
 </p>
 
 <p align="center">
-  <a href="https://opencroc.github.io/cube-pets-office/">在线演示</a> •
+  <a href="https://opencroc.github.io/whybuddy/">在线演示</a> •
   <a href="./docs/">文档</a> •
   <a href="./ROADMAP.md">路线图</a> •
   <a href="./CONTRIBUTING.md">贡献指南</a> •
@@ -61,11 +61,11 @@
 
 > **早期测试版**：正在积极开发中，可能存在粗糙之处。
 
-访问 [在线演示](https://opencroc.github.io/cube-pets-office/) 或本地运行：
+访问 [在线演示](https://opencroc.github.io/whybuddy/) 或本地运行：
 
 ```bash
 # 三条命令启动
-git clone https://github.com/opencroc/cube-pets-office.git && cd cube-pets-office
+git clone https://github.com/opencroc/whybuddy.git && cd whybuddy
 pnpm install
 pnpm run dev:all        # 全栈：前端 + 服务端 + 执行器
 # 或者：pnpm run dev:frontend  (纯浏览器模式，无需 .env)
@@ -77,16 +77,16 @@ pnpm run dev:all        # 全栈：前端 + 服务端 + 执行器
 
 <table>
   <tr>
-    <td width="50%"><img src="./docs/assets/A.png" alt="Cube Pets Office 界面截图 A" /></td>
-    <td width="50%"><img src="./docs/assets/B.png" alt="Cube Pets Office 界面截图 B" /></td>
+    <td width="50%"><img src="./docs/assets/A.png" alt="WhyBuddy 界面截图 A" /></td>
+    <td width="50%"><img src="./docs/assets/B.png" alt="WhyBuddy 界面截图 B" /></td>
   </tr>
   <tr>
-    <td width="50%"><img src="./docs/assets/C.png" alt="Cube Pets Office 界面截图 C" /></td>
-    <td width="50%"><img src="./docs/assets/D.png" alt="Cube Pets Office 界面截图 D" /></td>
+    <td width="50%"><img src="./docs/assets/C.png" alt="WhyBuddy 界面截图 C" /></td>
+    <td width="50%"><img src="./docs/assets/D.png" alt="WhyBuddy 界面截图 D" /></td>
   </tr>
     <tr>
-    <td width="50%"><img src="./docs/assets/E.png" alt="Cube Pets Office 界面截图 E" /></td>
-    <td width="50%"><img src="./docs/assets/F.png" alt="Cube Pets Office 界面截图 F" /></td>
+    <td width="50%"><img src="./docs/assets/E.png" alt="WhyBuddy 界面截图 E" /></td>
+    <td width="50%"><img src="./docs/assets/F.png" alt="WhyBuddy 界面截图 F" /></td>
   </tr>
 </table>
 
@@ -94,7 +94,7 @@ pnpm run dev:all        # 全栈：前端 + 服务端 + 执行器
 
 # 它是什么？
 
-Cube Pets Office 是一个开源的 **AI 产品预演引擎**。输入一句话想法，它为你推演出完整的产品方案 —— 规格文档、系统架构、路线规划、提示词包、效果预览 —— 全程可见、全部可导出、全部有证据留痕。
+WhyBuddy 是一个开源的 **AI 产品预演引擎**。输入一句话想法，它为你推演出完整的产品方案 —— 规格文档、系统架构、路线规划、提示词包、效果预览 —— 全程可见、全部可导出、全部有证据留痕。
 
 - **一句话输入，完整产品输出。** 不用写 PRD，不用画流程图。输入"AI 漫剧平台"，得到一份完整的产品预演：需求文档、设计文档、系统架构、任务拆解、提示词包。每份预演都是可分享的 Markdown 文档包，可直接用于立项评审、博客发布或投资人沟通。
 
@@ -212,17 +212,17 @@ Task Autopilot 的 L1-L5 是执行承诺模型，不是营销口号。README.new
 
 大多数产品工具从零开始。你花几天写 PRD，花几周对齐团队，花几个月才能看到方向是否正确。
 
-Cube Pets Office 跳过等待。输入你的想法，让 FSD 车队在 5 分钟内完成预演，在投入任何工程资源之前看到全貌。
+WhyBuddy 跳过等待。输入你的想法，让 FSD 车队在 5 分钟内完成预演，在投入任何工程资源之前看到全貌。
 
 **传统做法**：想法 → 2 周写 PRD → 1 周画架构 → 3 天对齐 → 发现方向不对 → 重来。
 
-**Cube Pets Office**：想法 → 5 分钟 → 完整预演 → 判断值不值得做 → 不值得就换下一个。
+**WhyBuddy**：想法 → 5 分钟 → 完整预演 → 判断值不值得做 → 不值得就换下一个。
 
 ---
 
 ## 与其他平台对比
 
-| 特性 | Dify | n8n | CrewAI | LangGraph | **Cube Pets Office** |
+| 特性 | Dify | n8n | CrewAI | LangGraph | **WhyBuddy** |
 |------|:---:|:---:|:---:|:---:|:---:|
 | 开源 | ✅ | ✅ | ✅ | ✅ | ✅ MIT |
 | 一句话到完整产品 | 🚫 | 🚫 | 🚫 | 🚫 | ✅ |
@@ -301,7 +301,7 @@ pnpm run test:release
 
 引擎产出的每一份预演都是一篇帮助他人发现可能性的内容。Star 这个仓库，帮助更多人找到它。
 
-[![Star History Chart](https://api.star-history.com/svg?repos=opencroc/cube-pets-office&type=Date)](https://star-history.com/#opencroc/cube-pets-office&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=opencroc/whybuddy&type=Date)](https://star-history.com/#opencroc/whybuddy&Date)
 
 ---
 

@@ -31,7 +31,7 @@ Route 不是替代现有 `mission / workflow / runtime` 的底层实现，而是
 
 ## 背景
 
-Cube Pets Office 当前已经具备以下基础：
+WhyBuddy 当前已经具备以下基础：
 
 - mission-first 的任务启动与执行语义；
 - 十阶段 workflow pipeline；

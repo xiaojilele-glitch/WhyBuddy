@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档定义 Cube Pets Office UE5 场景的完整灯光系统，包括主光源、局部补光、灯光预设与 Lumen GI 配置。灯光设计以 Three.js OfficeRoom 为参考蓝本，在 UE5 中使用 Lumen 全局光照实现高品质实时光影。
+本文档定义 WhyBuddy UE5 场景的完整灯光系统，包括主光源、局部补光、灯光预设与 Lumen GI 配置。灯光设计以 Three.js OfficeRoom 为参考蓝本，在 UE5 中使用 Lumen 全局光照实现高品质实时光影。
 
 **房间尺寸参考**（来自 `RoomShellData.h`）：
 - 地板：18m × 14m（1800cm × 1400cm）

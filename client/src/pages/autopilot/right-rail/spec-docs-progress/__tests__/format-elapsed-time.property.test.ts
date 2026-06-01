@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 
-import { formatElapsedTime } from "../SpecDocsProgressPanel";
+import { formatElapsedTime } from "../format-elapsed-time";
 
 describe("Property 5: Elapsed time formatting", () => {
   it("produces MM:SS format when total time is under 60 minutes", () => {

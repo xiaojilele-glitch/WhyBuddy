@@ -201,3 +201,67 @@ export function rethemeFurnitureMaterial(
 
   setColor(themeable, FUTURE_OFFICE_COLORS.furnitureAlt);
 }
+
+/**
+ * Kenney furniture body-color LOCK (2026-05-29 visual revision).
+ *
+ * Unlike `rethemeFurnitureMaterial` (which repaints furniture into the cold
+ * future-office palette), this helper PRESERVES the Kenney Furniture Kit's own
+ * authoritative GLB material colors — the warm-wood desks, off-white walls,
+ * coral sofas, etc. that ship with the asset pack. It only tunes material
+ * parameters that interact with the existing lights and adds a narrow,
+ * name-matched screen/lamp emissive exception. It NEVER writes a body
+ * `material.color`.
+ *
+ * Allowed:
+ * - `roughness` / `metalness` tuning (toy-plastic relief; no env map in scene)
+ * - emissive ONLY for functional `screen` / `display` / `monitor` / `lamp`
+ *   meshes (a dark screen glow or a lamp glow), matched narrowly by name
+ *
+ * NOT allowed:
+ * - `material.color.set(...)` on ANY mesh (wood / wall / door / fabric / floor)
+ * - a fallback that repaints unmatched meshes
+ *
+ * Used by the blueprint role workstations (`WorkstationModel`) so the desks
+ * keep their real Kenney colors, matching the pet body-color lock.
+ */
+export function preserveKenneyFurnitureMaterial(
+  material: THREE.Material,
+  meshName: string,
+  url: string
+) {
+  const themeable = material as ThemeableMaterial;
+  const key = `${url} ${meshName} ${material.name}`.toLowerCase();
+
+  // Parameter-only relief: lower roughness a touch (cap 0.7) for some specular
+  // pop under the directional/spot/point lights, keep metalness low. No env map
+  // exists in the scene, so envMapIntensity is intentionally NOT relied upon.
+  if (typeof themeable.roughness === "number") {
+    themeable.roughness = Math.min(themeable.roughness, 0.7);
+  }
+  if (typeof themeable.metalness === "number") {
+    themeable.metalness = Math.min(themeable.metalness, 0.1);
+  }
+
+  // Narrow functional exception: screens get a subtle self-lit glow. This is
+  // the screen surface only (a device, not a wood/wall/fabric body) and is the
+  // sole place we touch emissive — we still do NOT recolor the screen body.
+  if (includesAny(key, ["screen", "display", "monitor"])) {
+    if (themeable.emissive) {
+      themeable.emissive.set(FUTURE_OFFICE_COLORS.cyan);
+      themeable.emissiveIntensity = 0.16;
+    }
+    return;
+  }
+
+  // Lamp bulb/shade may glow softly, but the lamp BODY color is left as-is.
+  if (includesAny(key, ["lamp", "bulb"])) {
+    if (themeable.emissive) {
+      themeable.emissive.set(FUTURE_OFFICE_COLORS.practicalLight);
+      themeable.emissiveIntensity = 0.12;
+    }
+    return;
+  }
+
+  // Everything else: keep the authoritative Kenney GLB color untouched.
+}

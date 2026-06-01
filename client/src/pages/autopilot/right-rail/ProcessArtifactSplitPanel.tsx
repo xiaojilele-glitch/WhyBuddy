@@ -126,6 +126,13 @@ export const ProcessArtifactSplitPanel: FC<ProcessArtifactSplitPanelProps> = ({
     (state) => state.agentReasoning.entries
   );
   const sourceReasoningEntries = reasoningEntries ?? storeReasoningEntries;
+  const scopedReasoningEntries = useMemo(
+    () =>
+      job?.id
+        ? sourceReasoningEntries.filter(entry => entry.jobId === job.id)
+        : sourceReasoningEntries,
+    [sourceReasoningEntries, job?.id]
+  );
   const filterSet = useMemo(
     () =>
       stageFilter === undefined
@@ -143,8 +150,8 @@ export const ProcessArtifactSplitPanel: FC<ProcessArtifactSplitPanelProps> = ({
     [artifacts, job?.artifacts, artifactTypeSet]
   );
   const reasoningCards = useMemo(
-    () => deriveReasoningCards(sourceReasoningEntries, filterSet),
-    [sourceReasoningEntries, filterSet]
+    () => deriveReasoningCards(scopedReasoningEntries, filterSet),
+    [scopedReasoningEntries, filterSet]
   );
   const fallbackReasoningCards = useMemo(
     () =>
@@ -162,17 +169,19 @@ export const ProcessArtifactSplitPanel: FC<ProcessArtifactSplitPanelProps> = ({
   return (
     <section
       data-testid="autopilot-process-artifact-split-panel"
-      className="grid min-h-0 min-w-0 gap-2 overflow-hidden rounded-lg border border-slate-200 bg-white p-2 shadow-sm lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start"
+      className="grid min-h-0 min-w-0 gap-3 overflow-hidden border border-[#E5E5E5] bg-white p-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start"
+      style={{ borderRadius: "0px" }}
     >
       <div
         data-testid="autopilot-process-execution-lane"
-        className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-slate-100 bg-slate-50/80 p-2"
+        className="flex min-h-0 min-w-0 flex-col overflow-hidden border border-[#EEEEEE] bg-[#FAFAFA] p-3"
+        style={{ borderRadius: "0px" }}
       >
-        <LaneTitle>
+        <LaneTitle glyph="■">
           {executionTitle ?? DEFAULT_EXECUTION_TITLE[locale]}
         </LaneTitle>
         {executionCards.length > 0 ? (
-          <div className="mt-2 grid min-h-0 flex-1 gap-2 overflow-y-auto pr-1">
+          <div className="mt-3 grid min-h-0 flex-1 gap-2 overflow-y-auto pr-1">
             {executionCards.map((entry, index) => (
               <ReasoningCard
                 key={`${entry.id}-${index}`}
@@ -192,13 +201,14 @@ export const ProcessArtifactSplitPanel: FC<ProcessArtifactSplitPanelProps> = ({
 
       <div
         data-testid="autopilot-process-artifact-lane"
-        className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-slate-100 bg-white p-2"
+        className="flex min-h-0 min-w-0 flex-col overflow-hidden border border-[#EEEEEE] bg-white p-3"
+        style={{ borderRadius: "0px" }}
       >
-        <LaneTitle>
+        <LaneTitle glyph="◇">
           {artifactTitle ?? DEFAULT_ARTIFACT_TITLE[locale]}
         </LaneTitle>
         {artifactCards.length > 0 ? (
-          <div className="mt-2 grid min-h-0 flex-1 gap-2 overflow-y-auto pr-1">
+          <div className="mt-3 grid min-h-0 flex-1 gap-2 overflow-y-auto pr-1">
             {artifactCards.map((entry, index) => (
               <div
                 key={`${entry.id}-${index}`}
@@ -228,8 +238,18 @@ export const ProcessArtifactSplitPanel: FC<ProcessArtifactSplitPanelProps> = ({
 
 export default ProcessArtifactSplitPanel;
 
-const LaneTitle: FC<{ children: string }> = ({ children }) => (
-  <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">
+/**
+ * mirofish .panel-header — JetBrains Mono 0.8rem #999, with leading
+ * glyph ("■" for execution, "◇" for artifact).
+ */
+const LaneTitle: FC<{ children: string; glyph?: string }> = ({
+  children,
+  glyph = "■",
+}) => (
+  <div className="font-mono text-[12.8px] uppercase tracking-[0.04em] text-[#999] flex items-center gap-2">
+    <span className="text-[#FF4500]" aria-hidden="true">
+      {glyph}
+    </span>
     {children}
   </div>
 );
@@ -240,7 +260,8 @@ const EmptyLane: FC<{ children: string; testId: string }> = ({
 }) => (
   <p
     data-testid={testId}
-    className="mt-2 rounded-md border border-dashed border-slate-200 bg-white px-3 py-3 text-xs text-slate-500"
+    className="mt-3 border border-dashed border-[#E5E5E5] bg-white px-3 py-3 font-mono text-[11px] text-[#666]"
+    style={{ borderRadius: "0px" }}
   >
     {children}
   </p>
@@ -250,7 +271,8 @@ const ExecutionPlaceholderCard: FC<{ label: string }> = ({ label }) => (
   <div
     data-testid="autopilot-process-execution-placeholder"
     aria-busy="true"
-    className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-4 text-xs font-semibold text-slate-400"
+    className="mt-3 border border-[#EEEEEE] bg-white px-3 py-4 font-mono text-[11px] text-[#999]"
+    style={{ borderRadius: "0px" }}
   >
     {label}
   </div>
@@ -260,7 +282,8 @@ const ArtifactPlaceholderCard: FC<{ label: string }> = ({ label }) => (
   <div
     data-testid="autopilot-process-artifact-placeholder"
     aria-busy="true"
-    className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-4 text-xs font-semibold text-slate-400"
+    className="mt-3 border border-[#EEEEEE] bg-white px-3 py-4 font-mono text-[11px] text-[#999]"
+    style={{ borderRadius: "0px" }}
   >
     {label}
   </div>

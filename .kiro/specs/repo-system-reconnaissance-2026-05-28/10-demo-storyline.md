@@ -9,7 +9,7 @@ _Implements: REQ-2.5, REQ-6.1 — Validates: Property 7_
 
 ## One-line summary
 
-`Cube Pets Office` is **Mission as Task Autopilot**: the user states a destination, the system plans a route, executes the fleet, and replays evidence — all on top of the closed Mission Execution chain. Every storyline below tells the same loop from a different audience's vantage point.
+`WhyBuddy` is **Mission as Task Autopilot**: the user states a destination, the system plans a route, executes the fleet, and replays evidence — all on top of the closed Mission Execution chain. Every storyline below tells the same loop from a different audience's vantage point.
 
 ---
 
@@ -55,7 +55,7 @@ _Implements: REQ-2.5, REQ-6.1 — Validates: Property 7_
 
 ### 3. Fundraising storyline — "Defensive moat = closed Mission chain × Audit chain × Lineage DAG × replay-grade evidence"
 
-**Headline**: *Other agent platforms ship a chat-loop and call it a day. Cube Pets Office ships a closed loop with audit, lineage, and replay built into the runtime.*
+**Headline**: *Other agent platforms ship a chat-loop and call it a day. WhyBuddy ships a closed loop with audit, lineage, and replay built into the runtime.*
 
 **Differentiators**:
 1. **Closed Mission chain**: Mission lifecycle is a state machine, not a transcript. Each stage is auditable, replayable, and resumable.

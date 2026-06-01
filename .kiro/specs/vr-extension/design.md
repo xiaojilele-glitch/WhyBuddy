@@ -2,7 +2,7 @@
 
 ## 概述
 
-AR/VR 扩展模块在现有 Cube Pets Office 3D 场景（React Three Fiber + Three.js）基础上，构建沉浸式 VR 交互层。当前阶段聚焦于核心数据模型、渲染管道和平台适配接口的实现，VR 硬件集成作为远期演进方向。
+AR/VR 扩展模块在现有 WhyBuddy 3D 场景（React Three Fiber + Three.js）基础上，构建沉浸式 VR 交互层。当前阶段聚焦于核心数据模型、渲染管道和平台适配接口的实现，VR 硬件集成作为远期演进方向。
 
 设计原则：
 - 分层架构：数据模型层 → 渲染管道层 → 交互层 → 平台适配层

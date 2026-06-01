@@ -1,7 +1,7 @@
 /**
  * 跨框架导出格式契约
  *
- * cross-framework-export 模块将 Cube Pets Office 的动态组织结构和
+ * cross-framework-export 模块将 WhyBuddy 的动态组织结构和
  * 十阶段工作流配置导出为 CrewAI、LangGraph、AutoGen 兼容格式。
  * 导出产物为 ZIP 包（Python 代码 + YAML/JSON 配置），用户解压后可直接运行。
  */

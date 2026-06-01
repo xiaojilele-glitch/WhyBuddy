@@ -79,17 +79,17 @@ inclusion: manual
 
 | 能力线 | Worktree | 分支 | 当前状态 | 验证状态 | 最近产出 |
 | --- | --- | --- | --- | --- | --- |
-| main-control | `cube-pets-office-web-aigc-0-main-control` | `chore/web-aigc-main-control` | 总控保留 | 不适用 | 不承担功能开发 |
-| platform-a | `cube-pets-office-web-aigc-1-platform-a` | `feat/web-aigc-platform-a` | 已并入主仓底座薄切片并验证通过 | runtime / graph projection 定向测试通过，`node --run check` 已通过 | 统一 workflow domain/runtime、runtime routes、server/shared tests |
-| platform-b | `cube-pets-office-web-aigc-2-platform-b` | `feat/web-aigc-platform-b` | 已并入主仓底座薄切片并验证通过 | `mission-store`、`mission-routes` 与相关 workflow 回归测试通过，`node --run check` 已通过 | mission/session projection links、`/api/tasks/:id/projection`、`/api/tasks/:id/session` |
-| platform-c | `cube-pets-office-web-aigc-3-platform-c` | `feat/web-aigc-platform-c` | 已完成首刀，待后续收口 | 测试文件已补，正式运行受依赖阻塞 | governance gate、permission audit 镜像主审计链、`/api/audit` |
-| dialogue-qa | `cube-pets-office-web-aigc-4-dialogue-qa` | `feat/web-aigc-dialogue-qa` | 已完成首刀，待后续收口 | 测试文件已补，正式运行受依赖阻塞 | `llm/dialogue` 与 `knowledge_qa` 兼容执行入口 |
-| hitl-session | `cube-pets-office-web-aigc-5-hitl-session` | `feat/web-aigc-hitl-session` | 已完成首刀，待后续收口 | 测试文件已补，正式运行受依赖阻塞 | `DecisionPanel`、`DecisionHistory`、mission client、decision metadata |
-| content-processing | `cube-pets-office-web-aigc-6-content-processing` | `feat/web-aigc-content-processing` | 已并入主仓并验证通过 | `4` 个路由兼容测试通过，`node --run check` 已通过 | `document_search + fragment_search` RAG adapter |
-| multimodal-output | `cube-pets-office-web-aigc-7-multimodal-output` | `feat/web-aigc-multimodal-output` | 已并入主仓并验证通过 | `10` 个测试通过，`node --run check` 已通过 | OCR provider、vision output artifact、`POST /api/vision/ocr`、下载接口 |
-| tools-and-agents | `cube-pets-office-web-aigc-8-tools-and-agents` | `feat/web-aigc-tools-and-agents` | 已完成首刀，待后续收口 | 测试文件已补，正式运行受依赖阻塞 | `auto_agent` adapter、`/api/a2a/auto-agent`、skills/guest-agents execute |
-| controlflow | `cube-pets-office-web-aigc-9-controlflow` | `feat/web-aigc-controlflow` | 已并入主仓并验证通过 | 图投影定向测试通过，`node --run check` 已通过 | `start / variable_assignment / condition / end` controlflow adapter |
-| risk-actions | `cube-pets-office-web-aigc-10-risk-actions` | `feat/web-aigc-risk-actions` | 已完成首刀，待后续收口 | 测试文件已补，正式运行受依赖阻塞 | `vector_insert` risk action route、adapter、database checker、RAG ingest 接线 |
+| main-control | `whybuddy-web-aigc-0-main-control` | `chore/web-aigc-main-control` | 总控保留 | 不适用 | 不承担功能开发 |
+| platform-a | `whybuddy-web-aigc-1-platform-a` | `feat/web-aigc-platform-a` | 已并入主仓底座薄切片并验证通过 | runtime / graph projection 定向测试通过，`node --run check` 已通过 | 统一 workflow domain/runtime、runtime routes、server/shared tests |
+| platform-b | `whybuddy-web-aigc-2-platform-b` | `feat/web-aigc-platform-b` | 已并入主仓底座薄切片并验证通过 | `mission-store`、`mission-routes` 与相关 workflow 回归测试通过，`node --run check` 已通过 | mission/session projection links、`/api/tasks/:id/projection`、`/api/tasks/:id/session` |
+| platform-c | `whybuddy-web-aigc-3-platform-c` | `feat/web-aigc-platform-c` | 已完成首刀，待后续收口 | 测试文件已补，正式运行受依赖阻塞 | governance gate、permission audit 镜像主审计链、`/api/audit` |
+| dialogue-qa | `whybuddy-web-aigc-4-dialogue-qa` | `feat/web-aigc-dialogue-qa` | 已完成首刀，待后续收口 | 测试文件已补，正式运行受依赖阻塞 | `llm/dialogue` 与 `knowledge_qa` 兼容执行入口 |
+| hitl-session | `whybuddy-web-aigc-5-hitl-session` | `feat/web-aigc-hitl-session` | 已完成首刀，待后续收口 | 测试文件已补，正式运行受依赖阻塞 | `DecisionPanel`、`DecisionHistory`、mission client、decision metadata |
+| content-processing | `whybuddy-web-aigc-6-content-processing` | `feat/web-aigc-content-processing` | 已并入主仓并验证通过 | `4` 个路由兼容测试通过，`node --run check` 已通过 | `document_search + fragment_search` RAG adapter |
+| multimodal-output | `whybuddy-web-aigc-7-multimodal-output` | `feat/web-aigc-multimodal-output` | 已并入主仓并验证通过 | `10` 个测试通过，`node --run check` 已通过 | OCR provider、vision output artifact、`POST /api/vision/ocr`、下载接口 |
+| tools-and-agents | `whybuddy-web-aigc-8-tools-and-agents` | `feat/web-aigc-tools-and-agents` | 已完成首刀，待后续收口 | 测试文件已补，正式运行受依赖阻塞 | `auto_agent` adapter、`/api/a2a/auto-agent`、skills/guest-agents execute |
+| controlflow | `whybuddy-web-aigc-9-controlflow` | `feat/web-aigc-controlflow` | 已并入主仓并验证通过 | 图投影定向测试通过，`node --run check` 已通过 | `start / variable_assignment / condition / end` controlflow adapter |
+| risk-actions | `whybuddy-web-aigc-10-risk-actions` | `feat/web-aigc-risk-actions` | 已完成首刀，待后续收口 | 测试文件已补，正式运行受依赖阻塞 | `vector_insert` risk action route、adapter、database checker、RAG ingest 接线 |
 
 ## 已完成首刀的 9 条线
 
@@ -99,10 +99,10 @@ inclusion: manual
 
 关键文件：
 
-- [shared/workflow-domain.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-1-platform-a/shared/workflow-domain.ts)
-- [shared/workflow-runtime-engine.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-1-platform-a/shared/workflow-runtime-engine.ts)
-- [server/core/workflow-runtime-engine.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-1-platform-a/server/core/workflow-runtime-engine.ts)
-- [server/routes/workflows.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-1-platform-a/server/routes/workflows.ts)
+- [shared/workflow-domain.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-1-platform-a/shared/workflow-domain.ts)
+- [shared/workflow-runtime-engine.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-1-platform-a/shared/workflow-runtime-engine.ts)
+- [server/core/workflow-runtime-engine.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-1-platform-a/server/core/workflow-runtime-engine.ts)
+- [server/routes/workflows.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-1-platform-a/server/routes/workflows.ts)
 
 当前状态：低风险底座已经并入主仓并完成定向验证，新增 runtime-definition/runtime-state/runtime/run/runtime/resume 路由、共享状态映射与 runtime engine 测试；更高冲突的热路由收口放到后续阶段。
 
@@ -112,10 +112,10 @@ inclusion: manual
 
 关键文件：
 
-- [server/tasks/mission-projection.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-2-platform-b/server/tasks/mission-projection.ts)
-- [shared/mission/projection.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-2-platform-b/shared/mission/projection.ts)
-- [server/routes/tasks.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-2-platform-b/server/routes/tasks.ts)
-- [server/memory/session-store.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-2-platform-b/server/memory/session-store.ts)
+- [server/tasks/mission-projection.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-2-platform-b/server/tasks/mission-projection.ts)
+- [shared/mission/projection.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-2-platform-b/shared/mission/projection.ts)
+- [server/routes/tasks.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-2-platform-b/server/routes/tasks.ts)
+- [server/memory/session-store.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-2-platform-b/server/memory/session-store.ts)
 
 当前状态：已经并入主仓并完成定向验证，新增 mission projection 契约、projection 持久化、`GET /api/tasks/:id/projection` 与 `GET /api/tasks/:id/session` 两个只读收口接口。
 
@@ -125,10 +125,10 @@ inclusion: manual
 
 关键文件：
 
-- [server/permission/governance-policy.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-3-platform-c/server/permission/governance-policy.ts)
-- [server/permission/check-engine.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-3-platform-c/server/permission/check-engine.ts)
-- [server/permission/audit-logger.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-3-platform-c/server/permission/audit-logger.ts)
-- [server/tests/permission-governance-audit-routes.test.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-3-platform-c/server/tests/permission-governance-audit-routes.test.ts)
+- [server/permission/governance-policy.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-3-platform-c/server/permission/governance-policy.ts)
+- [server/permission/check-engine.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-3-platform-c/server/permission/check-engine.ts)
+- [server/permission/audit-logger.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-3-platform-c/server/permission/audit-logger.ts)
+- [server/tests/permission-governance-audit-routes.test.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-3-platform-c/server/tests/permission-governance-audit-routes.test.ts)
 
 当前状态：已完成第一段闭环，已经把 `/api/audit` 接入主 server，并新增治理审计事件。
 
@@ -138,10 +138,10 @@ inclusion: manual
 
 关键文件：
 
-- [server/routes/node-adapters/chat-node-adapter.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-4-dialogue-qa/server/routes/node-adapters/chat-node-adapter.ts)
-- [server/routes/node-adapters/knowledge-node-adapter.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-4-dialogue-qa/server/routes/node-adapters/knowledge-node-adapter.ts)
-- [server/routes/chat.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-4-dialogue-qa/server/routes/chat.ts)
-- [server/routes/knowledge.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-4-dialogue-qa/server/routes/knowledge.ts)
+- [server/routes/node-adapters/chat-node-adapter.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-4-dialogue-qa/server/routes/node-adapters/chat-node-adapter.ts)
+- [server/routes/node-adapters/knowledge-node-adapter.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-4-dialogue-qa/server/routes/node-adapters/knowledge-node-adapter.ts)
+- [server/routes/chat.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-4-dialogue-qa/server/routes/chat.ts)
+- [server/routes/knowledge.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-4-dialogue-qa/server/routes/knowledge.ts)
 
 当前状态：已完成第一段闭环。
 
@@ -151,10 +151,10 @@ inclusion: manual
 
 关键文件：
 
-- [client/src/components/tasks/DecisionPanel.tsx](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-5-hitl-session/client/src/components/tasks/DecisionPanel.tsx)
-- [client/src/components/tasks/DecisionHistory.tsx](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-5-hitl-session/client/src/components/tasks/DecisionHistory.tsx)
-- [client/src/lib/mission-client.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-5-hitl-session/client/src/lib/mission-client.ts)
-- [server/tasks/mission-decision.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-5-hitl-session/server/tasks/mission-decision.ts)
+- [client/src/components/tasks/DecisionPanel.tsx](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-5-hitl-session/client/src/components/tasks/DecisionPanel.tsx)
+- [client/src/components/tasks/DecisionHistory.tsx](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-5-hitl-session/client/src/components/tasks/DecisionHistory.tsx)
+- [client/src/lib/mission-client.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-5-hitl-session/client/src/lib/mission-client.ts)
+- [server/tasks/mission-decision.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-5-hitl-session/server/tasks/mission-decision.ts)
 
 当前状态：已完成第一段闭环，能够保留 `sessionId / interactionId / branchKey / formData` 等 HITL metadata。
 
@@ -164,10 +164,10 @@ inclusion: manual
 
 关键文件：
 
-- [server/rag/web-aigc-search-adapter.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-6-content-processing/server/rag/web-aigc-search-adapter.ts)
-- [shared/rag/web-aigc-search.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-6-content-processing/shared/rag/web-aigc-search.ts)
-- [server/routes/rag.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-6-content-processing/server/routes/rag.ts)
-- [server/tests/rag-web-aigc-routes.test.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-6-content-processing/server/tests/rag-web-aigc-routes.test.ts)
+- [server/rag/web-aigc-search-adapter.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-6-content-processing/server/rag/web-aigc-search-adapter.ts)
+- [shared/rag/web-aigc-search.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-6-content-processing/shared/rag/web-aigc-search.ts)
+- [server/routes/rag.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-6-content-processing/server/routes/rag.ts)
+- [server/tests/rag-web-aigc-routes.test.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-6-content-processing/server/tests/rag-web-aigc-routes.test.ts)
 
 当前状态：已完成第一段闭环。
 
@@ -177,10 +177,10 @@ inclusion: manual
 
 关键文件：
 
-- [server/core/ocr-provider.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-7-multimodal-output/server/core/ocr-provider.ts)
-- [server/core/vision-output.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-7-multimodal-output/server/core/vision-output.ts)
-- [server/routes/vision.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-7-multimodal-output/server/routes/vision.ts)
-- [server/tests/vision-routes.test.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-7-multimodal-output/server/tests/vision-routes.test.ts)
+- [server/core/ocr-provider.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-7-multimodal-output/server/core/ocr-provider.ts)
+- [server/core/vision-output.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-7-multimodal-output/server/core/vision-output.ts)
+- [server/routes/vision.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-7-multimodal-output/server/routes/vision.ts)
+- [server/tests/vision-routes.test.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-7-multimodal-output/server/tests/vision-routes.test.ts)
 
 当前状态：已经并入主仓并完成定向验证，而且验证最完整：
 
@@ -194,10 +194,10 @@ inclusion: manual
 
 关键文件：
 
-- [server/tool/api/auto-agent-adapter.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-8-tools-and-agents/server/tool/api/auto-agent-adapter.ts)
-- [server/routes/a2a.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-8-tools-and-agents/server/routes/a2a.ts)
-- [server/routes/skills.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-8-tools-and-agents/server/routes/skills.ts)
-- [server/routes/guest-agents.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-8-tools-and-agents/server/routes/guest-agents.ts)
+- [server/tool/api/auto-agent-adapter.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-8-tools-and-agents/server/tool/api/auto-agent-adapter.ts)
+- [server/routes/a2a.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-8-tools-and-agents/server/routes/a2a.ts)
+- [server/routes/skills.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-8-tools-and-agents/server/routes/skills.ts)
+- [server/routes/guest-agents.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-8-tools-and-agents/server/routes/guest-agents.ts)
 
 当前状态：主仓已存在 `auto_agent` 最小闭环及相关测试，后续重点不是整分支搬运，而是按 `mcp / internal_api / passthrough_api / message_notification` 做对账式补差收口。
 
@@ -207,10 +207,10 @@ inclusion: manual
 
 关键文件：
 
-- [server/core/web-aigc-controlflow.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-9-controlflow/server/core/web-aigc-controlflow.ts)
-- [server/core/workflow-graph-projection.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-9-controlflow/server/core/workflow-graph-projection.ts)
-- [shared/workflow-graph.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-9-controlflow/shared/workflow-graph.ts)
-- [server/tests/workflow-graph-projection.test.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-9-controlflow/server/tests/workflow-graph-projection.test.ts)
+- [server/core/web-aigc-controlflow.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-9-controlflow/server/core/web-aigc-controlflow.ts)
+- [server/core/workflow-graph-projection.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-9-controlflow/server/core/workflow-graph-projection.ts)
+- [shared/workflow-graph.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-9-controlflow/shared/workflow-graph.ts)
+- [server/tests/workflow-graph-projection.test.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-9-controlflow/server/tests/workflow-graph-projection.test.ts)
 
 当前状态：已经并入主仓并完成定向验证，主仓图投影现在可以直接识别 Web-AIGC `start / variable_assignment / condition / end` 控制流节点，并投影 `control_flow` 分支边。
 
@@ -220,11 +220,11 @@ inclusion: manual
 
 关键文件：
 
-- [shared/web-aigc-risk-actions.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-10-risk-actions/shared/web-aigc-risk-actions.ts)
-- [server/web-aigc/vector-insert-adapter.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-10-risk-actions/server/web-aigc/vector-insert-adapter.ts)
-- [server/routes/web-aigc-risk-actions.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-10-risk-actions/server/routes/web-aigc-risk-actions.ts)
-- [server/tests/vector-insert-adapter.test.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-10-risk-actions/server/tests/vector-insert-adapter.test.ts)
-- [server/tests/web-aigc-risk-actions-routes.test.ts](/C:/Users/wangchunji/Documents/cube-pets-office-web-aigc-10-risk-actions/server/tests/web-aigc-risk-actions-routes.test.ts)
+- [shared/web-aigc-risk-actions.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-10-risk-actions/shared/web-aigc-risk-actions.ts)
+- [server/web-aigc/vector-insert-adapter.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-10-risk-actions/server/web-aigc/vector-insert-adapter.ts)
+- [server/routes/web-aigc-risk-actions.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-10-risk-actions/server/routes/web-aigc-risk-actions.ts)
+- [server/tests/vector-insert-adapter.test.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-10-risk-actions/server/tests/vector-insert-adapter.test.ts)
+- [server/tests/web-aigc-risk-actions-routes.test.ts](/C:/Users/wangchunji/Documents/whybuddy-web-aigc-10-risk-actions/server/tests/web-aigc-risk-actions-routes.test.ts)
 
 当前状态：已完成第一段闭环，已经打通 `POST /api/rag/risk-actions/vector-insert`，并把 namespace/collection 隔离、permission resource 解析、RAG ingest 接线都串起来了。
 

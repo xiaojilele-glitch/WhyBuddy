@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1320" viewBox="0 0 1800 1320" role="img" aria-labelledby="title desc">
-  <title id="title">Cube Pets Office 当前系统执行路径</title>
+  <title id="title">WhyBuddy 当前系统执行路径</title>
   <desc id="desc">展示当前高级模式项目空间从登录态、项目启动、路线评估、澄清门、任务创建、执行器回调到前端实时更新的执行路径。绿色表示已走通或当前所在主路径，黄色表示当前阻塞的澄清门，蓝色表示执行器和实时回传通道，灰色表示已实现但本次尚未触发。</desc>
   <defs>
     <marker id="arrow-green" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
@@ -52,7 +52,7 @@
 
   <rect class="bg" x="0" y="0" width="1800" height="1320"/>
 
-  <text class="title" x="48" y="54">Cube Pets Office 当前系统执行路径</text>
+  <text class="title" x="48" y="54">WhyBuddy 当前系统执行路径</text>
   <text class="subtitle" x="48" y="86">当前画面：高级模式 / 办公室 / 项目空间 / 权限管理系统 / Clarifying / 3 个待回答澄清问题</text>
 
   <g transform="translate(1190 28)">

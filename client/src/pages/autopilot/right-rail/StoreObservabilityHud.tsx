@@ -26,7 +26,6 @@ import type { FC } from "react";
 import { AgentReasoningSubTimeline } from "./AgentReasoningSubTimeline";
 import { CapabilityRail } from "./CapabilityRail";
 import { FleetActivationLog } from "./FleetActivationLog";
-import { RoleStatusStrip } from "./RoleStatusStrip";
 
 /**
  * 跨阶段 HUD overlay。建议作为 `AutopilotVisualStage` 内部 absolute-positioned
@@ -37,6 +36,10 @@ import { RoleStatusStrip } from "./RoleStatusStrip";
  *   </div>
  *
  * 也可以作为右栏底部的内联挂载点；本组件不强制要求父级提供 absolute 定位。
+ *
+ * whybuddy-3d-real-role-driven-scene-2026-05-29 修订：移除 `<RoleStatusStrip />`，
+ * 角色身份 / 状态已由 3D 真实角色承载；`<CapabilityRail />` 现在只承载能力调用
+ * 明细面板（顶部全量能力 pills 已移除，由 3D 角色桌前 chips 承载）。
  */
 export const StoreObservabilityHud: FC = () => {
   return (
@@ -44,7 +47,6 @@ export const StoreObservabilityHud: FC = () => {
       data-testid="store-observability-hud"
       className="flex flex-col gap-1.5 rounded-[10px] bg-white/85 p-2 backdrop-blur-md shadow-sm"
     >
-      <RoleStatusStrip />
       <CapabilityRail />
       <AgentReasoningSubTimeline />
       <FleetActivationLog />

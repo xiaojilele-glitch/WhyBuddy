@@ -6,7 +6,7 @@ inclusion: manual
 
 ## 文档目的
 
-本索引用于跟踪把 `web-aigc` 编排能力并入 Cube Pets Office 过程中需要做出的关键架构决策。
+本索引用于跟踪把 `web-aigc` 编排能力并入 WhyBuddy 过程中需要做出的关键架构决策。
 
 ## 已规划 ADR
 

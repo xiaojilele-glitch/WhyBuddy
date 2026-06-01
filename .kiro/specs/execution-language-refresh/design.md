@@ -51,11 +51,11 @@
 
 优先覆盖：
 
-- [WorkflowPanel.tsx](c:/Users/2303670/Documents/cube-pets-office/client/src/components/WorkflowPanel.tsx)
-- [TaskDetailView.tsx](c:/Users/2303670/Documents/cube-pets-office/client/src/components/tasks/TaskDetailView.tsx)
-- [TasksPage.tsx](c:/Users/2303670/Documents/cube-pets-office/client/src/pages/tasks/TasksPage.tsx)
-- [TaskDetailPage.tsx](c:/Users/2303670/Documents/cube-pets-office/client/src/pages/tasks/TaskDetailPage.tsx)
-- [messages.ts](c:/Users/2303670/Documents/cube-pets-office/client/src/i18n/messages.ts)
+- [WorkflowPanel.tsx](c:/Users/2303670/Documents/whybuddy/client/src/components/WorkflowPanel.tsx)
+- [TaskDetailView.tsx](c:/Users/2303670/Documents/whybuddy/client/src/components/tasks/TaskDetailView.tsx)
+- [TasksPage.tsx](c:/Users/2303670/Documents/whybuddy/client/src/pages/tasks/TasksPage.tsx)
+- [TaskDetailPage.tsx](c:/Users/2303670/Documents/whybuddy/client/src/pages/tasks/TaskDetailPage.tsx)
+- [messages.ts](c:/Users/2303670/Documents/whybuddy/client/src/i18n/messages.ts)
 
 ## 实现策略
 

@@ -163,6 +163,32 @@ describe("MiroFishCardStream", () => {
     expect(markup).not.toContain('thought>C');
   });
 
+  it("filters store reasoning entries to the current job when job is provided", () => {
+    mockedSlices.agentReasoningEntries = [
+      makeReasoning({
+        id: "old-job-entry",
+        jobId: "job-old",
+        phase: "thinking",
+        thought: "old WhyBuddy residue",
+        stageId: "spec_docs",
+      }),
+      makeReasoning({
+        id: "current-job-entry",
+        jobId: "job-1",
+        phase: "thinking",
+        thought: "current permission project",
+        stageId: "spec_docs",
+      }),
+    ];
+
+    const markup = renderToStaticMarkup(
+      <MiroFishCardStream locale="en-US" job={makeJob({ id: "job-1" })} />
+    );
+
+    expect(markup).toContain("current permission project");
+    expect(markup).not.toContain("old WhyBuddy residue");
+  });
+
   it("stageFilter readonly string[]:多阶段合并视图", () => {
     mockedSlices.agentReasoningEntries = [
       makeReasoning({

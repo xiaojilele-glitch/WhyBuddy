@@ -2,7 +2,7 @@
 
 ## 简介
 
-AgentOperator 是一个自定义 Kubernetes Operator，用于管理 Cube Pets Office 平台中 Agent Pod 的生命周期、自动扩缩容、资源分配和故障恢复。通过 CRD（Custom Resource Definition）定义 Agent 工作负载，Operator 监听 CRD 变化并自动创建、更新、删除相应的 Pod、Service、ConfigMap 等资源。使用 TypeScript 和 `@kubernetes/client-node` 库实现。
+AgentOperator 是一个自定义 Kubernetes Operator，用于管理 WhyBuddy 平台中 Agent Pod 的生命周期、自动扩缩容、资源分配和故障恢复。通过 CRD（Custom Resource Definition）定义 Agent 工作负载，Operator 监听 CRD 变化并自动创建、更新、删除相应的 Pod、Service、ConfigMap 等资源。使用 TypeScript 和 `@kubernetes/client-node` 库实现。
 
 ## 术语表
 

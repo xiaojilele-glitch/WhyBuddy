@@ -122,7 +122,7 @@ interface ProjectEvidence {
 第一阶段使用 localStorage：
 
 ```text
-cube-pets-office.project-store.v1
+whybuddy.project-store.v1
 ```
 
 持久化内容包括：

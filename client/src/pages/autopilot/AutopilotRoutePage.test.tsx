@@ -11,6 +11,7 @@ const { projectState } = vi.hoisted(() => ({
 import AutopilotRoutePage, {
   ClarificationPanel,
   AutopilotSpecTreeHandoffPanel,
+  buildBlueprintRoleLabels,
   resolveActiveAutopilotPage,
   resolveAutopilotPageProjection,
   resolveHistoryActiveJobIdForCurrentJob,
@@ -50,6 +51,41 @@ describe("AutopilotRoutePage", () => {
     projectState.currentProjectId = null;
     projectState.projects = [];
     useAppStore.setState({ locale: "zh-CN" });
+  });
+
+  it("builds full 3D role labels from canonical names plus runtime displayName", () => {
+    const labels = buildBlueprintRoleLabels(
+      {
+        roleTimelines: [
+          {
+            roleId: "role-quality-auditor",
+            roleName: "role-quality-auditor",
+            displayName: "Quality Auditor",
+            displayLabel: "审计者",
+          },
+          {
+            roleId: "spec-architect",
+            roleName: "spec-architect",
+            displayName: "SPEC architect",
+            displayLabel: "spec-architect",
+          },
+          {
+            roleId: "repository-analyst",
+            roleName: "repository-analyst",
+            displayName: "repository-analyst",
+            displayLabel: "repository-analyst",
+          },
+        ],
+        presence: [],
+      } as any,
+      "zh-CN"
+    );
+
+    expect(labels).toEqual({
+      "role-quality-auditor": "Quality Auditor",
+      "spec-architect": "SPEC architect",
+      "repository-analyst": "Repository Analyst",
+    });
   });
 
   it("renders the 3D scene, scene HUD, and sequential workflow in Chinese", () => {
@@ -398,18 +434,13 @@ describe("AutopilotRoutePage", () => {
     expect(source).toContain("onNavigateWorkflowStage={handleNavigateWorkflowStage}");
   });
 
-  it("wires the right-rail history entry into an actual version history panel", async () => {
+  it("wires the header history entry into an actual version history panel", async () => {
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
     const routeSource = await fs.readFile(
       path.resolve(__dirname, "./AutopilotRoutePage.tsx"),
       "utf8"
     );
-    const railSource = await fs.readFile(
-      path.resolve(__dirname, "./right-rail/AutopilotRightRail.tsx"),
-      "utf8"
-    );
-
     expect(routeSource).toMatch(/AUTOPILOT_HISTORY_OPEN_EVENT/);
     expect(routeSource).toMatch(/readAutopilotHistoryOpenFromLocation/);
     expect(routeSource).toMatch(/data-testid="autopilot-version-history-panel"/);
@@ -418,8 +449,23 @@ describe("AutopilotRoutePage", () => {
     expect(routeSource).toMatch(/<CompareView/);
     expect(routeSource).toMatch(/resolveHistoryUrlSelectedJob/);
     expect(routeSource).toMatch(/appliedHistoryJobIdRef/);
-    expect(railSource).toMatch(/autopilot:history-open/);
-    expect(railSource).toMatch(/window\.dispatchEvent/);
+    expect(routeSource).toMatch(/<HistoryEntryPoint/);
+    expect(routeSource).toMatch(/handleHeaderOpenHistory/);
+    expect(routeSource).toMatch(/window\.dispatchEvent/);
+  });
+
+  it("passes distinct active/latest job ids into the 3D scene for history replay timing", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const source = await fs.readFile(
+      path.resolve(__dirname, "./AutopilotRoutePage.tsx"),
+      "utf8"
+    );
+
+    expect(source).toMatch(/const\s+latestSceneJobIdRef\s*=\s*useRef/);
+    expect(source).toMatch(/latestSceneJobId=\{latestSceneJobIdRef\.current/);
+    expect(source).toMatch(/activeJobId=\{job\?\.id\}/);
+    expect(source).not.toMatch(/latestJobId=\{job\?\.id\}/);
   });
 
   it("resolves a deep-linked active history job that differs from the current rail job", () => {
@@ -511,7 +557,7 @@ describe("AutopilotRoutePage", () => {
     );
 
     expect(routeSource).toMatch(/const refreshLatestGenerationSnapshot\s*=\s*useCallback/);
-    expect(routeSource).toMatch(/fetchLatestBlueprintGenerationJob\(\{\s*projectId:\s*currentProjectId\s*\?\?\s*undefined,\s*\}\)/);
+    expect(routeSource).toMatch(/fetchLatestBlueprintGenerationJob\(\{\s*projectId:\s*latestProjectId\s*,\s*\}\)/);
     expect(routeSource).toMatch(/onHistoryPanelClosed=\{async \(\) => \{\s*await refreshLatestGenerationSnapshot\(\);\s*\}\}/);
     expect(closeHandler).toMatch(/closeAutopilotHistorySearch\(\)/);
     expect(closeHandler).toMatch(/setHistoryPanelOpen\(false\)/);
@@ -677,7 +723,7 @@ describe("AutopilotRoutePage", () => {
     );
 
     expect(source).toMatch(/fetchLatestBlueprintGenerationJob/);
-    expect(source).toMatch(/fetchLatestBlueprintGenerationJob\(\{\s*projectId:\s*currentProjectId\s*\?\?\s*undefined,\s*\}\)/);
+    expect(source).toMatch(/fetchLatestBlueprintGenerationJob\(\{\s*projectId:\s*latestProjectId\s*,\s*\}\)/);
     expect(source).toMatch(/const applyLatestGenerationSnapshot\s*=\s*useCallback/);
     expect(source).toMatch(/applyLatestGenerationSnapshot\(\s*result\.data\s*\)/);
 
@@ -691,6 +737,24 @@ describe("AutopilotRoutePage", () => {
     expect(helperSource).toMatch(/setIntake\(\s*snapshot\.intake\s*\)/);
     expect(helperSource).toMatch(/resetLatestGenerationSnapshot\(\)/);
     expect(helperSource).toMatch(/setProjectContext\(\s*snapshot\.projectContext\s*\?\?\s*null\s*\)/);
+  });
+
+  it("does not fetch the global latest blueprint job when no current project is selected", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const source = await fs.readFile(
+      path.resolve(__dirname, "./AutopilotRoutePage.tsx"),
+      "utf8"
+    );
+
+    expect(source).toMatch(/if \(!IS_GITHUB_PAGES && !currentProjectId\) \{/);
+
+    const latestFetchRegion = source.slice(
+      source.indexOf("const latestJobRequest ="),
+      source.indexOf("const refreshPagesBlueprintSnapshot")
+    );
+    expect(latestFetchRegion).toMatch(/const latestProjectId = currentProjectId \?\? undefined/);
+    expect(latestFetchRegion).toMatch(/projectId:\s*latestProjectId/);
   });
 
   it("uses the GitHub Pages static blueprint runtime without remote right-rail fetches", async () => {

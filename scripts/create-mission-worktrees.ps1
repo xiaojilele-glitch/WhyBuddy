@@ -9,13 +9,13 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $worktrees = @(
-  @{ Branch = "chore/mission-contracts"; Path = "..\cube-pets-office-0-mission-contracts" },
-  @{ Branch = "feat/mission-core"; Path = "..\cube-pets-office-A-mission-core" },
-  @{ Branch = "feat/lobster-executor"; Path = "..\cube-pets-office-B-lobster-executor" },
-  @{ Branch = "feat/brain-dispatch"; Path = "..\cube-pets-office-C-brain-dispatch" },
-  @{ Branch = "feat/feishu-mission-bridge"; Path = "..\cube-pets-office-D-feishu-mission-bridge" },
-  @{ Branch = "feat/tasks-universe"; Path = "..\cube-pets-office-E-tasks-universe" },
-  @{ Branch = "feat/mission-integration"; Path = "..\cube-pets-office-F-mission-integration" }
+  @{ Branch = "chore/mission-contracts"; Path = "..\whybuddy-0-mission-contracts" },
+  @{ Branch = "feat/mission-core"; Path = "..\whybuddy-A-mission-core" },
+  @{ Branch = "feat/lobster-executor"; Path = "..\whybuddy-B-lobster-executor" },
+  @{ Branch = "feat/brain-dispatch"; Path = "..\whybuddy-C-brain-dispatch" },
+  @{ Branch = "feat/feishu-mission-bridge"; Path = "..\whybuddy-D-feishu-mission-bridge" },
+  @{ Branch = "feat/tasks-universe"; Path = "..\whybuddy-E-tasks-universe" },
+  @{ Branch = "feat/mission-integration"; Path = "..\whybuddy-F-mission-integration" }
 )
 
 Push-Location $repoRoot

@@ -6,9 +6,9 @@
   role="img"
   aria-labelledby="title desc"
 >
-  <title id="title">Cube Pets Office Architecture</title>
+  <title id="title">WhyBuddy Architecture</title>
   <desc id="desc">
-    Product architecture overview for Cube Pets Office updated on 2026-05-11.
+    Product architecture overview for WhyBuddy updated on 2026-05-11.
     This version preserves the 2026-04-26 pastel card layout while adding two
     mainline changes: (1) the autopilot right rail convergence 5 specs that
     shipped shared Destination parser, AutopilotRightRail component with 8

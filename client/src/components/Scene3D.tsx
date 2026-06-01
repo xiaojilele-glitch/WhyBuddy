@@ -54,6 +54,13 @@ const SECONDARY_SCENE_MODELS = [
 
 export type ScenePerformanceProfile = "balanced" | "resizing";
 
+// TODO(Wave 4): No canonical `AutopilotStage` type is exported in the codebase
+// yet. PetWorkers.tsx and BlueprintRuntimeAgents.tsx both keep a permissive
+// local `type AutopilotStage = string` until a canonical stage union exists.
+// We mirror the same alias here so the blueprint-branch passthrough signature
+// matches end-to-end (Scene3D -> PetWorkers -> BlueprintRuntimeAgents).
+type AutopilotStage = string;
+
 /**
  * 自动驾驶 3D 场景融合模式判别。
  * - "blueprint"：蓝图页（/autopilot），3D 场景跟随 BlueprintRealtimeStore。
@@ -85,6 +92,22 @@ export interface Scene3DProps {
    * 派生场景流线信号。mission-first 模式下应保持 null（默认）。
    */
   blueprintJob?: BlueprintGenerationJob | null;
+  /**
+   * Blueprint-branch passthroughs forwarded into `<PetWorkers mode="blueprint">`
+   * (which mounts BlueprintRuntimeAgents). All optional; only consumed by the
+   * blueprint branch. Mission-first callers can omit them entirely.
+   *
+   * - `isReplay`: explicit replay flag. When absent, BlueprintRuntimeAgents
+   *   derives replay from `latestJobId !== activeJobId` when both are present.
+   * - `latestJobId` / `activeJobId`: live vs. selected-historical job ids.
+   * - `activeStage`: the current blueprint stage, used by Wave 4 stage-rule
+   *   connection lines.
+   */
+  isReplay?: boolean;
+  latestJobId?: string;
+  activeJobId?: string;
+  activeStage?: AutopilotStage;
+  roleLabels?: Record<string, string>;
 }
 
 export function Scene3D({
@@ -94,6 +117,11 @@ export function Scene3D({
   projectId = null,
   mode = "mission-first",
   blueprintJob = null,
+  isReplay,
+  latestJobId,
+  activeJobId,
+  activeStage,
+  roleLabels,
 }: Scene3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { isMobile, isTablet, tier } = useViewportTier();
@@ -283,6 +311,7 @@ export function Scene3D({
           <OfficeRoom
             showSecondaryDecor={deferredDetailsReady && !reducedSceneEffects}
             reducedEffects={reducedSceneEffects}
+            mode={mode}
           />
           <SceneStageFlow
             projectId={projectId}
@@ -293,6 +322,11 @@ export function Scene3D({
             projectId={projectId}
             reducedOverlays={!deferredDetailsReady || reducedSceneEffects}
             mode={mode}
+            isReplay={isReplay}
+            latestJobId={latestJobId}
+            activeJobId={activeJobId}
+            activeStage={activeStage}
+            roleLabels={roleLabels}
           />
           <MissionIsland projectId={projectId} mode={mode} />
           <SandboxMonitor projectId={projectId} />
@@ -316,6 +350,16 @@ export function Scene3D({
           ) : null}
         </Suspense>
       </Canvas>
+
+      {/*
+        whybuddy-3d-real-role-driven-scene-2026-05-29 / Wave 0 Task 4
+        Non-canvas DOM marker. Rendered by Scene3D (which owns the DOM) as a
+        sibling ADJACENT to <Canvas>, never inside it — React Three Fiber canvas
+        children cannot be DOM nodes. `data-mode` reflects the active scene
+        fusion mode so the harness P10 assertion can read the mounted shell.
+        Acceptance: Requirement 8.7.
+      */}
+      <div data-testid="whybuddy-3d-shell" data-mode={mode} />
 
       {isRecovering && (
         <div

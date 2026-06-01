@@ -16,7 +16,7 @@
   <!-- Header -->
   <rect x="20" y="20" width="1160" height="100" fill="url(#headerGrad)" rx="8"/>
   <text x="60" y="60" fill="#10b981" font-size="24" font-weight="700">AIGC 节点能力审计报告</text>
-  <text x="60" y="88" fill="#94a3b8" font-size="14">Cube Pets Office · 2026-05-21 · 全量测试通过</text>
+  <text x="60" y="88" fill="#94a3b8" font-size="14">WhyBuddy · 2026-05-21 · 全量测试通过</text>
   <text x="900" y="55" fill="#10b981" font-size="36" font-weight="700">310 / 310</text>
   <text x="900" y="80" fill="#6ee7b7" font-size="14">tests passed · 0 failed</text>
   <text x="900" y="100" fill="#64748b" font-size="12">43 test files · 4.5s total</text>
@@ -199,10 +199,10 @@
 
   <!-- Architecture Comparison -->
   <rect x="20" y="970" width="1160" height="36" fill="#1e293b" rx="4"/>
-  <text x="40" y="994" fill="#818cf8" font-size="13" font-weight="600">🏗️ 架构对比：cube-pets-office vs rbac-system-pc</text>
+  <text x="40" y="994" fill="#818cf8" font-size="13" font-weight="600">🏗️ 架构对比：whybuddy vs rbac-system-pc</text>
 
   <rect x="20" y="1010" width="570" height="200" fill="#0f172a" rx="6" stroke="#334155" stroke-width="1"/>
-  <text x="40" y="1035" fill="#10b981" font-size="12" font-weight="600">cube-pets-office（Runtime-first）</text>
+  <text x="40" y="1035" fill="#10b981" font-size="12" font-weight="600">whybuddy（Runtime-first）</text>
   <text x="40" y="1060" fill="#94a3b8" font-size="11">✅ Wait/Resume HITL（mcp/transaction_flow/selection）</text>
   <text x="40" y="1080" fill="#94a3b8" font-size="11">✅ Replay/Audit observability（每个节点）</text>
   <text x="40" y="1100" fill="#94a3b8" font-size="11">✅ Loop guard（maxIterations 强制终止）</text>

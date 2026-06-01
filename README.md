@@ -1,11 +1,13 @@
 <p align="center">
-  <img src="./docs/assets/banner.png" alt="Cube Pets Office" width="100%" />
+  <img src="./docs/assets/banner.png" alt="WhyBuddy" width="100%" />
 </p>
 
-<h1 align="center">🏢 Cube Pets Office</h1>
+<h1 align="center">🌐 WhyBuddy</h1>
 
 <p align="center">
-  <strong>Type one idea. Get a complete product spec.<br/>Private deploy · Full observability · Evidence trail.</strong>
+  <strong>
+WhyBuddy — an AI agent crew that questions your product idea and rehearses it before you build.</strong><br/>
+  <em>Edge execution · Cloud orchestration · One sentence in, full spec out</em>
 </p>
 
 <p align="center">
@@ -14,87 +16,76 @@
 </p>
 
 <p align="center">
-  <a href="https://opencroc.github.io/cube-pets-office/"><img alt="demo" src="https://img.shields.io/badge/🌐_Live_Demo-blue?style=for-the-badge" /></a>
+  <a href="https://opencroc.github.io/whybuddy/"><img alt="demo" src="https://img.shields.io/badge/🌐_Live_Demo-blue?style=for-the-badge" /></a>
   <a href="./ROADMAP.md"><img alt="roadmap" src="https://img.shields.io/badge/🗺️_Roadmap-111827?style=for-the-badge" /></a>
   <a href="./CONTRIBUTING.md"><img alt="contribute" src="https://img.shields.io/badge/🤝_Contribute-16a34a?style=for-the-badge" /></a>
 </p>
 
-<p align="center">
-  <img alt="status" src="https://img.shields.io/badge/status-early_alpha-orange?style=flat-square" />
-  <img alt="license" src="https://img.shields.io/badge/license-MIT-111827?style=flat-square" />
-  <img alt="stars" src="https://img.shields.io/github/stars/opencroc/cube-pets-office?style=flat-square" />
-  <img alt="ts" src="https://img.shields.io/badge/TypeScript-486k_lines-2563eb?style=flat-square" />
-  <img alt="tests" src="https://img.shields.io/badge/tests-7,771_cases-0f766e?style=flat-square" />
-  <img alt="specs" src="https://img.shields.io/badge/specs-273_dirs-7c3aed?style=flat-square" />
-</p>
+---
+
+## 🚀 Quick Start (1 minute · 2 commands)
+
+```bash
+cp .env.example .env       # then fill in LLM_API_KEY (see "MUST FILL" section)
+docker compose up
+```
+
+Open <http://localhost:3000> and you're in. The WhyBuddy server (3001 internally) is published on host port **3000** so you can navigate directly without remembering port numbers.
+
+> **Three ways to run** — pick whichever matches your environment:
+> 1. **Online demo** — <https://opencroc.github.io/whybuddy/> (browser-only mode, no install).
+> 2. **Docker compose** — the snippet above; one MySQL + one WhyBuddy container.
+> 3. **Local dev** — `pnpm install && pnpm run dev:all` (full stack, hot reload, see [Local Dev](#-local-dev) below).
 
 ---
 
-## ⚡ 30-Second Overview
+## 🔑 MUST FILL — without these you'll get template-only output
 
-> **You type one sentence. The system rehearses the entire product for you.**
->
-> Spec documents · System architecture · Route planning · Prompt packages · Effect previews
->
-> Everything visible. Everything exportable. Everything evidence-backed.
+The server starts even when these are blank, but every autopilot bridge silently
+falls back to deterministic templates and you'll see the same canned answers
+regardless of input. Fill these two and you'll get real LLM-driven generation:
 
-<br/>
+| Variable | What to put | Where to get one |
+|:---------|:------------|:-----------------|
+| **`LLM_API_KEY`** | An OpenAI-compatible API key | OpenAI · DashScope · OpenRouter · Moonshot · SiliconFlow · Zhipu · DeepSeek · any provider that speaks the OpenAI Chat / Responses API |
+| **`SESSION_SECRET`** | Any 64-char hex string | `openssl rand -hex 32` |
 
-<table>
-<tr>
-<td width="50%">
-
-### 🎯 The Problem
-
-You spend **days** writing PRDs, **weeks** aligning teams, **months** before knowing if the direction is right.
-
-</td>
-<td width="50%">
-
-### 💡 The Solution
-
-Type your idea → **5 minutes** → complete rehearsal → decide if it's worth building → not worth it? next idea.
-
-</td>
-</tr>
-</table>
+`LLM_BASE_URL` and `LLM_MODEL` should match the provider you picked
+(default values target `api.openai.com` + `gpt-5.4`). Everything else in
+`.env.example` ships with safe defaults — leave them alone unless you have
+a reason.
 
 ---
 
-## 🔄 How It Works
+## 💡 What it does (in 30 seconds)
+
+You type one sentence. The system rehearses the entire product for you:
 
 ```
-    ╭──────────────────────────────────────────────────────────╮
-    │                                                          │
-    │   💬 "AI comic platform"                                 │
-    │       │                                                  │
-    │       ▼                                                  │
-    │   ① 🔍 Smart Clarification                              │
-    │       Goals · Constraints · Personas · Success criteria  │
-    │       │                                                  │
-    │       ▼                                                  │
-    │   ② 🗺️ Route Planning                                   │
-    │       Main route + Alternatives + Risk + Cost            │
-    │       │                                                  │
-    │       ▼                                                  │
-    │   ③ 🌳 SPEC Tree                                        │
-    │       Modular spec node decomposition                    │
-    │       │                                                  │
-    │       ▼                                                  │
-    │   ④ 📄 Spec Documents (streaming)                       │
-    │       Requirements / Design / Tasks — live               │
-    │       │                                                  │
-    │       ▼                                                  │
-    │   ⑤ 🎨 Effect Preview                                   │
-    │       Architecture + Prompts + Next steps                │
-    │       │                                                  │
-    │       ▼                                                  │
-    │   📦 Export → Markdown / ZIP / Online                    │
-    │                                                          │
-    ╰──────────────────────────────────────────────────────────╯
+    💬 "AI comic platform"
+        │
+        ▼
+    ① 🔍 Smart Clarification    Goals · Constraints · Personas · Success criteria
+        │
+        ▼
+    ② 🗺️ Route Planning         Main route + Alternatives + Risk + Cost
+        │
+        ▼
+    ③ 🌳 SPEC Tree              Modular spec node decomposition
+        │
+        ▼
+    ④ 📄 Spec Documents         Requirements / Design / Tasks (streaming)
+        │
+        ▼
+    ⑤ 🎨 Effect Preview         Architecture + Prompts + Next steps
+        │
+        ▼
+    📦 Export → Markdown / ZIP / Online
 ```
 
-> 💡 The entire process is **observable in real time**: a 3D office scene shows the agent fleet collaborating, while the right-rail workbench streams generation progress with stage indicators.
+> 💡 The entire process is **observable in real time**: a 3D office scene shows
+> the agent fleet collaborating, while the right-rail workbench streams
+> generation progress with stage indicators.
 
 ---
 
@@ -112,7 +103,8 @@ Seven specialized AI roles collaborate on every rehearsal:
 | 👁️ **Reviewer** | Checks quality, flags issues |
 | 📋 **Auditor** | Maintains evidence trail & compliance |
 
-Each role has access to **50+ AIGC capability nodes**, Docker sandbox, MCP tools, Skills, and domain knowledge injection.
+Each role has access to **50+ AIGC capability nodes**, Docker sandbox, MCP
+tools, Skills, and domain knowledge injection.
 
 ---
 
@@ -163,10 +155,10 @@ Markdown, ZIP, or online preview. Every rehearsal is a shareable document packag
 
 ---
 
-## 🚀 Quick Start
+## 🛠️ Local Dev
 
 ```bash
-git clone https://github.com/opencroc/cube-pets-office.git && cd cube-pets-office
+git clone https://github.com/opencroc/whybuddy.git && cd whybuddy
 pnpm install
 pnpm run dev:all          # Full stack: frontend + server + executor
 ```
@@ -178,7 +170,7 @@ pnpm run dev:all          # Full stack: frontend + server + executor
 pnpm run dev:frontend     # Opens at localhost:5173
 ```
 
-Or visit the [Live Demo](https://opencroc.github.io/cube-pets-office/) directly on GitHub Pages.
+Or visit the [Live Demo](https://opencroc.github.io/whybuddy/) directly on GitHub Pages.
 
 </details>
 
@@ -187,7 +179,27 @@ Or visit the [Live Demo](https://opencroc.github.io/cube-pets-office/) directly 
 
 - Node.js 22+
 - pnpm
-- Docker (optional, for full executor mode)
+- Docker (optional, only required for full sandbox executor mode; WhyBuddy
+  falls back to a native runner when Docker is unavailable)
+
+</details>
+
+<details>
+<summary>🐳 <strong>Notes on the Docker setup</strong></summary>
+
+- The compose file boots **two containers**: `whybuddy-app` (the server +
+  bundled frontend) and `whybuddy-mysql` (MySQL 8 with the
+  `whybuddy` schema kept for backward compat — the data shape is
+  unchanged, only the project brand changed).
+- The Lobster Executor sandbox is **not** in the compose file by default.
+  Docker-in-Docker introduces extra surface area and isn't required for
+  the spec generation loop. Opt in by setting
+  `LOBSTER_EXECUTION_MODE=real` and pointing the host's Docker daemon at
+  the executor service yourself.
+- All `BLUEPRINT_*_ENABLED` flags default to safe values matched to a
+  fresh dev environment; the **AUTOPILOT_REAL_RUNTIME** master switch is
+  on by default — bridges that find their dependencies will run real,
+  bridges that don't will fall back gracefully.
 
 </details>
 
@@ -214,7 +226,8 @@ Or visit the [Live Demo](https://opencroc.github.io/cube-pets-office/) directly 
 
 ## 📝 Rehearsal Examples
 
-> Every rehearsal is a shareable piece of content. **50 rehearsals = 50 distribution opportunities.**
+> Every rehearsal is a shareable piece of content. **50 rehearsals = 50
+> distribution opportunities.**
 
 | 💬 Input | 📦 Output |
 |:---------|:----------|
@@ -273,19 +286,18 @@ Or visit the [Live Demo](https://opencroc.github.io/cube-pets-office/) directly 
 | Metric | Count |
 |:-------|------:|
 | Project files | 4,707 |
-| TypeScript/TSX files | 1,837 |
-| Lines of TypeScript | 486,932 |
-| Test files | 723 |
-| Test cases | 7,771 |
-| Spec directories | 273 |
-| Spec markdown files | 879 |
-| Task checkboxes | 7,093 ✅ / 1,072 ⬜ |
+| TypeScript/TSX files | 2,130 |
+| Lines of TypeScript | 545,000 |
+| Test files | 866 |
+| Spec directories | 287 |
+| Spec markdown files | 1,074 |
+| Task checkboxes | 7,887 ✅ / 919 ⬜ |
 
 ---
 
 ## ⚔️ Comparison
 
-| Feature | Dify | n8n | CrewAI | LangGraph | **This** |
+| Feature | Dify | n8n | CrewAI | LangGraph | **WhyBuddy** |
 |:--------|:---:|:---:|:---:|:---:|:---:|
 | Open Source | ✅ | ✅ | ✅ | ✅ | ✅ |
 | One sentence → full product | ❌ | ❌ | ❌ | ❌ | ✅ |
@@ -313,14 +325,25 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
 ---
 
-## ⭐ Star History
+## 🪪 About the name
 
-> Every rehearsal is content that helps others discover possibilities. Star this repo to help more people find it.
+**WhyBuddy** is two characters: 端 (edge / endpoint) and 云 (cloud).
+Together they describe the model the project converges on — workloads execute
+**at the edge** when they can (browser runtime, native sandbox, your laptop's
+Docker), and **fall back to the cloud** when they need shared coordination
+(LLM, MCP servers, the Lobster Executor service). The codebase still carries
+the legacy package name `whybuddy` in some internal modules; that is
+intentional and tracked under
+[`whybuddy-internal-rename`](./.kiro/specs/) for a future sweep, not the entry
+point you read first.
 
-[![Star History Chart](https://api.star-history.com/svg?repos=opencroc/cube-pets-office&type=Date)](https://star-history.com/#opencroc/cube-pets-office&Date)
+The domain `whybuddy.com` is reserved for the hosted edition.
 
 ---
 
-<p align="center">
-  <a href="./LICENSE"><strong>MIT License</strong></a> · Made with ❤️ by <a href="https://github.com/opencroc">OpenCroc</a>
-</p>
+## ⭐ Star History
+
+> Every rehearsal is content that helps others discover possibilities. Star
+> this repo to help more people find it.
+
+[![Star History Chart](https://api.star-history.com/svg?repos=opencroc/whybuddy&type=Date)](https://star-history.com/#opencroc/whybuddy&Date)

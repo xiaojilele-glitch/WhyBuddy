@@ -2452,6 +2452,19 @@ export function BlueprintProgressPanel({
           onSpecTreeChange={setSpecTree}
           onSpecTreeVersionsChange={setSpecTreeVersions}
           onDocumentsChange={setSpecDocuments}
+          onEffectPreviewGenerated={response => {
+            // whybuddy-stage3-unblock-2026-05-29 — when the user clicks the
+            // new "进入效果预演" CTA on the SpecDocumentWorkbenchPanel,
+            // surface the new previews + advanced job state up here so the
+            // Effect Preview workbench (showEffectPreviewWorkbench branch
+            // below) lights up immediately.
+            const previews = response.effectPreviews ?? [];
+            setEffectPreviews(previews as BlueprintEffectPreview[]);
+            const newJob = (response as unknown as {
+              job?: BlueprintGenerationJob;
+            }).job;
+            if (newJob) setLatestJob(newJob);
+          }}
         />
       ) : null}
 

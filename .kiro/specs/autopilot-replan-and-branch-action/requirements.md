@@ -2,7 +2,7 @@
 
 ## 简介
 
-本 spec 是 Cube Pets Office autopilot blueprint 流"返回 / 重新规划 / 内联编辑"生命周期 5 个 spec 系列中的**第二个**，聚焦用户**显式**的"从这里重新规划"动作。系列概览：
+本 spec 是 WhyBuddy autopilot blueprint 流"返回 / 重新规划 / 内联编辑"生命周期 5 个 spec 系列中的**第二个**，聚焦用户**显式**的"从这里重新规划"动作。系列概览：
 
 - **spec 1 — `autopilot-asset-staleness-model`**：在仓库中目前**仅为需求文档（requirements-only）**，尚未落地任何代码与 design 文档；它定义了 `staleSince` / `invalidatedBy` / `staleArtifactIds` 字段、`BLUEPRINT_ASSET_DEPENDENCY_GRAPH` 依赖图、纯函数 `invalidateDownstream(job, fromStage, options)` 以及只读端点 `GET /api/blueprint/jobs/:jobId/stale-artifacts`，并通过 fast-check 验证幂等性与单调性。spec 1 显式排除任一用户触发动作。
 - **spec 2 — `autopilot-replan-and-branch-action`（本 spec）**：用户显式触发的"从这里重新规划"动作。承载：右栏 stage divider 处的按钮、全屏 `Replan_Confirmation_Modal`、`POST /api/blueprint/jobs/:jobId/replan` 端点、两种执行模式（`mode = "in_place"` 与 `mode = "branch"`）、`replan.triggered` 审计事件、分支元数据（`parentJobId` / `branchedAt` / `branchedFromStage`），以及 running-stage guard。这是用户**显式意图**通路。

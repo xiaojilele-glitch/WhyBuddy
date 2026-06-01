@@ -6,7 +6,7 @@
   role="img"
   aria-labelledby="title desc"
 >
-  <title id="title">Cube Pets Office Runtime Architecture</title>
+  <title id="title">WhyBuddy Runtime Architecture</title>
   <desc id="desc">
     Runtime architecture addendum updated on 2026-04-21. It highlights the
     office cockpit as the primary launch shell, the bottom UnifiedLaunchComposer
@@ -64,7 +64,7 @@
   <rect x="0" y="0" width="1280" height="980" fill="#f8fafc" />
 
   <text x="640" y="44" text-anchor="middle" class="title">
-    Cube Pets Office Runtime Architecture
+    WhyBuddy Runtime Architecture
   </text>
   <text x="640" y="66" text-anchor="middle" class="subtitle">
     Addendum: 2026-04-21

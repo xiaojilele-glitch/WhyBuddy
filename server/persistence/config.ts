@@ -122,7 +122,7 @@ export function readPersistenceConfig(env: EnvSource = process.env): Persistence
       mysql: {
         host: readString(env, "DB_HOST", "localhost"),
         port: readInteger(env, "DB_PORT", 3306, { min: 1 }),
-        database: readString(env, "DB_NAME", "cube_pets_office"),
+        database: readString(env, "DB_NAME", "whybuddy"),
         user: readString(env, "DB_USER", "root"),
         password: readOptionalString(env, "DB_PASSWORD"),
         pool: mysqlPool,

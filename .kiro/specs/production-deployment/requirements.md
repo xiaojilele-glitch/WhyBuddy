@@ -2,7 +2,7 @@
 
 ## 简介
 
-为 Cube Pets Office 多智能体可视化教学平台提供一套完整的生产级部署方案。通过 Docker Compose 一键编排前端静态托管、后端 Node 服务、Lobster Executor 执行器以及 Prometheus + Grafana 监控组件，支持多环境配置切换（dev / staging / prod），实现健康检查、优雅关闭、零停机更新、日志聚合和卷持久化，使系统可安全、可靠地部署到服务器、VPS 或云平台。
+为 WhyBuddy 多智能体可视化教学平台提供一套完整的生产级部署方案。通过 Docker Compose 一键编排前端静态托管、后端 Node 服务、Lobster Executor 执行器以及 Prometheus + Grafana 监控组件，支持多环境配置切换（dev / staging / prod），实现健康检查、优雅关闭、零停机更新、日志聚合和卷持久化，使系统可安全、可靠地部署到服务器、VPS 或云平台。
 
 ## 术语表
 

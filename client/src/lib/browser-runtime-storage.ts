@@ -1,6 +1,6 @@
 import type { SnapshotRecord } from "../../../shared/mission/contracts";
 
-const DB_NAME = "cube-pets-office-browser-runtime";
+const DB_NAME = "whybuddy-browser-runtime";
 const DB_VERSION = 2;
 
 const STORE_NAMES = {
@@ -91,7 +91,7 @@ export interface BrowserHeartbeatReportSnapshot {
 }
 
 export interface BrowserRuntimeExportBundle {
-  kind: "cube-pets-office-browser-runtime";
+  kind: "whybuddy-browser-runtime";
   schemaVersion: number;
   exportedAt: string;
   metadata: BrowserRuntimeMetadata;
@@ -471,7 +471,7 @@ export async function exportBrowserRuntimeBundle(): Promise<BrowserRuntimeExport
   const metadata = (await getMetadata()) || createDefaultMetadata();
 
   return {
-    kind: "cube-pets-office-browser-runtime",
+    kind: "whybuddy-browser-runtime",
     schemaVersion: DB_VERSION,
     exportedAt: new Date().toISOString(),
     metadata,
@@ -491,7 +491,7 @@ export async function exportBrowserRuntimeBundle(): Promise<BrowserRuntimeExport
 export async function importBrowserRuntimeBundle(
   bundle: BrowserRuntimeExportBundle
 ): Promise<void> {
-  if (bundle.kind !== "cube-pets-office-browser-runtime") {
+  if (bundle.kind !== "whybuddy-browser-runtime") {
     throw new Error("Unsupported runtime bundle format.");
   }
 

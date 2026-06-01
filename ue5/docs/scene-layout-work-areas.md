@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档定义 Cube Pets Office UE5 场景中 4 组工位区（Pod A-D）及 CEO 办公桌的精确放置规格。所有数据均从 Three.js `OfficeRoom` 组件提取，并按 UE5 坐标系与单位系统转换。
+本文档定义 WhyBuddy UE5 场景中 4 组工位区（Pod A-D）及 CEO 办公桌的精确放置规格。所有数据均从 Three.js `OfficeRoom` 组件提取，并按 UE5 坐标系与单位系统转换。
 
 ---
 

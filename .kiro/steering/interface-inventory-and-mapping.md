@@ -2,11 +2,11 @@
 inclusion: manual
 ---
 
-# 接口清单与映射：`web-aigc` -> Cube Pets Office
+# 接口清单与映射：`web-aigc` -> WhyBuddy
 
 ## 范围
 
-本文用于把已检查过的 `web-aigc` 编排接口映射到 Cube Pets Office 当前或未来的承接位置。
+本文用于把已检查过的 `web-aigc` 编排接口映射到 WhyBuddy 当前或未来的承接位置。
 
 ## 已检查的来源系统
 
@@ -17,7 +17,7 @@ inclusion: manual
 - `src/pages/aigc/orchestration/designer/nodes/nodeTypes.ts`
 - `src/pages/aigc/agent-monitoring/services/monitorApi.ts`
 
-### `cube-pets-office`
+### `whybuddy`
 
 - `shared/workflow-runtime.ts`
 - `server/core/workflow-engine.ts`

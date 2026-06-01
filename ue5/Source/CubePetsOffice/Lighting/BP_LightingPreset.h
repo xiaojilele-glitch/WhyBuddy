@@ -1,4 +1,4 @@
-// Copyright Cube Pets Office. All Rights Reserved.
+// Copyright WhyBuddy. All Rights Reserved.
 //
 // BP_LightingPreset — Blueprint-compatible lighting preset actor.
 //

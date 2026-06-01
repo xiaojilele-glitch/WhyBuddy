@@ -73,6 +73,76 @@ const FSD_TO_MISSION: Record<FsdRoleId, MissionAgentId> = {
 };
 
 /**
+ * 真实自动驾驶 job 的 role timeline 用了远多于 7 个 FSD 名的具体角色
+ * （`repository-analyst` / `spec-author` / `route-planner` / `product-strategist`
+ * / `executor-architect` / `runtime-quality-auditor` / `repo-engineer` / ...）。
+ * 这些 id 不会精确命中 FSD_TO_MISSION 字面量 key，导致 3D 角色全部退到 idle
+ * 动画（即用户看到的「静止不动」）。
+ *
+ * 这里加一个**关键字 → FSD canonical** 的纯字符串匹配 fallback：把任意角色
+ * 名扫一遍熟悉的子串，挑命中的 FSD canonical 名后再走 FSD_TO_MISSION。匹配
+ * 不到才回 undefined。匹配顺序按特异性从高到低排（更长 / 更具体的关键字先匹）
+ * ，避免 `analyst` 被 `analyzer` 之外的 alias 抢走。
+ */
+const FUZZY_FSD_KEYWORDS: ReadonlyArray<readonly [string, FsdRoleId]> = [
+  // auditor / quality / review 类
+  ["audit", "auditor"],
+  ["quality", "auditor"],
+  ["review", "reviewer"],
+  ["validator", "reviewer"],
+  // analyzer / analyst / research / inspect 类
+  ["analy", "analyzer"], // analyst / analyzer / analysis / analytic
+  ["inspect", "analyzer"],
+  ["research", "analyzer"], // researcher / research-* — 调研类工作归 analyzer
+  ["repo-engineer", "analyzer"],
+  ["repository", "analyzer"],
+  // generator / author / writer / spec-author 类
+  ["author", "generator"],
+  ["writer", "generator"],
+  ["generator", "generator"],
+  ["builder", "generator"],
+  ["synthes", "generator"],
+  // planner / architect / strategy / route 类
+  ["plan", "planner"],
+  ["architect", "planner"],
+  ["strateg", "planner"],
+  ["route-", "planner"],
+  // clarifier / interview 类
+  ["clarif", "clarifier"],
+  ["interview", "clarifier"],
+  // operator / runtime / executor / dispatcher 类
+  ["operator", "operator"],
+  ["runtime", "operator"],
+  ["executor", "operator"],
+  ["dispatcher", "operator"],
+];
+
+/**
+ * 把任意 role id（FSD canonical 或更具体的派生角色名）解析成最贴近的
+ * `MissionAgentId`。先尝试字面量精确命中 FSD_TO_MISSION，再走子串关键字
+ * fallback；都没命中返回 undefined。
+ *
+ * 全小写比较，调用方不需要预先归一化。
+ */
+export function resolveRoleIdToMissionAgent(
+  roleId: string
+): MissionAgentId | undefined {
+  // 1. 字面量命中（与原映射表完全等价）
+  const exact = FSD_TO_MISSION[roleId as FsdRoleId];
+  if (exact) return exact;
+
+  // 2. 关键字模糊命中
+  const lower = roleId.toLowerCase();
+  for (const [keyword, fsd] of FUZZY_FSD_KEYWORDS) {
+    if (lower.includes(keyword)) {
+      return FSD_TO_MISSION[fsd];
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * 从 BlueprintRealtimeStore.rolePhases 中按 mission agent id 读取对应的 RolePhase。
  *
  * 优先策略（蓝图模式专用，对应 AC9：FSD 优先）：
@@ -95,14 +165,18 @@ export function readBlueprintRolePhase(
 ): RolePhase | undefined {
   if (!rolePhases) return undefined;
 
-  // 反查：找出所有映射到该 mission agent id 的 FSD roleId
-  for (const [fsdRoleId, mappedMissionId] of Object.entries(FSD_TO_MISSION)) {
-    if (mappedMissionId === missionAgentId) {
-      const phase = rolePhases[fsdRoleId];
-      if (phase !== undefined) return phase;
+  // 优先：把每个 store key 模糊解析成 MissionAgentId，命中目标的就返回。
+  // 这一步覆盖真实自动驾驶 job 的派生角色名（spec-author / repository-analyst
+  // / runtime-quality-auditor 等），让 3D 场景在 blueprint 模式下能跟着角色
+  // 阶段动起来；而不是因字面量 key 不匹配整片 idle。
+  for (const [storeKey, phase] of Object.entries(rolePhases)) {
+    const resolved = resolveRoleIdToMissionAgent(storeKey);
+    if (resolved === missionAgentId && phase !== undefined) {
+      return phase;
     }
   }
-  // fallback：直读 mission agent id
+
+  // fallback：直读 mission agent id（保留 AC6 fallback 路径）
   return rolePhases[missionAgentId];
 }
 
@@ -112,10 +186,10 @@ export function readBlueprintRoleRuntimeState(
 ): RoleRuntimeState | undefined {
   if (!roleRuntimeStates) return undefined;
 
-  for (const [fsdRoleId, mappedMissionId] of Object.entries(FSD_TO_MISSION)) {
-    if (mappedMissionId === missionAgentId) {
-      const runtimeState = roleRuntimeStates[fsdRoleId];
-      if (runtimeState !== undefined) return runtimeState;
+  for (const [storeKey, runtimeState] of Object.entries(roleRuntimeStates)) {
+    const resolved = resolveRoleIdToMissionAgent(storeKey);
+    if (resolved === missionAgentId && runtimeState !== undefined) {
+      return runtimeState;
     }
   }
 

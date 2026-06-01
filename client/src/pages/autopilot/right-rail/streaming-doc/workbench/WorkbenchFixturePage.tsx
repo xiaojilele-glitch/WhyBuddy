@@ -1,4 +1,5 @@
 import type { FC } from "react";
+import { useMemo } from "react";
 
 import type { AgentReasoningEntry } from "@shared/blueprint/agent-reasoning";
 import type {
@@ -10,7 +11,9 @@ import type {
   BlueprintSpecTreeNode,
 } from "@shared/blueprint/contracts";
 
+import { useBlueprintRealtimeStore } from "@/lib/blueprint-realtime-store";
 import { AutopilotSpecDocumentsWorkbench } from "./AutopilotSpecDocumentsWorkbench";
+import { deriveNodeStatusById } from "../../spec-docs-progress/derive-node-status-by-id";
 
 const JOB_ID = "debug-spec-docs-workbench";
 const TREE_ID = "debug-spec-docs-tree";
@@ -255,7 +258,7 @@ const FIXTURE_JOB = {
     targetText: "Workbench Route Authoring",
     mode: "spec-documents-workbench",
     domainContext: {
-      projectName: "Cube Pets Office",
+      projectName: "WhyBuddy",
     },
   },
   status: "reviewing",
@@ -268,6 +271,27 @@ const FIXTURE_JOB = {
 } as unknown as BlueprintGenerationJob;
 
 export const AutopilotSpecDocumentsWorkbenchFixturePage: FC = () => {
+  // whybuddy-spec-tree-progress-merge-2026-05-29 §6 (dev-only fixture)：
+  // 把 store 的 specDocsProgress.nodes 派生成 nodeStatusById 透传给 workbench，
+  // 让 e2e 通过 window.__blueprintRealtimeStore.dispatchEvent 驱动节点行状态变化。
+  // 与 AutopilotRightRail 的双源合并一致：persisted specDocuments → baseline
+  // completed；live progress overlays（assembled→completed 收敛）。
+  const specDocsNodes = useBlueprintRealtimeStore(
+    (state) => state.specDocsProgress.nodes
+  );
+  const specDocsBatchStatus = useBlueprintRealtimeStore(
+    (state) => state.specDocsProgress.batchStatus
+  );
+  const nodeStatusById = useMemo(
+    () =>
+      deriveNodeStatusById({
+        persistedSpecDocuments: FIXTURE_SPEC_DOCUMENTS,
+        liveProgressNodes: specDocsNodes,
+        liveBatchStatus: specDocsBatchStatus,
+      }),
+    [specDocsNodes, specDocsBatchStatus]
+  );
+
   return (
     <main
       data-testid="autopilot-spec-documents-workbench-fixture"
@@ -284,6 +308,7 @@ export const AutopilotSpecDocumentsWorkbenchFixturePage: FC = () => {
           generating={null}
           jobId={JOB_ID}
           job={FIXTURE_JOB}
+          nodeStatusById={nodeStatusById}
         />
       </div>
     </main>

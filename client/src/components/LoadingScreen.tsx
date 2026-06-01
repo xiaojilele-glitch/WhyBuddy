@@ -2,35 +2,56 @@ import type { CSSProperties } from "react";
 
 import { useI18n } from "@/i18n";
 import { useAppStore } from "@/lib/store";
+import {
+  BRAND_HEADLINE_EN,
+  BRAND_HEADLINE_ZH,
+  BRAND_NAME_DISPLAY,
+  BRAND_TAGLINE_EN,
+  BRAND_TAGLINE_ZH,
+} from "@shared/brand";
+
+/**
+ * MiroFish-aligned loading screen — replaces the pixel-art holographic
+ * variant per whybuddy-rebrand-and-stage3-unblock-2026-05-28 §D.1.
+ *
+ * Visual language (matches client/src/styles/mirofish-tokens.css):
+ *   - bg: #FFFFFF
+ *   - fg: #000000
+ *   - accent: #FF4500 (single use: progress bar fill + status pip)
+ *   - border: 1px solid #E5E5E5
+ *   - radius: 2px max
+ *   - shadow: none
+ *   - typography: DM Sans / Noto Sans SC (display) + JetBrains Mono (data)
+ *
+ * Behavior unchanged: consumes useAppStore.loadingProgress and shows a
+ * locale-aware copy block. Same `data-testid="loading-screen"` so existing
+ * tests still find it.
+ */
 
 const RAIL_STEPS = ["INIT", "SYNC", "CONFIG", "FINALIZE"] as const;
 
-const FLOATING_BLOCKS = [
-  "left-[8%] top-[11%] size-3 bg-[#ff4d4f]",
-  "left-[10%] top-[62%] size-5 bg-white",
-  "left-[13%] top-[83%] size-2.5 bg-[#b9c4d0]",
-  "right-[8%] top-[22%] size-3 bg-[#b9c4d0]",
-  "right-[14%] top-[72%] size-3 bg-[#ff4d4f]",
-  "right-[7%] top-[57%] size-3 bg-[#f4a340]",
-] as const;
-
-const DOT_FIELDS = [
-  "left-[9%] top-[16%]",
-  "right-[10%] top-[31%]",
-  "left-[9%] bottom-[17%]",
-  "right-[11%] bottom-[14%]",
-] as const;
-
 const CHINESE_COPY = {
-  title: "正在配置书房...",
-  subtitle: "小宠物们正在搬家具，马上就绪",
-  progress: "正在同步书房布局与装饰数据...",
+  brandHeadline: BRAND_HEADLINE_ZH,
+  brandTagline: BRAND_TAGLINE_ZH,
+  title: "正在准备工作台",
+  subtitle: "端侧资源加载完成后即可开始",
+  progress: "同步组件、令牌与样式资源…",
+  progressLabel: "PIXEL SYNC",
+  systemLabel: "SYSTEM",
+  onlineLabel: "ONLINE",
+  versionLabel: "VER. 1.0.0",
 };
 
 const ENGLISH_COPY = {
-  title: "Configuring the study...",
-  subtitle: "The cube pets are moving furniture. Almost ready",
-  progress: "Syncing study layout and decoration data...",
+  brandHeadline: BRAND_HEADLINE_EN,
+  brandTagline: BRAND_TAGLINE_EN,
+  title: "Preparing your workbench",
+  subtitle: "Edge resources are loading. We'll be ready in a moment.",
+  progress: "Syncing components, tokens and stylesheets…",
+  progressLabel: "PIXEL SYNC",
+  systemLabel: "SYSTEM",
+  onlineLabel: "ONLINE",
+  versionLabel: "VER. 1.0.0",
 };
 
 function clampProgress(progress: number): number {
@@ -38,101 +59,41 @@ function clampProgress(progress: number): number {
   return Math.max(0, Math.min(100, Math.round(progress)));
 }
 
-function PixelCluster({
-  className,
-  mirrored = false,
-}: {
-  className: string;
-  mirrored?: boolean;
-}) {
-  return (
-    <div className={`absolute h-28 w-28 opacity-70 ${className}`}>
-      {Array.from({ length: 18 }).map((_, index) => {
-        const column = index % 6;
-        const row = Math.floor(index / 6);
-        return (
-          <span
-            key={index}
-            className="absolute border border-white bg-white/75 shadow-[0_8px_22px_rgba(90,104,123,0.12)]"
-            style={{
-              left: column * 17 + (mirrored ? Math.abs(3 - column) * 1.5 : 0),
-              top: row * 17 + Math.abs(2 - column) * 1.8,
-              width: 15,
-              height: 15,
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function PixelField() {
-  return (
-    <div
-      className="pointer-events-none absolute inset-0 overflow-hidden"
-      data-testid="loading-pixel-field"
-    >
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(108,124,143,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(108,124,143,0.08)_1px,transparent_1px)] bg-[size:26px_26px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.72)_0%,rgba(255,255,255,0.48)_45%,rgba(231,236,241,0.8)_100%)]" />
-
-      <PixelCluster className="left-[5%] top-[37%]" />
-      <PixelCluster className="right-[10%] top-[43%]" mirrored />
-
-      {DOT_FIELDS.map(position => (
-        <div
-          key={position}
-          className={`absolute grid grid-cols-4 gap-3 opacity-55 ${position}`}
-        >
-          {Array.from({ length: 16 }).map((_, index) => (
-            <span key={index} className="size-1 rounded-full bg-[#aab6c4]" />
-          ))}
-        </div>
-      ))}
-
-      {FLOATING_BLOCKS.map(className => (
-        <span
-          key={className}
-          className={`absolute rounded-[3px] shadow-[0_8px_18px_rgba(35,48,66,0.12)] ${className}`}
-        />
-      ))}
-      <span className="absolute left-[13%] top-[27%] h-7 w-7 rounded-full border-[6px] border-[#f4a340]/75" />
-      <span className="absolute right-[13%] top-[15%] h-7 w-7 rounded-full border-[6px] border-[#ff4d4f]/80" />
-    </div>
-  );
-}
-
-function LoadingStatusRail() {
+function StatusRail({ copy }: { copy: typeof CHINESE_COPY }) {
   return (
     <aside
-      className="relative flex min-h-[350px] flex-col justify-between overflow-hidden rounded-[26px] border border-[#e3e8ee] bg-[linear-gradient(180deg,rgba(255,255,255,0.74),rgba(241,245,249,0.58))] px-7 py-7 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] lg:min-h-[500px] lg:rounded-[30px]"
+      className="relative flex min-h-[420px] flex-col justify-between border border-[#E5E5E5] bg-white p-7 text-left lg:min-h-[520px]"
+      style={{ borderRadius: "2px" }}
       data-testid="loading-status-rail"
     >
       <div>
-        <p className="font-data text-[11px] font-semibold uppercase tracking-[0.22em] text-[#718197]">
-          SYSTEM
+        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-black/60">
+          {copy.systemLabel}
         </p>
-        <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-[#ffb0b2] bg-white/70 px-4 py-2 font-data text-[11px] font-semibold uppercase tracking-[0.18em] text-[#ff4d4f]">
-          <span className="size-2.5 rounded-full bg-[#ff4d4f] shadow-[0_0_0_5px_rgba(255,77,79,0.12)]" />
-          ONLINE
+        <div
+          className="mt-5 inline-flex items-center gap-2 border border-[#FF4500] px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF4500]"
+          style={{ borderRadius: "2px" }}
+        >
+          <span className="size-2 rounded-full bg-[#FF4500]" />
+          {copy.onlineLabel}
         </div>
       </div>
 
       <div className="relative my-10 pl-1">
-        <span className="absolute left-[8px] top-3 h-[calc(100%-24px)] w-px bg-[#c5ced8]" />
-        <div className="flex flex-col gap-8">
+        <span className="absolute left-[8px] top-3 h-[calc(100%-24px)] w-px bg-[#E5E5E5]" />
+        <div className="flex flex-col gap-7">
           {RAIL_STEPS.map((step, index) => (
             <div key={step} className="relative flex items-center gap-5">
               <span
-                className={`relative z-10 size-3 rounded-full border-2 shadow-[0_0_0_4px_rgba(255,255,255,0.8)] ${
+                className={`relative z-10 size-3 rounded-full border-2 ${
                   index < 3
-                    ? "border-[#ff4d4f] bg-[#ff4d4f]"
-                    : "border-[#a9b5c2] bg-white"
+                    ? "border-[#FF4500] bg-[#FF4500]"
+                    : "border-black/30 bg-white"
                 }`}
               />
               <span
-                className={`font-data text-[12px] font-semibold uppercase tracking-[0.18em] ${
-                  index < 3 ? "text-[#5e6b7a]" : "text-[#a0abb7]"
+                className={`font-mono text-[12px] font-bold uppercase tracking-[0.18em] ${
+                  index < 3 ? "text-black/80" : "text-black/40"
                 }`}
               >
                 {step}
@@ -142,56 +103,34 @@ function LoadingStatusRail() {
         </div>
       </div>
 
-      <p className="font-data text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8d9aa8]">
-        VER. 1.0.0
+      <p className="font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-black/40">
+        {copy.versionLabel}
       </p>
     </aside>
   );
 }
 
-function SimpleLoadingLogo() {
+function BrandWordmark({ copy }: { copy: typeof CHINESE_COPY }) {
   return (
     <div
-      aria-label="CUBE PETS OFFICE"
-      className="relative mx-auto flex h-[132px] w-full items-center justify-center"
-      data-testid="loading-simple-logo"
+      aria-label={copy.brandHeadline}
+      className="relative mx-auto flex w-full flex-col items-start gap-3"
+      data-testid="loading-brand-wordmark"
     >
-      <div className="absolute left-1/2 top-1/2 h-[104px] w-[104px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(207,216,226,0.42)_1.5px,transparent_1.5px)] bg-[size:11px_11px]" />
-      <svg
-        viewBox="0 0 120 120"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="relative h-[112px] w-[112px] drop-shadow-[0_20px_36px_rgba(70,86,108,0.18)]"
+      <img
+        src="/brand/logo.png"
+        alt="WhyBuddy"
+        className="h-16 w-auto object-contain"
+      />
+      <h1
+        className="font-display text-[clamp(3.5rem,8vw,5.5rem)] font-medium leading-[0.95] tracking-tight text-black"
       >
-        <g>
-          <path d="M20 58 L40 46 L60 58 L40 70Z" fill="#e6ebf0" />
-          <path d="M20 58 L40 70 L40 94 L20 82Z" fill="#9aa8b7" />
-          <path d="M60 58 L40 70 L40 94 L60 82Z" fill="#bbc5cf" />
-        </g>
-        <g>
-          <path d="M60 58 L80 46 L100 58 L80 70Z" fill="#d9e0e7" />
-          <path d="M60 58 L80 70 L80 94 L60 82Z" fill="#9aa8b7" />
-          <path d="M100 58 L80 70 L80 94 L100 82Z" fill="#adb8c4" />
-        </g>
-        <g>
-          <path d="M40 34 L60 22 L80 34 L60 46Z" fill="#ff4d4f" />
-          <path d="M40 34 L60 46 L60 70 L40 58Z" fill="#d9363e" />
-          <path d="M80 34 L60 46 L60 70 L80 58Z" fill="#ef3f46" />
-        </g>
-      </svg>
-      <span className="absolute left-[28%] top-[47%] size-2 rotate-45 bg-[#f4a340]" />
-      <span className="absolute right-[28%] top-[38%] size-2 rotate-45 bg-[#ff4d4f]" />
-      <span className="absolute right-[24%] top-[62%] size-1.5 rotate-45 bg-[#b8c3cf]" />
+        {BRAND_NAME_DISPLAY}
+      </h1>
+      <p className="font-display text-base font-normal leading-7 tracking-normal text-black/60">
+        {copy.brandTagline}
+      </p>
     </div>
-  );
-}
-
-function CubeMark() {
-  return (
-    <span
-      aria-hidden="true"
-      className="size-2 rotate-45 rounded-[1px] bg-[linear-gradient(135deg,#ff4d4f,#c8d1dc)]"
-    />
   );
 }
 
@@ -203,65 +142,72 @@ export function LoadingScreen() {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex min-h-[100svh] items-center justify-center overflow-hidden bg-[#f3f5f8] px-4 py-6 text-center text-[#26364a] sm:px-6 lg:py-8"
+      className="fixed inset-0 z-[100] flex min-h-[100svh] items-center justify-center bg-white px-4 py-6 text-black sm:px-6 lg:py-10"
       data-testid="loading-screen"
     >
-      <PixelField />
-
-      <main className="relative z-10 flex w-full max-w-[1060px] flex-col items-center">
+      <main className="relative z-10 flex w-full max-w-[1280px] flex-col items-stretch">
         <section
-          className="grid w-full gap-4 rounded-[34px] border border-[#e3e8ee] bg-[linear-gradient(145deg,rgba(255,255,255,0.9),rgba(244,247,250,0.78))] p-4 shadow-[0_28px_80px_rgba(81,96,115,0.14),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-xl lg:grid-cols-[150px_minmax(0,1fr)] lg:gap-5 lg:rounded-[42px] lg:p-5"
+          className="grid w-full gap-6 border border-[#E5E5E5] bg-white p-5 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-8 lg:p-8"
+          style={{ borderRadius: "2px" }}
           data-testid="loading-wide-card"
         >
-          <LoadingStatusRail />
+          <StatusRail copy={copy} />
 
-          <div className="relative flex min-h-[430px] flex-col items-center justify-center overflow-hidden rounded-[26px] border border-[#e3e8ee] bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(248,250,252,0.58))] px-5 py-9 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:px-8 lg:min-h-[500px] lg:rounded-[30px]">
-            <SimpleLoadingLogo />
+          <div
+            className="relative flex min-h-[420px] flex-col justify-between border border-[#E5E5E5] bg-white p-8 lg:min-h-[520px] lg:p-10"
+            style={{ borderRadius: "2px" }}
+          >
+            <BrandWordmark copy={copy} />
 
-            <div className="mx-auto mt-1 max-w-[720px]">
-              <h1 className="text-[clamp(1.65rem,3vw,2.25rem)] font-semibold leading-tight tracking-[0.18em] text-[#687688]">
+            <div className="mt-10 flex flex-col gap-3">
+              <h2
+                className="font-display text-2xl font-medium leading-tight tracking-tight text-black"
+              >
                 {copy.title}
-              </h1>
-              <p className="mt-5 text-base font-medium leading-7 tracking-[0.08em] text-[#94a1b1]">
+              </h2>
+              <p className="font-display text-sm font-normal leading-6 tracking-normal text-black/60">
                 {copy.subtitle}
               </p>
+            </div>
 
-              <div className="mt-8 flex justify-center gap-4">
-                <span className="size-2.5 rounded-full bg-[#ff4d4f]" />
-                <span className="size-2.5 rounded-full bg-[#c8d1dc]" />
-                <span className="size-2.5 rounded-full bg-[#d8dee5]" />
+            <div
+              className="mt-8 w-full border border-[#E5E5E5] bg-white p-5"
+              style={
+                {
+                  borderRadius: "2px",
+                  "--loading-progress": `${progress}%`,
+                } as CSSProperties
+              }
+            >
+              <div className="mb-4 flex items-center justify-between gap-4 font-mono text-[12px] font-bold uppercase tracking-[0.22em] text-black/70">
+                <span>{copy.progressLabel}</span>
+                <span className="text-[#FF4500] tracking-normal">
+                  {progress}%
+                </span>
               </div>
-
               <div
-                className="mx-auto mt-10 w-full max-w-[610px] rounded-[20px] border border-[#e2e7ee] bg-white/60 px-6 py-5 text-left shadow-[0_16px_42px_rgba(81,96,115,0.08),inset_0_1px_0_rgba(255,255,255,0.9)]"
-                style={
-                  { "--loading-progress": `${progress}%` } as CSSProperties
-                }
+                className="relative h-1.5 overflow-hidden bg-[#E5E5E5]"
+                style={{ borderRadius: "2px" }}
               >
-                <div className="mb-4 flex items-center justify-between gap-4 font-data text-[12px] font-semibold uppercase tracking-[0.24em] text-[#6b7787]">
-                  <span>PIXEL SYNC</span>
-                  <span className="tracking-normal text-[#ff4d4f]">
-                    {progress}%
-                  </span>
-                </div>
-                <div className="relative h-3.5 overflow-hidden rounded-full bg-[#dbe1e8] shadow-[inset_0_2px_5px_rgba(31,48,70,0.12)]">
-                  <div
-                    className="h-full rounded-full bg-[linear-gradient(90deg,#ff4d4f_0%,#ff6045_52%,#f7b347_100%)] shadow-[0_9px_18px_rgba(255,77,79,0.22),inset_0_1px_0_rgba(255,255,255,0.28)] transition-[width] duration-300 ease-out"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-                <p className="mt-4 text-center text-sm font-medium leading-6 tracking-[0.06em] text-[#94a1b1]">
-                  {copy.progress}
-                </p>
+                <div
+                  className="h-full bg-[#FF4500] transition-[width] duration-300 ease-out"
+                  style={{ width: `${progress}%`, borderRadius: "2px" }}
+                />
               </div>
+              <p className="mt-4 font-display text-sm font-normal leading-6 tracking-normal text-black/60">
+                {copy.progress}
+              </p>
             </div>
           </div>
         </section>
 
-        <footer className="mt-8 flex max-w-full items-center justify-center gap-5 font-data text-[12px] font-semibold uppercase tracking-[0.48em] text-[#6b7787]">
-          <CubeMark />
-          <span>CUBE PETS OFFICE</span>
-          <CubeMark />
+        <footer
+          className="mt-6 flex items-center justify-between gap-5 border border-[#E5E5E5] bg-white px-5 py-3 font-mono text-[11px] font-bold uppercase tracking-[0.32em] text-black/60"
+          style={{ borderRadius: "2px" }}
+        >
+          <span>WHYBUDDY</span>
+          <span className="text-black/30">·</span>
+          <span>{copy.brandHeadline}</span>
         </footer>
       </main>
     </div>

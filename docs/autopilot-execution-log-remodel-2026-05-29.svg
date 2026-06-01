@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1180" role="img" aria-labelledby="title desc">
+  <title id="title">Autopilot execution log remodeling map</title>
+  <desc id="desc">A before and after map for remodeling raw autopilot execution records into user-readable execution flow and artifact ownership.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fbff"/>
+      <stop offset="0.52" stop-color="#eef6f8"/>
+      <stop offset="1" stop-color="#f6f0ff"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#059669"/>
+      <stop offset="1" stop-color="#10b981"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f97316"/>
+      <stop offset="1" stop-color="#ef4444"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .page { fill: url(#bg); }
+      .panel { fill: rgba(255,255,255,0.84); stroke: #dbe4ef; stroke-width: 1.5; filter: url(#shadow); }
+      .panel-flat { fill: rgba(255,255,255,0.78); stroke: #dbe4ef; stroke-width: 1.5; }
+      .title { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif; font-size: 42px; font-weight: 900; fill: #0f172a; }
+      .subtitle { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif; font-size: 18px; font-weight: 650; fill: #475569; }
+      .section { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif; font-size: 24px; font-weight: 900; fill: #0f172a; }
+      .label { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif; font-size: 18px; font-weight: 800; fill: #1e293b; }
+      .body { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif; font-size: 15px; font-weight: 600; fill: #475569; }
+      .small { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif; font-size: 13px; font-weight: 600; fill: #64748b; }
+      .tiny { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif; font-size: 12px; font-weight: 650; fill: #64748b; }
+      .mono { font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace; font-size: 13px; font-weight: 700; fill: #334155; }
+      .mono-small { font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace; font-size: 11px; font-weight: 650; fill: #64748b; }
+      .white { fill: #ffffff; }
+      .muted { fill: #94a3b8; }
+      .danger { fill: #dc2626; }
+      .ok { fill: #047857; }
+      .blueText { fill: #1d4ed8; }
+      .chip { fill: #eef6ff; stroke: #bfdbfe; stroke-width: 1; }
+      .chipGreen { fill: #ecfdf5; stroke: #a7f3d0; stroke-width: 1; }
+      .chipOrange { fill: #fff7ed; stroke: #fed7aa; stroke-width: 1; }
+      .line { stroke: #94a3b8; stroke-width: 2; fill: none; }
+      .arrow { stroke: #2563eb; stroke-width: 4; fill: none; marker-end: url(#arrowHead); }
+      .thinArrow { stroke: #64748b; stroke-width: 2.2; fill: none; marker-end: url(#thinArrowHead); }
+    </style>
+    <marker id="arrowHead" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#2563eb"/>
+    </marker>
+    <marker id="thinArrowHead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M1.5,1.5 L8,5 L1.5,8.5 Z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect class="page" x="0" y="0" width="1600" height="1180"/>
+
+  <text class="title" x="70" y="78">自动驾驶执行日志改造图</text>
+  <text class="subtitle" x="72" y="112">目标：把技术事件、能力调用、角色加载和产物生成，归并成用户能读懂的执行流，并和产物挂载位置对齐。</text>
+
+  <rect class="panel-flat" x="70" y="145" width="1460" height="84" rx="18"/>
+  <text class="label" x="102" y="181">这次要解决的核心问题</text>
+  <text class="body" x="102" y="209">现在用户看到的是一串内部事件：能力名、角色容器、job.stage、0ms。它们真实有用，但不应该直接铺在主执行流里。</text>
+  <text class="body" x="830" y="209">改造后：主线讲“发生了什么”，细节讲“谁做的、调用了什么、产出了什么”。</text>
+
+  <!-- Before panel -->
+  <rect class="panel" x="70" y="270" width="430" height="610" rx="22"/>
+  <text class="section" x="100" y="315">A. 当前看到的原始记录</text>
+  <text class="small" x="100" y="345">问题：技术事件直接暴露，用户难以判断它和执行产物的关系。</text>
+
+  <rect x="100" y="375" width="370" height="86" rx="14" fill="#0f172a"/>
+  <text class="mono white" x="122" y="407">总计 7   运行 0   完成 7   失败 0</text>
+  <text class="mono-small" x="122" y="435" fill="#cbd5e1">... 已折叠 2 条记录</text>
+
+  <g>
+    <rect class="chip" x="100" y="490" width="370" height="54" rx="12"/>
+    <text class="mono" x="122" y="522">docker-analysis-sandbox</text>
+    <text class="small ok" x="392" y="522">完成 0ms</text>
+  </g>
+  <g>
+    <rect class="chip" x="100" y="556" width="370" height="54" rx="12"/>
+    <text class="mono" x="122" y="588">aigc-spec-node</text>
+    <text class="small ok" x="392" y="588">完成 0ms</text>
+  </g>
+  <g>
+    <rect class="chip" x="100" y="622" width="370" height="54" rx="12"/>
+    <text class="mono" x="122" y="654">role-system-architecture</text>
+    <text class="small ok" x="392" y="654">完成 0ms</text>
+  </g>
+  <g>
+    <rect class="chip" x="100" y="688" width="370" height="54" rx="12"/>
+    <text class="mono" x="122" y="720">role-container-loader:route-planner</text>
+  </g>
+  <g>
+    <rect class="chipOrange" x="100" y="765" width="370" height="76" rx="12"/>
+    <text class="mono" x="122" y="796">[03:33:16] system</text>
+    <text class="mono" x="122" y="822">acting · job.stage</text>
+  </g>
+  <text class="tiny danger" x="100" y="865">症状：看得见执行很多，但看不出“到了哪一步、产物挂在哪一步”。</text>
+
+  <!-- Transformer panel -->
+  <rect class="panel" x="585" y="270" width="430" height="610" rx="22"/>
+  <text class="section" x="615" y="315">B. 中间加一层归类器</text>
+  <text class="small" x="615" y="345">不要按原始事件顺序硬塞 UI，先按语义归并。</text>
+
+  <rect x="630" y="390" width="340" height="68" rx="16" fill="url(#blue)"/>
+  <text class="label white" x="660" y="431">Execution Event Normalizer</text>
+
+  <path class="thinArrow" d="M800 458 L800 500"/>
+
+  <g>
+    <rect class="panel-flat" x="625" y="510" width="350" height="78" rx="15"/>
+    <circle cx="660" cy="549" r="18" fill="#dbeafe"/>
+    <text class="label" x="692" y="543">能力调用</text>
+    <text class="small" x="692" y="568">capability_* / sandbox / agent node</text>
+  </g>
+  <g>
+    <rect class="panel-flat" x="625" y="606" width="350" height="78" rx="15"/>
+    <circle cx="660" cy="645" r="18" fill="#fef3c7"/>
+    <text class="label" x="692" y="639">角色加载</text>
+    <text class="small" x="692" y="664">role-container-loader:* 归为幕后准备</text>
+  </g>
+  <g>
+    <rect class="panel-flat" x="625" y="702" width="350" height="78" rx="15"/>
+    <circle cx="660" cy="741" r="18" fill="#dcfce7"/>
+    <text class="label" x="692" y="735">阶段推进</text>
+    <text class="small" x="692" y="760">job.stage 转成人话阶段文案</text>
+  </g>
+  <g>
+    <rect class="panel-flat" x="625" y="798" width="350" height="58" rx="15"/>
+    <circle cx="660" cy="827" r="18" fill="#fce7f3"/>
+    <text class="label" x="692" y="833">产物归属</text>
+  </g>
+
+  <path class="arrow" d="M500 575 C535 575 548 575 585 575"/>
+  <path class="arrow" d="M1015 575 C1050 575 1065 575 1100 575"/>
+
+  <!-- After panel -->
+  <rect class="panel" x="1100" y="270" width="430" height="610" rx="22"/>
+  <text class="section" x="1130" y="315">C. 改造后的用户视图</text>
+  <text class="small" x="1130" y="345">主线只讲可理解的进展，技术记录默认收起。</text>
+
+  <g>
+    <rect x="1130" y="385" width="370" height="94" rx="16" fill="#f8fafc" stroke="#cbd5e1"/>
+    <rect x="1130" y="385" width="8" height="94" rx="4" fill="#22c55e"/>
+    <text class="label" x="1158" y="418">采集完成</text>
+    <text class="body" x="1158" y="445">记录输入、GitHub 来源、项目上下文。</text>
+    <text class="mono-small" x="1158" y="467">产物：intake / github_source / project_context</text>
+  </g>
+  <g>
+    <rect x="1130" y="500" width="370" height="112" rx="16" fill="#f8fafc" stroke="#cbd5e1"/>
+    <rect x="1130" y="500" width="8" height="112" rx="4" fill="#3b82f6"/>
+    <text class="label" x="1158" y="533">路线生成中</text>
+    <text class="body" x="1158" y="560">正在读取仓库上下文，为路线规划提供依据。</text>
+    <text class="mono-small" x="1158" y="584">产物：route_set / sandbox_derivation_job</text>
+    <rect class="chip" x="1158" y="596" width="250" height="28" rx="8"/>
+    <text class="tiny blueText" x="1174" y="615">技术明细 5 条，默认折叠</text>
+  </g>
+  <g>
+    <rect x="1130" y="633" width="370" height="112" rx="16" fill="#f8fafc" stroke="#cbd5e1"/>
+    <rect x="1130" y="633" width="8" height="112" rx="4" fill="#a855f7"/>
+    <text class="label" x="1158" y="666">运行时能力准备</text>
+    <text class="body" x="1158" y="693">加载角色容器、绑定能力、收集证据。</text>
+    <text class="mono-small" x="1158" y="717">产物：capability_* / runtime sandbox</text>
+    <rect class="chipGreen" x="1158" y="729" width="196" height="28" rx="8"/>
+    <text class="tiny ok" x="1174" y="748">0ms 恢复记录隐藏</text>
+  </g>
+  <g>
+    <rect x="1130" y="770" width="370" height="74" rx="16" fill="#fff7ed" stroke="#fdba74"/>
+    <text class="label" x="1158" y="802">异常只在需要时突出</text>
+    <text class="body" x="1158" y="829">失败、重试、缺少产物才提升到主线。</text>
+  </g>
+
+  <!-- Mapping table -->
+  <rect class="panel" x="70" y="930" width="1460" height="185" rx="22"/>
+  <text class="section" x="100" y="973">落地映射规则</text>
+
+  <line class="line" x1="100" y1="998" x2="1500" y2="998"/>
+  <text class="small" x="105" y="1027">原始事件</text>
+  <text class="small" x="430" y="1027">UI 归类</text>
+  <text class="small" x="740" y="1027">主线是否展示</text>
+  <text class="small" x="1045" y="1027">产物挂载</text>
+
+  <line class="line" x1="100" y1="1040" x2="1500" y2="1040"/>
+  <text class="mono" x="105" y="1068">docker-analysis-sandbox / aigc-spec-node</text>
+  <text class="body" x="430" y="1068">能力调用明细</text>
+  <text class="body" x="740" y="1068">默认折叠，失败时提升</text>
+  <text class="body" x="1045" y="1068">挂到当前 route/runtime 阶段</text>
+
+  <text class="mono" x="105" y="1100">role-container-loader:*</text>
+  <text class="body" x="430" y="1100">幕后准备</text>
+  <text class="body" x="740" y="1100">不进主线，只进技术明细</text>
+  <text class="body" x="1045" y="1100">不生成用户产物</text>
+
+  <text class="mono" x="105" y="1132">system acting · job.stage</text>
+  <text class="body" x="430" y="1132">阶段推进</text>
+  <text class="body" x="740" y="1132">转成人话：进入路线生成等</text>
+  <text class="body" x="1045" y="1132">驱动 execution lane 位置</text>
+
+  <text class="tiny" x="70" y="1155">文件：docs/autopilot-execution-log-remodel-2026-05-29.svg</text>
+</svg>

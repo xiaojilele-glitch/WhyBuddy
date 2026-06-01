@@ -2,7 +2,7 @@
 
 ## 概述
 
-跨框架导出功能在 Cube Pets Office 现有的动态组织生成、十阶段工作流引擎和 Mission Runtime 基础上，新增一个导出引擎层。该引擎读取已完成工作流的 `WorkflowOrganizationSnapshot`、`WorkflowRecord` 和 `TaskRecord` 数据，先转换为框架无关的中间表示（IR），再通过目标框架适配器生成 CrewAI / LangGraph / AutoGen 的可运行代码和配置文件，最终打包为 ZIP 下载。
+跨框架导出功能在 WhyBuddy 现有的动态组织生成、十阶段工作流引擎和 Mission Runtime 基础上，新增一个导出引擎层。该引擎读取已完成工作流的 `WorkflowOrganizationSnapshot`、`WorkflowRecord` 和 `TaskRecord` 数据，先转换为框架无关的中间表示（IR），再通过目标框架适配器生成 CrewAI / LangGraph / AutoGen 的可运行代码和配置文件，最终打包为 ZIP 下载。
 
 核心设计原则：
 - **IR 优先**：所有框架适配器基于统一 IR 工作，新增框架只需实现一个适配器

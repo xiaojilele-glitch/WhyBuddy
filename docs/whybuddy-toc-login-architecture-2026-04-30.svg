@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1800" height="1180" viewBox="0 0 1800 1180" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">WhyBuddy ToC Login Architecture</title>
+  <desc id="desc">A trimmed login architecture for WhyBuddy ToC MVP, keeping email login, DB-backed session, optional Redis cache, project owner guard, and admin gate while excluding tenant, SMS, WeChat mini program, and dynamic RBAC.</desc>
+  <defs>
+    <linearGradient id="topGradient" x1="30" y1="24" x2="1770" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#18324A"/>
+      <stop offset="0.48" stop-color="#256B73"/>
+      <stop offset="1" stop-color="#4E7A51"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="15" flood-color="#172536" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M1 1 L11 6 L1 11 Z" fill="#3974F6"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M1 1 L11 6 L1 11 Z" fill="#2F8A57"/>
+    </marker>
+    <marker id="arrowTeal" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M1 1 L11 6 L1 11 Z" fill="#0F8B8D"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M1 1 L11 6 L1 11 Z" fill="#D97706"/>
+    </marker>
+    <style>
+      .bg { fill: #F5F7FA; }
+      .hero-title { font: 900 38px "Inter", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #FFFFFF; letter-spacing: 0; }
+      .hero-sub { font: 600 17px "Inter", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: rgba(255,255,255,0.82); letter-spacing: 0; }
+      .hero-meta { font: 750 13px "Inter", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: rgba(255,255,255,0.7); letter-spacing: 0; }
+      .panel { fill: #FFFFFF; stroke-width: 1.4; filter: url(#shadow); }
+      .panel-lite { fill: #FFFFFF; stroke-width: 1.2; }
+      .panel-title { font: 900 22px "Inter", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #15283D; letter-spacing: 0; }
+      .panel-note { font: 600 13px "Inter", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #657388; letter-spacing: 0; }
+      .box-title { font: 850 16px "Inter", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #15283D; letter-spacing: 0; }
+      .box-note { font: 600 12px "Inter", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #5F6F84; letter-spacing: 0; }
+      .mono { font: 700 12px "JetBrains Mono", "Consolas", monospace; fill: #617187; letter-spacing: 0; }
+      .tiny { font: 650 11px "Inter", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #718096; letter-spacing: 0; }
+      .legend { font: 650 12px "Inter", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #5F6F84; letter-spacing: 0; }
+      .flow-blue { stroke: #3974F6; stroke-width: 2.2; fill: none; marker-end: url(#arrowBlue); }
+      .flow-green { stroke: #2F8A57; stroke-width: 2.2; fill: none; marker-end: url(#arrowGreen); }
+      .flow-teal { stroke: #0F8B8D; stroke-width: 2.2; fill: none; marker-end: url(#arrowTeal); }
+      .flow-orange { stroke: #D97706; stroke-width: 2.2; fill: none; marker-end: url(#arrowOrange); }
+      .flow-dash { stroke-dasharray: 7 7; }
+      .cut-text { font: 800 13px "Inter", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #9A3412; letter-spacing: 0; }
+      .keep-text { font: 800 13px "Inter", "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #166534; letter-spacing: 0; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1800" height="1180"/>
+
+  <rect x="30" y="24" width="1740" height="162" rx="24" fill="url(#topGradient)"/>
+  <text x="70" y="76" class="hero-meta">WHYBUDDY / TOC LOGIN / MYSQL-FIRST / REDIS-OPTIONAL / PROJECT-FIRST</text>
+  <text x="70" y="122" class="hero-title">裁剪版登录架构逻辑图</text>
+  <text x="70" y="156" class="hero-sub">从成熟 ToB 登录架构中保留可用骨架：邮箱登录、DB Session、Redis 可选缓存、项目归属隔离、管理员后台门禁。</text>
+  <rect x="1290" y="58" width="420" height="90" rx="18" fill="rgba(255,255,255,0.13)" stroke="rgba(255,255,255,0.25)"/>
+  <text x="1316" y="91" class="hero-meta">明确裁剪</text>
+  <text x="1316" y="123" class="hero-sub">无租户 / 无短信 / 无微信扫码 / 无动态 RBAC</text>
+
+  <!-- Source cut boundary -->
+  <g transform="translate(30 215)">
+    <rect class="panel" width="230" height="690" rx="18" stroke="#CBD5E1"/>
+    <text x="28" y="44" class="panel-title">裁剪边界</text>
+    <text x="28" y="72" class="panel-note">参考图只取架构骨架</text>
+
+    <rect x="24" y="105" width="182" height="44" rx="10" fill="#ECFDF5" stroke="#86EFAC"/>
+    <text x="42" y="132" class="keep-text">保留：邮箱登录</text>
+    <rect x="24" y="162" width="182" height="44" rx="10" fill="#ECFDF5" stroke="#86EFAC"/>
+    <text x="42" y="189" class="keep-text">保留：Session</text>
+    <rect x="24" y="219" width="182" height="44" rx="10" fill="#ECFDF5" stroke="#86EFAC"/>
+    <text x="42" y="246" class="keep-text">保留：Redis 缓存</text>
+    <rect x="24" y="276" width="182" height="44" rx="10" fill="#ECFDF5" stroke="#86EFAC"/>
+    <text x="42" y="303" class="keep-text">保留：后台门禁</text>
+
+    <rect x="24" y="355" width="182" height="44" rx="10" fill="#FFF7ED" stroke="#FDBA74"/>
+    <text x="42" y="382" class="cut-text">删除：tenant_id</text>
+    <rect x="24" y="412" width="182" height="44" rx="10" fill="#FFF7ED" stroke="#FDBA74"/>
+    <text x="42" y="439" class="cut-text">删除：X-Tenant-Id</text>
+    <rect x="24" y="469" width="182" height="44" rx="10" fill="#FFF7ED" stroke="#FDBA74"/>
+    <text x="42" y="496" class="cut-text">删除：短信登录</text>
+    <rect x="24" y="526" width="182" height="44" rx="10" fill="#FFF7ED" stroke="#FDBA74"/>
+    <text x="42" y="553" class="cut-text">删除：微信扫码</text>
+    <rect x="24" y="583" width="182" height="44" rx="10" fill="#FFF7ED" stroke="#FDBA74"/>
+    <text x="42" y="610" class="cut-text">删除：动态菜单 RBAC</text>
+    <text x="28" y="664" class="tiny">替换核心：tenant isolation -> project owner isolation</text>
+  </g>
+
+  <!-- Client layer -->
+  <g transform="translate(290 215)">
+    <rect class="panel" width="500" height="250" rx="18" stroke="#93C5FD"/>
+    <text x="28" y="42" class="panel-title">前端登录入口</text>
+    <text x="28" y="70" class="panel-note">React/Vite + auth store + request failure handling</text>
+
+    <rect x="28" y="104" width="132" height="56" rx="10" fill="#EFF6FF" stroke="#60A5FA"/>
+    <text x="56" y="128" class="box-title">登录页</text>
+    <text x="48" y="148" class="box-note">email + code/password</text>
+
+    <rect x="184" y="104" width="132" height="56" rx="10" fill="#EFF6FF" stroke="#60A5FA"/>
+    <text x="216" y="128" class="box-title">AuthStore</text>
+    <text x="206" y="148" class="box-note">currentUser/isAdmin</text>
+
+    <rect x="340" y="104" width="132" height="56" rx="10" fill="#EFF6FF" stroke="#60A5FA"/>
+    <text x="362" y="128" class="box-title">请求处理</text>
+    <text x="366" y="148" class="box-note">401/403/logout</text>
+
+    <rect x="28" y="178" width="132" height="48" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+    <text x="54" y="207" class="box-title">/login</text>
+
+    <rect x="184" y="178" width="132" height="48" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+    <text x="216" y="207" class="box-title">/projects</text>
+
+    <rect x="340" y="178" width="132" height="48" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+    <text x="376" y="207" class="box-title">/admin</text>
+  </g>
+
+  <!-- API routes -->
+  <g transform="translate(830 215)">
+    <rect class="panel" width="500" height="250" rx="18" stroke="#86EFAC"/>
+    <text x="28" y="42" class="panel-title">登录 API 与路由</text>
+    <text x="28" y="70" class="panel-note">公开 auth 路由 + 受保护项目路由 + 后台 admin 路由</text>
+
+    <rect x="28" y="104" width="138" height="56" rx="10" fill="#F0FDF4" stroke="#4ADE80"/>
+    <text x="48" y="128" class="box-title">/api/auth/login</text>
+    <text x="58" y="148" class="box-note">邮箱登录</text>
+
+    <rect x="182" y="104" width="138" height="56" rx="10" fill="#F0FDF4" stroke="#4ADE80"/>
+    <text x="202" y="128" class="box-title">/api/auth/me</text>
+    <text x="204" y="148" class="box-note">恢复 currentUser</text>
+
+    <rect x="336" y="104" width="138" height="56" rx="10" fill="#F0FDF4" stroke="#4ADE80"/>
+    <text x="350" y="128" class="box-title">/api/auth/logout</text>
+    <text x="368" y="148" class="box-note">撤销 session</text>
+
+    <rect x="58" y="178" width="170" height="48" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+    <text x="80" y="207" class="box-title">/api/projects/*</text>
+
+    <rect x="272" y="178" width="170" height="48" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+    <text x="304" y="207" class="box-title">/api/admin/*</text>
+  </g>
+
+  <!-- Middleware gate -->
+  <g transform="translate(1370 215)">
+    <rect class="panel" width="400" height="250" rx="18" stroke="#FDBA74"/>
+    <text x="28" y="42" class="panel-title">中间件与门禁</text>
+    <text x="28" y="70" class="panel-note">同一身份体系，不拆 admin token</text>
+
+    <rect x="28" y="104" width="156" height="56" rx="10" fill="#FFF7ED" stroke="#FB923C"/>
+    <text x="54" y="128" class="box-title">requireAuth</text>
+    <text x="48" y="148" class="box-note">session -> req.user</text>
+
+    <rect x="216" y="104" width="156" height="56" rx="10" fill="#FFF7ED" stroke="#FB923C"/>
+    <text x="238" y="128" class="box-title">requireAdmin</text>
+    <text x="238" y="148" class="box-note">admin/super_admin</text>
+
+    <rect x="28" y="178" width="156" height="48" rx="10" fill="#FFF7ED" stroke="#FB923C"/>
+    <text x="48" y="207" class="box-title">ProjectOwner</text>
+
+    <rect x="216" y="178" width="156" height="48" rx="10" fill="#FFF7ED" stroke="#FB923C"/>
+    <text x="236" y="207" class="box-title">404 / 403 策略</text>
+  </g>
+
+  <!-- Service layer -->
+  <g transform="translate(290 505)">
+    <rect class="panel" width="700" height="270" rx="18" stroke="#67E8F9"/>
+    <text x="28" y="42" class="panel-title">Auth Service 与会话逻辑</text>
+    <text x="28" y="70" class="panel-note">登录业务集中在 service/repository，不写散到 route handler</text>
+
+    <rect x="28" y="108" width="150" height="58" rx="10" fill="#ECFEFF" stroke="#22D3EE"/>
+    <text x="60" y="133" class="box-title">AuthValidate</text>
+    <text x="54" y="153" class="box-note">email/password/code</text>
+
+    <rect x="202" y="108" width="150" height="58" rx="10" fill="#ECFEFF" stroke="#22D3EE"/>
+    <text x="235" y="133" class="box-title">AuthService</text>
+    <text x="230" y="153" class="box-note">查用户/状态/登录</text>
+
+    <rect x="376" y="108" width="150" height="58" rx="10" fill="#ECFEFF" stroke="#22D3EE"/>
+    <text x="402" y="133" class="box-title">SessionService</text>
+    <text x="404" y="153" class="box-note">create/revoke/refresh</text>
+
+    <rect x="550" y="108" width="122" height="58" rx="10" fill="#ECFEFF" stroke="#22D3EE"/>
+    <text x="576" y="133" class="box-title">Cookie</text>
+    <text x="574" y="153" class="box-note">httpOnly</text>
+
+    <rect x="88" y="196" width="150" height="48" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+    <text x="116" y="225" class="box-title">统一错误</text>
+
+    <rect x="276" y="196" width="150" height="48" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+    <text x="292" y="225" class="box-title">lastLogin 更新</text>
+
+    <rect x="464" y="196" width="150" height="48" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+    <text x="482" y="225" class="box-title">disabled 拦截</text>
+  </g>
+
+  <!-- Access service -->
+  <g transform="translate(1030 505)">
+    <rect class="panel" width="740" height="270" rx="18" stroke="#C4B5FD"/>
+    <text x="28" y="42" class="panel-title">项目隔离与后台访问</text>
+    <text x="28" y="70" class="panel-note">ToC 核心替换：tenant isolation -> project owner isolation</text>
+
+    <rect x="28" y="108" width="160" height="58" rx="10" fill="#F5F3FF" stroke="#A78BFA"/>
+    <text x="54" y="133" class="box-title">ProjectGuard</text>
+    <text x="52" y="153" class="box-note">owner_user_id</text>
+
+    <rect x="212" y="108" width="160" height="58" rx="10" fill="#F5F3FF" stroke="#A78BFA"/>
+    <text x="236" y="133" class="box-title">ProjectService</text>
+    <text x="232" y="153" class="box-note">my projects only</text>
+
+    <rect x="396" y="108" width="160" height="58" rx="10" fill="#F5F3FF" stroke="#A78BFA"/>
+    <text x="428" y="133" class="box-title">AdminService</text>
+    <text x="430" y="153" class="box-note">global read views</text>
+
+    <rect x="580" y="108" width="132" height="58" rx="10" fill="#F5F3FF" stroke="#A78BFA"/>
+    <text x="604" y="133" class="box-title">Audit Later</text>
+    <text x="602" y="153" class="box-note">support ops</text>
+
+    <rect x="58" y="196" width="185" height="48" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+    <text x="82" y="225" class="box-title">越权项目返回 404</text>
+
+    <rect x="278" y="196" width="185" height="48" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+    <text x="310" y="225" class="box-title">后台不足返回 403</text>
+
+    <rect x="498" y="196" width="185" height="48" rx="10" fill="#F8FAFC" stroke="#CBD5E1"/>
+    <text x="522" y="225" class="box-title">普通接口不穿透 admin</text>
+  </g>
+
+  <!-- Persistence layer -->
+  <g transform="translate(290 815)">
+    <rect class="panel" width="700" height="235" rx="18" stroke="#93C5FD"/>
+    <text x="28" y="42" class="panel-title">MySQL 事实源</text>
+    <text x="28" y="70" class="panel-note">database: whybuddy；真实权限只看 MySQL，不看 localStorage/JSON</text>
+
+    <rect x="30" y="106" width="122" height="54" rx="10" fill="#EFF6FF" stroke="#60A5FA"/>
+    <text x="68" y="130" class="box-title">users</text>
+    <text x="52" y="150" class="box-note">role/status/email</text>
+
+    <rect x="174" y="106" width="122" height="54" rx="10" fill="#EFF6FF" stroke="#60A5FA"/>
+    <text x="198" y="130" class="box-title">sessions</text>
+    <text x="192" y="150" class="box-note">token_hash</text>
+
+    <rect x="318" y="106" width="150" height="54" rx="10" fill="#EFF6FF" stroke="#60A5FA"/>
+    <text x="338" y="130" class="box-title">email_tokens</text>
+    <text x="350" y="150" class="box-note">expires/consumed</text>
+
+    <rect x="490" y="106" width="122" height="54" rx="10" fill="#EFF6FF" stroke="#60A5FA"/>
+    <text x="522" y="130" class="box-title">projects</text>
+    <text x="506" y="150" class="box-note">owner_user_id</text>
+
+    <text x="30" y="195" class="mono">schema_migrations -> users -> sessions -> email_login_tokens -> projects</text>
+  </g>
+
+  <g transform="translate(1030 815)">
+    <rect class="panel" width="740" height="235" rx="18" stroke="#5EEAD4"/>
+    <text x="28" y="42" class="panel-title">Redis 可选增强</text>
+    <text x="28" y="70" class="panel-note">Redis enabled 时加速；Redis down 时回落 MySQL-only</text>
+
+    <rect x="30" y="106" width="150" height="54" rx="10" fill="#F0FDFA" stroke="#2DD4BF"/>
+    <text x="58" y="130" class="box-title">session cache</text>
+    <text x="56" y="150" class="box-note">miss -> MySQL</text>
+
+    <rect x="204" y="106" width="150" height="54" rx="10" fill="#F0FDFA" stroke="#2DD4BF"/>
+    <text x="238" y="130" class="box-title">login rate</text>
+    <text x="230" y="150" class="box-note">email/ip limit</text>
+
+    <rect x="378" y="106" width="150" height="54" rx="10" fill="#F0FDFA" stroke="#2DD4BF"/>
+    <text x="408" y="130" class="box-title">force logout</text>
+    <text x="414" y="150" class="box-note">cache assist</text>
+
+    <rect x="552" y="106" width="150" height="54" rx="10" fill="#F0FDFA" stroke="#2DD4BF"/>
+    <text x="590" y="130" class="box-title">queue later</text>
+    <text x="578" y="150" class="box-note">async jobs only</text>
+
+    <text x="30" y="195" class="mono">prefix: cube:pets:office:  / queue prefix: cube:pets:office:queue:</text>
+  </g>
+
+  <!-- Flows -->
+  <path class="flow-blue" d="M762 340 C796 340 800 340 830 340"/>
+  <path class="flow-blue" d="M1330 340 C1350 340 1350 340 1370 340"/>
+  <path class="flow-teal" d="M1080 465 C930 486 780 500 640 535"/>
+  <path class="flow-orange" d="M1556 465 C1544 492 1520 505 1500 535"/>
+  <path class="flow-green" d="M640 775 C642 790 642 800 642 815"/>
+  <path class="flow-green flow-dash" d="M706 775 C890 798 1080 802 1240 830"/>
+  <path class="flow-blue" d="M1300 775 C1245 797 1200 808 1160 815"/>
+  <path class="flow-teal flow-dash" d="M1290 815 C1288 790 1290 782 1300 775"/>
+  <path class="flow-orange" d="M1220 465 C1230 485 1260 500 1300 535"/>
+  <path class="flow-blue flow-dash" d="M485 465 C512 485 540 503 575 535"/>
+
+  <!-- Legend -->
+  <g transform="translate(30 1082)">
+    <rect class="panel-lite" width="1740" height="72" rx="18" stroke="#CBD5E1"/>
+    <circle cx="34" cy="25" r="6" fill="#3974F6"/>
+    <text x="50" y="30" class="legend">同步请求 / API 调用</text>
+    <circle cx="208" cy="25" r="6" fill="#0F8B8D"/>
+    <text x="224" y="30" class="legend">会话恢复 / service 调用</text>
+    <circle cx="430" cy="25" r="6" fill="#2F8A57"/>
+    <text x="446" y="30" class="legend">MySQL 事实源</text>
+    <circle cx="600" cy="25" r="6" fill="#D97706"/>
+    <text x="616" y="30" class="legend">后台门禁 / 拒绝策略</text>
+    <line x1="805" y1="25" x2="865" y2="25" class="flow-teal flow-dash"/>
+    <text x="880" y="30" class="legend">可选 Redis 缓存或降级链路</text>
+    <text x="34" y="54" class="tiny">生成位置：docs/whybuddy-toc-login-architecture-2026-04-30.svg</text>
+    <text x="1200" y="54" class="tiny">核心原则：MySQL is source of truth; Redis is optional; project ownership replaces tenant context.</text>
+  </g>
+</svg>

@@ -2,11 +2,11 @@
 
 ## 目标
 
-为 Cube Pets Office 的 ToC 账号、个人项目隔离和管理员后台建立轻量但可靠的持久化底座。当前测试环境已经具备 MySQL 和 Redis，本 spec 将其纳入项目实施主线：MySQL 作为用户、会话、项目和权限边界的唯一事实源；Redis 作为可选加速、限流和短期状态组件，不作为系统启动或权限判断的硬依赖。
+为 WhyBuddy 的 ToC 账号、个人项目隔离和管理员后台建立轻量但可靠的持久化底座。当前测试环境已经具备 MySQL 和 Redis，本 spec 将其纳入项目实施主线：MySQL 作为用户、会话、项目和权限边界的唯一事实源；Redis 作为可选加速、限流和短期状态组件，不作为系统启动或权限判断的硬依赖。
 
 ## 背景
 
-当前仓库仍以 `data/database.json` 和前端 localStorage 承接大量 demo/runtime 状态。这个模式适合单机演示，但不适合承接真实 ToC 用户登录、项目归属和管理员后台访问控制。`rbac-system-pc/backend` 的测试服务器配置可作为连接 MySQL/Redis 的工程参考，但该项目的租户、部门、岗位、用户组和完整 RBAC 体系不应迁移到 Cube Pets Office 的 ToC MVP。
+当前仓库仍以 `data/database.json` 和前端 localStorage 承接大量 demo/runtime 状态。这个模式适合单机演示，但不适合承接真实 ToC 用户登录、项目归属和管理员后台访问控制。`rbac-system-pc/backend` 的测试服务器配置可作为连接 MySQL/Redis 的工程参考，但该项目的租户、部门、岗位、用户组和完整 RBAC 体系不应迁移到 WhyBuddy 的 ToC MVP。
 
 2026-04-30 已在测试 MySQL 实例上创建独立数据库 `cube_pets_office`，并验证 Redis 可达。创建过程未删除或修改 `rbac-system-pc` 既有数据库。
 
@@ -14,7 +14,7 @@
 
 ### 需求 1：独立 MySQL 数据库
 
-系统 SHALL 使用独立 MySQL database/schema 承接 Cube Pets Office 的真实业务数据，数据库名为 `cube_pets_office`。系统 SHALL NOT 复用或修改 `rbac_multitenant` 等既有 `rbac-system-pc` 数据库。
+系统 SHALL 使用独立 MySQL database/schema 承接 WhyBuddy 的真实业务数据，数据库名为 `cube_pets_office`。系统 SHALL NOT 复用或修改 `rbac_multitenant` 等既有 `rbac-system-pc` 数据库。
 
 ### 需求 2：MySQL 作为权限事实源
 

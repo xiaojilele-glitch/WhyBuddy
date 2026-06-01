@@ -55,7 +55,10 @@ import type {
   WorkbenchStaleArtifactState,
 } from "./WorkbenchDocMain";
 import { WorkbenchExecutionPanel } from "./WorkbenchExecutionPanel";
-import { WorkbenchSpecTree } from "./WorkbenchSpecTree";
+import {
+  WorkbenchSpecTree,
+  type WorkbenchSpecTreeNodeStatusMap,
+} from "./WorkbenchSpecTree";
 import { WorkbenchStatusBar } from "./WorkbenchStatusBar";
 import { deriveDocStats } from "./derive-doc-stats";
 import { deriveChapterChecklist } from "./derive-chapter-checklist";
@@ -90,6 +93,21 @@ export interface AutopilotSpecDocumentsWorkbenchProps {
   jobId?: string;
   /** 当前蓝图 job 对象，用于底部执行步骤区域复用 `MiroFishCardStream` 派生。 */
   job?: BlueprintGenerationJob | null;
+  /**
+   * whybuddy-stage3-unblock-2026-05-29 — 进入效果预演（stage 3）回调。
+   * 透传给 `WorkbenchStatusBar`。
+   */
+  onEnterEffectPreview?: () => void;
+  /** 进入效果预演按钮的运行态。透传给 `WorkbenchStatusBar`。 */
+  effectPreviewState?: "idle" | "loading" | "success" | "error";
+  /** 进入效果预演按钮的禁用条件。透传给 `WorkbenchStatusBar`。 */
+  effectPreviewDisabled?: boolean;
+  /**
+   * whybuddy-spec-tree-progress-merge-2026-05-29：每节点生成进度快照，
+   * 透传给 `WorkbenchSpecTree` 渲染节点行状态图标。由 `AutopilotRightRail`
+   * 从 `specDocsProgress.nodes` 派生。
+   */
+  nodeStatusById?: WorkbenchSpecTreeNodeStatusMap;
 }
 
 export interface WorkbenchGridLayout {
@@ -468,7 +486,12 @@ export const AutopilotSpecDocumentsWorkbench: FC<
       data-expanded={docExpanded ? "true" : undefined}
       role="region"
       aria-label="autopilot spec documents workbench"
-      className="h-full min-h-0 w-full overflow-hidden rounded-lg border border-slate-200 bg-[#f6f8fb] p-1.5 shadow-sm"
+      // whybuddy-stage3-unblock-2026-05-29 — 用户反馈 spec 文档驾驶舱外
+      // 包浅灰 (#f6f8fb) + p-1.5 + rounded + border + shadow 与右栏整体
+      // 视觉割裂，且与内部各个子面板自带的边框 / 背景重复。这里改成完全
+      // 透明无内边距的 grid 容器，让内部 4 个子区域（status / tree /
+      // main / exec）各自的 chrome 直接接管视觉。
+      className="h-full min-h-0 w-full overflow-hidden bg-transparent"
       style={{
         display: "grid",
         gridTemplateColumns: gridLayout.gridTemplateColumns,
@@ -501,6 +524,9 @@ export const AutopilotSpecDocumentsWorkbench: FC<
           onReview={handleReview}
           onRefresh={handleRefresh}
           onGenerateAll={props.onGenerateAll}
+          onEnterEffectPreview={props.onEnterEffectPreview}
+          effectPreviewState={props.effectPreviewState}
+          effectPreviewDisabled={props.effectPreviewDisabled}
           exportDisabled={exportDisabled}
           docStats={docStats}
         />
@@ -527,6 +553,7 @@ export const AutopilotSpecDocumentsWorkbench: FC<
           onSelectDocument={handleSelectDocument}
           onGenerateNode={onGenerateNode}
           generating={generating}
+          nodeStatusById={props.nodeStatusById}
           locale={locale}
         />
       </div>

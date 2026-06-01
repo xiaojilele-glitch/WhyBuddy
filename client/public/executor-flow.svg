@@ -26,7 +26,7 @@
 
   <rect x="0" y="0" width="1200" height="720" fill="#060b16"/>
 
-  <text x="40" y="52" class="t1">Cube Pets Office 执行链路（Trae 沙盒：real → native 自动降级）</text>
+  <text x="40" y="52" class="t1">WhyBuddy 执行链路（Trae 沙盒：real → native 自动降级）</text>
   <text x="40" y="78" class="t3">端口：Client 3000 | Server 3001 | Executor 3031</text>
 
   <rect x="60" y="120" width="320" height="120" class="box"/>

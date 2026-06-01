@@ -2,7 +2,7 @@
 
 ## Overview
 
-This design mechanizes the 14 requirements of `repo-system-reconnaissance-2026-05-28` into a **runnable 7-stage pipeline** the Author executes against the `2026-05-28` snapshot of `cube-pets-office`. It is a procedure manual, not a runtime architecture. The Author will run it once, against a clock, with a 3–5 working-day budget (Req 13). When the pipeline halts, every artifact in the Reconnaissance_Output_Set is bounded, every one of the 287 specs is bucketed, and every one of the Five_Control_Recovery_Questions points to a specific section + SVG.
+This design mechanizes the 14 requirements of `repo-system-reconnaissance-2026-05-28` into a **runnable 7-stage pipeline** the Author executes against the `2026-05-28` snapshot of `whybuddy`. It is a procedure manual, not a runtime architecture. The Author will run it once, against a clock, with a 3–5 working-day budget (Req 13). When the pipeline halts, every artifact in the Reconnaissance_Output_Set is bounded, every one of the 287 specs is bucketed, and every one of the Five_Control_Recovery_Questions points to a specific section + SVG.
 
 The design is defensive by construction:
 

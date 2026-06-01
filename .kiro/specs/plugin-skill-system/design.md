@@ -2,7 +2,7 @@
 
 ## 概述
 
-Plugin / Skill 体系在现有 Cube Pets Office 多智能体平台上构建模块化能力框架。核心思路是将 `dynamic-organization.ts` 中硬编码的 `SKILL_LIBRARY` 演进为数据库驱动的 `SkillRegistry`，支持运行时注册、版本管理、依赖解析、灰度发布和性能监控。
+Plugin / Skill 体系在现有 WhyBuddy 多智能体平台上构建模块化能力框架。核心思路是将 `dynamic-organization.ts` 中硬编码的 `SKILL_LIBRARY` 演进为数据库驱动的 `SkillRegistry`，支持运行时注册、版本管理、依赖解析、灰度发布和性能监控。
 
 设计遵循以下原则：
 - **渐进式迁移**：保持与现有 `WorkflowSkillBinding`、`WorkflowOrganizationNode` 类型的兼容

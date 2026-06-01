@@ -131,10 +131,15 @@ describe("RoleStatusStrip render contract", () => {
   });
 });
 
-// ─── Layer 2：源代码层 — 挂载点必须位于 fabric 分支 ────────────────────────
+// ─── Layer 2：源代码层 — RoleStatusStrip 已从右栏移除 ──────────────────────
 
-describe("AutopilotRightRail mounts <RoleStatusStrip /> inside the fabric branch", () => {
-  it("references <RoleStatusStrip /> within the fabric <aside> return block", async () => {
+describe("AutopilotRightRail no longer mounts <RoleStatusStrip />", () => {
+  it("does not reference <RoleStatusStrip /> anywhere in the rail (moved to 3D scene)", async () => {
+    // whybuddy-3d-real-role-driven-scene-2026-05-29: role identity / phase
+    // status is now carried by the real 3D agents (pet body + nameplate + bob
+    // animation), so the duplicate role chip strip was removed from the right
+    // rail. The RoleStatusStrip component itself is kept (Layer 1 render
+    // contract above still holds) but is no longer mounted by AutopilotRightRail.
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
     const source = await fs.readFile(
@@ -142,27 +147,8 @@ describe("AutopilotRightRail mounts <RoleStatusStrip /> inside the fabric branch
       "utf8"
     );
 
-    // <RoleStatusStrip /> 至少出现一次
-    const jsxMatches = source.match(/<RoleStatusStrip\b/g) ?? [];
-    expect(jsxMatches.length).toBeGreaterThanOrEqual(1);
-
-    // 关键事实：挂载点必须出现在 fabric 分支的 <aside> return 块中。
-    // 我们用 `data-stage-placeholder="fabric"` 这个 fabric 分支独有的标识
-    // 与下一个顶层 helper（`function ActiveNodeContent` 已经在文件顶部声明，
-    // 因此 fabric 分支真正的下一个顶层符号是 `export default AutopilotRightRail`）
-    // 之间的范围作为 fabric 分支的 source slice。
-    const fabricBlockMatch = source.match(
-      /data-stage-placeholder="fabric"[\s\S]*?export\s+default\s+AutopilotRightRail/
-    );
-    expect(fabricBlockMatch).not.toBeNull();
-    expect(fabricBlockMatch?.[0] ?? "").toMatch(/<RoleStatusStrip\s*\/>/);
-
-    // 进一步确认非 fabric 分支（fileTop ↔ fabric placeholder 之间）不挂载，
-    // 避免被误移到“当 currentStage !== 'fabric' 时”的 placeholder 分支。
-    const headBlockMatch = source.match(
-      /currentStage\s*!==\s*"fabric"[\s\S]*?data-stage-placeholder="fabric"/
-    );
-    expect(headBlockMatch).not.toBeNull();
-    expect(headBlockMatch?.[0] ?? "").not.toMatch(/<RoleStatusStrip\b/);
+    // Neither the JSX mount nor the import should remain.
+    expect(source).not.toMatch(/<RoleStatusStrip\b/);
+    expect(source).not.toMatch(/import\s*\{\s*RoleStatusStrip\s*\}/);
   });
 });

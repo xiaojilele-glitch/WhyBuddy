@@ -20,7 +20,7 @@ export const messages = {
       unavailable: "--",
     },
     app: {
-      name: "Cube Pets Office",
+      name: "WhyBuddy",
       subtitle: "多智能体办公室",
       localeSwitch: "切换语言",
       localeDescription: "中英文切换会自动保存，下次打开保持上次选择。",
@@ -42,7 +42,7 @@ export const messages = {
       runtimeChip: (label: string) => `当前模式：${label}`,
       agentChip: (count: number) => `在线 Agent：${count}`,
       workflowChip: (count: number) => `活跃工作流：${count}`,
-      desktopOfficeLabel: "Cube Pets Office / 办公室",
+      desktopOfficeLabel: "WhyBuddy / 办公室",
       taskHubTitle: "任务主路径",
       newMission: "新建任务",
       liveDemo: "载入演示",
@@ -738,7 +738,7 @@ export const messages = {
         life: "生活部协作区",
         meta: "元部门审计区",
       },
-      brand: "Cube Pets Office",
+      brand: "WhyBuddy",
     },
     lineage: {
       title: "数据血缘",
@@ -859,7 +859,7 @@ export const messages = {
       unavailable: "--",
     },
     app: {
-      name: "Cube Pets Office",
+      name: "WhyBuddy",
       subtitle: "Multi-Agent Office",
       localeSwitch: "Switch language",
       localeDescription:
@@ -883,7 +883,7 @@ export const messages = {
       runtimeChip: (label: string) => `Mode: ${label}`,
       agentChip: (count: number) => `Agents online: ${count}`,
       workflowChip: (count: number) => `Active workflows: ${count}`,
-      desktopOfficeLabel: "Cube Pets Office / Office",
+      desktopOfficeLabel: "WhyBuddy / Office",
       taskHubTitle: "Task Path",
       newMission: "New Mission",
       liveDemo: "Load Demo",
@@ -1647,7 +1647,7 @@ export const messages = {
         life: "Life team zone",
         meta: "Meta audit zone",
       },
-      brand: "Cube Pets Office",
+      brand: "WhyBuddy",
     },
     lineage: {
       title: "Data Lineage",

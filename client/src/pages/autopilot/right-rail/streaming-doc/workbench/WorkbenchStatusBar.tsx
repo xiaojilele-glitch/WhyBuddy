@@ -22,7 +22,7 @@
  */
 
 import type { FC } from "react";
-import { Download, Eye, RefreshCw } from "lucide-react";
+import { Download, Eye, RefreshCw, Sparkles } from "lucide-react";
 
 import type { AppLocale } from "@/lib/locale";
 import type { DocStats } from "./derive-doc-stats";
@@ -50,6 +50,29 @@ export interface WorkbenchStatusBarProps {
   onRefresh: () => void;
   /** 一键生成全部规格文档。缺失时不渲染按钮。 */
   onGenerateAll?: () => void;
+  /**
+   * whybuddy-stage3-unblock-2026-05-29 — 进入效果预演（stage 3）。
+   *
+   * 当用户在 spec 文档驾驶舱已经看到至少一份生成出的 SPEC 文档（无需
+   * "全部 accepted"），点击此按钮会触发后端
+   * `POST /api/blueprint/jobs/:id/effect-previews`，由容器把响应里的
+   * job + 13 份预演快照抬到 `latestJob` / `effectPreviews`，使右栏 dispatcher
+   * 自动切换到效果预演面板。缺失时不渲染按钮，向后兼容既有调用方。
+   */
+  onEnterEffectPreview?: () => void;
+  /**
+   * 进入效果预演按钮的进行中态：
+   *   - "idle"    → 默认，按钮可点击
+   *   - "loading" → POST 请求中，按钮带 spinner，不可点击
+   *   - "success" → 后端 201 已返回，按钮翻成 ✓ 已就绪
+   *   - "error"   → 后端 4xx/5xx，按钮翻成红色，可重试
+   */
+  effectPreviewState?: "idle" | "loading" | "success" | "error";
+  /**
+   * 进入效果预演按钮的禁用条件。容器在 `documents.length === 0` 或
+   * `jobId === undefined` 时设为 `true`。
+   */
+  effectPreviewDisabled?: boolean;
   /**
    * 导出按钮额外禁用条件。容器在 `props.jobId === undefined` 或
    * `generating !== null` 时设为 `true`。
@@ -161,6 +184,9 @@ export const WorkbenchStatusBar: FC<WorkbenchStatusBarProps> = ({
   onReview,
   onRefresh,
   onGenerateAll,
+  onEnterEffectPreview,
+  effectPreviewState = "idle",
+  effectPreviewDisabled,
   exportDisabled,
   docStats,
   locale,
@@ -189,7 +215,7 @@ export const WorkbenchStatusBar: FC<WorkbenchStatusBarProps> = ({
       data-testid="autopilot-workbench-status-bar"
       role="banner"
       aria-label="autopilot workbench status bar"
-      className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm"
+      className="bg-white"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
@@ -217,6 +243,60 @@ export const WorkbenchStatusBar: FC<WorkbenchStatusBarProps> = ({
               className="inline-flex h-7 items-center gap-1 rounded-md bg-slate-900 px-2 text-[10px] font-bold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
               <span className="truncate">{generating === "all" ? (locale === "zh-CN" ? "生成中..." : "Generating...") : (locale === "zh-CN" ? "生成全部" : "Generate All")}</span>
+            </button>
+          ) : null}
+          {onEnterEffectPreview ? (
+            <button
+              type="button"
+              data-testid="autopilot-workbench-action-enter-effect-preview"
+              onClick={onEnterEffectPreview}
+              disabled={
+                baseDisabled ||
+                effectPreviewDisabled === true ||
+                effectPreviewState === "loading" ||
+                effectPreviewState === "success"
+              }
+              aria-disabled={
+                baseDisabled ||
+                effectPreviewDisabled === true ||
+                effectPreviewState === "loading" ||
+                effectPreviewState === "success"
+              }
+              title={
+                locale === "zh-CN"
+                  ? "基于已生成的 SPEC 文档触发后端推导效果预演（stage 3）"
+                  : "Derive Stage 3 effect previews from current SPEC documents"
+              }
+              className={
+                effectPreviewState === "success"
+                  ? "inline-flex h-7 items-center gap-1 rounded-md border border-[#0f766e] bg-white px-2 text-[10px] font-bold text-[#0f766e] shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60"
+                  : effectPreviewState === "error"
+                    ? "inline-flex h-7 items-center gap-1 rounded-md border border-red-300 bg-red-50 px-2 text-[10px] font-bold text-red-700 shadow-sm transition hover:bg-red-100 disabled:cursor-not-allowed"
+                    : "inline-flex h-7 items-center gap-1 rounded-md bg-[#FF4500] px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-white shadow-[rgba(255,69,0,0.18)_0_0_0_3px] transition hover:bg-[#e63e00] disabled:cursor-not-allowed disabled:opacity-50"
+              }
+            >
+              {effectPreviewState === "loading" ? (
+                <RefreshCw className="h-3 w-3 shrink-0 animate-spin" aria-hidden="true" />
+              ) : (
+                <Sparkles className="h-3 w-3 shrink-0" aria-hidden="true" />
+              )}
+              <span className="truncate">
+                {effectPreviewState === "success"
+                  ? locale === "zh-CN"
+                    ? "已进入预演"
+                    : "Preview ready"
+                  : effectPreviewState === "loading"
+                    ? locale === "zh-CN"
+                      ? "生成中..."
+                      : "Generating..."
+                    : effectPreviewState === "error"
+                      ? locale === "zh-CN"
+                        ? "重试预演"
+                        : "Retry preview"
+                      : locale === "zh-CN"
+                        ? "进入效果预演"
+                        : "Enter Preview"}
+              </span>
             </button>
           ) : null}
           <button

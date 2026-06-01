@@ -13,7 +13,7 @@ import {
 } from "./github-pages-demo-data";
 
 export const PROJECT_STORE_SCHEMA_VERSION = 1;
-export const PROJECT_STORE_STORAGE_KEY = "cube-pets-office.project-store.v1";
+export const PROJECT_STORE_STORAGE_KEY = "whybuddy.project-store.v1";
 // Legacy/demo boundary: this localStorage snapshot is only a browser-side
 // transition cache for Project-first UX. Real project ownership and permission
 // checks must come from the authenticated server session plus MySQL projects.

@@ -13,13 +13,13 @@ if (-not (Test-Path $rootEnvPath)) {
 }
 
 $targets = @(
-  "..\cube-pets-office-0-mission-contracts",
-  "..\cube-pets-office-A-mission-core",
-  "..\cube-pets-office-B-lobster-executor",
-  "..\cube-pets-office-C-brain-dispatch",
-  "..\cube-pets-office-D-feishu-mission-bridge",
-  "..\cube-pets-office-E-tasks-universe",
-  "..\cube-pets-office-F-mission-integration"
+  "..\whybuddy-0-mission-contracts",
+  "..\whybuddy-A-mission-core",
+  "..\whybuddy-B-lobster-executor",
+  "..\whybuddy-C-brain-dispatch",
+  "..\whybuddy-D-feishu-mission-bridge",
+  "..\whybuddy-E-tasks-universe",
+  "..\whybuddy-F-mission-integration"
 )
 
 Push-Location $repoRoot

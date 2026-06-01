@@ -1,4 +1,4 @@
-// Copyright Cube Pets Office. All Rights Reserved.
+// Copyright WhyBuddy. All Rights Reserved.
 //
 // Meeting & Collaboration Data — UE5-compatible constants for meeting/collaboration elements.
 // Covers: CorkBoard, MobileBoards (4), TaskCarts (4).

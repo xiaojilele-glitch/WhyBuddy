@@ -125,7 +125,7 @@ interface GithubPagesBlueprintDemoState {
   artifactReplays: BlueprintArtifactReplay[];
 }
 
-const DEFAULT_STORAGE_KEY = "cube-pets-office:autopilot:pages-blueprint-demo";
+const DEFAULT_STORAGE_KEY = "whybuddy:autopilot:pages-blueprint-demo";
 
 function makeApiError(message: string, endpoint: string): ApiRequestError {
   return {
@@ -1348,7 +1348,7 @@ function buildLandingPlans(input: {
         {
           id: `pages-landing-step-${input.job.id}`,
           title: "Verify Pages smoke",
-          summary: "Serve dist/public under /cube-pets-office/ and click through the Autopilot flow.",
+          summary: "Serve dist/public under /whybuddy/ and click through the Autopilot flow.",
           status: "ready",
           owner: "autopilot",
           target: "GitHub Pages",

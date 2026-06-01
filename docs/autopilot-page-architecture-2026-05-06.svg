@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="2800" height="1900" viewBox="0 0 2800 1900" role="img" aria-labelledby="title desc">
-  <title id="title">Cube Pets Office SPEC 自动驾驶与未来效果推演整体架构图</title>
+  <title id="title">WhyBuddy SPEC 自动驾驶与未来效果推演整体架构图</title>
   <desc id="desc">从想法或 GitHub 输入开始，经过澄清、自动驾驶路线规划、SPEC 树推导、规格文档、效果预演、实现提示词和工程落地，形成可保存、可预演、可执行的项目资产。</desc>
 
   <defs>
@@ -89,7 +89,7 @@
 
   <!-- Header -->
   <g transform="translate(60 48)">
-    <text class="title" x="0" y="0">Cube Pets Office | SPEC 自动驾驶与未来效果推演整体架构图</text>
+    <text class="title" x="0" y="0">WhyBuddy | SPEC 自动驾驶与未来效果推演整体架构图</text>
     <text class="subtitle" x="40" y="44">输入想法 / GitHub -> 澄清 -> 自动驾驶路线集 -> 推导 SPEC 树 -> 规格文档 -> 效果预演 -> 实现提示词 -> 工程落地</text>
     <g transform="translate(860 82)">
       <rect x="0" y="0" rx="27" ry="27" width="610" height="54" fill="#ffffff" stroke="#3b82f6" stroke-width="1.6" filter="url(#softShadow)"/>

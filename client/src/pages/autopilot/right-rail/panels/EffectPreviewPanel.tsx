@@ -1215,22 +1215,22 @@ function EffectPreviewPanelInner({
   locale: AppLocale;
   initialImageSettings?: ImageSettingsViewModel | null;
 }) {
-  const acceptedDocuments = useMemo(
+  const previewSourceDocuments = useMemo(
     () =>
       documents.filter(
-        document => (document.status ?? "draft").toLowerCase() === "accepted"
+        document => (document.status ?? "draft").toLowerCase() !== "rejected"
       ),
     [documents]
   );
   const previewNodeIds = useMemo(
     () =>
       new Set([
-        ...acceptedDocuments.map(document => document.nodeId),
+        ...previewSourceDocuments.map(document => document.nodeId),
         ...specTree.nodes
           .filter(node => node.type === "effect_preview")
           .map(node => node.id),
       ]),
-    [acceptedDocuments, specTree.nodes]
+    [previewSourceDocuments, specTree.nodes]
   );
   const previewNodes = useMemo(
     () =>
@@ -1247,7 +1247,7 @@ function EffectPreviewPanelInner({
   );
   const [selectedNodeId, setSelectedNodeId] = useState(
     previewNodes[0]?.id ??
-      acceptedDocuments[0]?.nodeId ??
+      previewSourceDocuments[0]?.nodeId ??
       specTree.nodes.find(node => node.type === "effect_preview")?.id ??
       specTree.rootNodeId
   );
@@ -1368,7 +1368,7 @@ function EffectPreviewPanelInner({
     }
     return 1;
   }, [activePreview]);
-  const canGenerate = Boolean(jobId) && acceptedDocuments.length > 0;
+  const canGenerate = Boolean(jobId) && previewSourceDocuments.length > 0;
 
   const publishPreviews = useCallback(
     (nextPreviews: BlueprintEffectPreviewSnapshot[]) => {
@@ -1404,7 +1404,7 @@ function EffectPreviewPanelInner({
   }, [jobId, publishPreviews]);
 
   const handleGenerate = useCallback(async () => {
-    if (!jobId || acceptedDocuments.length === 0) return;
+    if (!jobId || previewSourceDocuments.length === 0) return;
 
     setGenerating(true);
     setError(null);
@@ -1412,7 +1412,7 @@ function EffectPreviewPanelInner({
     try {
       const result = await generateBlueprintEffectPreview(jobId, {
         nodeId: selectedNode?.id,
-        includeDrafts: false,
+        includeDrafts: true,
       });
       if (result.ok) {
         publishPreviews(result.data.effectPreviews);
@@ -1422,7 +1422,7 @@ function EffectPreviewPanelInner({
     } finally {
       setGenerating(false);
     }
-  }, [acceptedDocuments.length, jobId, publishPreviews, selectedNode?.id]);
+  }, [previewSourceDocuments.length, jobId, publishPreviews, selectedNode?.id]);
 
   useEffect(() => {
     if (!jobId || previews.length > 0) return;
@@ -1617,7 +1617,7 @@ function EffectPreviewPanelInner({
               {previewNodes.length ? (
                 previewNodes.map(node => {
                   const selected = selectedNode?.id === node.id;
-                  const acceptedCount = acceptedDocuments.filter(
+                  const usableCount = previewSourceDocuments.filter(
                     document => document.nodeId === node.id
                   ).length;
 
@@ -1640,8 +1640,8 @@ function EffectPreviewPanelInner({
                         </span>
                         <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500">
                           {panelText(
-                            `${acceptedCount} 已接受`,
-                            `${acceptedCount} accepted`,
+                            `${usableCount} 可用`,
+                            `${usableCount} usable`,
                             locale
                           )}
                         </span>
@@ -1686,7 +1686,7 @@ function EffectPreviewPanelInner({
                 variant="outline"
                 className="rounded-full border-slate-200 bg-slate-50 text-[10px] font-black text-slate-500"
               >
-                {acceptedDocuments.length} 份已接受文档
+                {previewSourceDocuments.length} 份可用文档
               </Badge>
             </div>
             <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">

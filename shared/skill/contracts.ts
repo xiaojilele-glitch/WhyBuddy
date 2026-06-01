@@ -3,7 +3,7 @@
  *
  * 从 rbac-system-pc/backend/src/ai/orchestration/ 的节点注册制迁移并改造。
  * 原版是 AIGC 编排节点的 NodeTypeRegistry + FlowExecutor，
- * 此版改造为 cube-pets-office 的 Skill 热插拔体系。
+ * 此版改造为 whybuddy 的 Skill 热插拔体系。
  *
  * 核心思路：每个 Skill 只声明独有配置（prompt/tools/适用角色），
  * 执行框架由 WorkflowEngine 统一提供，避免每个 Skill 重复实现执行逻辑。
@@ -159,7 +159,7 @@ export type SkillLifecycleEvent =
 // ---------------------------------------------------------------------------
 
 /**
- * 当前 cube-pets-office 的映射关系：
+ * 当前 whybuddy 的映射关系：
  *
  * SkillDefinition → WorkflowSkillBinding (现有，在 organization-schema.ts 中)
  *   现有的 WorkflowSkillBinding 是精简版（id/name/summary/prompt），

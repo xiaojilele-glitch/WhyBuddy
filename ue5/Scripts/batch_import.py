@@ -1,6 +1,6 @@
 """
 Blender Python 脚本：批量将 GLTF/GLB 模型转换为 FBX 格式
-用于 Cube Pets Office UE5 项目的 Kenney Furniture Kit 模型导入准备
+用于 WhyBuddy UE5 项目的 Kenney Furniture Kit 模型导入准备
 
 使用方法：
   blender --background --python ue5/Scripts/batch_import.py -- \
@@ -248,7 +248,7 @@ def main():
         sys.exit(1)
 
     print("=" * 60)
-    print("Cube Pets Office — GLTF → FBX 批量转换")
+    print("WhyBuddy — GLTF → FBX 批量转换")
     print("=" * 60)
     print(f"  输入目录: {input_dir}")
     print(f"  输出目录: {output_dir}")
@@ -295,7 +295,7 @@ def main():
     # 生成导入清单文件
     manifest_path = os.path.join(output_dir, "import_manifest.txt")
     with open(manifest_path, "w", encoding="utf-8") as f:
-        f.write("# Cube Pets Office — FBX 导入清单\n")
+        f.write("# WhyBuddy — FBX 导入清单\n")
         f.write(f"# 生成时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"# 缩放因子: {scale_factor}x\n")
         f.write(f"# 文件数量: {len(converted)}\n\n")

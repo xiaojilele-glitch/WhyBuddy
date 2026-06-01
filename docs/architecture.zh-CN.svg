@@ -6,9 +6,9 @@
   role="img"
   aria-labelledby="title desc"
 >
-  <title id="title">Cube Pets Office 架构图(中文版)</title>
+  <title id="title">WhyBuddy 架构图(中文版)</title>
   <desc id="desc">
-    Cube Pets Office 产品架构总览,2026-05-11 版本。
+    WhyBuddy 产品架构总览,2026-05-11 版本。
     保留 2026-04-26 的柔和卡片风格,新增两条主线变化:
     (1) 已落地的 Autopilot 右栏收敛 5 specs(&lt;AutopilotRightRail&gt; + 8 个 fabric 子阶段面板、
     useAutopilotRightRailData 统一数据 hook、useRightRailSubStageState 的 URL ?sub + sticky

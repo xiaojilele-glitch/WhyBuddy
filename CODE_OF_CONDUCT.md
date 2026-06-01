@@ -2,7 +2,7 @@
 
 ## Our Pledge
 
-Cube Pets Office is an open-source project for people building, testing, and discussing AI-assisted work systems. We want the project to be useful, welcoming, and safe for contributors with different backgrounds, skill levels, and viewpoints.
+WhyBuddy is an open-source project for people building, testing, and discussing AI-assisted work systems. We want the project to be useful, welcoming, and safe for contributors with different backgrounds, skill levels, and viewpoints.
 
 Everyone who participates in this project is expected to help keep the community respectful and productive.
 
@@ -33,4 +33,4 @@ When reporting, include as much context as you are comfortable sharing: what hap
 
 Maintainers may remove comments, close discussions, block accounts, or take other reasonable action to protect the project community. Enforcement decisions should be proportionate to the situation and focused on restoring a safe, productive environment.
 
-This code of conduct applies in project spaces, including GitHub issues, pull requests, discussions, documentation, community chat, and public spaces where someone is representing Cube Pets Office.
+This code of conduct applies in project spaces, including GitHub issues, pull requests, discussions, documentation, community chat, and public spaces where someone is representing WhyBuddy.

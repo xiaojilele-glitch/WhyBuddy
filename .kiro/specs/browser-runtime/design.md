@@ -38,7 +38,7 @@ function createBrowserWorkflowEngine(options) {
 ## IndexedDB 存储层 (`client/src/lib/browser-runtime-storage.ts`)
 
 ### 数据库结构
-- 数据库名：`cube-pets-office-runtime`
+- 数据库名：`whybuddy-runtime`
 - 版本升级通过 `onupgradeneeded` 自动创建 object store
 
 | Store 名称 | Key | 用途 |

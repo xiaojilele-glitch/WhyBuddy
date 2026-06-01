@@ -2,7 +2,7 @@
 
 ## 简介
 
-跨框架导出功能允许用户将 Cube Pets Office 中当前的动态组织结构、十阶段工作流管道配置和 Mission 配置，一键导出为 CrewAI、LangGraph、AutoGen 等主流多智能体框架的兼容格式（Python 代码 + YAML/JSON 配置）。导出产物以 ZIP 包形式下载，用户解压后可直接运行，无需手动重写 Agent 定义和流程编排。
+跨框架导出功能允许用户将 WhyBuddy 中当前的动态组织结构、十阶段工作流管道配置和 Mission 配置，一键导出为 CrewAI、LangGraph、AutoGen 等主流多智能体框架的兼容格式（Python 代码 + YAML/JSON 配置）。导出产物以 ZIP 包形式下载，用户解压后可直接运行，无需手动重写 Agent 定义和流程编排。
 
 ## 术语表
 

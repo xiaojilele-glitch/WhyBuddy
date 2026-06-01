@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1120" viewBox="0 0 1600 1120" role="img" aria-labelledby="title desc">
-  <title id="title">Cube Pets Office 当前入口与执行链路架构图</title>
+  <title id="title">WhyBuddy 当前入口与执行链路架构图</title>
   <desc id="desc">说明首页、任务中心、统一发起器、FSD 角色编排、角色内 AIGC 能力、Mission、Workflow、运行证据与反馈展示之间的关系。</desc>
   <defs>
     <style>

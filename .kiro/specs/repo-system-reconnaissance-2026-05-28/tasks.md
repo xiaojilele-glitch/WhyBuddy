@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a procedure manual the Author executes against a clock, not runtime code. "Implementation" is *running the 7-stage pipeline against the `2026-05-28` snapshot of `cube-pets-office`*; "tests" are the 6 mechanical checks performed by `.tmp/cap-audit.{js|mjs|py}` plus the manual reviewer checklist for Property 2, Property 4, and Property 5. Nothing in this plan introduces runtime code, property-based tests, fuzz tests, or new source-tree files. Every artifact lives under `.kiro/specs/repo-system-reconnaissance-2026-05-28/` (the deliverable) or `.tmp/` (scratch + audit script).
+This is a procedure manual the Author executes against a clock, not runtime code. "Implementation" is *running the 7-stage pipeline against the `2026-05-28` snapshot of `whybuddy`*; "tests" are the 6 mechanical checks performed by `.tmp/cap-audit.{js|mjs|py}` plus the manual reviewer checklist for Property 2, Property 4, and Property 5. Nothing in this plan introduces runtime code, property-based tests, fuzz tests, or new source-tree files. Every artifact lives under `.kiro/specs/repo-system-reconnaissance-2026-05-28/` (the deliverable) or `.tmp/` (scratch + audit script).
 
 The work is bounded by Req 13 to **3–5 focused working days (≤ 40 hours)**. The time hints below sum to roughly `30–41` hours; the upper bound is the ceiling, not the target. If any task overruns its hint, demote optional content (Req 13.2) before extending.
 

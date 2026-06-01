@@ -64,7 +64,81 @@ const EMPTY_AGENT_CREW = {
   roleTimelines: [],
 } as unknown as BlueprintAgentCrewSnapshot;
 
+const FABRIC_SPEC_TREE = {
+  id: "fabric-tree-test",
+  rootNodeId: "node-preview",
+  version: 1,
+  nodes: [
+    {
+      id: "node-preview",
+      title: "效果预演节点",
+      type: "effect_preview",
+      status: "ready",
+    },
+  ],
+  documents: [
+    {
+      id: "doc-draft",
+      nodeId: "node-preview",
+      type: "requirements",
+      status: "draft",
+      title: "草稿需求",
+      content: "draft content",
+      format: "markdown",
+      version: 1,
+    },
+  ],
+} as unknown as BlueprintSpecTree;
+
 describe("AutopilotRightRail streaming timeline", () => {
+  it("renders the canonical EffectPreviewPanel for the effect_preview fabric sub-stage", () => {
+    const markup = renderToStaticMarkup(
+      <AutopilotRightRail
+        {...makeProps({
+          currentSubStage: "effect_preview",
+          job: {
+            id: "job-test",
+            stage: "effect_preview",
+            status: "completed",
+            artifacts: [],
+          } as unknown as BlueprintGenerationJob,
+          specTree: FABRIC_SPEC_TREE,
+          agentCrew: EMPTY_AGENT_CREW,
+        })}
+      />,
+    );
+
+    expect(markup).toContain('data-stage-key="effect_preview"');
+    expect(markup).toContain('data-sub-stage-placeholder="effect_preview"');
+    expect(markup).toContain('data-testid="effect-preview-generate-button"');
+    expect(markup).not.toContain('data-testid="timeline-confirm-advance"');
+    expect(markup).not.toContain("POST /api/blueprint/prompt-packages");
+  });
+
+  it("renders the canonical PromptPackagePanel for the prompt_package fabric sub-stage", () => {
+    const markup = renderToStaticMarkup(
+      <AutopilotRightRail
+        {...makeProps({
+          currentSubStage: "prompt_package",
+          job: {
+            id: "job-test",
+            stage: "prompt_packaging",
+            status: "running",
+            artifacts: [],
+          } as unknown as BlueprintGenerationJob,
+          specTree: FABRIC_SPEC_TREE,
+          agentCrew: EMPTY_AGENT_CREW,
+        })}
+      />,
+    );
+
+    expect(markup).toContain('data-stage-key="effect_preview"');
+    expect(markup).toContain('data-sub-stage-placeholder="prompt_package"');
+    expect(markup).toContain('data-testid="prompt-package-workbench"');
+    expect(markup).not.toContain('data-testid="timeline-confirm-advance"');
+    expect(markup).not.toContain("POST /api/blueprint/prompt-packages");
+  });
+
   it("case 1: renders completed + active timeline nodes when activeSubStage=spec_tree and data is ready", () => {
     const markup = renderToStaticMarkup(
       <AutopilotRightRail
@@ -256,7 +330,7 @@ describe("AutopilotRightRail streaming timeline", () => {
     expect(markup).toContain("步骤 04");
   });
 
-  it("renders history and replan entry points in the fabric action strip", () => {
+  it("renders the replan entry point in the fabric action strip without duplicating header history", () => {
     const markup = renderToStaticMarkup(
       <AutopilotRightRail
         {...makeProps({
@@ -277,9 +351,8 @@ describe("AutopilotRightRail streaming timeline", () => {
     );
 
     expect(markup).toContain('data-testid="autopilot-right-rail-action-strip"');
-    expect(markup).toContain('data-testid="autopilot-history-entry"');
-    expect(markup).toContain('data-version-history-entry-point="true"');
-    expect(markup).toContain(">历史<");
+    expect(markup).not.toContain('data-testid="autopilot-history-entry"');
+    expect(markup).not.toContain('data-version-history-entry-point="true"');
     expect(markup).not.toContain(">History<");
     expect(markup).toContain(
       'data-testid="autopilot-replan-from-stage-divider"'
@@ -756,7 +829,7 @@ describe("AutopilotRightRail replan integration contract", () => {
       "utf8",
     );
     const handlerStart = source.indexOf("const handleConfirmReplan");
-    const handlerEnd = source.indexOf("const handleOpenHistory");
+    const handlerEnd = source.indexOf("const handleRegenerateStaleStage");
     const handlerSource = source.slice(handlerStart, handlerEnd);
 
     expect(handlerStart).toBeGreaterThanOrEqual(0);

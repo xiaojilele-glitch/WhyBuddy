@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This spec scopes the **A+ tier** of a multi-tier repo recovery effort over the `cube-pets-office` codebase as of the `2026-05-28` snapshot (`2,130` files / `~545,000` lines / `287` specs). It is deliberately **not** a documentation-engineering project. The goal is for the Author to recover operational control over a codebase that has outgrown a single human's working memory.
+This spec scopes the **A+ tier** of a multi-tier repo recovery effort over the `whybuddy` codebase as of the `2026-05-28` snapshot (`2,130` files / `~545,000` lines / `287` specs). It is deliberately **not** a documentation-engineering project. The goal is for the Author to recover operational control over a codebase that has outgrown a single human's working memory.
 
 Phase 1 succeeds when the Author can answer five concrete questions about the system from a small, finite set of artifacts produced by direct scan of the repo, not from memory and not from prose drawn around an existing mental model. Documents and SVG diagrams are byproducts and are bounded from above; producing more of them is not progress.
 

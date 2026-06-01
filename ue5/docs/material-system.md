@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档定义 Cube Pets Office UE5 项目的完整材质系统，包括 Master Material 设计、材质实例参数、家具材质分配表以及 Kenney 模型顶点色支持方案。所有材质遵循 `ue5/docs/naming-conventions.md` 中定义的命名规范。
+本文档定义 WhyBuddy UE5 项目的完整材质系统，包括 Master Material 设计、材质实例参数、家具材质分配表以及 Kenney 模型顶点色支持方案。所有材质遵循 `ue5/docs/naming-conventions.md` 中定义的命名规范。
 
 ---
 

@@ -116,7 +116,10 @@ const StageHeader: FC<StageHeaderProps> = ({
       : `STEP ${stepNumber} · ${englishLabel}`;
 
   return (
-    <header className="sticky top-0 z-10 bg-slate-50 border-b border-slate-100 px-3 py-2">
+    <header
+      className="sticky top-0 z-10 bg-white px-3 py-2"
+      data-mirofish="stage-header"
+    >
       <div className="flex min-w-0 items-start gap-2">
         {canNavigatePrevious ? (
           <button
@@ -124,7 +127,7 @@ const StageHeader: FC<StageHeaderProps> = ({
             onClick={onNavigatePreviousStage}
             aria-label={previousStageLabel}
             title={previousStageLabel}
-            className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-[7px] border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/30"
+            className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-[2px] border border-[#E5E5E5] bg-white text-black/60 transition hover:border-[#FF4500] hover:text-[#FF4500] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4500]/30"
             data-testid="autopilot-stage-back-button"
             data-previous-sub-stage={previousSubStage}
             data-previous-workbench-stage={previousWorkbenchStage}
@@ -136,19 +139,20 @@ const StageHeader: FC<StageHeaderProps> = ({
         ) : null}
 
         <div className="min-w-0 flex-1">
-          {/* 英文步骤标识 */}
+          {/* whybuddy-rebrand-and-stage3-unblock-2026-05-28 §D.3:
+              eyebrow uses MiroFish mono token; title uses MiroFish display
+              token. Color contrast is the only state-bearing change. */}
           <p
-            className={`font-mono text-[10px] uppercase tracking-wider ${
-              isActive ? "text-slate-500" : "text-slate-300"
+            className={`font-mono text-[11px] font-bold uppercase tracking-[0.18em] ${
+              isActive ? "text-[#FF4500]" : "text-black/40"
             }`}
           >
             {eyebrow}
           </p>
 
-          {/* 中文大标题 */}
           <h2
-            className={`mt-0.5 truncate text-sm font-semibold ${
-              isActive ? "text-slate-800" : "text-slate-400"
+            className={`mt-1 truncate font-display text-base font-medium tracking-tight ${
+              isActive ? "text-black" : "text-black/40"
             }`}
           >
             {chineseTitle}
@@ -161,7 +165,7 @@ const StageHeader: FC<StageHeaderProps> = ({
             onClick={onNavigateNextStage}
             aria-label={nextStageLabel}
             title={nextStageLabel}
-            className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-[7px] border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/30"
+            className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-[2px] border border-[#E5E5E5] bg-white text-black/60 transition hover:border-[#FF4500] hover:text-[#FF4500] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4500]/30"
             data-testid="autopilot-stage-forward-button"
             data-next-sub-stage={nextSubStage}
             data-next-workbench-stage={nextWorkbenchStage}

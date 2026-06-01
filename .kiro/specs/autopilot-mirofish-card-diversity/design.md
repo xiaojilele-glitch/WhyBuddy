@@ -112,12 +112,26 @@ interface CollapsedNodeGroupProps {
 
 ### ReasoningCard
 
+实际实现已对齐 mirofish-demo/console 视觉（白底 + #E5E5E5 边框 + 0 圆角），并在
+whybuddy-3d-real-role-driven-scene-2026-05-29 reasoning-detail（2026-05-31）把
+单字段 fallback 升级为「每个存在字段各自成行」，让一条同时带 think→act→observe 的
+entry 完整展开，不再被压成一行。
+
 | 元素 | 样式 |
 |------|------|
-| 容器 | `relative pl-3 py-2 bg-white/5 rounded-md border border-white/10` |
-| 左侧渐变竖条 | `absolute left-0 top-0 bottom-0 w-[2px] bg-gradient-to-b ${REASONING_GRADIENT[phase]}` |
-| 文本 | `font-mono text-[11px] text-white/80 leading-relaxed` |
-| 流式光标 | `inline-block w-[2px] h-3 bg-white/70 animate-blink ml-0.5` |
+| 容器 | `relative pl-3 pr-3 py-2 bg-white border border-[#E5E5E5]`，`borderRadius: 0` |
+| 左侧实色竖条 | `absolute left-0 top-0 bottom-0 w-[2px] ${REASONING_BAR[phase]}`（thinking `bg-[#FF4500]` / observing `bg-[#666666]` / acting `bg-black`） |
+| 标签行 | `flex items-baseline justify-between`：左 `font-mono text-[10px] text-[#999]` 显示 `phase · iterationLabel`；右 `font-mono text-[10px] text-[#BBB] tabular-nums` 显示 `formatTimestampHHMMSS(timestamp)` |
+| thought 行 | `font-mono text-[12.5px] text-black leading-[1.55]` |
+| action 行 | `font-mono text-[12px] text-[#555]`，文本 `→ ${actionToolId}` |
+| observation 行 | `font-mono text-[12px]`，成功 `text-black` / 失败 `text-[#C0392B]`，文本 `${✓\|✗} ${已剥前缀的 observationSummary}` |
+| reason 行 | `font-mono text-[11px] text-[#999]`（次要） |
+| error 行 | `font-mono text-[12px] text-[#C0392B]` |
+| 流式光标 | `inline-block w-[2px] h-3 bg-[#FF4500] animate-mirofish-blink ml-0.5` |
+
+> 实现约束：`✓`/`✗`/`→` mark 必须与其后的摘要文本同处一个文本节点（不要用独立
+> element 包裹 mark），否则 SSR 字符串里 mark 会被 `</span>` 截断，破坏既有
+> `toContain("✓ ...")` / `toContain("→ ...")` 断言。
 
 ### CapabilityCard
 

@@ -155,6 +155,40 @@ function buildSpecTreeFixture(): BlueprintSpecTree {
   } as unknown as BlueprintSpecTree;
 }
 
+function buildDraftOnlySpecTreeFixture(): BlueprintSpecTree {
+  return {
+    id: "tree-draft-only",
+    rootNodeId: "node-draft",
+    routeSetId: "route-draft",
+    jobId: "job-draft",
+    version: 1,
+    status: "reviewing",
+    nodes: [
+      {
+        id: "node-draft",
+        title: "Draft node",
+        type: "effect_preview",
+        status: "ready",
+      },
+    ],
+    edges: [],
+    documents: [
+      {
+        id: "doc-draft",
+        nodeId: "node-draft",
+        type: "requirements",
+        status: "draft",
+        title: "Draft requirements",
+        summary: "Draft requirements",
+        content: "",
+        format: "markdown",
+        version: 1,
+        savedAt: "2026-05-24T07:00:00.000Z",
+      },
+    ],
+  } as unknown as BlueprintSpecTree;
+}
+
 function buildEffectPreviewSnapshotFixture(): BlueprintEffectPreviewSnapshot {
   return {
     id: "preview-snapshot",
@@ -312,5 +346,45 @@ describe("EffectPreviewPanel · Phase 4 Task 37.1 (downgraded) production snapsh
     expect(galleryIdx).toBeGreaterThanOrEqual(0);
     expect(scheduleIdx).toBeGreaterThan(galleryIdx);
     expect(settingsIdx).toBeGreaterThan(scheduleIdx);
+  });
+
+  it("treats draft SPEC documents as usable preview sources", () => {
+    const specTree = buildDraftOnlySpecTreeFixture();
+
+    const markup = renderToStaticMarkup(
+      <EffectPreviewPanel
+        jobId="job-draft"
+        job={null}
+        specTree={specTree}
+        effectPreviews={[]}
+        initialPreviews={[]}
+        agentCrew={null as unknown as BlueprintAgentCrewSnapshot | null}
+        capabilityEvidence={[]}
+        locale="zh-CN"
+        initialImageSettings={READY_VIEW_MODEL}
+      />,
+    );
+
+    const generateButtonMatch = markup.match(
+      /<button[^>]*data-testid="effect-preview-generate-button"[^>]*>/
+    );
+    expect(generateButtonMatch).not.toBeNull();
+    expect(generateButtonMatch![0]).not.toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(markup).toContain("1 份可用文档");
+    expect(markup).not.toContain("份已接受文档");
+  });
+
+  it("keeps generation request options aligned with draft source documents", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const source = await fs.readFile(
+      path.resolve(__dirname, "../EffectPreviewPanel.tsx"),
+      "utf8"
+    );
+
+    expect(source).toMatch(/const\s+previewSourceDocuments\s*=\s*useMemo/);
+    expect(source).toMatch(
+      /generateBlueprintEffectPreview\(jobId,\s*\{[\s\S]*?includeDrafts:\s*true/
+    );
   });
 });

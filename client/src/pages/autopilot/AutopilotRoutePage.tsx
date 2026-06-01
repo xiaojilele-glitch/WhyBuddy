@@ -23,10 +23,10 @@ import {
   Route,
   Send,
   Terminal,
-  Workflow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import autopilotHeaderLogoUrl from "../../../../docs/assets/logo.png";
 import { Scene3D } from "@/components/Scene3D";
 import { HoloDrawer } from "@/components/HoloDrawer";
 import { MirofishThemeProvider } from "@/contexts/MirofishThemeContext";
@@ -56,6 +56,7 @@ import {
   type BlueprintLatestGenerationJobSnapshot,
   type BlueprintRuntimeCapability,
 } from "@/lib/blueprint-api";
+import { blueprintCopy as translateBlueprintCopy } from "@/lib/blueprint-copy";
 import { patchBlueprintIntake } from "@/lib/blueprint-api/intake";
 import { IS_GITHUB_PAGES } from "@/lib/deploy-target";
 import type { AppLocale } from "@/lib/locale";
@@ -90,6 +91,7 @@ import {
   type RightRailSubStageContextValue,
   type ViewportTier,
 } from "./right-rail";
+import { resolveRoleLabel } from "./right-rail/role-labels";
 import {
   selectAutoAdvanceSubStage,
   useAutoAdvance,
@@ -576,6 +578,53 @@ function mapCoordinationStageToWorkflowStage(
 
 function t(locale: AppLocale, zh: string, en: string): string {
   return locale === "zh-CN" ? zh : en;
+}
+
+function normalizeRoleNamePart(value: string | undefined): string {
+  return value?.trim() ?? "";
+}
+
+function buildFullBlueprintRoleLabel(
+  role: BlueprintAgentCrewSnapshot["roleTimelines"][number],
+  locale: AppLocale
+): string {
+  const roleId = role.roleId.trim();
+  const canonical = resolveRoleLabel(roleId, locale).trim();
+  const englishCanonical = resolveRoleLabel(roleId, "en-US").trim();
+  const displayName = normalizeRoleNamePart(role.displayName || role.roleName);
+  const displayLabel = translateBlueprintCopy(
+    role.displayLabel || role.displayName || role.roleName,
+    locale
+  ).trim();
+
+  // The first nameplate row already shows the localized role type. The second
+  // row should therefore show only the concrete role name/detail, not
+  // "类型 / 名字" again.
+  if (displayName && displayName !== roleId) return displayName;
+  if (englishCanonical && englishCanonical !== roleId) return englishCanonical;
+  if (displayLabel && displayLabel !== roleId && displayLabel !== canonical) {
+    return displayLabel;
+  }
+  return canonical && canonical !== roleId ? canonical : roleId;
+}
+
+export function buildBlueprintRoleLabels(
+  agentCrew: BlueprintAgentCrewSnapshot | null,
+  locale: AppLocale
+): Record<string, string> | undefined {
+  const timelines = agentCrew?.roleTimelines ?? agentCrew?.presence ?? [];
+  if (timelines.length === 0) return undefined;
+
+  const labels: Record<string, string> = {};
+  for (const role of timelines) {
+    const roleId = role.roleId?.trim();
+    if (!roleId) continue;
+
+    const label = buildFullBlueprintRoleLabel(role, locale);
+    if (label) labels[roleId] = label;
+  }
+
+  return Object.keys(labels).length ? labels : undefined;
 }
 
 function normalizeGithubUrl(value: string): string {
@@ -1247,6 +1296,7 @@ function AutopilotVisualStage({
   locale,
   currentProjectId,
   job,
+  latestSceneJobId,
   routeSet,
   selection,
   specTree,
@@ -1258,6 +1308,7 @@ function AutopilotVisualStage({
   locale: AppLocale;
   currentProjectId: string | null;
   job: BlueprintGenerationJob | null;
+  latestSceneJobId?: string | null;
   routeSet: BlueprintRouteSet | null;
   selection: BlueprintRouteSelection | null;
   specTree: BlueprintSpecTree | null;
@@ -1266,6 +1317,11 @@ function AutopilotVisualStage({
   capabilityEvidence: BlueprintCapabilityEvidence[];
   consoleLines: ConsoleLine[];
 }) {
+  const blueprintRoleLabels = useMemo(
+    () => buildBlueprintRoleLabels(agentCrew, locale),
+    [agentCrew, locale]
+  );
+
   return (
     // 自动驾驶 3D 场景融合 follow-up（2026-05-13 v10 去边框去边距）：
     // visual stage / console panel / 外包 div 移除 rounded / border / gap，
@@ -1285,7 +1341,16 @@ function AutopilotVisualStage({
           data-autopilot-crew-state={agentCrew ? "ready" : "pending"}
         >
           <div className="pointer-events-none absolute inset-0">
-            <Scene3D performanceProfile="balanced" projectId={currentProjectId} mode="blueprint" blueprintJob={job} />
+            <Scene3D
+              performanceProfile="balanced"
+              projectId={currentProjectId}
+              mode="blueprint"
+              blueprintJob={job}
+              activeJobId={job?.id}
+              latestJobId={latestSceneJobId ?? job?.id}
+              activeStage={job?.stage}
+              roleLabels={blueprintRoleLabels}
+            />
           </div>
         </div>
       </section>
@@ -1496,11 +1561,12 @@ export function ClarificationPanel({
                       key={option}
                       type="button"
                       className={cn(
-                        "rounded-[6px] border px-2.5 py-1.5 text-xs font-black transition",
+                        "border px-3 py-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.06em] transition-colors",
                         active
-                          ? "border-slate-950 bg-slate-950 text-white"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"
+                          ? "border-[#FF4500] bg-[#FF4500] text-white"
+                          : "border-[#E5E5E5] bg-white text-black hover:border-black"
                       )}
+                      style={{ borderRadius: "0px" }}
                       onClick={() => onAnswerChange(question.id, option)}
                       data-testid={`autopilot-answer-option-${question.id}`}
                     >
@@ -1513,7 +1579,8 @@ export function ClarificationPanel({
             <textarea
               value={answerDrafts[question.id] ?? ""}
               onChange={event => onAnswerChange(question.id, event.target.value)}
-              className="min-h-[74px] resize-y rounded-[8px] border border-slate-200 bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-700 outline-none transition focus:border-slate-900/40 focus:ring-2 focus:ring-slate-900/10"
+              className="min-h-[74px] resize-y border border-[#E5E5E5] bg-white px-3 py-2 font-mono text-[13px] leading-6 text-black outline-none transition focus:border-black focus:ring-1 focus:ring-black"
+              style={{ borderRadius: "0px" }}
               placeholder={t(
                 locale,
                 "填写这条路线规划问题的答案",
@@ -1575,7 +1642,7 @@ export function ClarificationPanel({
           </div>
           <Button
             type="button"
-            className="gap-2 rounded-[8px] bg-slate-950 px-4 font-black text-white hover:bg-slate-800"
+            className="group relative gap-2 rounded-none border border-black bg-black px-5 py-3 font-mono font-bold uppercase tracking-[1px] text-white shadow-[rgba(0,0,0,0.06)_0_0_0_4px] transition-all duration-300 hover:-translate-y-[2px] hover:border-[#FF4500] hover:bg-[#FF4500] disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:bg-black"
             disabled={!canSubmit}
             onClick={onSubmit}
             data-testid="autopilot-submit-clarifications-button"
@@ -1619,39 +1686,48 @@ function RouteOption({
   return (
     <article
       className={cn(
-        "rounded-[8px] border bg-slate-50 px-3 py-3",
-        selected ? "border-emerald-300 bg-emerald-50" : "border-slate-200"
+        "border bg-white px-4 py-4 transition-colors",
+        selected
+          ? "border-[#FF4500] bg-[#FFF7F2]"
+          : "border-[#E5E5E5] hover:border-black"
       )}
+      style={{ borderRadius: "0px" }}
       data-mf-card
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="line-clamp-2 text-sm font-black text-slate-950">
+            <h3 className="line-clamp-2 font-display text-base font-medium tracking-tight text-black">
               {copyDynamic(locale, route.title)}
             </h3>
-            <span className="rounded-[6px] bg-white px-2 py-0.5 text-[10px] font-black text-slate-600">
+            <span
+              className="border border-[#E5E5E5] bg-white px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#666]"
+              style={{ borderRadius: "0px" }}
+            >
               {primary ? t(locale, "主路线", "Primary") : t(locale, "备选", "Alternative")}
             </span>
             {selected ? (
-              <span className="rounded-[6px] bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-700">
+              <span
+                className="bg-[#FF4500] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-white"
+                style={{ borderRadius: "0px" }}
+              >
                 {t(locale, "已选择", "Selected")}
               </span>
             ) : null}
           </div>
-          <p className="mt-2 line-clamp-3 text-xs font-semibold leading-5 text-slate-600">
+          <p className="mt-2 line-clamp-3 text-[13px] font-normal leading-6 text-[#666]">
             {copyDynamic(locale, route.summary)}
           </p>
         </div>
         <Button
           type="button"
           size="sm"
-          variant={selected ? "outline" : "default"}
+          variant="default"
           className={cn(
-            "shrink-0 gap-2 rounded-[8px] font-black",
+            "group relative shrink-0 gap-2 rounded-none border px-4 py-2 font-mono font-bold uppercase tracking-[1px] transition-all duration-300 disabled:opacity-50",
             selected
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
-              : "bg-slate-950 text-white hover:bg-slate-800"
+              ? "border-[#FF4500] bg-white text-[#FF4500] hover:bg-white"
+              : "border-black bg-black text-white shadow-[rgba(0,0,0,0.06)_0_0_0_4px] hover:-translate-y-[2px] hover:border-[#FF4500] hover:bg-[#FF4500]"
           )}
           disabled={selected || selecting}
           onClick={() => onSelect(route.id)}
@@ -1882,6 +1958,7 @@ function AutopilotWorkflowRail({
   workflowStageOverride,
   onNavigateWorkflowStage,
   onJobUpdated,
+  onHistoryJobSelected,
   onBranchJobActivated,
   onHistoryPanelClosed,
   onSpecDocumentsGenerated,
@@ -1989,6 +2066,7 @@ function AutopilotWorkflowRail({
   workflowStageOverride: AutopilotWorkflowStage | null;
   onNavigateWorkflowStage: (nextStage: AutopilotWorkflowStage) => void;
   onJobUpdated: (job: BlueprintGenerationJob) => void;
+  onHistoryJobSelected?: (job: BlueprintGenerationJob) => void;
   onBranchJobActivated?: (job: BlueprintGenerationJob) => void;
   onHistoryPanelClosed?: () => void | Promise<void>;
   /**
@@ -2490,7 +2568,7 @@ function AutopilotWorkflowRail({
                 coordinator={coordinator}
                 onJobSelected={selectedJob => {
                   onNavigateWorkflowStage("fabric");
-                  onJobUpdated(selectedJob);
+                  (onHistoryJobSelected ?? onJobUpdated)(selectedJob);
                 }}
               />
             ) : null}
@@ -2548,28 +2626,11 @@ function AutopilotWorkflowRail({
               </div>
             ) : null}
 
-            {/* Batch 5: fabric sub-stage unified split mounts */}
-            {(subStageContext.effectiveSubStage ?? fabricSubStage) === "spec_tree" && (
-              <StageSplitMount
-                descriptor={deriveStageSplitDescriptor({
-                  sub: "spec_tree",
-                  locale,
-                  isActive: true,
-                  isCompleted: false,
-                  intake,
-                  projectContext,
-                  clarificationSession,
-                  readiness,
-                  routeSet,
-                  selection,
-                  specTree,
-                  job: rightRailView.job.data ?? latestJob,
-                })}
-                job={rightRailView.job.data ?? latestJob}
-                locale={locale}
-                variant="active"
-              />
-            )}
+            {/* Batch 5: fabric sub-stage unified split mounts.
+                spec_tree is intentionally skipped here because the
+                AutopilotRightRail workbench owns its execution/artifact strip.
+                Rendering the generic StageSplitMount as well duplicates the
+                same "执行流 / SPEC 产物" block below the workbench. */}
 
             {(subStageContext.effectiveSubStage ?? fabricSubStage) === "effect_preview" && (
               <StageSplitMount
@@ -2730,9 +2791,10 @@ function AutopilotWorkflowRail({
       }}
     >
       <section
-        className="min-w-0 h-full border border-slate-200 bg-white"
+        className="min-w-0 h-full bg-white"
         data-testid="autopilot-workflow-steps"
         data-mf-card
+        style={{ borderRadius: "0px" }}
       >
         {/*
           2026-05-19：移除顶部 antd Steps 横向步骤条（输入 / 编组 两步）。
@@ -3228,6 +3290,7 @@ export default function AutopilotRoutePage() {
   const [latestJob, setLatestJob] = useState<BlueprintGenerationJob | null>(
     null
   );
+  const latestSceneJobIdRef = useRef<string | undefined>(undefined);
   const [routeSet, setRouteSet] = useState<BlueprintRouteSet | null>(null);
   const [selection, setSelection] = useState<BlueprintRouteSelection | null>(
     null
@@ -3290,6 +3353,7 @@ export default function AutopilotRoutePage() {
   const [selectingRouteId, setSelectingRouteId] = useState<string | null>(null);
 
   const resetLatestGenerationSnapshot = useCallback(() => {
+    latestSceneJobIdRef.current = undefined;
     setLatestJob(null);
     setRouteSet(null);
     setSelection(null);
@@ -3309,6 +3373,7 @@ export default function AutopilotRoutePage() {
         return;
       }
 
+      latestSceneJobIdRef.current = snapshot.job.id;
       setLatestJob(snapshot.job);
       setRouteSet(snapshot.routeSet ?? null);
       setSelection(snapshot.selection ?? null);
@@ -3345,11 +3410,20 @@ export default function AutopilotRoutePage() {
   useEffect(() => {
     let active = true;
 
+    if (!IS_GITHUB_PAGES && !currentProjectId) {
+      resetLatestGenerationSnapshot();
+      setApiError(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    const latestProjectId = currentProjectId ?? undefined;
     const latestJobRequest =
       IS_GITHUB_PAGES && pagesBlueprintRuntime
         ? pagesBlueprintRuntime.fetchLatestGenerationJob()
         : fetchLatestBlueprintGenerationJob({
-            projectId: currentProjectId ?? undefined,
+            projectId: latestProjectId,
           });
 
     latestJobRequest.then(result => {
@@ -3365,14 +3439,26 @@ export default function AutopilotRoutePage() {
     return () => {
       active = false;
     };
-  }, [applyLatestGenerationSnapshot, currentProjectId, pagesBlueprintRuntime]);
+  }, [
+    applyLatestGenerationSnapshot,
+    currentProjectId,
+    pagesBlueprintRuntime,
+    resetLatestGenerationSnapshot,
+  ]);
 
   const refreshLatestGenerationSnapshot = useCallback(async () => {
+    if (!IS_GITHUB_PAGES && !currentProjectId) {
+      resetLatestGenerationSnapshot();
+      setApiError(null);
+      return false;
+    }
+
+    const latestProjectId = currentProjectId ?? undefined;
     const latestJobRequest =
       IS_GITHUB_PAGES && pagesBlueprintRuntime
         ? pagesBlueprintRuntime.fetchLatestGenerationJob()
         : fetchLatestBlueprintGenerationJob({
-            projectId: currentProjectId ?? undefined,
+            projectId: latestProjectId,
           });
     const result = await latestJobRequest;
     if (!result.ok) {
@@ -3382,7 +3468,12 @@ export default function AutopilotRoutePage() {
 
     applyLatestGenerationSnapshot(result.data);
     return true;
-  }, [applyLatestGenerationSnapshot, currentProjectId, pagesBlueprintRuntime]);
+  }, [
+    applyLatestGenerationSnapshot,
+    currentProjectId,
+    pagesBlueprintRuntime,
+    resetLatestGenerationSnapshot,
+  ]);
 
   const refreshPagesBlueprintSnapshot = useCallback(async () => {
     if (!pagesBlueprintRuntime) return false;
@@ -3485,6 +3576,14 @@ export default function AutopilotRoutePage() {
     activeCoordinationStageRef.current = activeCoordinationStage;
   }, [activeCoordinationStage]);
   const handleCoordinationJobUpdated = useCallback(
+    (job: BlueprintGenerationJob) => {
+      activeCoordinationStageRef.current = job.stage;
+      latestSceneJobIdRef.current = job.id;
+      setLatestJob(job);
+    },
+    []
+  );
+  const handleHistoryJobSelected = useCallback(
     (job: BlueprintGenerationJob) => {
       activeCoordinationStageRef.current = job.stage;
       setLatestJob(job);
@@ -4009,6 +4108,7 @@ export default function AutopilotRoutePage() {
       if (!result) return;
 
       if (result.ok) {
+        latestSceneJobIdRef.current = result.data.job.id;
         setLatestJob(result.data.job);
         setRouteSet(result.data.routeSet ?? null);
         setSelection(null);
@@ -4106,6 +4206,7 @@ export default function AutopilotRoutePage() {
 
         if (result.ok) {
           setWorkflowStageOverride(null);
+          latestSceneJobIdRef.current = result.data.job.id;
           setLatestJob(result.data.job);
           setRouteSet(result.data.routeSet);
           setSelection(result.data.selection);
@@ -4140,16 +4241,22 @@ export default function AutopilotRoutePage() {
       data-testid="autopilot-route-page"
     >
       <header
-        className="sticky top-0 z-20 border-b border-slate-200 bg-white/92 px-3 py-3 backdrop-blur md:px-4"
+        className="sticky top-0 z-20 border-b border-[#E5E5E5] bg-white px-3 py-3 md:px-4"
         data-testid="autopilot-topbar"
       >
         <div className="flex w-full flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-[9px] bg-slate-950 text-white">
-              <Workflow className="size-4" aria-hidden="true" />
+            <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden bg-white">
+              <img
+                src={autopilotHeaderLogoUrl}
+                alt=""
+                aria-hidden="true"
+                className="size-full object-contain"
+                draggable={false}
+              />
             </div>
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] font-black uppercase tracking-normal text-slate-500">
+              <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[#666]">
                 <a
                   href={projectSpaceHref}
                   onClick={handleProjectSpaceBreadcrumbClick}
@@ -4158,7 +4265,7 @@ export default function AutopilotRoutePage() {
                     "返回项目空间",
                     "Back to project space"
                   )}
-                  className="inline-flex items-center gap-1 rounded-[6px] px-1 py-0.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/30"
+                  className="inline-flex items-center gap-1 rounded-none px-1 py-0.5 transition hover:text-[#FF4500] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4500]/30"
                   data-testid="autopilot-back-to-project-space"
                 >
                   <ArrowLeft className="size-3" aria-hidden="true" />
@@ -4166,10 +4273,10 @@ export default function AutopilotRoutePage() {
                     {t(locale, "项目自动驾驶", "Project autopilot")}
                   </span>
                 </a>
-                <span className="text-slate-300">/</span>
+                <span className="text-[#999]">/</span>
                 <span>{t(locale, "SPEC-first 蓝图", "SPEC-first blueprint")}</span>
               </div>
-              <div className="truncate text-base font-black text-slate-950">
+              <div className="truncate font-display text-base font-medium tracking-tight text-black">
                 {currentProject?.name ||
                   t(locale, "未绑定项目", "No project selected")}
               </div>
@@ -4179,7 +4286,7 @@ export default function AutopilotRoutePage() {
           <div className="flex flex-wrap items-center gap-2">
             <Badge
               variant="outline"
-              className="rounded-[6px] border-slate-200 bg-slate-50 text-xs font-black text-slate-600"
+              className="rounded-none border border-[#E5E5E5] bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-[#666]"
             >
               {readAutopilotJobStatus(pageProjection.visualJob, locale)}
             </Badge>
@@ -4197,7 +4304,8 @@ export default function AutopilotRoutePage() {
                   "返回最新阶段",
                   "Return to latest stage"
                 )}
-                className="inline-flex items-center gap-1 rounded-[6px] border border-slate-200 bg-white px-2 py-1 text-xs font-black text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/30"
+                className="inline-flex items-center gap-1 border border-black bg-white px-2 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-black transition hover:bg-black hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4500]/30"
+                style={{ borderRadius: "0px" }}
                 data-testid="autopilot-forward-to-latest-stage"
               >
                 <span>{t(locale, "继续下一步", "Continue")}</span>
@@ -4227,6 +4335,7 @@ export default function AutopilotRoutePage() {
             locale={locale}
             currentProjectId={currentProjectId}
             job={pageProjection.visualJob}
+            latestSceneJobId={latestSceneJobIdRef.current}
             routeSet={routeSet}
             selection={selection}
             specTree={pageProjection.visualSpecTree}
@@ -4295,6 +4404,7 @@ export default function AutopilotRoutePage() {
             workflowStageOverride={workflowStageOverride}
             onNavigateWorkflowStage={handleNavigateWorkflowStage}
             onJobUpdated={handleCoordinationJobUpdated}
+            onHistoryJobSelected={handleHistoryJobSelected}
             onBranchJobActivated={handleReplanBranchJobActivated}
             onHistoryPanelClosed={async () => {
               await refreshLatestGenerationSnapshot();

@@ -25,7 +25,7 @@ import {
 // IndexedDB constants
 // ---------------------------------------------------------------------------
 
-const DB_NAME = "cube-pets-office-cost";
+const DB_NAME = "whybuddy-cost";
 const DB_VERSION = 1;
 const STORE_COST_RECORDS = "cost-records";
 const STORE_BUDGET = "budget";

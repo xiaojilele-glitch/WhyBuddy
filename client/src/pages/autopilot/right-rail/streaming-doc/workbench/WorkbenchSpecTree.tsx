@@ -50,7 +50,7 @@
  *   关键 props 使用中文 JSDoc（R6.3）。
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FC, JSX } from "react";
 
 import type { AppLocale } from "@/lib/locale";
@@ -93,6 +93,137 @@ export type WorkbenchSpecTreeStaleState = {
   invalidatedBy?: BlueprintGenerationArtifact["invalidatedBy"] | null;
 };
 
+/**
+ * whybuddy-spec-tree-progress-merge-2026-05-29 §3/§6：
+ * 每个 SPEC 树节点的生成进度快照，由 `AutopilotRightRail` 从
+ * `useBlueprintRealtimeStore().specDocsProgress.nodes` 派生成 plain record
+ * 后逐层透传进来。本组件只读，不订阅 store（保持 SSR 可测的无 hooks 契约）。
+ */
+export type WorkbenchSpecTreeNodeStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed";
+
+export interface WorkbenchSpecTreeNodeStatusEntry {
+  status: WorkbenchSpecTreeNodeStatus;
+  /** A2 白盒：该节点曾 failed→processing 重试过（即使最终 completed 也保留）。 */
+  wasRetried?: boolean;
+  /** 首次失败原因，用于重试角标的 hover tooltip。 */
+  errorSummary?: string;
+}
+
+export type WorkbenchSpecTreeNodeStatusMap = Readonly<
+  Record<string, WorkbenchSpecTreeNodeStatusEntry>
+>;
+
+/**
+ * whybuddy-spec-tree-progress-merge-2026-05-29 §2：单节点状态图标（24×24）。
+ *
+ * 5 态：
+ * - pending           空心圆，stroke #999
+ * - processing        3/4 圆弧 + 旋转，stroke #FF8A1A
+ * - completed         实心绿圆 + 白 ✓，fill #16A34A
+ * - failed            实心红圆 + 白 ✗，fill #DC2626
+ * - completed+retried 绿 ✓ 基础上叠加右上角 8px 橙色 ⚠ 角标（A2 白盒）
+ *
+ * 纯展示，零 hooks；testid `autopilot-workbench-spec-tree-status-{nodeId}`，
+ * 带 `data-status` / `data-retried`，供 SSR 测试与 Playwright 断言。
+ */
+const SpecTreeStatusIcon: FC<{
+  nodeId: string;
+  entry: WorkbenchSpecTreeNodeStatusEntry | undefined;
+}> = ({ nodeId, entry }) => {
+  const status = entry?.status ?? "pending";
+  const retried = entry?.wasRetried === true;
+
+  let circle: JSX.Element;
+  switch (status) {
+    case "processing":
+      circle = (
+        <svg
+          viewBox="0 0 24 24"
+          className="size-[18px] animate-spin"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M12 3a9 9 0 1 0 9 9"
+            stroke="#FF8A1A"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+      break;
+    case "completed":
+      circle = (
+        <svg viewBox="0 0 24 24" className="size-[18px]" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" fill="#16A34A" />
+          <path
+            d="M7.5 12.4l3 3 6-6.4"
+            stroke="#FFFFFF"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </svg>
+      );
+      break;
+    case "failed":
+      circle = (
+        <svg viewBox="0 0 24 24" className="size-[18px]" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" fill="#DC2626" />
+          <path
+            d="M8.5 8.5l7 7M15.5 8.5l-7 7"
+            stroke="#FFFFFF"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            fill="none"
+          />
+        </svg>
+      );
+      break;
+    case "pending":
+    default:
+      circle = (
+        <svg
+          viewBox="0 0 24 24"
+          className="size-[18px]"
+          fill="none"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="9" stroke="#999999" strokeWidth="2" />
+        </svg>
+      );
+      break;
+  }
+
+  const showRetryBadge = status === "completed" && retried;
+
+  return (
+    <span
+      data-testid={`autopilot-workbench-spec-tree-status-${nodeId}`}
+      data-status={status}
+      data-retried={retried ? "true" : undefined}
+      title={showRetryBadge ? entry?.errorSummary || "重试后成功" : undefined}
+      className="relative flex size-5 shrink-0 items-center justify-center"
+    >
+      {circle}
+      {showRetryBadge ? (
+        <span
+          data-testid={`autopilot-workbench-spec-tree-retry-badge-${nodeId}`}
+          aria-hidden="true"
+          className="absolute -right-0.5 -top-0.5 flex size-[9px] items-center justify-center rounded-full bg-[#FF8A1A] text-[6px] font-black leading-none text-white"
+        >
+          !
+        </span>
+      ) : null}
+    </span>
+  );
+};
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -120,6 +251,12 @@ export interface WorkbenchSpecTreeProps {
   onGenerateNode?: (nodeId: string) => void;
   /** 生成中状态，与 `AutopilotRightRail.specDocsGenerating` 一致。 */
   generating: "all" | "single" | null;
+  /**
+ * whybuddy-spec-tree-progress-merge-2026-05-29：每节点生成进度快照
+   * （nodeId → { status, wasRetried, errorSummary }）。缺省 / 缺某节点时
+   * 该行回退为 pending。合并了原 SpecDocsProgressPanel 浮层的职责。
+   */
+  nodeStatusById?: WorkbenchSpecTreeNodeStatusMap;
   locale: AppLocale;
 }
 
@@ -414,6 +551,15 @@ interface WorkbenchSpecTreeViewProps {
   onGenerateNode?: (nodeId: string) => void;
   /** 生成中状态。 */
   generating: "all" | "single" | null;
+  /** 每节点生成进度快照（见 WorkbenchSpecTreeProps.nodeStatusById）。 */
+  nodeStatusById?: WorkbenchSpecTreeNodeStatusMap;
+  /** 节点总数，用于 `节点 · N` header。来自 specTree.nodes.length。 */
+  nodeCount?: number;
+  /**
+   * 注册节点行 DOM ref（Q4 自动滚动用）。由有状态 wrapper 提供，纯 view
+   * 仅在渲染时回调登记 ref，自身不持有 hooks。缺省时为 no-op。
+   */
+  registerNodeRowRef?: (nodeId: string, el: HTMLElement | null) => void;
   /** 国际化文案。 */
   copy: SpecTreeCopy;
   /** 国际化 locale，用于 StaleBadge 等子组件。 */
@@ -443,6 +589,9 @@ export const WorkbenchSpecTreeView: FC<WorkbenchSpecTreeViewProps> = (props) => 
     onSelectDocument,
     onGenerateNode,
     generating,
+    nodeStatusById,
+    nodeCount,
+    registerNodeRowRef = () => {},
     copy,
     locale,
   } = props;
@@ -502,18 +651,29 @@ export const WorkbenchSpecTreeView: FC<WorkbenchSpecTreeViewProps> = (props) => 
 
     const generateDisabled = generating !== null;
 
+    // whybuddy-spec-tree-progress-merge-2026-05-29：节点生成进度。
+    const statusEntry = nodeStatusById?.[node.id];
+    const nodeStatus = statusEntry?.status ?? "pending";
+    const isProcessing = nodeStatus === "processing";
+    // generated 文档数（用于 `n/N 修订` 副标题，仅 generated > 0 时显示）。
+    const generatedDocCount = docs.length;
+
+    // 双 background（Q6）：cool-gray selection 优先于 cream processing。
+    const rowBgClass = isNodeSelected
+      ? "border-[#D6DEE8] bg-[#F0F4F8] shadow-sm"
+      : isProcessing
+        ? "border-[#F0E4D4] bg-[#FAF7F2]"
+        : "border-transparent hover:border-slate-200 hover:bg-slate-50";
+
     return (
       <div
         key={node.id}
         data-testid={`autopilot-workbench-spec-tree-node-${node.id}`}
         data-node-id={node.id}
         data-active={isNodeSelected ? "true" : undefined}
-        className={
-          "min-w-0 overflow-hidden rounded-md border transition " +
-          (isNodeSelected
-            ? "border-cyan-200 bg-cyan-50/80 shadow-sm"
-            : "border-transparent hover:border-slate-200 hover:bg-slate-50")
-        }
+        data-node-status={nodeStatus}
+        ref={(el) => registerNodeRowRef(node.id, el)}
+        className={"min-w-0 overflow-hidden rounded-md border transition " + rowBgClass}
         style={{ paddingLeft: depth * 12 }}
       >
         <div className="flex min-w-0 items-center gap-1 px-1 py-1">
@@ -531,17 +691,29 @@ export const WorkbenchSpecTreeView: FC<WorkbenchSpecTreeViewProps> = (props) => 
           ) : (
             <span className="h-5 w-5 shrink-0" aria-hidden="true" />
           )}
+          {/* 状态图标（Q2 左侧）：在展开箭头之后、标题之前 */}
+          <SpecTreeStatusIcon nodeId={node.id} entry={statusEntry} />
           <button
             type="button"
             data-testid={`autopilot-workbench-spec-tree-label-${node.id}`}
             data-active={isNodeSelected ? "true" : undefined}
             onClick={onNodeClick}
             className={
-              "min-w-0 flex-1 truncate rounded-md px-1 py-0.5 text-left text-[11px] font-bold " +
+              "min-w-0 flex-1 rounded-md px-1 py-0.5 text-left " +
               (isNodeSelected ? "text-cyan-950" : "text-slate-800")
             }
           >
-            {node.title}
+            <span className="block truncate text-[11px] font-bold">
+              {node.title}
+            </span>
+            {generatedDocCount > 0 ? (
+              <span
+                data-testid={`autopilot-workbench-spec-tree-doc-count-${node.id}`}
+                className="mt-0.5 block truncate text-[11px] font-medium text-[#666666]"
+              >
+                {generatedDocCount}/{generatedDocCount} 修订
+              </span>
+            ) : null}
           </button>
           <span className="min-w-0 max-w-[86px] shrink-0 overflow-hidden [&>*]:max-w-full [&_*]:truncate">
             <SpecTreeChip
@@ -610,7 +782,7 @@ export const WorkbenchSpecTreeView: FC<WorkbenchSpecTreeViewProps> = (props) => 
       data-testid="autopilot-workbench-spec-tree"
       role="navigation"
       aria-label="autopilot workbench spec tree"
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-white"
     >
       <input
         type="search"
@@ -621,6 +793,15 @@ export const WorkbenchSpecTreeView: FC<WorkbenchSpecTreeViewProps> = (props) => 
         onChange={(e) => onQueryChange(e.target.value)}
         className="m-1.5 h-7 rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-cyan-300 focus:bg-white"
       />
+      {/* 节点 · N header（Q3：搜索框下方、tree roots 上方） */}
+      {typeof nodeCount === "number" && nodeCount > 0 ? (
+        <div
+          data-testid="autopilot-workbench-spec-tree-node-count"
+          className="px-2.5 pb-1 pt-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.08em] text-[#999999]"
+        >
+          节点 · {nodeCount}
+        </div>
+      ) : null}
       <div
         data-testid="autopilot-workbench-spec-tree-roots"
         className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-1.5 pb-1.5"
@@ -647,6 +828,7 @@ export const WorkbenchSpecTree: FC<WorkbenchSpecTreeProps> = (props) => {
     onSelectDocument,
     onGenerateNode,
     generating,
+    nodeStatusById,
     locale,
   } = props;
 
@@ -683,6 +865,43 @@ export const WorkbenchSpecTree: FC<WorkbenchSpecTreeProps> = (props) => {
     }
     return buildTreeIndex(specTree);
   }, [specTree]);
+
+  // whybuddy-spec-tree-progress-merge-2026-05-29 §Q4：节点行 DOM ref 登记表
+  // + 一次性自动滚动。当某节点 status 从非 processing 跃迁到 processing 时，
+  // 把该行 scrollIntoView({ block: "nearest" }) 一次；用 ref 记录上一轮每节点
+  // status，只对"新晋 processing"触发，避免持续抢夺用户手动滚动位置。
+  const nodeRowRefs = useRef<Map<string, HTMLElement | null>>(new Map());
+  const registerNodeRowRef = useCallback(
+    (nodeId: string, el: HTMLElement | null) => {
+      if (el === null) {
+        nodeRowRefs.current.delete(nodeId);
+      } else {
+        nodeRowRefs.current.set(nodeId, el);
+      }
+    },
+    []
+  );
+  const prevNodeStatusRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const prev = prevNodeStatusRef.current;
+    const nextSnapshot: Record<string, string> = {};
+    let newlyProcessingId: string | null = null;
+    for (const [id, entry] of Object.entries(nodeStatusById ?? {})) {
+      const status = entry?.status ?? "pending";
+      nextSnapshot[id] = status;
+      if (status === "processing" && prev[id] !== "processing") {
+        // 取第一个新晋 processing 节点滚动（批量并发时滚最靠前那个即可）。
+        if (newlyProcessingId === null) newlyProcessingId = id;
+      }
+    }
+    prevNodeStatusRef.current = nextSnapshot;
+    if (newlyProcessingId !== null) {
+      const el = nodeRowRefs.current.get(newlyProcessingId);
+      if (el && typeof el.scrollIntoView === "function") {
+        el.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [nodeStatusById]);
 
   const onToggleNode = useCallback(
     (nodeId: string) => {
@@ -721,7 +940,7 @@ export const WorkbenchSpecTree: FC<WorkbenchSpecTreeProps> = (props) => {
         data-testid="autopilot-workbench-spec-tree"
         role="navigation"
         aria-label="autopilot workbench spec tree"
-        className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-dashed border-slate-200 bg-white p-1.5 shadow-sm"
+        className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-white p-1.5"
       >
         <input
           type="search"
@@ -762,6 +981,9 @@ export const WorkbenchSpecTree: FC<WorkbenchSpecTreeProps> = (props) => {
       onSelectDocument={onSelectDocument}
       onGenerateNode={onGenerateNode}
       generating={generating}
+      nodeStatusById={nodeStatusById}
+      nodeCount={specTree?.nodes.length ?? 0}
+      registerNodeRowRef={registerNodeRowRef}
       copy={copy}
       locale={locale}
     />

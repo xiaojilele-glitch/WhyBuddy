@@ -137,6 +137,37 @@ describe("ReasoningCard", () => {
     expect(markup).toContain('data-tone="danger"');
     expect(markup).toContain("LLM 调用失败");
   });
+
+  // whybuddy-3d-real-role-driven-scene-2026-05-29 reasoning-detail 2026-05-31：
+  // 一条同时携带 thought / action / observation 的 entry 应把三段都展开显示，
+  // 而不是 fallback-pick-one 只显示 thought。
+  it("一条 entry 同时带 thought + action + observation 时三段都展开", () => {
+    const markup = renderToStaticMarkup(
+      <ReasoningCard
+        entry={{
+          id: "evt-6",
+          kind: "reasoning",
+          stageId: "spec_tree",
+          timestamp: BASE_TS,
+          tone: "success",
+          phase: "observing",
+          iterationLabel: "#2",
+          thought: "需要先派生 SPEC 树再校验节点",
+          actionToolId: "llm.spec_tree_derivation",
+          observationSuccess: true,
+          observationSummary: "SPEC 树派生完成：26 个节点",
+          reason: "节点数量符合预期",
+        }}
+      />
+    );
+    // thought / action / observation / reason 同屏可见
+    expect(markup).toContain("需要先派生 SPEC 树再校验节点");
+    expect(markup).toContain("→ llm.spec_tree_derivation");
+    expect(markup).toContain("✓ SPEC 树派生完成：26 个节点");
+    expect(markup).toContain("节点数量符合预期");
+    // 标签行附带 HH:MM:SS 时间
+    expect(markup).toMatch(/\d{2}:\d{2}:\d{2}/);
+  });
 });
 
 // ─── NodeCompletedCard ─────────────────────────────────────────────────

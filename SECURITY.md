@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Cube Pets Office is in early active development. Security fixes are handled on the main development line unless a maintainer explicitly announces supported release branches.
+WhyBuddy is in early active development. Security fixes are handled on the main development line unless a maintainer explicitly announces supported release branches.
 
 | Version | Supported |
 | ------- | --------- |

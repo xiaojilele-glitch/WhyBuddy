@@ -8,7 +8,7 @@ _Implements: REQ-2.1, REQ-2.2, REQ-2.3, REQ-2.4, REQ-2.5, REQ-2.6, REQ-6.1, REQ-
 
 ## Project sentence
 
-`Cube Pets Office` is a **task-autopilot platform** built on a **mission-first runtime**: the user states a destination, the system plans a route, executes a fleet, and replays evidence — all under one Mission lifecycle. The product line is `Project → Clarification → Spec → Route → Execution → Evidence`; the engineering trunk is `Mission / Workflow / Runtime / Decision / Audit / Replay`.
+`WhyBuddy` is a **task-autopilot platform** built on a **mission-first runtime**: the user states a destination, the system plans a route, executes a fleet, and replays evidence — all under one Mission lifecycle. The product line is `Project → Clarification → Spec → Route → Execution → Evidence`; the engineering trunk is `Mission / Workflow / Runtime / Decision / Audit / Replay`.
 
 This A+ Reconnaissance phase is **not** new product work. It is a one-pass control-recovery audit that takes the existing 545,000-line codebase and turns it back into a navigable system: 287 specs bucketed, 969 modules inventoried, 1 main loop named, 1 B-tier recommendation produced.
 

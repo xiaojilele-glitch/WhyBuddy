@@ -1,139 +1,132 @@
 /**
- * autopilot-streaming-experience integration-gap-2026-05-16 — UI 消费面 Step 2
- * 回归测试：CapabilityRail。
+ * whybuddy-3d-real-role-driven-scene-2026-05-29 — CapabilityRail 回归测试。
  *
- * 测试策略与既有 right-rail 测试（`AutopilotRightRail.subtimeline-mount.test.tsx`、
- * `RoleStatusStrip.test.tsx`）保持一致：本仓 *未* 集成
- * `@testing-library/react` / `jsdom` / `happy-dom`，引入这些工具属于跨规格的
- * 工具链改造；因此使用 `react-dom/server` `renderToStaticMarkup` + `vi.mock`
- * 替换 `useBlueprintRealtimeStore` 的方式做 SSR 层断言。
+ * 顶部「全量能力 status pills」已移除（信息由 3D 角色桌前 chips 承载），
+ * `CapabilityRail` 现在只渲染 `CapabilityBridgePanel`（详细调用明细）。
  *
- * 覆盖三类契约（与 spec 一一对应）：
- *  1. capabilityStatuses 为空时返回 null，不出现 `data-testid="capability-rail"`。
- *  2. capabilityStatuses 非空时渲染所有 capabilityId 与对应状态颜色：
- *     - invoking → bg-amber-100 + animate-pulse
- *     - completed → bg-emerald-100
- *     - failed → bg-rose-100
- *  3. capabilityId 字母序稳定排序：不论 store 注入顺序如何，输出 markup 中
- *     `docker-analysis-sandbox` 必须先于 `mcp-github-source` 出现。
+ * 因此本测试改为：
+ *  1. 断言 CapabilityRail 不再渲染顶部 pills（无 `data-testid="capability-rail"`、
+ *     无 `data-capability-id` badge、无 capabilityId 平铺）。
+ *  2. 断言它委托给 CapabilityBridgePanel：无调用数据时整体返回 null，
+ *     有调用数据时渲染 BridgePanel 内容。
+ *
+ * 测试策略与本仓既有 right-rail 测试一致：`react-dom/server`
+ * `renderToStaticMarkup` + `vi.mock`。
  */
 
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CapabilityStatus } from "@/lib/blueprint-realtime-store";
+import type { UseCapabilityBridgeStateReturn } from "../capability-panel/types";
 
-// ─── 受控的 capabilityStatuses 状态 ───────────────────────────────────────
+// ─── 受控的 bridge 调用状态 ───────────────────────────────────────────────
 
-let mockedCapabilityStatuses: Record<string, CapabilityStatus> = {};
+let mockedBridgeState: UseCapabilityBridgeStateReturn = {
+  invocations: [],
+  activeInvocations: [],
+  summary: { total: 0, running: 0, completed: 0, failed: 0 },
+};
 
-function setMockedCapabilityStatuses(
-  next: Record<string, CapabilityStatus>
-): void {
-  mockedCapabilityStatuses = { ...next };
-}
-
-function resetMockedCapabilityStatuses(): void {
-  mockedCapabilityStatuses = {};
-}
-
-// ─── Mock `@/lib/blueprint-realtime-store` ────────────────────────────────
-
-vi.mock("@/lib/blueprint-realtime-store", () => {
-  const useBlueprintRealtimeStore = ((
-    selector?: (state: {
-      capabilityStatuses: Record<string, CapabilityStatus>;
-    }) => unknown
-  ) => {
-    const snapshot = { capabilityStatuses: mockedCapabilityStatuses };
-    return selector ? selector(snapshot) : snapshot;
-  }) as unknown as typeof import("@/lib/blueprint-realtime-store").useBlueprintRealtimeStore;
-
-  return {
-    useBlueprintRealtimeStore,
-    __setSocket: () => {},
+function setMockedBridgeState(next: Partial<UseCapabilityBridgeStateReturn>): void {
+  mockedBridgeState = {
+    invocations: next.invocations ?? [],
+    activeInvocations: next.activeInvocations ?? [],
+    summary:
+      next.summary ?? { total: 0, running: 0, completed: 0, failed: 0 },
   };
-});
+}
+
+function resetMockedBridgeState(): void {
+  mockedBridgeState = {
+    invocations: [],
+    activeInvocations: [],
+    summary: { total: 0, running: 0, completed: 0, failed: 0 },
+  };
+}
+
+// The panel reads its data from useCapabilityBridgeState; mock that so we can
+// drive "no data → null" vs "has data → renders" without a live store/socket.
+vi.mock("../capability-panel/useCapabilityBridgeState", () => ({
+  useCapabilityBridgeState: () => mockedBridgeState,
+}));
+
+// useAppStore (locale) — minimal mock.
+vi.mock("@/lib/store", () => ({
+  useAppStore: (selector?: (s: { locale: string }) => unknown) => {
+    const snapshot = { locale: "zh-CN" };
+    return selector ? selector(snapshot) : snapshot;
+  },
+}));
 
 import { CapabilityRail } from "../CapabilityRail";
 
 // ─── SSR 契约 ──────────────────────────────────────────────────────────────
 
-describe("CapabilityRail render contract", () => {
+describe("CapabilityRail render contract (3D-migration cleanup)", () => {
   beforeEach(() => {
-    resetMockedCapabilityStatuses();
+    resetMockedBridgeState();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    resetMockedCapabilityStatuses();
+    resetMockedBridgeState();
   });
 
-  it("returns null when capabilityStatuses is empty (folded state)", () => {
-    setMockedCapabilityStatuses({});
+  it("never renders the legacy top capability pills row", () => {
+    setMockedBridgeState({
+      invocations: [
+        {
+          id: "docker-analysis-sandbox",
+          bridgeType: "docker",
+          name: "docker-analysis-sandbox",
+          status: "completed",
+          startedAt: 0,
+          stageIndex: 0,
+        },
+      ],
+      summary: { total: 1, running: 0, completed: 1, failed: 0 },
+    });
 
     const markup = renderToStaticMarkup(<CapabilityRail />);
 
-    // 折叠态：返回 null → markup 为空字符串，且不可能含有 testid。
+    // The removed pills row used these markers — they must be gone.
     expect(markup).not.toContain('data-testid="capability-rail"');
+    expect(markup).not.toContain("data-capability-id");
+    expect(markup).not.toContain("flex flex-wrap gap-1.5");
+  });
+
+  it("returns null (no markup) when the bridge panel has no invocations", () => {
+    setMockedBridgeState({});
+
+    const markup = renderToStaticMarkup(<CapabilityRail />);
+
+    // CapabilityBridgePanel returns null when there are no invocations, so the
+    // whole CapabilityRail collapses to empty markup.
     expect(markup).toBe("");
   });
 
-  it("renders one badge per capability with status-specific color classes", () => {
-    setMockedCapabilityStatuses({
-      "docker-analysis-sandbox": "completed",
-      "role-system-architecture": "invoking",
-      "mcp-github-source": "failed",
+  it("renders the detailed bridge panel when invocations exist", () => {
+    setMockedBridgeState({
+      invocations: [
+        {
+          id: "docker-analysis-sandbox",
+          bridgeType: "docker",
+          name: "docker-analysis-sandbox",
+          status: "completed",
+          startedAt: 0,
+          completedAt: 0,
+          durationMs: 0,
+          stageIndex: 0,
+        },
+      ],
+      summary: { total: 1, running: 0, completed: 1, failed: 0 },
     });
 
     const markup = renderToStaticMarkup(<CapabilityRail />);
 
-    // 容器 testid + 布局 class
-    expect(markup).toContain('data-testid="capability-rail"');
-    expect(markup).toContain("flex flex-wrap gap-1.5");
-
-    // 三个 capabilityId 都必须出现在 markup 中
+    // Non-empty: the detailed audit panel renders (capabilityId shows in the
+    // detail row, NOT as a top pill).
+    expect(markup).not.toBe("");
     expect(markup).toContain("docker-analysis-sandbox");
-    expect(markup).toContain("role-system-architecture");
-    expect(markup).toContain("mcp-github-source");
-
-    // 状态颜色：
-    // invoking → bg-amber-100 + animate-pulse
-    expect(markup).toContain("bg-amber-100");
-    expect(markup).toContain("animate-pulse");
-    // completed → bg-emerald-100
-    expect(markup).toContain("bg-emerald-100");
-    // failed → bg-rose-100
-    expect(markup).toContain("bg-rose-100");
-
-    // pill 形 badge 的核心 class（gap-1 用于状态点 + 文本之间的间距）
-    expect(markup).toContain("rounded-full");
-    expect(markup).toContain("px-2 py-0.5");
-    expect(markup).toContain("text-[10px]");
-  });
-
-  it("sorts capabilities alphabetically regardless of insertion order", () => {
-    // 故意以非字母序注入；ES2015 规范保留对象键插入序，
-    // 因此如果组件未排序，markup 中 mcp-github-source 会先于 docker-analysis-sandbox。
-    setMockedCapabilityStatuses({
-      "role-system-architecture": "invoking",
-      "mcp-github-source": "failed",
-      "docker-analysis-sandbox": "completed",
-    });
-
-    const markup = renderToStaticMarkup(<CapabilityRail />);
-
-    const dockerIdx = markup.indexOf("docker-analysis-sandbox");
-    const mcpIdx = markup.indexOf("mcp-github-source");
-    const roleIdx = markup.indexOf("role-system-architecture");
-
-    // 三个 capabilityId 都必须出现
-    expect(dockerIdx).toBeGreaterThan(-1);
-    expect(mcpIdx).toBeGreaterThan(-1);
-    expect(roleIdx).toBeGreaterThan(-1);
-
-    // 字母序：docker- < mcp- < role-
-    expect(dockerIdx).toBeLessThan(mcpIdx);
-    expect(mcpIdx).toBeLessThan(roleIdx);
   });
 });

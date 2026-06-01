@@ -2,7 +2,7 @@
 
 ## 概述
 
-本设计为 Cube Pets Office 平台增加 Vision 能力，使 Agent 能够"看懂"图片并基于视觉信息进行分析和推理。核心思路是：
+本设计为 WhyBuddy 平台增加 Vision 能力，使 Agent 能够"看懂"图片并基于视觉信息进行分析和推理。核心思路是：
 
 1. 扩展现有附件管道，在图片识别后增加 Vision LLM 分析步骤
 2. 扩展 LLMMessage 类型支持多模态消息格式（text + image_url）

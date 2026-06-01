@@ -48,7 +48,7 @@
 
   <rect x="40" y="30" width="1520" height="210" rx="24" fill="url(#heroGradient)"/>
   <text x="80" y="92" class="hero-meta">PROJECT-FIRST ROADMAP · 2026-04-30</text>
-  <text x="80" y="142" class="hero-title">Cube Pets Office · Project-First 9 个规格执行进度总览</text>
+  <text x="80" y="142" class="hero-title">WhyBuddy · Project-First 9 个规格执行进度总览</text>
   <text x="80" y="183" class="hero-subtitle">从“发起任务”收敛到“创建项目 → 澄清目标 → 演化 Spec → 规划路线 → 自动执行 → 沉淀证据”的主链路。</text>
   <text x="80" y="213" class="hero-meta">统计口径：读取 .kiro/specs/project-* 下 9 个 spec 的 tasks.md 顶层任务勾选项</text>
   <rect x="1170" y="72" width="310" height="118" rx="18" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.24)"/>

@@ -7,7 +7,7 @@
   role="img"
   aria-labelledby="title desc"
 >
-  <title id="title">Cube Pets Office Blueprint Execution Progress</title>
+  <title id="title">WhyBuddy Blueprint Execution Progress</title>
   <desc id="desc">
     Execution progress for blueprint specs on 2026-05-06. Current top-level task
     progress is 60 of 60.
@@ -207,7 +207,7 @@
   <text class="kicker" x="86" y="84">
     BLUEPRINT EXECUTION PROGRESS / 2026-05-06
   </text>
-  <text class="title" x="86" y="136">Cube Pets Office Blueprint Progress</text>
+  <text class="title" x="86" y="136">WhyBuddy Blueprint Progress</text>
   <text class="subtitle" x="86" y="174">
     Autopilot now captures intake, GitHub sources, clarification readiness, and
     project context before generating the RouteSet asset.

@@ -1,5 +1,5 @@
 <svg width="3840" height="2160" viewBox="0 0 3840 2160" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">Cube Pets Office 已完成执行计划全景逻辑图（4K 中文版）</title>
+  <title id="title">WhyBuddy 已完成执行计划全景逻辑图（4K 中文版）</title>
   <desc id="desc">基于 execution-plan 中已经完成或已经形成主线能力的模块，按 UI 层、运行时层、编排层、智能层、执行层、治理层和互操作层绘制的 4K 中文 SVG 总览图，用于后续 UI 改版与逻辑升级。</desc>
   <style>
     .title { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif; font-size: 58px; font-weight: 800; fill: #0f172a; }
@@ -66,7 +66,7 @@
   <rect x="0" y="0" width="3840" height="2160" fill="url(#bg)" />
   <rect x="0" y="0" width="3840" height="2160" fill="url(#grid)" opacity="0.45" />
 
-  <text class="title" x="60" y="96">Cube Pets Office 已完成执行计划全景逻辑图</text>
+  <text class="title" x="60" y="96">WhyBuddy 已完成执行计划全景逻辑图</text>
   <text class="subtitle" x="60" y="136">基于 execution-plan 已落地主线能力生成，聚焦 UI 层、逻辑层、执行链路、治理链路与后续升级切入点。适合作为产品改版、领域拆分、代码梳理与平台化升级的总底图。</text>
   <text class="subtitle" x="60" y="170">收录范围：C01-C08 契约底板、P00-P07 基座、L01-L30 已完成链路、任务控制台补完 P0/P1/P2，以及已形成可用能力的 workflow-artifacts-display / holographic-ui / executor-integration / ai-enabled-sandbox。</text>
 

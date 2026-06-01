@@ -77,7 +77,8 @@ const StageCTA: FC<StageCTAProps> = ({
     );
   }
 
-  // MiroFish 变体：全宽黑底白字等宽字体，无圆角，hover translateY(-2px)
+  // MiroFish 变体：全宽黑底白字等宽字体，无圆角，hover 翻成 #FF4500 橙色，
+  // 周围带 4px 半透明黑色 halo（对齐 mirofish-demo .start-engine-btn 真实样式）。
   if (isMirofish) {
     return (
       <div className="sticky bottom-0 z-10 bg-[--mf-color-bg] border-t border-[--mf-color-border] px-4 py-3">
@@ -85,13 +86,17 @@ const StageCTA: FC<StageCTAProps> = ({
           type="button"
           data-testid={testId}
           data-mf-button="primary"
-          className={`w-full bg-black text-white font-[family-name:var(--mf-font-mono)] text-xs font-bold py-2.5 rounded-none hover:-translate-y-0.5 transition-transform ${
-            loading ? "opacity-50" : ""
-          } ${disabled || loading ? "pointer-events-none opacity-50" : ""}`}
+          className={`relative w-full overflow-hidden border border-black bg-black px-5 py-3 font-[family-name:var(--mf-font-mono)] text-sm font-bold uppercase tracking-[1px] text-white shadow-[rgba(0,0,0,0.06)_0_0_0_4px] transition-all duration-300 hover:-translate-y-[2px] hover:border-[#FF4500] hover:bg-[#FF4500] active:translate-y-0 ${
+            loading ? "animate-pulse" : ""
+          } ${disabled || loading ? "pointer-events-none opacity-50 hover:translate-y-0 hover:bg-black" : ""}`}
+          style={{ borderRadius: "0px" }}
           disabled={disabled || loading}
           onClick={onAction}
         >
-          {loading ? `${label}...` : label}
+          <span className="flex w-full items-center justify-between gap-3">
+            <span>{loading ? `${label}...` : label}</span>
+            <span aria-hidden="true">→</span>
+          </span>
         </button>
       </div>
     );

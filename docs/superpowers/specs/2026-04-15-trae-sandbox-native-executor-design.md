@@ -1,4 +1,4 @@
-# Cube Pets Office — Trae 沙盒 Native Executor 兼容设计
+# WhyBuddy — Trae 沙盒 Native Executor 兼容设计
 
 日期：2026-04-15  
 目标：在不具备 Docker 的 Trae/solo 沙盒环境中，让 “real” 执行链路依然可以真实运行命令（以本机进程方式），而不是退化为 mock。

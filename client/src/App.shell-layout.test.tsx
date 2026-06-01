@@ -21,8 +21,8 @@ import { AppShell, isProjectWorkspaceLocation } from "./App";
 
 vi.mock("./lib/deploy-target", () => ({
   CAN_USE_ADVANCED_RUNTIME: true,
-  GITHUB_REPOSITORY: "opencroc/cube-pets-office",
-  GITHUB_REPOSITORY_URL: "https://github.com/opencroc/cube-pets-office",
+  GITHUB_REPOSITORY: "opencroc/whybuddy",
+  GITHUB_REPOSITORY_URL: "https://github.com/opencroc/whybuddy",
   get IS_GITHUB_PAGES() {
     return deployTargetState.isGitHubPages;
   },

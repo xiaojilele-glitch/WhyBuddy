@@ -6,9 +6,9 @@
   role="img"
   aria-labelledby="title desc"
 >
-  <title id="title">Cube Pets Office Architecture</title>
+  <title id="title">WhyBuddy Architecture</title>
   <desc id="desc">
-    Product architecture overview for Cube Pets Office updated on 2026-04-26.
+    Product architecture overview for WhyBuddy updated on 2026-04-26.
     This 1440 by 900 landscape version preserves the original detailed labels
     and pastel card style while adding the Web-AIGC 58/58 spec mainline wiring,
     route mounting, runtime adapters, workflow governance, RAG vector governance,

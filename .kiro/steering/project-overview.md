@@ -10,6 +10,25 @@
 
 ## inclusion: auto
 
+## 2026-05-28 Rebrand: 端云 / WhyBuddy
+
+This project's user-facing brand has changed from `WhyBuddy` to
+`端云 / WhyBuddy`. Strategy is **alias-first, not big-bang rename**:
+
+- User-visible touchpoints (HTML title, login, loading, README hero,
+  `package.json` `name`) consume `shared/brand.ts`.
+- Internal symbols (file names, module identifiers, audit / lineage event
+  families, the 287 spec dirs, this steering file's older sections) keep
+  their existing strings; a future `whybuddy-internal-rename` spec will
+  carry out the coordinated sweep.
+- The legacy package name lives on as `BRAND_PACKAGE_LEGACY` in
+  `shared/brand.ts` for places that still need to reference the old token.
+
+The name expands to `端 (edge / endpoint) + 云 (cloud)` — workloads run at
+the edge when they can (browser runtime, native sandbox, your laptop's
+Docker), and fall back to the cloud when they need shared coordination
+(LLM, MCP servers, the Lobster Executor service).
+
 ## 2026-04-30 Project-first next phase
 
 This project overview now treats Project-first as the next product mainline above the closed Task Autopilot Phase 1 baseline.
@@ -57,7 +76,7 @@ The 50+ AIGC nodes are internal capabilities inside FSD roles such as Planner, C
 
 本页已经同步到 2026-04-26 的主线口径，旧阶段性文档继续保留用于历史追溯。当前需要优先记住以下事实：
 
-- Cube Pets Office 的产品口径已经从 `mission-first` 任务操作系统升级为 `task autopilot` 任务自动驾驶平台
+- WhyBuddy 的产品口径已经从 `mission-first` 任务操作系统升级为 `task autopilot` 任务自动驾驶平台
 - `mission-first` 不废弃：它仍是底层工程哲学与任务真相源，负责承载 Mission、Workflow、Runtime、Review、Audit、Replay 等主干能力
 - `task autopilot` 是上层产品抽象：用户输入“目的地”，系统生成“路线”，组织“车队”，展示“驾驶状态”，并在关键点请求“接管”
 - 第一阶段 `18 / 18` 份 task-autopilot specs 已完成并收口，共 `54 / 54` 份 spec markdown、`345 / 345` 顶层任务项、`602 / 602` raw checklist 项
@@ -78,13 +97,13 @@ The 50+ AIGC nodes are internal capabilities inside FSD roles such as Planner, C
 - `docs/task-autopilot-18-spec-progress-overview-2026-04-24.svg`
 - `docs/architecture-runtime-2026-04-21.svg`
 
-# Cube Pets Office 项目总览
+# WhyBuddy 项目总览
 
 ## 项目定位
 
-一句话定义：`Cube Pets Office` 是一个面向复杂任务的任务自动驾驶平台：用户输入目标、查看路线，让系统执行安全部分，并在人类判断必需时接管。
+一句话定义：`WhyBuddy` 是一个面向复杂任务的任务自动驾驶平台：用户输入目标、查看路线，让系统执行安全部分，并在人类判断必需时接管。
 
-Cube Pets Office 当前对内定义为：建立在 `mission-first` 底座上的 `task autopilot` 任务自动驾驶平台。
+WhyBuddy 当前对内定义为：建立在 `mission-first` 底座上的 `task autopilot` 任务自动驾驶平台。
 
 `mission-first` 任务操作系统是当前已经落地的工程底座：用户不是触发零散工具调用，而是在创建和推进一个 Mission；系统不是返回单轮答案，而是围绕 Mission 组织 Workflow、Runtime、Agent、HITL、Review、Replay、Audit、Lineage 与交付物。任务工作台、`tasks-store`、Mission Runtime、十阶段工作流、Docker executor、浏览器运行时、审计链与回放能力共同构成这层底座。
 
@@ -377,7 +396,7 @@ Swarm 协作：
 ## 项目目录结构
 
 ```
-cube-pets-office/
+whybuddy/
 ├── client/                          # 🖥️ 前端应用
 │   ├── src/
 │   │   ├── components/

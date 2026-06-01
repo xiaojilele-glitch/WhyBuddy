@@ -9,17 +9,17 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $worktrees = @(
-  @{ Branch = "chore/web-aigc-main-control"; Path = "..\cube-pets-office-web-aigc-0-main-control" },
-  @{ Branch = "feat/web-aigc-platform-a"; Path = "..\cube-pets-office-web-aigc-1-platform-a" },
-  @{ Branch = "feat/web-aigc-platform-b"; Path = "..\cube-pets-office-web-aigc-2-platform-b" },
-  @{ Branch = "feat/web-aigc-platform-c"; Path = "..\cube-pets-office-web-aigc-3-platform-c" },
-  @{ Branch = "feat/web-aigc-dialogue-qa"; Path = "..\cube-pets-office-web-aigc-4-dialogue-qa" },
-  @{ Branch = "feat/web-aigc-hitl-session"; Path = "..\cube-pets-office-web-aigc-5-hitl-session" },
-  @{ Branch = "feat/web-aigc-content-processing"; Path = "..\cube-pets-office-web-aigc-6-content-processing" },
-  @{ Branch = "feat/web-aigc-multimodal-output"; Path = "..\cube-pets-office-web-aigc-7-multimodal-output" },
-  @{ Branch = "feat/web-aigc-tools-and-agents"; Path = "..\cube-pets-office-web-aigc-8-tools-and-agents" },
-  @{ Branch = "feat/web-aigc-controlflow"; Path = "..\cube-pets-office-web-aigc-9-controlflow" },
-  @{ Branch = "feat/web-aigc-risk-actions"; Path = "..\cube-pets-office-web-aigc-10-risk-actions" }
+  @{ Branch = "chore/web-aigc-main-control"; Path = "..\whybuddy-web-aigc-0-main-control" },
+  @{ Branch = "feat/web-aigc-platform-a"; Path = "..\whybuddy-web-aigc-1-platform-a" },
+  @{ Branch = "feat/web-aigc-platform-b"; Path = "..\whybuddy-web-aigc-2-platform-b" },
+  @{ Branch = "feat/web-aigc-platform-c"; Path = "..\whybuddy-web-aigc-3-platform-c" },
+  @{ Branch = "feat/web-aigc-dialogue-qa"; Path = "..\whybuddy-web-aigc-4-dialogue-qa" },
+  @{ Branch = "feat/web-aigc-hitl-session"; Path = "..\whybuddy-web-aigc-5-hitl-session" },
+  @{ Branch = "feat/web-aigc-content-processing"; Path = "..\whybuddy-web-aigc-6-content-processing" },
+  @{ Branch = "feat/web-aigc-multimodal-output"; Path = "..\whybuddy-web-aigc-7-multimodal-output" },
+  @{ Branch = "feat/web-aigc-tools-and-agents"; Path = "..\whybuddy-web-aigc-8-tools-and-agents" },
+  @{ Branch = "feat/web-aigc-controlflow"; Path = "..\whybuddy-web-aigc-9-controlflow" },
+  @{ Branch = "feat/web-aigc-risk-actions"; Path = "..\whybuddy-web-aigc-10-risk-actions" }
 )
 
 Push-Location $repoRoot

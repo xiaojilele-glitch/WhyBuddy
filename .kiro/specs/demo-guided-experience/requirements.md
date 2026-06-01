@@ -2,7 +2,7 @@
 
 ## 简介
 
-为 Cube Pets Office 多智能体可视化教学平台构建演示回放引擎与引导体验层。该模块负责将预录演示数据（来自 demo-data-engine 的 DemoDataBundle）通过现有 UI 组件（WorkflowPanel、Scene3D、ChatPanel）进行回放，提供零配置的"Live Demo"入口，并通过 Mission Store（tasks-store）原生接口驱动 3D 场景动画、对话气泡、消息流转、阶段指示器以及记忆系统和进化引擎的可视化展示。
+为 WhyBuddy 多智能体可视化教学平台构建演示回放引擎与引导体验层。该模块负责将预录演示数据（来自 demo-data-engine 的 DemoDataBundle）通过现有 UI 组件（WorkflowPanel、Scene3D、ChatPanel）进行回放，提供零配置的"Live Demo"入口，并通过 Mission Store（tasks-store）原生接口驱动 3D 场景动画、对话气泡、消息流转、阶段指示器以及记忆系统和进化引擎的可视化展示。
 
 本文档覆盖五大需求模块：
 - **演示回放引擎** — 按时间线调度预录事件，驱动前端状态更新

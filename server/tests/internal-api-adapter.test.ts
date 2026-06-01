@@ -55,7 +55,7 @@ function makeWorkflow(id: string): WorkflowRecord {
         ],
       },
       input: {
-        sourceApp: "cube-pets-office",
+        sourceApp: "whybuddy",
       },
     },
     created_at: "2026-04-22T07:50:00.000Z",
@@ -125,7 +125,7 @@ function makeMission(): MissionRecord {
       workflowId: "wf-detail-1",
       instanceId: "wf-detail-1",
       sessionId: "topic-1",
-      sourceApp: "cube-pets-office",
+      sourceApp: "whybuddy",
     },
     executor: {
       name: "parallel-engine",
@@ -151,7 +151,7 @@ describe("InternalApiExecutor", () => {
         startedAt: "2026-04-22T08:00:00.000Z",
         completedAt: null,
         attachmentCount: 0,
-        sourceApp: "cube-pets-office",
+        sourceApp: "whybuddy",
         sessionId: "topic-1",
       },
       session: {
@@ -206,7 +206,7 @@ describe("InternalApiExecutor", () => {
         sessionId: "topic-1",
         user: "topic-1",
         startTime: "2026-04-22T07:49:00.000Z",
-        sourceApp: "cube-pets-office",
+        sourceApp: "whybuddy",
         messages: [
           {
             id: "1",
@@ -572,7 +572,7 @@ describe("InternalApiExecutor governance hooks", () => {
           replayId: "replay-internal-denied",
           lineageId: "lineage-internal-denied",
           decisionId: "decision-internal-denied",
-          sourceApp: "cube-pets-office",
+          sourceApp: "whybuddy",
         },
       }),
     ).rejects.toThrow("No allow rule found for api:call");
@@ -593,7 +593,7 @@ describe("InternalApiExecutor governance hooks", () => {
         replayId: "replay-internal-denied",
         lineageId: "lineage-internal-denied",
         decisionId: "decision-internal-denied",
-        sourceApp: "cube-pets-office",
+        sourceApp: "whybuddy",
         stage: "internal_api_guard",
         contextCount: 1,
         metadataKeys: [
@@ -646,7 +646,7 @@ describe("InternalApiExecutor governance hooks", () => {
         replayId: "replay-internal-api",
         lineageId: "lineage-internal-api",
         decisionId: "decision-internal-api",
-        sourceApp: "cube-pets-office",
+        sourceApp: "whybuddy",
       },
     });
 
@@ -668,7 +668,7 @@ describe("InternalApiExecutor governance hooks", () => {
         replayId: "replay-internal-api",
         lineageId: "lineage-internal-api",
         decisionId: "decision-internal-api",
-        sourceApp: "cube-pets-office",
+        sourceApp: "whybuddy",
         stage: "internal_api_allowed",
         contextCount: 1,
         metadataKeys: [
@@ -767,7 +767,7 @@ describe("InternalApiExecutor governance hooks", () => {
         replayId: "replay-internal-fallback",
         lineageId: "lineage-internal-fallback",
         decisionId: "decision-internal-fallback",
-        sourceApp: "cube-pets-office",
+        sourceApp: "whybuddy",
         fallback: {
           mode: "empty_result",
           targetLabel: "Mission Projection Empty Fallback",
@@ -789,7 +789,7 @@ describe("InternalApiExecutor governance hooks", () => {
         replayId: "replay-internal-fallback",
         lineageId: "lineage-internal-fallback",
         decisionId: "decision-internal-fallback",
-        sourceApp: "cube-pets-office",
+        sourceApp: "whybuddy",
         stage: "internal_api_fallback",
         contextCount: 1,
         metadataKeys: [

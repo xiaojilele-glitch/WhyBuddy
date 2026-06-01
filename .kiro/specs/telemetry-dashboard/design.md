@@ -2,7 +2,7 @@
 
 ## 概述
 
-本设计为 Cube Pets Office 新增实时遥测仪表盘模块。核心思路是在 LLM 调用链路和 Agent 调用链路中插入轻量埋点，将遥测数据汇聚到 `TelemetryStore`，通过 REST API 和 Socket.IO 推送到前端 `TelemetryDashboard` 组件进行可视化展示。
+本设计为 WhyBuddy 新增实时遥测仪表盘模块。核心思路是在 LLM 调用链路和 Agent 调用链路中插入轻量埋点，将遥测数据汇聚到 `TelemetryStore`，通过 REST API 和 Socket.IO 推送到前端 `TelemetryDashboard` 组件进行可视化展示。
 
 设计遵循以下原则：
 - **零阻塞**：埋点采集不阻塞 LLM 调用主流程，采用同步内存写入

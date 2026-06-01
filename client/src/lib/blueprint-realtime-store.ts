@@ -131,6 +131,26 @@ export interface AgentProgressEntry {
 export type CapabilityStatus = "idle" | "invoking" | "completed" | "failed";
 
 /**
+ * 能力调用的真实 owner 记录（whybuddy-3d-real-role-driven-scene-2026-05-29
+ * Requirement 12 修订）。
+ *
+ * 后端 `capability.*` 事件 payload 自带权威 `roleId`（见
+ * `server/routes/blueprint.ts` CapabilityInvoked 事件）。store 把它单独存进
+ * `capabilityOwners[capabilityId]`，让 3D 场景的 capability→role 绑定第一优先级
+ * 使用真实 owner，而不是靠 capability id 猜测（heuristic 仅作兜底）。
+ */
+// Latest-by-capability owner snapshot. This is intentionally not a full
+// invocation history; the right-rail audit surfaces retain detailed records.
+export interface CapabilityOwner {
+  /** 调用该能力的真实角色 id（来自事件 payload）。 */
+  roleId: string;
+  /** 调用记录 id（如有），用于右侧审计对账。 */
+  invocationId?: string;
+  /** 最近一次更新时间戳（ms）。 */
+  updatedAt: number;
+}
+
+/**
  * 流式日志条目。
  */
 export interface BlueprintLogEntry {
@@ -184,6 +204,13 @@ export interface SpecDocsNodeEntry {
   position: number;
   status: SpecDocsNodeStatus;
   errorSummary?: string;
+  /**
+   * whybuddy-spec-tree-progress-merge-2026-05-29 §3（决策 Q1=A2 白盒）：
+   * 节点曾经历过 `failed → processing` 重试。一旦置 true 永久保留，
+   * 即使后续 `node_completed` 也不清除——让 SPEC 树节点行能渲染
+   * "绿 ✓ + 橙 ⚠ 角标"，向用户透明展示"这个节点重试过"。
+   */
+  wasRetried?: boolean;
 }
 
 /**
@@ -239,7 +266,9 @@ const VALID_TRANSITIONS: Record<SpecDocsNodeStatus, SpecDocsNodeStatus[]> = {
   processing: ["completed", "failed"],
   completed: ["assembled"],
   assembled: [],
-  failed: [],
+  // whybuddy-spec-tree-progress-merge-2026-05-29 §3（Q1=A2）：放宽 failed 终态，
+  // 允许后端把失败节点重排重试（failed → processing）。原为 `[]`（终态）。
+  failed: ["processing"],
 };
 
 /**
@@ -319,6 +348,13 @@ export interface BlueprintRealtimeState {
 
   /** 能力调用状态：capabilityId → status */
   capabilityStatuses: Record<string, CapabilityStatus>;
+
+  /**
+   * 能力调用真实 owner：capabilityId → { roleId, invocationId, updatedAt }。
+   * 仅由携带 `roleId` 的 `capability.*` 事件与 role-container loader 路径写入，
+   * 供 3D 场景 capability→role 绑定使用真实 owner（Requirement 12）。
+   */
+  capabilityOwners: Record<string, CapabilityOwner>;
 
   /** 流式日志条目（最近 200 条） */
   logEntries: BlueprintLogEntry[];
@@ -410,6 +446,27 @@ export function mapEventTypeToPhase(type: string): RolePhase | null {
       return "sleeping";
     case "role.container.failed":
       return "failed";
+    // whybuddy-3d-real-role-driven-scene-2026-05-29 Requirement 10 (Fix 1)：
+    // 把 7 个 `role.agent.*` 推理事件映射到 RolePhase，使角色推理循环
+    // （iteration → thinking → acting → observing）能流入 `rolePhases`，
+    // 由既有 `if (type.startsWith("role."))` 分支写入 `rolePhases[roleId]`。
+    // 注意：`iteration_completed` 故意映射到 `observing` 而非 `completed`——
+    // 多迭代角色否则会在两次迭代之间闪烁到 faded 的 `completed` tier 再弹回；
+    // `completed` tier 保留给终态 `role.agent.completed`。
+    case "role.agent.iteration_started":
+      return "activated";
+    case "role.agent.thinking":
+      return "thinking";
+    case "role.agent.acting":
+      return "acting";
+    case "role.agent.observing":
+      return "observing";
+    case "role.agent.iteration_completed":
+      return "observing";
+    case "role.agent.completed":
+      return "completed";
+    case "role.agent.error":
+      return "failed";
     default:
       return null;
   }
@@ -474,6 +531,19 @@ function readRoleIdFromPayload(
 
   const key = readNestedRecord(record, "key");
   return key ? readString(key.roleId) : undefined;
+}
+
+/**
+ * 公开、可复用的 payload roleId 读取器（spec task 6）。
+ *
+ * 这是 {@link readRoleIdFromPayload} 的薄包装，供 blueprint runtime 场景
+ * 事件观察器（BlueprintRuntimeAgents）在不触碰 store 内部状态的前提下，
+ * 从 BlueprintRelayedEvent 的 payload 中读取 roleId。纯函数、无副作用、不访问 store。
+ */
+export function readRoleIdFromBlueprintPayload(
+  payload: Record<string, unknown>
+): string | undefined {
+  return readRoleIdFromPayload(payload);
 }
 
 function readRoleContainerKey(
@@ -899,6 +969,10 @@ function handleSpecDocsProgressEvent(
       const node = currentState.nodes[nodeId];
       if (!node) return null; // Unknown node (Req 2.8)
       if (!isValidTransition(node.status, "processing")) return null; // (Req 2.7)
+      // whybuddy-spec-tree-progress-merge-2026-05-29 §3（Q1=A2 白盒）：
+      // 若本次 node_started 是从 failed 态重新进入 processing（后端重排重试），
+      // 永久标记 wasRetried，使最终态可渲染 "✓ + ⚠" 角标。
+      const wasRetried = node.status === "failed" ? true : node.wasRetried;
       return {
         specDocsProgress: {
           ...currentState,
@@ -909,6 +983,7 @@ function handleSpecDocsProgressEvent(
               status: "processing",
               title: String(payload.nodeTitle ?? "").slice(0, 200),
               position: Number(payload.position) || 0,
+              ...(wasRetried ? { wasRetried: true } : {}),
             },
           },
         },
@@ -1052,6 +1127,41 @@ function handleSpecDocsProgressEvent(
 }
 
 // ---------------------------------------------------------------------------
+// Blueprint 实时事件观察者（module-level，非 store state）
+// ---------------------------------------------------------------------------
+
+/**
+ * `whybuddy-3d-real-role-driven-scene-2026-05-29` spec Task 5：
+ * Blueprint 实时事件监听器签名。监听器在 `dispatchEvent(event)` 的 reducer
+ * 完成后被同步通知一次，接收到的就是这次被分发的 `BlueprintRelayedEvent`。
+ */
+export type BlueprintRealtimeEventListener = (
+  event: BlueprintRelayedEvent
+) => void;
+
+/**
+ * 模块级监听器集合。刻意保持在 module scope 而非 `BlueprintRealtimeState`，
+ * 以满足 Requirements 2.15 / 5.2 / 6.6：本特性不向 store 顶层 state 增加字段。
+ */
+const blueprintRealtimeEventListeners = new Set<BlueprintRealtimeEventListener>();
+
+/**
+ * 订阅 blueprint 实时事件。每次 `dispatchEvent` 在 reducer 状态更新之后会把
+ * 该事件同步派发给所有当前注册的监听器（详见 design.md
+ * §「Event Observation and Line Priority」→「Event Observer」）。
+ *
+ * @returns 取消订阅函数；调用后该监听器不再收到后续事件。
+ */
+export function subscribeBlueprintRealtimeEvents(
+  listener: BlueprintRealtimeEventListener
+): () => void {
+  blueprintRealtimeEventListeners.add(listener);
+  return () => {
+    blueprintRealtimeEventListeners.delete(listener);
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Store 创建
 // ---------------------------------------------------------------------------
 
@@ -1061,6 +1171,7 @@ const initialState: BlueprintRealtimeState = {
   roleRuntimeStates: {},
   agentProgress: [],
   capabilityStatuses: {},
+  capabilityOwners: {},
   logEntries: [],
   fleetRoleCards: [],
   connectionState: "disconnected",
@@ -1089,16 +1200,24 @@ export const useBlueprintRealtimeStore = create<
 
     const s = getOrCreateSocket();
 
-    // 当 jobId 变化时保留历史 agentReasoning entries，避免阶段切换
-    // （intake.id → job.id）时丢失之前的执行步骤。entries 的 stageId
-    // 字段已标记每条 entry 属于哪个阶段，MiroFishCardStream 可按需过滤。
+    // A subscription is a hard job boundary. These slices are active-job data,
+    // so switching from one job/project to another must wipe them instead of
+    // preserving historical entries. Connection-level state stays outside this
+    // reset because it describes the socket, not the current job.
     set({
       subscribedJobId: jobId,
       connectionState: "connecting",
+      rolePhases: {},
+      roleRuntimeStates: {},
+      agentProgress: [],
+      capabilityStatuses: {},
+      capabilityOwners: {},
+      fleetRoleCards: [],
+      logEntries: [],
       agentReasoning: {
         jobId,
-        entries: state.agentReasoning.entries,
-        currentIteration: state.agentReasoning.currentIteration,
+        entries: [],
+        currentIteration: 0,
         status: "idle",
       },
     });
@@ -1257,7 +1376,9 @@ export const useBlueprintRealtimeStore = create<
       roleRuntimeStates: {},
       agentProgress: [],
       capabilityStatuses: {},
+      capabilityOwners: {},
       fleetRoleCards: [],
+      logEntries: [],
       connectionState: s.connected ? "connected" : "disconnected",
       // `autopilot-agent-reasoning-stream` spec Task 8.6 / 8.7：
       // agentReasoning 与 rolePhases / agentProgress / capabilityStatuses 同属
@@ -1268,6 +1389,11 @@ export const useBlueprintRealtimeStore = create<
   },
 
   dispatchEvent(event: BlueprintRelayedEvent) {
+    const activeJobId = get().subscribedJobId;
+    if (activeJobId && event.jobId !== activeJobId) {
+      return;
+    }
+
     const { type, payload } = event;
 
     set((state) => {
@@ -1370,6 +1496,22 @@ export const useBlueprintRealtimeStore = create<
             ...state.capabilityStatuses,
             [capId]: status,
           };
+
+          // Requirement 12 修订：保留事件里的真实 owner roleId，供 3D 绑定第一
+          // 优先级使用（不再靠 capability id 猜测）。仅当 payload 带 roleId 时写入。
+          const ownerRoleId = readRoleIdFromPayload(payload);
+          if (ownerRoleId) {
+            const invocationId =
+              (payload?.invocationId as string) ?? undefined;
+            updates.capabilityOwners = {
+              ...(updates.capabilityOwners ?? state.capabilityOwners),
+              [capId]: {
+                roleId: ownerRoleId,
+                invocationId,
+                updatedAt: lastUpdated,
+              },
+            };
+          }
         }
       }
 
@@ -1382,6 +1524,12 @@ export const useBlueprintRealtimeStore = create<
         updates.capabilityStatuses = {
           ...(updates.capabilityStatuses ?? state.capabilityStatuses),
           [capabilityId]: roleContainerCapabilityStatus,
+        };
+        // The loader capability id already encodes its owner role; record it as
+        // an authoritative owner so the 3D binding never has to guess for it.
+        updates.capabilityOwners = {
+          ...(updates.capabilityOwners ?? state.capabilityOwners),
+          [capabilityId]: { roleId, updatedAt: lastUpdated },
         };
         const runtimeState = buildRoleRuntimeState(event, roleId, lastUpdated);
         if (runtimeState) {
@@ -1418,6 +1566,24 @@ export const useBlueprintRealtimeStore = create<
 
       return updates;
     });
+
+    // `whybuddy-3d-real-role-driven-scene-2026-05-29` spec Task 5：
+    // reducer 状态更新完成后，同步通知所有模块级监听器一次。每个监听器调用都
+    // 包在 try/catch 中——一个 scene-bridge / observer 的 bug 绝不能破坏 reducer
+    // 或阻断其它监听器（Requirement 5.1 / 5.2）。
+    for (const listener of blueprintRealtimeEventListeners) {
+      try {
+        listener(event);
+      } catch (err) {
+        if (import.meta.env?.DEV) {
+          // eslint-disable-next-line no-console
+          console.error(
+            "[blueprint-realtime] event listener threw",
+            err
+          );
+        }
+      }
+    }
   },
 
   dismissSpecDocsProgress() {
@@ -1501,3 +1667,41 @@ export const useBlueprintRealtimeStore = create<
     set(initialState);
   },
 }));
+
+/**
+ * whybuddy-spec-tree-progress-merge-2026-05-29 §8.5：DEV-only e2e 注入口。
+ *
+ * 本 dev 环境 `AUTOPILOT_REAL_RUNTIME=true` 会把 job 一路自动驾驶冲过
+ * spec_docs，且真 LLM 批量生成耗时数分钟、无法稳定复现 `node_failed → 重试
+ * → node_completed`（A2 白盒）这条路径。Playwright 验收脚本因此需要一个
+ * 浏览器侧的 socket 事件本地回放入口，按 batch_init → node_started →
+ * node_failed → node_started → node_completed → batch_finished 顺序直接
+ * dispatch，确保 5 态 + retried 渲染都被真浏览器验证到，不依赖真 LLM 时序。
+ *
+ * 该 accessor 仅在 `import.meta.env.DEV` 下挂到 `window`，生产构建（Vite
+ * 静态消除 `if (false)` 分支）不包含此代码，因此不构成生产暴露面。与既有
+ * `globalThis.__snapshot*`（browser-runtime.ts / snapshot-lifecycle-bridge.ts）
+ * 的 dev accessor 模式一致。
+ */
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as Record<string, unknown>).__blueprintRealtimeStore = {
+    dispatchEvent: (event: BlueprintRelayedEvent) =>
+      useBlueprintRealtimeStore.getState().dispatchEvent(event),
+    getSpecDocsProgress: () =>
+      useBlueprintRealtimeStore.getState().specDocsProgress,
+    getState: () => useBlueprintRealtimeStore.getState(),
+    /**
+     * DEV-only setter that lets the e2e harness pivot `batchStatus` without
+     * going through the reducer (used to reproduce the "leftover processing
+     * entry from a prior batch that never fired batch_finished" race that the
+     * stale-guard in `deriveNodeStatusById` is supposed to neutralize).
+     */
+    setBatchStatus: (
+      next: "idle" | "running" | "assembling" | "finished"
+    ): void => {
+      useBlueprintRealtimeStore.setState((state) => ({
+        specDocsProgress: { ...state.specDocsProgress, batchStatus: next },
+      }));
+    },
+  };
+}

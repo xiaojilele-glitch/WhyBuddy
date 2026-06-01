@@ -13,7 +13,7 @@ inclusion: manual
 - 尽可能提高并行度
 - 尽量避免共享文件冲突
 - 让多 Agent / 多工作流 / 多 worktree 可以稳定推进
-- 让 `cube-pets-office` 在迁移过程中持续保持可集成、可回归、可收口
+- 让 `whybuddy` 在迁移过程中持续保持可集成、可回归、可收口
 
 ## 范围
 

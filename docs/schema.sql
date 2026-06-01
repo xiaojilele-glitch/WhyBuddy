@@ -1,12 +1,12 @@
 -- ============================================================
--- Cube Pets Office — MySQL Schema
+-- WhyBuddy — MySQL Schema
 -- 多智能体 LLM 编排系统数据库
 -- ============================================================
 
-CREATE DATABASE IF NOT EXISTS cube_pets_office
+CREATE DATABASE IF NOT EXISTS whybuddy
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-USE cube_pets_office;
+USE whybuddy;
 
 -- ============================================================
 -- 1. 智能体定义（对应三文件规范）

@@ -16,7 +16,10 @@ const __rr_filename = fileURLToPath(import.meta.url);
 const __rr_dirname = dirname(__rr_filename);
 
 function shouldPersistRoleRegistryByDefault(): boolean {
-  if (process.env.CUBE_PETS_DISABLE_ROLE_PERSISTENCE === '1') {
+  if (
+    process.env.WHYBUDDY_DISABLE_ROLE_PERSISTENCE === '1' ||
+    process.env["CUBE_" + "PETS_DISABLE_ROLE_PERSISTENCE"] === '1'
+  ) {
     return false;
   }
 

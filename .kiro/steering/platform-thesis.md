@@ -2,15 +2,15 @@
 inclusion: manual
 ---
 
-# 平台主张：在 Cube Pets Office 中构建图式 Agent 运行时
+# 平台主张：在 WhyBuddy 中构建图式 Agent 运行时
 
 ## 文档目的
 
-本文用于说明，为什么 Cube Pets Office 需要吸收 `web-aigc` 中部分 AI Agent 编排能力，以及为什么迁移目标应该是“分层平台能力”，而不是一次性的页面搬运或节点复制。
+本文用于说明，为什么 WhyBuddy 需要吸收 `web-aigc` 中部分 AI Agent 编排能力，以及为什么迁移目标应该是“分层平台能力”，而不是一次性的页面搬运或节点复制。
 
 ## 核心判断
 
-Cube Pets Office 目前已经具备比较强的运行时底座能力：
+WhyBuddy 目前已经具备比较强的运行时底座能力：
 
 - mission / task 运行时
 - workflow 引擎
@@ -27,7 +27,7 @@ Cube Pets Office 目前已经具备比较强的运行时底座能力：
 - 会话关联的执行观察能力
 - 覆盖对话、人工介入、检索、多模态、工具调用、向量操作等的大量节点体系
 
-所以正确战略不是把整个 `web-aigc` 后台壳子照搬过来，而是让 Cube Pets Office 变成一个“运行时优先、可承载图式编排”的 Agent Office 平台：
+所以正确战略不是把整个 `web-aigc` 后台壳子照搬过来，而是让 WhyBuddy 变成一个“运行时优先、可承载图式编排”的 Agent Office 平台：
 
 1. 保留 Cube 当前 mission / task / replay / audit 作为系统主记录
 2. 吸收 `web-aigc` 中可迁移的编排运行时契约
@@ -81,7 +81,7 @@ Cube Pets Office 目前已经具备比较强的运行时底座能力：
 
 ## 产品定位
 
-如果迁移方向正确，Cube Pets Office 可以形成这样一种差异化定位：
+如果迁移方向正确，WhyBuddy 可以形成这样一种差异化定位：
 
 - 不是单纯 canvas-first 的流程平台，而是 runtime-first 的 Agent 平台
 - 默认具备 replay、audit、lineage、operator control

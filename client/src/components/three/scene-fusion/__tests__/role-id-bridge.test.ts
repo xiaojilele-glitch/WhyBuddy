@@ -139,3 +139,119 @@ describe("readBlueprintRolePhase / 兼容与降级", () => {
     expect(readBlueprintRolePhase(rolePhases, "agent-ceo")).toBe("completed");
   });
 });
+
+describe("readBlueprintRolePhase / 派生角色名模糊命中（真实 autopilot job 体）", () => {
+  // 这一组例子取自 2026-05-29 真实自动驾驶 job 的 role timeline，覆盖 7 个 FSD
+  // canonical 名以外、字面量不会命中 FSD_TO_MISSION 但用户依然期望 3D 角色
+  // 跟着动起来的角色 id。每条断言：派生角色名 → 模糊解析到的 mission agent id
+  // 收到对应 phase。
+  const fuzzyCases: Array<{
+    storeKey: string;
+    expectedMission: MissionAgentId;
+    note: string;
+  }> = [
+    {
+      storeKey: "repository-analyst",
+      expectedMission: "agent-manager-design",
+      note: "analyst → analyzer",
+    },
+    {
+      storeKey: "spec-author",
+      expectedMission: "agent-worker-design",
+      note: "author → generator",
+    },
+    {
+      storeKey: "product-strategist",
+      expectedMission: "agent-manager-research",
+      note: "strategist → planner",
+    },
+    {
+      storeKey: "executor-architect",
+      expectedMission: "agent-manager-research",
+      note: "architect → planner",
+    },
+    {
+      storeKey: "spec-architect",
+      expectedMission: "agent-manager-research",
+      note: "architect → planner",
+    },
+    {
+      storeKey: "route-planner",
+      expectedMission: "agent-manager-research",
+      note: "plan → planner",
+    },
+    {
+      storeKey: "runtime-quality-auditor",
+      expectedMission: "agent-worker-engineering",
+      note: "audit → auditor (优先于 quality)",
+    },
+    {
+      storeKey: "repo-engineer",
+      expectedMission: "agent-manager-design",
+      note: "repository / repo → analyzer",
+    },
+    {
+      storeKey: "product-researcher",
+      expectedMission: "agent-manager-design",
+      note: "research → analyzer 子串命中（不影响 planner 字面量直读）",
+    },
+  ];
+
+  for (const { storeKey, expectedMission, note } of fuzzyCases) {
+    it(`${storeKey} → ${expectedMission} (${note})`, () => {
+      const rolePhases: Record<string, RolePhase> = {
+        [storeKey]: "thinking" as RolePhase,
+      };
+      expect(readBlueprintRolePhase(rolePhases, expectedMission)).toBe(
+        "thinking"
+      );
+    });
+  }
+
+  it("派生角色名不会污染其他 mission agent id 的查询（隔离性）", () => {
+    const rolePhases: Record<string, RolePhase> = {
+      "spec-author": "acting" as RolePhase,
+    };
+    // spec-author 模糊命中 generator → agent-worker-design
+    expect(readBlueprintRolePhase(rolePhases, "agent-worker-design")).toBe(
+      "acting"
+    );
+    // 其它 mission agent id 应该返回 undefined（无干扰）
+    expect(
+      readBlueprintRolePhase(rolePhases, "agent-manager-research")
+    ).toBeUndefined();
+    expect(readBlueprintRolePhase(rolePhases, "agent-ceo")).toBeUndefined();
+  });
+
+  it("完全匹配不上时回 undefined（不会乱命中）", () => {
+    const rolePhases: Record<string, RolePhase> = {
+      "totally-unrelated-token": "acting" as RolePhase,
+    };
+    for (const target of [
+      "agent-ceo",
+      "agent-manager-research",
+      "agent-worker-design",
+    ] as MissionAgentId[]) {
+      expect(readBlueprintRolePhase(rolePhases, target)).toBeUndefined();
+    }
+  });
+
+  it("派生角色名也透传到 runtime state 解析", () => {
+    const runtimeStates = {
+      "spec-author": {
+        roleId: "spec-author",
+        status: "ready",
+        runtimeKind: "real",
+        containerMode: "real",
+        executionMode: "real",
+        lastUpdated: 1,
+      },
+    } as const;
+    expect(
+      readBlueprintRoleRuntimeState(runtimeStates, "agent-worker-design")
+    ).toMatchObject({
+      roleId: "spec-author",
+      runtimeKind: "real",
+    });
+  });
+});

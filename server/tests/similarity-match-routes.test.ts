@@ -63,11 +63,11 @@ describe("POST /api/similarity-match/nodes/execute", () => {
         body: JSON.stringify({
           nodeType: "similarity_match",
           input: {
-            query: "cube pets office workflow",
+            query: "whybuddy workflow",
             candidates: [
               {
                 candidateId: "workflow",
-                text: "cube pets office workflow orchestration",
+                text: "whybuddy workflow orchestration",
               },
               {
                 candidateId: "music",
@@ -108,7 +108,7 @@ describe("POST /api/similarity-match/nodes/execute", () => {
         body: JSON.stringify({
           nodeType: "similarity_match",
           input: {
-            query: "cube pets office workflow",
+            query: "whybuddy workflow",
           },
         }),
       });

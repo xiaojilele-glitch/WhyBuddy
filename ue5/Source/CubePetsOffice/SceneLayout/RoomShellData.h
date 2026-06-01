@@ -1,4 +1,4 @@
-// Copyright Cube Pets Office. All Rights Reserved.
+// Copyright WhyBuddy. All Rights Reserved.
 //
 // Room Shell Data — UE5-compatible constants for the office room shell.
 // All values are in centimeters (cm) using UE5 Z-up coordinate system.

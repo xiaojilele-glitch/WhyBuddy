@@ -2,7 +2,7 @@
 
 ## 设计概述
 
-本设计旨在为 Cube Pets Office 增加一层面向“任务自动驾驶”的高层状态机视图，用于把当前 mission-first、Mission Runtime、workflow runtime、人工接管、review / audit / replay 等底层事实，统一解释为一条用户可理解的任务驾驶过程。
+本设计旨在为 WhyBuddy 增加一层面向“任务自动驾驶”的高层状态机视图，用于把当前 mission-first、Mission Runtime、workflow runtime、人工接管、review / audit / replay 等底层事实，统一解释为一条用户可理解的任务驾驶过程。
 
 核心原则如下：
 

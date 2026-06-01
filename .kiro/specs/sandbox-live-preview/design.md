@@ -2,7 +2,7 @@
 
 ## 概述
 
-本设计为 Cube Pets Office 平台增加沙箱实时预览能力，使用户能在 3D 办公场景中实时查看 Docker 容器的终端输出和浏览器截图。设计分为三层：
+本设计为 WhyBuddy 平台增加沙箱实时预览能力，使用户能在 3D 办公场景中实时查看 Docker 容器的终端输出和浏览器截图。设计分为三层：
 
 1. **协议层**：扩展 ExecutorEvent 类型，新增 `job.log_stream` 和 `job.screenshot` 事件类型
 2. **中继层**：Cube Brain 接收执行器事件，维护滚动缓冲区，通过 Socket.IO 转发给前端

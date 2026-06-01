@@ -23,10 +23,11 @@ import {
 } from "@/lib/blueprint-realtime-store";
 import { useAppStore } from "@/lib/store";
 import type { AppLocale } from "@/lib/locale";
+import { displayLabel } from "@/components/three/scene-fusion/role-display-label";
 
 import { RoleCrewDots } from "./crew-activation/RoleCrewDots";
 import { useRoleCrewState } from "./crew-activation/useRoleCrewState";
-import { resolveRoleLabel, resolveStageLabel } from "./role-labels";
+import { resolveStageLabel } from "./role-labels";
 
 /**
  * 8 类相位 + idle 默认色到 Tailwind class 的稳定映射。
@@ -109,7 +110,7 @@ export const RoleStatusStrip: FC = () => {
         </div>
       )}
 
-      {/* 原有 badge 列表 — 现在使用 resolveRoleLabel 显示本地化标签 */}
+      {/* 原有 badge 列表 — 现在使用 displayLabel 显示本地化标签 */}
       <div className="flex flex-wrap gap-1.5">
         {sortedEntries.map(([roleId, phase]) => (
           <span
@@ -117,7 +118,7 @@ export const RoleStatusStrip: FC = () => {
             className={`px-2 py-0.5 rounded-full text-[10px] font-bold max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap ${resolvePhaseClass(phase)}`}
             title={`${roleId} · ${phase}`}
           >
-            {resolveRoleLabel(roleId, locale)}
+            {displayLabel(roleId, locale)}
           </span>
         ))}
       </div>

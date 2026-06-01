@@ -88,7 +88,7 @@ function escapePyTripleQuote(str: string): string {
 function generateMainPy(ir: ExportIR): string {
   const lines: string[] = [];
 
-  lines.push(`"""Cube Pets Office — LangGraph Export"""`);
+  lines.push(`"""WhyBuddy — LangGraph Export"""`);
   lines.push(``);
   lines.push(`import json`);
   lines.push(`from typing import TypedDict, Any`);

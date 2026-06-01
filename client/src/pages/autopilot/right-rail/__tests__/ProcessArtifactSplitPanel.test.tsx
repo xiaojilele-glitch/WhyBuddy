@@ -1,4 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AgentReasoningEntry } from "@shared/blueprint/agent-reasoning";
@@ -176,6 +178,46 @@ describe("ProcessArtifactSplitPanel", () => {
     expect(markup).toContain('data-testid="mirofish-card-artifact"');
     expect(markup).toContain('data-artifact-type="clarification_session"');
     expect(markup).not.toContain('data-testid="autopilot-process-artifact-empty"');
+  });
+
+  it("filters reasoning entries to the current job before rendering execution cards", () => {
+    const job = { id: "job-current", artifacts: [] } as unknown as BlueprintGenerationJob;
+
+    const markup = renderToStaticMarkup(
+      <ProcessArtifactSplitPanel
+        locale="en-US"
+        job={job}
+        stageFilter="spec_docs"
+        reasoningEntries={[
+          makeReasoning({
+            id: "old-job-entry",
+            jobId: "job-old",
+            phase: "thinking",
+            stageId: "spec_docs",
+            thought: "old WhyBuddy document assembly",
+          }),
+          makeReasoning({
+            id: "current-job-entry",
+            jobId: "job-current",
+            phase: "thinking",
+            stageId: "spec_docs",
+            thought: "current permission document assembly",
+          }),
+        ]}
+      />
+    );
+
+    expect(markup).toContain("current permission document assembly");
+    expect(markup).not.toContain("old WhyBuddy document assembly");
+  });
+
+  it("StageSplitMount passes descriptor stageFilter into the execution panel", () => {
+    const source = readFileSync(
+      resolve(__dirname, "../StageSplitMount.tsx"),
+      "utf8"
+    );
+
+    expect(source).toMatch(/stageFilter=\{descriptor\.stageFilter\}/);
   });
 });
 

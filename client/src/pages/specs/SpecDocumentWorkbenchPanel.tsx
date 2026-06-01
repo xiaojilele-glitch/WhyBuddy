@@ -5,6 +5,7 @@ import {
   RefreshCw,
   Save,
   Send,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 
@@ -13,9 +14,11 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   fetchBlueprintSpecDocuments,
+  generateBlueprintEffectPreview,
   generateBlueprintSpecDocuments,
   reviewBlueprintSpecDocument,
   saveBlueprintSpecDocumentVersion,
+  type BlueprintEffectPreviewsSnapshotResponse,
   type BlueprintSpecDocumentReviewDecision,
 } from "@/lib/blueprint-api";
 import type { ApiRequestError } from "@/lib/api-client";
@@ -34,6 +37,18 @@ interface SpecDocumentWorkbenchPanelProps {
   initialDocuments?: BlueprintSpecDocument[];
   autoLoad?: boolean;
   onDocumentsChange?: (documents: BlueprintSpecDocument[]) => void;
+  /**
+   * whybuddy-stage3-unblock-2026-05-29：用户在 spec_documents 阶段发现没有
+   * 进入第三阶段（effect_preview）的入口。本回调让父组件在用户手动点击
+   * "进入效果预演" 按钮、且后端 `POST /jobs/:jobId/effect-previews`
+   * 返回 201 时，把响应里携带的最新 job 状态 / 13 份效果预演快照回写到
+   * AutopilotRoutePage 的 `latestJob` / `effectPreviews`，使右栏的
+   * `useAutoAdvance` 与 sub-stage dispatcher 把视图切到 effect_preview。
+   * 父组件未提供该回调时，按钮会回退为静默成功（仍打 API + 重拉数据）。
+   */
+  onEffectPreviewGenerated?: (
+    response: BlueprintEffectPreviewsSnapshotResponse
+  ) => void;
 }
 
 type ReviewStatus = "draft" | "accepted" | "rejected" | "reviewing" | string;
@@ -155,6 +170,7 @@ export function SpecDocumentWorkbenchPanel({
   initialDocuments = [],
   autoLoad = true,
   onDocumentsChange,
+  onEffectPreviewGenerated,
 }: SpecDocumentWorkbenchPanelProps) {
   const [documents, setDocuments] =
     useState<BlueprintSpecDocument[]>(initialDocuments);
@@ -170,6 +186,16 @@ export function SpecDocumentWorkbenchPanel({
     "选择已生成的 Markdown 文档后即可执行评审操作。"
   );
   const [error, setError] = useState<ApiRequestError | null>(null);
+
+  // whybuddy-stage3-unblock-2026-05-29：进入效果预演 CTA 的运行态。
+  // - generatingPreview = "loading"  → 已 POST /effect-previews，等待响应
+  // - generatingPreview = "success"  → 收到 201，且父组件已被 notify
+  // - generatingPreview = "error"    → 后端 4xx/5xx；error 文案由 effectPreviewError 承载
+  const [generatingPreview, setGeneratingPreview] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
+  const [effectPreviewError, setEffectPreviewError] =
+    useState<ApiRequestError | null>(null);
 
   useEffect(() => {
     setDocuments(initialDocuments);
@@ -353,6 +379,59 @@ export function SpecDocumentWorkbenchPanel({
       setReviewAction(null);
     }
   };
+
+  /**
+   * whybuddy-stage3-unblock-2026-05-29 — manual entry into stage 3
+   * (effect_preview).
+   *
+   * 排查结论：服务端 `POST /api/blueprint/jobs/:id/effect-previews`
+   * 在 specTree 存在时即可成功（已在线下用 .tmp/stage3-probe.mjs 验证：
+   * 返回 201 + 13 份预演快照 + job.stage 翻到 effect_preview）。但是
+   * `useAutoAdvance` 只在 `stage === "spec_docs" && status === "completed"`
+   * 时才发起这一步；服务端 spec_docs 完成后默认把 job 留在
+   * `status: "reviewing"` 等用户接受文档，于是自动推进永远沉默，
+   * 用户在第二阶段就找不到第三阶段入口。
+   *
+   * 本 handler 给 spec_documents 视图加一个手动 CTA："进入效果预演"。
+   * 用户在生成完 SPEC 文档（哪怕没 accept）后，点一下就能让后端推进到
+   * effect_preview 并把 13 份预演快照回写到 latestJob，使右栏 dispatcher
+   * 把视图切到 EffectPreviewPanel。
+   */
+  const handleEnterEffectPreview = async () => {
+    if (!jobId) return;
+    if (generatingPreview === "loading") return;
+
+    setGeneratingPreview("loading");
+    setEffectPreviewError(null);
+
+    try {
+      const result = await generateBlueprintEffectPreview(jobId, {
+        includeDrafts: true,
+      });
+      if (result.ok) {
+        setGeneratingPreview("success");
+        onEffectPreviewGenerated?.(result.data);
+      } else {
+        setGeneratingPreview("error");
+        setEffectPreviewError(result.error);
+      }
+    } catch (err) {
+      setGeneratingPreview("error");
+      setEffectPreviewError({
+        message: "请求失败",
+        detail: String(err),
+        status: 500,
+      } as ApiRequestError);
+    }
+  };
+
+  /**
+   * 当 SPEC 文档列表里至少有一份生成成功的文档时，"进入效果预演" 按钮才
+   * 启用。空 specTree 或全部草稿态时按钮置灰，避免用户在没产物的状态下
+   * 触发后端 404（preview 端点要求 specTree 存在 + 至少一个文档可读）。
+   */
+  const canEnterEffectPreview =
+    !!jobId && documents.length > 0 && generatingPreview !== "loading";
 
   return (
     <div
@@ -622,6 +701,64 @@ export function SpecDocumentWorkbenchPanel({
                 ? blueprintCopy(activeDocument.content)
                 : buildPreviewFallback(selectedNode, selectedType)}
             </pre>
+          </div>
+
+          {/*
+            whybuddy-stage3-unblock-2026-05-29 — manual stage 3 entry CTA.
+            Visible only on the SPEC documents view (this panel) and only
+            once at least one document exists. Click triggers the same
+            backend endpoint useAutoAdvance would have called (with the
+            same `includeDrafts: true` payload) so users without "all docs
+            accepted" can still cross into stage 3.
+          */}
+          <div
+            className="mt-4 flex flex-col gap-2 border-t border-[#0f766e]/20 pt-4 sm:flex-row sm:items-center sm:justify-between"
+            data-testid="spec-document-stage3-entry"
+          >
+            <div className="min-w-0">
+              <div className="font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-[#666]">
+                {generatingPreview === "loading"
+                  ? "→ 正在生成效果预演"
+                  : generatingPreview === "success"
+                    ? "✓ 效果预演已就绪"
+                    : generatingPreview === "error"
+                      ? "✗ 生成失败"
+                      : "→ 准备进入第三阶段"}
+              </div>
+              <div className="mt-1 text-[12px] font-semibold leading-5 text-slate-600">
+                {generatingPreview === "success"
+                  ? "右栏将自动切换到效果预演面板。"
+                  : generatingPreview === "error"
+                    ? effectPreviewError?.message ?? "请稍后重试或检查后端日志。"
+                    : documents.length === 0
+                      ? "请先生成至少一份 SPEC 文档（点击上方“生成全部文档”）。"
+                      : "已生成 " +
+                        documents.length +
+                        " 份文档，点击右侧按钮即可让系统基于 SPEC 树推导可视化效果预演。"}
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className={cn(
+                "shrink-0 gap-2 rounded-none border px-5 py-2 font-mono text-[12px] font-bold uppercase tracking-[1px] transition-all duration-300 disabled:opacity-50",
+                generatingPreview === "success"
+                  ? "border-[#0f766e] bg-white text-[#0f766e]"
+                  : "border-[#FF4500] bg-[#FF4500] text-white shadow-[rgba(255,69,0,0.18)_0_0_0_4px] hover:-translate-y-[2px] hover:bg-[#e63e00]"
+              )}
+              disabled={!canEnterEffectPreview}
+              onClick={handleEnterEffectPreview}
+              data-testid="spec-document-enter-effect-preview-button"
+            >
+              {generatingPreview === "loading" ? (
+                <RefreshCw className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : generatingPreview === "success" ? (
+                <CheckCircle2 className="size-3.5" aria-hidden="true" />
+              ) : (
+                <Sparkles className="size-3.5" aria-hidden="true" />
+              )}
+              {generatingPreview === "success" ? "已进入效果预演" : "进入效果预演 →"}
+            </Button>
           </div>
         </div>
       </div>

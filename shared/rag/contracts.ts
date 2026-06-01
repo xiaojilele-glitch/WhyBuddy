@@ -3,7 +3,7 @@
  *
  * 从 rbac-system-pc/backend/src/ai/rag/ 迁移并改造。
  * 原版依赖 Sequelize + Milvus SDK，此版改为纯接口，
- * 适配 cube-pets-office 的本地向量存储和浏览器/服务端双运行时。
+ * 适配 whybuddy 的本地向量存储和浏览器/服务端双运行时。
  *
  * 使用场景：
  * - vector-db-rag-pipeline: 完整 RAG 管道实现
@@ -159,7 +159,7 @@ export interface IVectorStore {
 // ---------------------------------------------------------------------------
 
 /**
- * 当前 cube-pets-office 的映射关系：
+ * 当前 whybuddy 的映射关系：
  *
  * IVectorStore.search()  → VectorStore.searchMemorySummaries() (现有 96 维本地向量)
  * IVectorStore.insert()  → VectorStore.upsertMemorySummary() (现有)

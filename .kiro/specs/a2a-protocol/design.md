@@ -2,7 +2,7 @@
 
 ## 概述
 
-A2A 协议在 Cube Pets Office 现有的 MessageBus、动态组织生成、Mission Runtime 和 Guest Agent 机制基础上，新增跨框架 Agent 互操作层。该层包含三个核心模块：A2A 协议类型定义（共享层）、A2A Client（发起对外调用）和 A2A Server（接收外部调用），以及针对 CrewAI / LangGraph / Claude 的框架适配器。
+A2A 协议在 WhyBuddy 现有的 MessageBus、动态组织生成、Mission Runtime 和 Guest Agent 机制基础上，新增跨框架 Agent 互操作层。该层包含三个核心模块：A2A 协议类型定义（共享层）、A2A Client（发起对外调用）和 A2A Server（接收外部调用），以及针对 CrewAI / LangGraph / Claude 的框架适配器。
 
 核心设计原则：
 - **协议优先**：基于 JSON-RPC 2.0 定义统一信封格式，所有框架适配器基于同一协议工作

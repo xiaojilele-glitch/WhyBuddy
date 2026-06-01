@@ -5,7 +5,7 @@
 This spec archives the sandbox-compatible execution changes that landed through the
 `trae/solo-agent-ENNSlg` branch and the local follow-up dev startup fixes.
 
-The main goal is to preserve a clear record of how Cube Pets Office behaves when:
+The main goal is to preserve a clear record of how WhyBuddy behaves when:
 
 - Docker is available locally
 - Docker is unavailable locally, but Node processes can still run
@@ -32,7 +32,7 @@ the environment boundaries, and the developer workflow expectations that now exi
 
 ### Requirement 1: Executor supports sandbox-compatible real execution fallback
 
-**User Story:** As a developer running Cube Pets Office in a sandbox or on a machine without Docker, I want the executor to keep a real execution path instead of hard-failing when Docker is unavailable, so I can still run commands and produce artifacts locally.
+**User Story:** As a developer running WhyBuddy in a sandbox or on a machine without Docker, I want the executor to keep a real execution path instead of hard-failing when Docker is unavailable, so I can still run commands and produce artifacts locally.
 
 #### Acceptance Criteria
 

@@ -456,7 +456,7 @@ describe("web-aigc monitoring compatibility routes", () => {
       expect(body.data).toMatchObject({
         sessionId: "session-monitor",
         user: "session-monitor",
-        sourceApp: "cube-pets-office",
+        sourceApp: "whybuddy",
       });
       expect(body.data.messages).toHaveLength(1);
       expect(body.data.messages[0]).toMatchObject({

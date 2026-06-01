@@ -2,7 +2,7 @@
 
 ## 概述
 
-多区域灾难恢复系统为 Cube Pets Office 平台提供跨地理区域的高可用性和灾难恢复能力。系统在现有单区域架构之上引入 Region 抽象层，通过 Region Manager、Replication Strategy、Region Scheduler、Global Load Balancer 和 Region Health Monitor 五大核心组件，实现数据复制、区域感知调度、负载均衡、自动故障转移和实时监控。
+多区域灾难恢复系统为 WhyBuddy 平台提供跨地理区域的高可用性和灾难恢复能力。系统在现有单区域架构之上引入 Region 抽象层，通过 Region Manager、Replication Strategy、Region Scheduler、Global Load Balancer 和 Region Health Monitor 五大核心组件，实现数据复制、区域感知调度、负载均衡、自动故障转移和实时监控。
 
 设计遵循以下原则：
 - **渐进式集成**：不破坏现有 WorkflowEngine、MissionRuntime 等模块，通过适配器模式接入

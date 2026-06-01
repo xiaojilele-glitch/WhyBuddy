@@ -1,4 +1,4 @@
-// Copyright Cube Pets Office. All Rights Reserved.
+// Copyright WhyBuddy. All Rights Reserved.
 //
 // Material System Data — UE5-compatible constants for the office material
 // system, including Master Material parameter names, color definitions for

@@ -1,0 +1,73 @@
+# WhyBuddy — one-command bootstrap
+#
+#   docker compose up
+#
+# This boots:
+#   - app   → the WhyBuddy server + bundled frontend on http://localhost:3000
+#             (the container internally listens on 3001; we publish 3000:3001)
+#   - mysql → MySQL 8 with the whybuddy schema (legacy DB name kept
+#             for backward compatibility; project name is whybuddy)
+#
+# What is NOT included in this compose:
+#   - Lobster Executor (Docker-in-Docker is messy; opt in separately)
+#   - Redis (off by default; flip REDIS_ENABLED=true to enable)
+#   - Feishu integration (mock mode by default)
+#
+# Required env: copy .env.example to .env and fill at least LLM_API_KEY +
+# SESSION_SECRET. Compose passes the host's .env into the app container.
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: whybuddy-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-whybuddy_root_change_me}
+      MYSQL_DATABASE: ${DB_NAME:-whybuddy}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - whybuddy-mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "127.0.0.1",
+          "-uroot",
+          "-p${DB_PASSWORD:-whybuddy_root_change_me}",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: whybuddy:local
+    container_name: whybuddy-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-whybuddy}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-whybuddy_root_change_me}
+      CORS_ORIGIN: http://localhost:3000
+    ports:
+      - "3000:3001"
+    restart: unless-stopped
+
+volumes:
+  whybuddy-mysql-data:
+    name: whybuddy-mysql-data

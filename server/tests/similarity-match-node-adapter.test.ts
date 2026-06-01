@@ -7,11 +7,11 @@ describe("executeSimilarityMatchNode", () => {
     const result = await executeSimilarityMatchNode({
       nodeType: "similarity_match",
       input: {
-        query: "cube pets office agent orchestration",
+        query: "whybuddy agent orchestration",
         candidates: [
           {
             candidateId: "workflow",
-            text: "cube pets office workflow orchestration and agent routing",
+            text: "whybuddy workflow orchestration and agent routing",
             metadata: { source: "spec" },
           },
           {
@@ -145,7 +145,7 @@ describe("executeSimilarityMatchNode", () => {
           candidates: [
             {
               candidateId: "alpha",
-              text: "cube pets office",
+              text: "whybuddy",
             },
           ],
         },
@@ -158,7 +158,7 @@ describe("executeSimilarityMatchNode", () => {
       executeSimilarityMatchNode({
         nodeType: "similarity_match",
         input: {
-          query: "cube pets office",
+          query: "whybuddy",
           candidates: [
             {
               candidateId: "empty",

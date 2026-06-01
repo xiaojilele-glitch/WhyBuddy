@@ -170,7 +170,7 @@ describe("github-pages-blueprint-demo", () => {
       },
     };
     storageLike.setItem(
-      "cube-pets-office:autopilot:pages-blueprint-demo",
+      "whybuddy:autopilot:pages-blueprint-demo",
       JSON.stringify({
         sequence: 42,
         job: {

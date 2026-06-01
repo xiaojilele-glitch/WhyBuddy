@@ -42,6 +42,7 @@ vi.mock("socket.io-client", () => ({
 import {
   useBlueprintRealtimeStore,
   __setSocket,
+  mapEventTypeToPhase,
   type BlueprintRelayedEvent,
 } from "../blueprint-realtime-store";
 
@@ -90,6 +91,7 @@ describe("BlueprintRealtimeStore", () => {
     expect(state.rolePhases).toEqual({});
     expect(state.agentProgress).toEqual([]);
     expect(state.capabilityStatuses).toEqual({});
+    expect(state.capabilityOwners).toEqual({});
     expect(state.logEntries).toEqual([]);
     expect(state.fleetRoleCards).toEqual([]);
     expect(state.connectionState).toBe("disconnected");
@@ -123,6 +125,30 @@ describe("BlueprintRealtimeStore", () => {
 
     const state = useBlueprintRealtimeStore.getState();
     expect(state.capabilityStatuses["cap-42"]).toBe("completed");
+  });
+
+  it("should retain the real capability owner from capability event payload", () => {
+    const { dispatchEvent } = useBlueprintRealtimeStore.getState();
+
+    dispatchEvent(
+      makeEvent({
+        type: "capability.completed",
+        timestamp: 12345,
+        payload: {
+          capabilityId: "aigc-spec-node",
+          roleId: "role-runtime-executor",
+          invocationId: "inv-123",
+        },
+      })
+    );
+
+    const state = useBlueprintRealtimeStore.getState();
+    expect(state.capabilityStatuses["aigc-spec-node"]).toBe("completed");
+    expect(state.capabilityOwners["aigc-spec-node"]).toEqual({
+      roleId: "role-runtime-executor",
+      invocationId: "inv-123",
+      updatedAt: 12345,
+    });
   });
 
   it("should surface role container provisioning from payload.key.roleId", () => {
@@ -292,7 +318,7 @@ describe("BlueprintRealtimeStore", () => {
   });
 
   // 8. unsubscribe 重置状态（但不清空 logEntries，保留历史）
-  it("should reset state on unsubscribe but preserve logEntries", () => {
+  it("should reset state on unsubscribe and clear active logEntries", () => {
     (mockSocket as unknown as { connected: boolean }).connected = true;
 
     const store = useBlueprintRealtimeStore.getState();
@@ -310,7 +336,11 @@ describe("BlueprintRealtimeStore", () => {
       makeEvent({
         type: "capability.invoked",
         jobId: "job-xyz",
-        payload: { capabilityId: "c1" },
+        payload: {
+          capabilityId: "c1",
+          roleId: "r1",
+          invocationId: "inv-reset",
+        },
       })
     );
 
@@ -325,9 +355,9 @@ describe("BlueprintRealtimeStore", () => {
     expect(state.subscribedJobId).toBeNull();
     expect(state.rolePhases).toEqual({});
     expect(state.capabilityStatuses).toEqual({});
+    expect(state.capabilityOwners).toEqual({});
     expect(state.agentProgress).toEqual([]);
-    // logEntries 保留历史
-    expect(state.logEntries.length).toBeGreaterThan(0);
+    expect(state.logEntries).toEqual([]);
   });
 
   // 9. 额外：connectionState 跟踪
@@ -382,3 +412,146 @@ describe("BlueprintRealtimeStore", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// whybuddy-3d-real-role-driven-scene-2026-05-29 Requirement 10 (Fix 1):
+// role.agent.* reasoning events drive rolePhases.
+//
+// mapEventTypeToPhase 现在为 7 个 role.agent.* 事件返回阶段，使其经由既有
+// `if (type.startsWith("role."))` 分支流入 rolePhases[roleId]，同时不破坏既有
+// role.agent.* → agentReasoning slice 行为（两条分支并行）。
+// ---------------------------------------------------------------------------
+
+describe("mapEventTypeToPhase — role.agent.* reasoning events (Fix 1)", () => {
+  // Unit-level: direct call mappings for all 7 role.agent.* types (Req 10.1-10.7).
+  it("maps role.agent.iteration_started → activated", () => {
+    expect(mapEventTypeToPhase("role.agent.iteration_started")).toBe(
+      "activated"
+    );
+  });
+
+  it("maps role.agent.thinking → thinking", () => {
+    expect(mapEventTypeToPhase("role.agent.thinking")).toBe("thinking");
+  });
+
+  it("maps role.agent.acting → acting", () => {
+    expect(mapEventTypeToPhase("role.agent.acting")).toBe("acting");
+  });
+
+  it("maps role.agent.observing → observing", () => {
+    expect(mapEventTypeToPhase("role.agent.observing")).toBe("observing");
+  });
+
+  it("maps role.agent.iteration_completed → observing (NOT completed)", () => {
+    // 故意映射到 observing 而非 completed：避免多迭代角色在两次迭代之间
+    // 闪烁到 faded 的 completed tier 再弹回（Req 10.5）。
+    expect(mapEventTypeToPhase("role.agent.iteration_completed")).toBe(
+      "observing"
+    );
+    expect(mapEventTypeToPhase("role.agent.iteration_completed")).not.toBe(
+      "completed"
+    );
+  });
+
+  it("maps role.agent.completed → completed", () => {
+    expect(mapEventTypeToPhase("role.agent.completed")).toBe("completed");
+  });
+
+  it("maps role.agent.error → failed", () => {
+    expect(mapEventTypeToPhase("role.agent.error")).toBe("failed");
+  });
+});
+
+describe(
+  "BlueprintRealtimeStore — role.agent.* events flow into rolePhases (Fix 1)",
+  () => {
+    beforeEach(() => {
+      __setSocket(mockSocket);
+      resetStore();
+    });
+
+    afterEach(() => {
+      resetStore();
+      __setSocket(null);
+    });
+
+    // Integration-level: dispatching a role.agent.thinking event (mirroring the
+    // server emitter shape with both a top-level roleId and payload.roleId)
+    // writes the mapped phase into rolePhases[roleId] (Req 10.8).
+    it("dispatch role.agent.thinking → rolePhases[roleId] === 'thinking'", () => {
+      const { dispatchEvent } = useBlueprintRealtimeStore.getState();
+
+      dispatchEvent({
+        type: "role.agent.thinking",
+        jobId: "job-1",
+        timestamp: Date.now(),
+        // 镜像服务端 emitter 形态：顶层 roleId + payload.roleId 同时存在。
+        roleId: "intake-coordinator",
+        payload: { roleId: "intake-coordinator" },
+      } as unknown as BlueprintRelayedEvent);
+
+      expect(
+        useBlueprintRealtimeStore.getState().rolePhases["intake-coordinator"]
+      ).toBe("thinking");
+    });
+
+    it("dispatch role.agent.completed → rolePhases[roleId] === 'completed'", () => {
+      const { dispatchEvent } = useBlueprintRealtimeStore.getState();
+
+      dispatchEvent({
+        type: "role.agent.completed",
+        jobId: "job-1",
+        timestamp: Date.now(),
+        roleId: "intake-coordinator",
+        payload: { roleId: "intake-coordinator" },
+      } as unknown as BlueprintRelayedEvent);
+
+      expect(
+        useBlueprintRealtimeStore.getState().rolePhases["intake-coordinator"]
+      ).toBe("completed");
+    });
+
+    it("dispatch role.agent.error → rolePhases[roleId] === 'failed'", () => {
+      const { dispatchEvent } = useBlueprintRealtimeStore.getState();
+
+      dispatchEvent({
+        type: "role.agent.error",
+        jobId: "job-1",
+        timestamp: Date.now(),
+        roleId: "intake-coordinator",
+        payload: { roleId: "intake-coordinator" },
+      } as unknown as BlueprintRelayedEvent);
+
+      expect(
+        useBlueprintRealtimeStore.getState().rolePhases["intake-coordinator"]
+      ).toBe("failed");
+    });
+
+    // Parallel slice non-regression: dispatching role.agent.thinking still
+    // populates the agentReasoning slice — Fix 1 did not break the reasoning
+    // path (Req 10.9). Both the rolePhases branch and the agentReasoning branch
+    // run in parallel.
+    it("dispatch role.agent.thinking still populates agentReasoning (parallel path intact)", () => {
+      const { dispatchEvent } = useBlueprintRealtimeStore.getState();
+
+      dispatchEvent({
+        type: "role.agent.thinking",
+        jobId: "job-1",
+        timestamp: Date.now(),
+        roleId: "intake-coordinator",
+        payload: {
+          roleId: "intake-coordinator",
+          iteration: 1,
+          thought: "分析意图",
+        },
+      } as unknown as BlueprintRelayedEvent);
+
+      const state = useBlueprintRealtimeStore.getState();
+      // rolePhases branch wrote the phase…
+      expect(state.rolePhases["intake-coordinator"]).toBe("thinking");
+      // …and the agentReasoning slice was still populated in parallel.
+      expect(state.agentReasoning.entries.length).toBeGreaterThan(0);
+      expect(state.agentReasoning.entries.at(-1)?.phase).toBe("thinking");
+    });
+  }
+);

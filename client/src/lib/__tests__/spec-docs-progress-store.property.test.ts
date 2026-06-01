@@ -460,7 +460,12 @@ describe("Property 4: Invalid transitions and unknown nodes are rejected", () =>
     );
   });
 
-  it("failed nodes reject further transitions", () => {
+  it("failed nodes allow retry (failed → processing) but reject direct completed/failed", () => {
+    // whybuddy-spec-tree-progress-merge-2026-05-29 §3 (Q1=A2): the failed state
+    // is no longer terminal — the backend may re-queue a failed node, so
+    // `failed → processing` is now a VALID transition that also stamps
+    // `wasRetried: true`. Direct `failed → completed` / `failed → failed`
+    // (without first re-entering processing) remain invalid.
     fc.assert(
       fc.property(arbNodeIds.filter((ids) => ids.length >= 1), (nodeIds) => {
         useBlueprintRealtimeStore.getState().reset();
@@ -474,20 +479,28 @@ describe("Property 4: Invalid transitions and unknown nodes are rejected", () =>
         dispatchNodeFailed(nodeId, "some error");
         expect(getProgress().nodes[nodeId].status).toBe("failed");
 
-        // Try invalid: failed → processing
-        const beforeInvalid1 = JSON.stringify(getProgress());
-        dispatchNodeStarted(nodeId, 1);
-        expect(JSON.stringify(getProgress())).toBe(beforeInvalid1);
-
-        // Try invalid: failed → completed
-        const beforeInvalid2 = JSON.stringify(getProgress());
+        // Invalid: failed → completed (must re-enter processing first)
+        const beforeInvalidCompleted = JSON.stringify(getProgress());
         dispatchNodeCompleted(nodeId, 1);
-        expect(JSON.stringify(getProgress())).toBe(beforeInvalid2);
+        expect(JSON.stringify(getProgress())).toBe(beforeInvalidCompleted);
 
-        // Try invalid: failed → failed
-        const beforeInvalid3 = JSON.stringify(getProgress());
+        // Invalid: failed → failed
+        const beforeInvalidFailed = JSON.stringify(getProgress());
         dispatchNodeFailed(nodeId, "another error");
-        expect(JSON.stringify(getProgress())).toBe(beforeInvalid3);
+        expect(JSON.stringify(getProgress())).toBe(beforeInvalidFailed);
+
+        // VALID (A2 retry): failed → processing, stamps wasRetried = true
+        dispatchNodeStarted(nodeId, 1);
+        expect(getProgress().nodes[nodeId].status).toBe("processing");
+        expect(getProgress().nodes[nodeId].wasRetried).toBe(true);
+
+        // The original errorSummary is preserved through the retry.
+        expect(getProgress().nodes[nodeId].errorSummary).toBe("some error");
+
+        // After a successful retry, wasRetried stays true permanently (white-box trail).
+        dispatchNodeCompleted(nodeId, 1);
+        expect(getProgress().nodes[nodeId].status).toBe("completed");
+        expect(getProgress().nodes[nodeId].wasRetried).toBe(true);
       }),
       { numRuns: 100 }
     );

@@ -5,7 +5,8 @@
  * spec_tree → spec_docs → effect_preview → prompt_packaging →
  * runtime_capability → engineering_handoff → engineering_landing
  *
- * 每一步完成后自动触发下一步,用户无需手动点击。
+ * spec_docs 与 prompt_packaging 的下游阶段会自动触发；effect_preview →
+ * prompt_packaging 显式保留为用户手动推进，避免用户刚进入效果预览就被跳走。
  * 失败时停止推进,暴露 error + retry 给 UI。
  */
 
@@ -84,7 +85,7 @@ export function selectAutoAdvanceSubStage(
  * 阶段推进规则:
  * - spec_tree (reviewing) → 自动生成 spec_docs
  * - spec_docs (completed) → 自动生成 effect_preview
- * - effect_preview (completed) → 自动生成 prompt_packages
+ * - effect_preview (completed) → 仅由 forceAdvance 手动生成 prompt_packages
  * - prompt_packaging (completed) → 自动生成 engineering_landing
  *
  * 注:runtime_capability 和 engineering_handoff 目前由后端 SSE 事件驱动,
@@ -123,27 +124,84 @@ export function useAutoAdvance({
   // 防止重复触发
   const advancedStagesRef = useRef<Set<string>>(new Set());
   const mountedRef = useRef(true);
-  // 首次加载延迟:页面刚进入编组时不立即推进,给用户 3 秒看当前状态
+  // 首次加载延迟：页面刚进入编组时不立即推进，给用户一个观察窗口。
+  // whybuddy-rebrand-and-stage3-unblock-2026-05-28 §A.3：
+  //   - 默认 800ms（原 3000ms）。
+  //   - 当挂载时 job.stage 已经超过 clarification（说明这次挂载不是第一次入场，
+  //     而是 spec 阶段后的 re-attach），则跳过延迟，避免阻塞 spec_docs →
+  //     effect_preview 的正常自动推进。
   const initialDelayRef = useRef(true);
+  const lastJobStageRef = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
+    const initialStage = job?.stage ?? null;
+    const skipDelay =
+      initialStage !== null &&
+      initialStage !== "input" &&
+      initialStage !== "clarification";
+    if (skipDelay) {
+      initialDelayRef.current = false;
+    }
     const timer = setTimeout(() => {
       initialDelayRef.current = false;
-    }, 3000);
+    }, 800);
     return () => {
       mountedRef.current = false;
       clearTimeout(timer);
     };
+    // 仅依赖 mount，job.stage 在后续 effect 中通过 lastJobStageRef 处理。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 当 jobId 变化时重置
   useEffect(() => {
     advancedStagesRef.current = new Set();
+    lastJobStageRef.current = null;
     setError(null);
     setAdvancing(false);
     setAdvancingTo(null);
   }, [jobId]);
+
+  // whybuddy-rebrand-and-stage3-unblock-2026-05-28 §A.2：
+  // 当 job.stage 回退（例如用户从 effect_preview 回到 spec_docs 重生成），
+  // advancedStagesRef 中的旧条目会让自动推进永久哑火。这里在 stage 回退时
+  // 把比新 stage 更靠后的所有条目清空，让用户的二次推进重新生效。
+  useEffect(() => {
+    const currentStage = job?.stage ?? null;
+    const previousStage = lastJobStageRef.current;
+    lastJobStageRef.current = currentStage;
+    if (!currentStage || !previousStage || currentStage === previousStage) {
+      return;
+    }
+    const order = [
+      "input",
+      "clarification",
+      "route_generation",
+      "spec_tree",
+      "spec_docs",
+      "effect_preview",
+      "preview",
+      "prompt_packaging",
+      "engineering_landing",
+      "runtime_capability",
+      "engineering_handoff",
+    ];
+    const currentIdx = order.indexOf(currentStage);
+    const previousIdx = order.indexOf(previousStage);
+    if (currentIdx < 0 || previousIdx < 0 || currentIdx >= previousIdx) {
+      return;
+    }
+    // Stage 回退：清掉 currentStage 之后的所有 advanced 标记。
+    const next = new Set<string>();
+    advancedStagesRef.current.forEach(stageKey => {
+      const idx = order.indexOf(stageKey);
+      if (idx >= 0 && idx <= currentIdx) {
+        next.add(stageKey);
+      }
+    });
+    advancedStagesRef.current = next;
+  }, [job?.stage]);
 
   const advance = useCallback(
     async (targetStage: string, action: () => Promise<{ ok: boolean; error?: ApiRequestError }>) => {
@@ -198,7 +256,7 @@ export function useAutoAdvance({
 
     /**
      * 契约（autopilot-streaming-experience 需求 5）：spec_tree 阶段只能由用户
-     * 点击 `timeline-confirm-advance` 按钮经 forceAdvance 推进；auto-advance
+     * 点击 StageViewport CTA 经 forceAdvance 推进；auto-advance
      * 严禁调用 generateBlueprintSpecDocuments，无论 status 是 running /
      * reviewing / completed。若未来重新启用此处自动推进，必须同步更新
      * `hooks/__tests__/use-auto-advance.spec-tree.test.ts` 的回归断言。
@@ -230,21 +288,9 @@ export function useAutoAdvance({
       return;
     }
 
-    // effect_preview + completed → 自动生成 prompt_packages
-    if (
-      (stage === "effect_preview" || stage === "preview") &&
-      status === "completed" &&
-      !advancedStagesRef.current.has("prompt_packaging")
-    ) {
-      void advance("prompt_packaging", async () => {
-        const result = await actions.generatePromptPackages(jobId, {
-          includeDrafts: true,
-          includePreviewDrafts: true,
-        });
-        return { ok: result.ok, error: result.ok ? undefined : result.error };
-      });
-      return;
-    }
+    // effect_preview + completed 不再自动生成 prompt_packages。
+    // autopilot-step-06-effect-preview-fix-2026-05-31：必须由用户点击
+    // StageViewport CTA 触发 forceAdvance()，让用户有时间审阅效果预演。
 
     // prompt_packaging + completed → 自动生成 engineering_landing
     if (
@@ -285,8 +331,13 @@ export function useAutoAdvance({
     // 直接调用 API,不检查 advancedStagesRef(用户主动点击应该总是执行)
     if (stage === "spec_tree") {
       void advance("spec_docs", async () => {
+        // whybuddy-rebrand-and-stage3-unblock-2026-05-28 §A.1：
+        // 用户明确要求 "你不要生成全部，这特别费时间，你只生成一份就好了"。
+        // 默认只生成 requirements 文档以缩短关键路径。后端仍可一次受理 3 个
+        // 文档类型；这里只是 client-side 的默认值，UI 入口（详情页或 worker）
+        // 仍可显式 override 为 ["requirements","design","tasks"]。
         const result = await actions.generateSpecDocuments(jobId, {
-          types: ["requirements", "design", "tasks"],
+          types: ["requirements"],
           locale,
         });
         return { ok: result.ok, error: result.ok ? undefined : result.error };

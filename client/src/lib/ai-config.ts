@@ -22,7 +22,7 @@ interface PersistedAISettings {
   browserConfig?: Partial<AIConfig>;
 }
 
-const STORAGE_KEY = "cube-pets-office.ai-settings.v1";
+const STORAGE_KEY = "whybuddy.ai-settings.v1";
 
 function getSafeLocalStorage(): Storage | null {
   if (typeof window === "undefined") return null;

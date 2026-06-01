@@ -9,7 +9,7 @@
 
 ## 概述
 
-本功能为 Cube Pets Office 平台补齐 Docker 执行器产物（artifacts）的完整展示与下载链路。当前执行器回调已将产物元信息写入 MissionRecord.artifacts，但前端仅在 ExecutorStatusPanel 中做了简单列表展示，缺少下载、预览和实时更新能力。
+本功能为 WhyBuddy 平台补齐 Docker 执行器产物（artifacts）的完整展示与下载链路。当前执行器回调已将产物元信息写入 MissionRecord.artifacts，但前端仅在 ExecutorStatusPanel 中做了简单列表展示，缺少下载、预览和实时更新能力。
 
 本设计新增三个服务端 REST API 端点（列表查询、文件下载、内容预览），扩展前端 WorkflowPanel 和 TaskDetailView 中的产物展示区域，并利用现有 Socket.IO `mission_event` 通道实现产物列表的实时推送。
 

@@ -45,14 +45,17 @@ function SidebarHeader({
     >
       <span
         className={cn(
-          "relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-[15px] border text-xs font-black tracking-[0.04em] shadow-sm",
+          "relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-[15px] border bg-white shadow-sm",
           glass
-            ? "border-white/80 bg-white/58 text-sky-700 shadow-[0_14px_34px_rgba(14,165,233,0.14),inset_0_1px_0_rgba(255,255,255,0.9)]"
-            : "border-sky-100 bg-white/82 text-sky-700 shadow-[0_14px_34px_rgba(14,165,233,0.14),inset_0_1px_0_rgba(255,255,255,0.96)]"
+            ? "border-white/80 shadow-[0_14px_34px_rgba(14,165,233,0.14),inset_0_1px_0_rgba(255,255,255,0.9)]"
+            : "border-sky-100 shadow-[0_14px_34px_rgba(14,165,233,0.14),inset_0_1px_0_rgba(255,255,255,0.96)]"
         )}
       >
-        <span className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(125,211,252,0.42),transparent_42%),linear-gradient(135deg,rgba(255,255,255,0.96),rgba(224,242,254,0.46))]" />
-        <span className="relative">CP</span>
+        <img
+          src="/brand/transLogo.png"
+          alt="WhyBuddy"
+          className="relative size-9 object-contain"
+        />
       </span>
       {!collapsed ? (
         <span className="min-w-0">
@@ -62,7 +65,7 @@ function SidebarHeader({
               glass ? "text-slate-700" : "text-slate-800"
             )}
           >
-            Cube Pets Office
+            WhyBuddy
           </span>
           <span className="mt-1.5 block truncate text-[11px] font-semibold leading-none text-slate-500">
             {subtitle}

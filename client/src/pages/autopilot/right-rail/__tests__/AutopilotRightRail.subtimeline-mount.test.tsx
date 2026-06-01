@@ -82,8 +82,14 @@ vi.mock("@/lib/blueprint-realtime-store", () => {
   // AutopilotRightRail 不直接读写其它字段，且 sub-timeline 仅消费
   // `agentReasoning.entries`。其它 API（subscribe / unsubscribe / dispatchEvent
   // / __setSocket）在本测试中不被调用。
-  const useBlueprintRealtimeStore = ((selector?: (state: { agentReasoning: AgentReasoningSliceState }) => unknown) => {
-    const snapshot = { agentReasoning: mockedAgentReasoning };
+  const useBlueprintRealtimeStore = ((selector?: (state: { agentReasoning: AgentReasoningSliceState; specDocsProgress: { nodes: Record<string, never> } }) => unknown) => {
+    const snapshot = {
+      agentReasoning: mockedAgentReasoning,
+      // whybuddy-spec-tree-progress-merge-2026-05-29 §6：RightRail 现在派生
+      // specDocsProgress.nodes → nodeStatusById 透传给 SPEC 树。真实 store 始终
+      // 初始化该切片，这里补一个空 nodes record 让 SSR selector 不命中 undefined。
+      specDocsProgress: { nodes: {} as Record<string, never> },
+    };
     return selector ? selector(snapshot) : snapshot;
   }) as unknown as typeof import("@/lib/blueprint-realtime-store").useBlueprintRealtimeStore;
 
@@ -216,7 +222,7 @@ describe("AgentReasoningSubTimeline render contract via AutopilotRightRail SSR",
     expect(markup).not.toContain('data-testid="mirofish-card-stream"');
   });
 
-  it("renders the subtimeline container when entries contain a thinking phase and status is streaming", () => {
+  it("renders the canonical agent crew panel instead of the legacy subtimeline for agent_crew_fabric", () => {
     setMockedAgentReasoning({
       jobId: "job-test",
       entries: [makeThinkingEntry()],
@@ -232,12 +238,9 @@ describe("AgentReasoningSubTimeline render contract via AutopilotRightRail SSR",
       />
     );
 
-    // autopilot-mirofish-stream 重构后：子时间线容器 testid 改为 mirofish-card-stream，
-    // 单纵向布局取代了原双轨 grid-cols-[1fr_2px_1fr]。
-    expect(markup).toContain('data-testid="mirofish-card-stream"');
-
-    // entry 的 thought 文本会被原样渲染到 reasoning 卡片中。
-    expect(markup).toContain("正在分析仓库目录结构");
+    expect(markup).toContain('data-testid="blueprint-agent-crew-surface"');
+    expect(markup).not.toContain('data-testid="mirofish-card-stream"');
+    expect(markup).not.toContain("正在分析仓库目录结构");
   });
 
   it("does not mount the subtimeline when currentStage !== 'fabric'", () => {

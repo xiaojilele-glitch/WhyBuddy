@@ -1,13 +1,27 @@
 /**
  * autopilot-mirofish-card-diversity / Task 2.1 — ReasoningCard
  *
- * 独立的推理卡片组件，展示 Agent 思考/观察/行动过程。
+ * 独立的推理卡片组件，展示 Agent 思考/执行/观察过程。
  *
- * 视觉特征：
- * - 左侧 2px 渐变竖条（thinking=蓝紫, observing=青绿, acting=橙黄）
- * - font-mono text-[11px] 紧凑文本
- * - 流式光标闪烁（CSS @keyframes mirofish-blink）
- * - 进入动画：animate-mirofish-fade-in
+ * 视觉特征（whybuddy-rebrand-and-stage3-unblock-2026-05-28 §D refinement
+ * 2026-05-29，对齐 mirofish-demo/console 真实视觉语言）：
+ * - 卡片：白色背景 + 1px solid #E5E5E5 边框 + 0 radius + 无阴影
+ * - 左侧 2px 实色条：thinking → #FF4500，observing → #666666，acting → #000000
+ * - 标签行：JetBrains Mono 0.7rem (~11px)，#999 (gray-text)，右侧补 HH:MM:SS 时间
+ * - 推理文本：JetBrains Mono，#000，line-height 1.55
+ * - 进入动画：animate-mirofish-fade-in（保留）
+ *
+ * 信息密度增强（whybuddy-3d-real-role-driven-scene-2026-05-29 reasoning-detail
+ * 2026-05-31）：
+ * - 旧实现对每条 entry 只 fallback-pick-one 字段（thought / action / observation
+ *   / reason / error 取其一），导致一条同时带 think→act→observe 的 entry 在卡片上
+ *   只显示一行，推理流看着很稀薄。
+ * - 现在改为「每个存在的字段各自成行」：thought（主黑字）、`→ actionToolId`（灰）、
+ *   `✓/✗ observationSummary`（成功黑 / 失败红）、reason（浅灰次要）、error（红）同屏
+ *   可见，让单条 entry 的完整 ReAct 细节直接展开，而不是被压成一行。
+ * - 关键约束：mark 与摘要文本必须同处一个文本节点（不要用独立 element 包裹 `✓` /
+ *   `→`），否则 SSR 字符串里会被 `</span>` 截断，破坏既有 `toContain("✓ ...")` /
+ *   `toContain("→ ...")` 断言。
  *
  * 流式增强（autopilot-streaming-lifecycle-weave / Task 4.1）：
  * - 可选 `streamingTokens` prop 接收来自 useStreamingWeave 的实时 token
@@ -30,12 +44,17 @@ import { blueprintCopy } from "@/lib/blueprint-copy";
 import type { AppLocale } from "@/lib/locale";
 
 import type { MiroFishReasoningEntry } from "../mirofish-stream-types";
+import { formatTimestampHHMMSS } from "./card-shell";
 
-/** 左侧渐变竖条色映射：phase → Tailwind gradient class */
-const REASONING_GRADIENT: Record<string, string> = {
-  thinking: "from-blue-500 to-purple-500",
-  observing: "from-cyan-400 to-emerald-400",
-  acting: "from-orange-400 to-yellow-400",
+/**
+ * 左侧 2px 实色条配色 — 替换原渐变方案。
+ * 对齐 mirofish-demo/console：单一 accent (#FF4500) + 中性灰 + 黑色，
+ * 不做多色渐变，保留 phase 区分度但让整体更克制。
+ */
+const REASONING_BAR: Record<string, string> = {
+  thinking: "bg-[#FF4500]",
+  observing: "bg-[#666666]",
+  acting: "bg-black",
 };
 
 export interface ReasoningCardProps {
@@ -59,8 +78,9 @@ export interface ReasoningCardProps {
 /**
  * ReasoningCard — 推理过程卡片
  *
- * 通过左侧渐变竖条区分 thinking / observing / acting 三种推理阶段，
- * 使用等宽字体保持信息密度，流式状态下展示闪烁光标。
+ * 通过左侧实色竖条区分 thinking / observing / acting 三种推理阶段，
+ * 使用等宽字体保持信息密度。一条 entry 上同时存在的 thought / action /
+ * observation / reason / error 字段各自成行展开，流式状态下展示闪烁光标。
  *
  * 流式增强：当 `streamingTokens` 提供时，使用 useRef 将 token 追加到
  * DOM 节点，避免每次 token 到达触发整个卡片列表 re-render。
@@ -71,7 +91,7 @@ export const ReasoningCard: FC<ReasoningCardProps> = ({
   streaming = false,
   streamingTokens,
 }) => {
-  const gradient = REASONING_GRADIENT[entry.phase] ?? REASONING_GRADIENT.thinking;
+  const bar = REASONING_BAR[entry.phase] ?? REASONING_BAR.thinking;
 
   // 流式 token 追加 ref — 避免每次 token 触发整个列表 re-render
   const streamingRef = useRef<HTMLSpanElement>(null);
@@ -83,20 +103,23 @@ export const ReasoningCard: FC<ReasoningCardProps> = ({
     }
   }, [streamingTokens]);
 
-  // 组装显示文本
-  let text: string | undefined;
-  if (entry.thought) text = blueprintCopy(entry.thought, locale);
-  else if (entry.actionToolId) text = `→ ${entry.actionToolId}`;
-  else if (entry.observationSummary) {
-    const mark = entry.observationSuccess === false ? "✗" : "✓";
-    // 服务端 emitter（spec-docs-llm-generation.ts）已经在 observationSummary
-    // 头部塞了 "✓ " 或 "⚠ " 前缀，这里要先剥掉，避免与本组件追加的 mark
-    // 叠加成 "✓ ✓ ..." / "⚠ ✗ ..."。
-    const summary = blueprintCopy(entry.observationSummary, locale);
-    const stripped = summary.replace(/^[✓✗⚠]\s+/u, "");
-    text = `${mark} ${stripped}`;
-  } else if (entry.reason) text = blueprintCopy(entry.reason, locale);
-  else if (entry.error) text = blueprintCopy(entry.error, locale);
+  // 观察行：剥掉服务端 emitter（spec-docs-llm-generation.ts）已经塞在
+  // observationSummary 头部的 "✓ " / "⚠ " 前缀，避免与本组件追加的 mark
+  // 叠加成 "✓ ✓ ..." / "⚠ ✗ ..."。
+  const observationMark = entry.observationSuccess === false ? "✗" : "✓";
+  const observationText = entry.observationSummary
+    ? blueprintCopy(entry.observationSummary, locale).replace(/^[✓✗⚠]\s+/u, "")
+    : "";
+
+  const showCursor = streaming || Boolean(streamingTokens);
+  const hasContent =
+    Boolean(
+      entry.thought ||
+        entry.actionToolId ||
+        entry.observationSummary ||
+        entry.reason ||
+        entry.error
+    ) || streamingTokens !== undefined;
 
   return (
     <div
@@ -104,33 +127,78 @@ export const ReasoningCard: FC<ReasoningCardProps> = ({
       data-tone={entry.tone}
       data-phase={entry.phase}
       data-iteration={entry.iterationLabel}
-      className="animate-mirofish-fade-in relative pl-3 py-2 bg-slate-50 rounded-md border border-slate-200"
+      className="animate-mirofish-fade-in relative pl-3 pr-3 py-2 bg-white border border-[#E5E5E5]"
+      style={{ borderRadius: "0px" }}
     >
-      {/* 左侧 2px 渐变竖条 */}
+      {/* 左侧 2px 实色条 — mirofish 单色 accent */}
       <div
-        className={`absolute left-0 top-0 bottom-0 w-[2px] rounded-full bg-gradient-to-b ${gradient}`}
+        className={`absolute left-0 top-0 bottom-0 w-[2px] ${bar}`}
         aria-hidden="true"
       />
 
-      {/* 迭代标签 */}
-      <div className="text-[9px] font-mono text-slate-400 mb-0.5">
-        {entry.phase} · {entry.iterationLabel}
+      {/* 标签行 — 左 phase · iteration，右 HH:MM:SS；
+          注意 phase · iteration 必须同处一个 span，保持 "thinking · #1" 连续。 */}
+      <div className="flex items-baseline justify-between gap-2 mb-1">
+        <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#999]">
+          {entry.phase} · {entry.iterationLabel}
+        </span>
+        <span className="font-mono text-[10px] text-[#BBB] tabular-nums">
+          {formatTimestampHHMMSS(entry.timestamp)}
+        </span>
       </div>
 
-      {/* 推理文本 */}
-      {(text || streamingTokens) && (
-        <div className="font-mono text-[11px] text-slate-700 leading-relaxed break-all">
-          {text}
-          {/* 流式 token 追加区域 — 通过 ref 直接操作 DOM 避免 re-render */}
-          {streamingTokens !== undefined && (
-            <span ref={streamingRef} aria-live="polite" />
+      {/* 多字段详情 — 每个存在的字段各自成行，不再 fallback-pick-one。 */}
+      {hasContent && (
+        <div className="flex flex-col gap-1">
+          {entry.thought && (
+            <div className="font-mono text-[12.5px] text-black leading-[1.55] break-all">
+              {blueprintCopy(entry.thought, locale)}
+            </div>
           )}
-          {/* 流式光标 */}
-          {(streaming || streamingTokens) && (
-            <span
-              className="animate-mirofish-blink inline-block w-[2px] h-3 bg-slate-500 ml-0.5 align-middle"
-              aria-hidden="true"
-            />
+
+          {entry.actionToolId && (
+            <div className="font-mono text-[12px] text-[#555] leading-[1.5] break-all">
+              → {entry.actionToolId}
+            </div>
+          )}
+
+          {entry.observationSummary && (
+            <div
+              className={`font-mono text-[12px] leading-[1.5] break-all ${
+                entry.observationSuccess === false
+                  ? "text-[#C0392B]"
+                  : "text-black"
+              }`}
+            >
+              {observationMark} {observationText}
+            </div>
+          )}
+
+          {entry.reason && (
+            <div className="font-mono text-[11px] text-[#999] leading-[1.5] break-all">
+              {blueprintCopy(entry.reason, locale)}
+            </div>
+          )}
+
+          {entry.error && (
+            <div className="font-mono text-[12px] text-[#C0392B] leading-[1.5] break-all">
+              {blueprintCopy(entry.error, locale)}
+            </div>
+          )}
+
+          {/* 流式 token 追加区域 + 闪烁光标 */}
+          {(streamingTokens !== undefined || showCursor) && (
+            <div className="font-mono text-[12.5px] text-black leading-[1.55] break-all">
+              {streamingTokens !== undefined && (
+                <span ref={streamingRef} aria-live="polite" />
+              )}
+              {showCursor && (
+                <span
+                  className="animate-mirofish-blink inline-block w-[2px] h-3 bg-[#FF4500] ml-0.5 align-middle"
+                  aria-hidden="true"
+                />
+              )}
+            </div>
           )}
         </div>
       )}

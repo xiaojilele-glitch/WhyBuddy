@@ -34,6 +34,12 @@ import type { BlueprintSpecDocument } from "@shared/blueprint/contracts";
  * fabric stage 调用本面板时留空，`SpecDocumentWorkbenchPanel` 内部对
  * `undefined` 有现成的降级路径（需求 2.9 / 设计文档「extra props 与 callback
  * 的处理规则」）。
+ *
+ * whybuddy-stage3-unblock-2026-05-29 增补：补充
+ * `onEffectPreviewGenerated` 私有字段，用于把"进入效果预演"按钮的
+ * 后端响应回写到上层 `latestJob` / `effectPreviews`。当父组件未提供
+ * 时，`SpecDocumentWorkbenchPanel` 内部的 fallback 仍然会把预演快照
+ * 显示出来（按钮翻成 ✓ 已进入效果预演），不会阻塞用户。
  */
 export type SpecDocumentsPanelProps = Pick<
   AutopilotRightRailProps,
@@ -41,6 +47,9 @@ export type SpecDocumentsPanelProps = Pick<
 > & {
   initialDocuments?: BlueprintSpecDocument[];
   onDocumentsChange?: (documents: BlueprintSpecDocument[]) => void;
+  onEffectPreviewGenerated?: (
+    response: import("@/lib/blueprint-api").BlueprintEffectPreviewsSnapshotResponse
+  ) => void;
 };
 
 /**
@@ -57,6 +66,7 @@ export const SpecDocumentsPanel: FC<SpecDocumentsPanelProps> = ({
   locale: _locale,
   initialDocuments,
   onDocumentsChange,
+  onEffectPreviewGenerated,
 }) => {
   if (!specTree) {
     // 空态与 BlueprintProgressPanel 在 specTree === null 分支一致
@@ -70,6 +80,7 @@ export const SpecDocumentsPanel: FC<SpecDocumentsPanelProps> = ({
       jobId={jobId || undefined}
       initialDocuments={initialDocuments}
       onDocumentsChange={onDocumentsChange}
+      onEffectPreviewGenerated={onEffectPreviewGenerated}
     />
   );
 };

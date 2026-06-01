@@ -1,6 +1,6 @@
-# Contributing to Cube Pets Office
+# Contributing to WhyBuddy
 
-Thanks for helping improve Cube Pets Office. This project is moving toward a Project-first Task Autopilot platform, so contributions are most useful when they keep the product story, runtime behavior, and evidence trail aligned.
+Thanks for helping improve WhyBuddy. This project is moving toward a Project-first Task Autopilot platform, so contributions are most useful when they keep the product story, runtime behavior, and evidence trail aligned.
 
 ## Good First Contributions
 

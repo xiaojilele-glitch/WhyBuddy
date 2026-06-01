@@ -1314,12 +1314,16 @@ export default function Home({
   const utilityChipClass = resizeActive
     ? "border-slate-200/90 bg-[hsl(var(--background))]/96 shadow-[0_8px_20px_rgba(15,23,42,0.06)]"
     : "border-white/68 bg-[rgba(248,250,252,0.82)] shadow-[0_10px_24px_rgba(15,23,42,0.08)] backdrop-blur";
+  // whybuddy-rebrand-and-stage3-unblock-2026-05-28 §D.2: project hub surfaces
+  // adopt the MiroFish skin — flat white bg, 1px solid #E5E5E5 border, no
+  // gradient, no shadow. Existing data-testid hooks are preserved so layout
+  // and snapshot tests still match.
   const projectHubSurfaceClass =
-    "border-white/72 bg-white/62 shadow-[0_18px_48px_rgba(15,23,42,0.10)] backdrop-blur-2xl";
+    "border border-[#E5E5E5] bg-white rounded-[2px]";
   const projectHubControlClass =
-    "border-white/76 bg-white/68 shadow-[0_12px_30px_rgba(15,23,42,0.09)] backdrop-blur-xl";
+    "border border-[#E5E5E5] bg-white rounded-[2px]";
   const projectHubInputClass =
-    "border-white/78 bg-white/70 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl";
+    "border border-[#E5E5E5] bg-white rounded-[2px]";
   const desktopProjectHubDashboard =
     !isMobile && isProjectHub ? (
       <div
@@ -1402,7 +1406,7 @@ export default function Home({
                 onClick={() => handleCreateProjectFromTemplate()}
                 aria-label={isZh ? "新建项目" : "New Project"}
                 data-testid="home-project-create-button"
-                className="inline-flex h-11 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-sm font-black text-white shadow-[0_14px_30px_rgba(79,70,229,0.28)] transition hover:bg-indigo-700"
+                className="inline-flex h-11 items-center gap-2 rounded-[2px] bg-[#FF4500] px-5 text-sm font-bold text-white transition hover:bg-[#e63e00]"
               >
                 <Plus className="h-4 w-4" />
                 {isZh ? "新建项目" : "New Project"}
@@ -1901,7 +1905,7 @@ export default function Home({
                     onClick={() => handleCreateProjectFromTemplate()}
                     aria-label={isZh ? "新建项目" : "New Project"}
                     data-testid="home-project-empty-create-button"
-                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white shadow-[0_14px_30px_rgba(79,70,229,0.24)] transition hover:bg-indigo-700"
+                    className="mt-5 inline-flex items-center gap-2 rounded-[2px] bg-[#FF4500] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#e63e00]"
                   >
                     <Plus className="h-4 w-4" />
                     {isZh ? "新建项目" : "New Project"}

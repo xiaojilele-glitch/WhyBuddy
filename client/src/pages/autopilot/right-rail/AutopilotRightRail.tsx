@@ -24,7 +24,15 @@
  *   做 CTA 适配；只读提示文案对应需求 1.1 / 2.1 中"StageCTA 在此阶段为只读"。
  */
 
-import { useCallback, useEffect, useRef, useState, type FC } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FC,
+  type ReactNode,
+} from "react";
 import { toast as showToast } from "sonner";
 
 import type { AppLocale } from "@/lib/locale";
@@ -36,7 +44,10 @@ import type {
   BlueprintSpecDocumentsResponse,
   BlueprintSpecTree,
 } from "@shared/blueprint/contracts";
-import { generateBlueprintSpecDocuments } from "@/lib/blueprint-api";
+import {
+  generateBlueprintEffectPreview,
+  generateBlueprintSpecDocuments,
+} from "@/lib/blueprint-api";
 import { postBlueprintReplan } from "@/lib/blueprint-api/replan";
 import type { ApiRequestError } from "@/lib/api-client";
 import { IS_GITHUB_PAGES } from "@/lib/deploy-target";
@@ -49,11 +60,9 @@ import {
 import { AgentReasoningSubTimeline } from "./AgentReasoningSubTimeline";
 import { CapabilityRail } from "./CapabilityRail";
 import { FleetActivationLog } from "./FleetActivationLog";
+import { deriveNodeStatusById } from "./spec-docs-progress/derive-node-status-by-id";
 import { stepSubStage } from "./hooks/use-right-rail-sub-stage-state";
 import { resolveRailSubStage } from "./resolve-rail-sub-stage";
-import { RoleStatusStrip } from "./RoleStatusStrip";
-import { HistoryEntryPoint } from "../version-history";
-import { SpecDocsProgressPanel } from "./spec-docs-progress/SpecDocsProgressPanel";
 import { SpecTreeWorkbench } from "./spec-tree-workbench/SpecTreeWorkbench";
 import { StreamingDocRenderer } from "./streaming-doc/StreamingDocRenderer";
 import { deriveSubStageSummary } from "./sub-stage-summary";
@@ -88,6 +97,14 @@ import {
   type AutopilotRightRailProps,
   type AutopilotTimelineStage,
 } from "./types";
+import {
+  AgentCrewFabricPanel,
+  ArtifactMemoryPanel,
+  EffectPreviewPanel,
+  EngineeringHandoffPanel,
+  PromptPackagePanel,
+  RuntimeCapabilityPanel,
+} from "./panels";
 
 const TIMELINE_STAGE_ORDER: readonly AutopilotTimelineStage[] = [
   "input",
@@ -101,6 +118,14 @@ type ReplannableGenerationStage = Extract<
   BlueprintGenerationStage,
   ReplanStage
 >;
+
+const EMPTY_FABRIC_SPEC_TREE = {
+  id: "empty-fabric-spec-tree",
+  rootNodeId: "empty-root",
+  version: 1,
+  nodes: [],
+  documents: [],
+} as unknown as BlueprintSpecTree;
 
 /**
  * 将 RAIL_SUB_STAGE_ORDER 中的子阶段映射到 STAGE_ORDER 中的阶段索引。
@@ -493,6 +518,71 @@ function extractSpecDocuments(
   return docs.length > 0 ? docs : undefined;
 }
 
+function renderFabricSubStageContent(
+  activeSubStage: AutopilotRailSubStage,
+  props: AutopilotRightRailProps,
+): ReactNode {
+  const specTree = props.specTree ?? EMPTY_FABRIC_SPEC_TREE;
+
+  switch (activeSubStage) {
+    case "agent_crew_fabric":
+      return (
+        <AgentCrewFabricPanel
+          jobId={props.jobId}
+          job={props.job}
+          agentCrew={props.agentCrew}
+          capabilities={props.capabilities}
+          capabilityInvocations={props.capabilityInvocations}
+          capabilityEvidence={props.capabilityEvidence}
+          locale={props.locale}
+        />
+      );
+    case "spec_tree":
+      return null;
+    case "effect_preview":
+      return (
+        <EffectPreviewPanel
+          jobId={props.jobId}
+          job={props.job}
+          specTree={specTree}
+          effectPreviews={props.effectPreviews}
+          initialPreviews={props.effectPreviews}
+          documents={extractSpecDocuments(props.job)}
+          agentCrew={props.agentCrew}
+          capabilityEvidence={props.capabilityEvidence}
+          locale={props.locale}
+        />
+      );
+    case "prompt_package":
+      return (
+        <PromptPackagePanel
+          jobId={props.jobId}
+          specTree={specTree}
+          effectPreviews={props.effectPreviews}
+          locale={props.locale}
+        />
+      );
+    case "runtime_capability":
+      return (
+        <RuntimeCapabilityPanel
+          jobId={props.jobId}
+          specTree={specTree}
+          capabilities={props.capabilities}
+          capabilityInvocations={props.capabilityInvocations}
+          capabilityEvidence={props.capabilityEvidence}
+          agentCrew={props.agentCrew}
+          locale={props.locale}
+        />
+      );
+    case "engineering_handoff":
+      return <EngineeringHandoffPanel jobId={props.jobId} locale={props.locale} />;
+    case "artifact_memory":
+      return <ArtifactMemoryPanel jobId={props.jobId} locale={props.locale} />;
+    default:
+      return activeSubStage satisfies never;
+  }
+}
+
 /**
  * 活跃节点的默认内容:显示 API path + 摘要文案。
  *
@@ -505,9 +595,6 @@ function ActiveNodeContent({
   summary,
   locale,
   subStage,
-  dataReady,
-  onConfirmAdvance,
-  advancing,
   specTree,
   job,
   jobId,
@@ -518,9 +605,6 @@ function ActiveNodeContent({
   summary: { apiPath: string; summary: string; dataReady: boolean };
   locale: AppLocale;
   subStage: string;
-  dataReady: boolean;
-  onConfirmAdvance?: () => void;
-  advancing?: boolean;
   specTree?: BlueprintSpecTree | null;
   job?: BlueprintGenerationJob | null;
   jobId: string;
@@ -583,31 +667,6 @@ function ActiveNodeContent({
           job prop 让流能合并 artifact / route / node_completed entry。 */}
       <AgentReasoningSubTimeline locale={locale} job={job} />
 
-      {/*
-        数据就绪时显示"确认并继续"按钮。
-        spec_tree 阶段下隐藏：CTA 由 SpecTreeWorkbench 顶部双按钮承担，
-        当用户点击"生成整棵树文档"完成后由父组件 onSpecDocumentsGenerated
-        回调推动后端 stage 前进，再由 useAutoAdvance 推到 effect_preview。
-      */}
-      {dataReady && onConfirmAdvance && !isSpecTreeStage && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log("[timeline] confirm advance clicked", { subStage, advancing });
-            onConfirmAdvance();
-          }}
-          disabled={advancing}
-          style={{ position: "relative", zIndex: 10 }}
-          className="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-700 disabled:bg-slate-400 cursor-pointer"
-          data-testid="timeline-confirm-advance"
-        >
-          {advancing
-            ? (isZh ? "推进中..." : "Advancing...")
-            : (isZh ? "继续下一步" : "Continue")}
-        </button>
-      )}
     </div>
   );
 }
@@ -800,6 +859,33 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
   // 避免 SSR 路径下出现 undefined。
   const reasoningEntries = useBlueprintRealtimeStore(
     (state) => state.agentReasoning.entries
+  );
+
+  // whybuddy-spec-tree-progress-merge-2026-05-29 §6：把 specDocsProgress.nodes
+  // 派生成 plain record（nodeId → { status, wasRetried, errorSummary }）透传给
+  // 下游 SPEC 树，替代原 SpecDocsProgressPanel 浮层。selector 直接返回 store
+  // 的 nodes record，useMemo 把它映射成轻量快照只在 nodes 引用变化时重算。
+  //
+  // 双源合并（refresh 持久化修复）：specDocsProgress 是浏览器内存里的活跃态浮层，
+  // 刷新页面后会回到 idle / 空 nodes，导致历史已生成节点被错判为 pending。把
+  // job.artifacts 中已落盘的 spec documents 也作为 status 来源——任何节点存在
+  // 至少一份持久化文档，基线就是 completed；live progress 再覆盖（in-flight
+  // 重试时显示 processing 而不是 completed），保证刷新后 ✓ 不丢、live retry 优先。
+  const specDocsNodes = useBlueprintRealtimeStore(
+    (state) => state.specDocsProgress.nodes
+  );
+  const specDocsBatchStatus = useBlueprintRealtimeStore(
+    (state) => state.specDocsProgress.batchStatus
+  );
+  const persistedSpecDocuments = extractSpecDocuments(props.job);
+  const nodeStatusById = useMemo(
+    () =>
+      deriveNodeStatusById({
+        persistedSpecDocuments,
+        liveProgressNodes: specDocsNodes,
+        liveBatchStatus: specDocsBatchStatus,
+      }),
+    [persistedSpecDocuments, specDocsNodes, specDocsBatchStatus]
   );
 
   // 切场方向：基于上一次 stageIndex 判断 forward / backward
@@ -1018,6 +1104,64 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
   const generateSpecDocuments =
     props.generateSpecDocuments ?? generateBlueprintSpecDocuments;
 
+  // whybuddy-stage3-unblock-2026-05-29：进入效果预演（stage 3）的 in-flight
+  // 状态与 onClick 处理。背景：服务端 POST /jobs/:id/effect-previews 在
+  // specTree 存在时即可成功（probe 已验证返回 201 + 13 份预演 + job.stage
+  // 翻到 effect_preview）。useAutoAdvance 只在 stage === "spec_docs" &&
+  // status === "completed" 时才推进，但服务端 spec_docs 默认停在
+  // status:"reviewing" 等用户接受文档，导致自动推进永远沉默。这里给用户一个
+  // 显式按钮，点击后把响应抬到上层 onSpecDocumentsGenerated 让 latestJob
+  // 推进，使右栏 dispatcher 切换到 effect_preview 子阶段。
+  const [effectPreviewState, setEffectPreviewState] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
+  const handleEnterEffectPreview = useCallback(async () => {
+    if (!props.jobId) return;
+    if (effectPreviewState === "loading") return;
+    setEffectPreviewState("loading");
+    try {
+      const result = await generateBlueprintEffectPreview(props.jobId, {
+        includeDrafts: true,
+      });
+      if (result.ok) {
+        // Re-use the existing onSpecDocumentsGenerated bridge so the parent
+        // page rolls latestJob / specTree forward; the response contract from
+        // /effect-previews is a superset (carries job + effectPreviews) and
+        // the parent's setLatestJob accepts the same shape.
+        const job = (result.data as unknown as { job?: BlueprintGenerationJob })
+          .job;
+        if (job && props.onSpecDocumentsGenerated) {
+          props.onSpecDocumentsGenerated({
+            job,
+            specTree: props.specTree as BlueprintSpecTree,
+            documents: extractSpecDocuments(props.job),
+          } as unknown as Parameters<
+            NonNullable<typeof props.onSpecDocumentsGenerated>
+          >[0]);
+        }
+        setEffectPreviewState("success");
+      } else {
+        setEffectPreviewState("error");
+      }
+    } catch {
+      setEffectPreviewState("error");
+    }
+  }, [
+    props.jobId,
+    props.onSpecDocumentsGenerated,
+    props.specTree,
+    props.job,
+    effectPreviewState,
+  ]);
+  // Reset the success/error state when the job advances out of the spec
+  // documents view (e.g. once the server's stage flips to effect_preview, we
+  // want a fresh button if the user comes back).
+  useEffect(() => {
+    if (props.job?.stage !== "spec_docs" && effectPreviewState !== "idle") {
+      setEffectPreviewState("idle");
+    }
+  }, [props.job?.stage, effectPreviewState]);
+
   const triggerSpecDocsGeneration = useCallback(
     async (scope: "all" | "single", nodeId?: string) => {
       if (!props.jobId || specDocsGenerating !== null) return;
@@ -1104,21 +1248,6 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
     [handleGenerateAllSpecDocs, props.onStageAdvanced],
   );
 
-  const historyFamilyCount = resolveHistoryEntryFamilyCount({
-    familyJobCount: props.job?.parentJobId ? 2 : 1,
-    hasParentJob: Boolean(props.job?.parentJobId),
-  });
-  const handleOpenHistory = useCallback((jobId: string) => {
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    url.searchParams.set("history", "1");
-    url.searchParams.set("activeJob", jobId);
-    window.history.pushState({}, "", url);
-    window.dispatchEvent(
-      new CustomEvent("autopilot:history-open", { detail: { jobId } }),
-    );
-  }, []);
-
   if (currentStage !== "fabric") {
     return (
       <aside
@@ -1146,8 +1275,7 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
       data-testid="autopilot-right-rail"
       data-autopilot-stage={currentStage}
       data-autopilot-sub-stage={activeSubStage ?? ""}
-      className="flex h-full flex-col p-2"
-      data-mf-card
+      className="flex h-full flex-col"
       style={{
         // 硬约束 aside 宽度。父级是 grid track minmax(0, 2fr)，正常情况下
         // 应该自然限制宽度，但右栏内部多层 flex / motion.div / overflow 嵌套
@@ -1165,7 +1293,6 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
       {/* fabric 阶段的 placeholder 保留(供测试断言) */}
       <div data-stage-placeholder="fabric" data-active="true" className="hidden" />
 
-      {/* autopilot-streaming-experience integration-gap-2026-05-16 UI 消费面 Step 1：角色态条带 */}
       <div
         className="mb-2 flex flex-shrink-0 flex-wrap items-center gap-2 px-1"
         data-testid="autopilot-right-rail-action-strip"
@@ -1179,15 +1306,6 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
           staticPreview={IS_GITHUB_PAGES}
           label={locale === "zh-CN" ? "从这里重新规划" : "Replan from here"}
           onOpen={() => setReplanOpen(true)}
-        />
-        <HistoryEntryPoint
-          jobId={props.jobId || null}
-          locale={locale}
-          familyCount={historyFamilyCount}
-          staleCount={props.job?.staleArtifactIds?.length ?? 0}
-          staticPreview={IS_GITHUB_PAGES}
-          disabled={IS_GITHUB_PAGES || !props.jobId}
-          onOpen={handleOpenHistory}
         />
       </div>
 
@@ -1225,15 +1343,15 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
         onRegenerate={handleRegenerateStaleStage}
       />
 
-      <div className="flex-shrink-0 overflow-x-auto pt-1">
-        <RoleStatusStrip />
-      </div>
+      {/* whybuddy-3d-real-role-driven-scene-2026-05-29: the role status strip
+          was removed from the right rail. Role identity / phase status is now
+          carried by the real 3D agents (pet body + nameplate + bob animation),
+          so a duplicate role chip strip here was redundant. */}
 
-      {/* Spec Docs 批量生成进度面板 — 放在 workbench chrome/status 区域，
-          不在 MarkdownRenderer/StreamingDocRenderer 文档主体内。
-          组件自身处理可见性：idle 或 dismissed 时返回 null。
-          Requirements: 3.1, 3.7 */}
-      <SpecDocsProgressPanel />
+      {/* whybuddy-spec-tree-progress-merge-2026-05-29：原 <SpecDocsProgressPanel/>
+          浮层已删除，其每节点进度状态合并进 WorkbenchSpecTree 节点行
+          （nodeStatusById 透传链），全局进度仍由 WorkbenchStatusBar 统计三联承载。
+          store 的 specDocsProgress slice 与 dismiss/complete action 保留不变。 */}
 
       {/* 阶段独占视口 — 包一层 flex-1 min-h-0 让它占满 aside 剩余高度，
           避免大屏下 StageViewport 内容只占 content-height、底部出现白色空白带。 */}
@@ -1351,13 +1469,28 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
                 entries={reasoningEntries}
                 specDocuments={extractSpecDocuments(props.job)}
                 specTree={props.specTree}
+                nodeStatusById={nodeStatusById}
                 locale={locale}
                 onGenerateAll={handleGenerateAllSpecDocs}
                 onGenerateNode={handleGenerateNodeSpecDocs}
                 generating={specDocsGenerating}
                 jobId={props.jobId}
                 job={props.job}
+                onEnterEffectPreview={handleEnterEffectPreview}
+                effectPreviewState={effectPreviewState}
+                effectPreviewDisabled={
+                  !props.jobId ||
+                  (extractSpecDocuments(props.job)?.length ?? 0) === 0
+                }
               />
+            </div>
+          ) : currentStage === "fabric" && activeSubStage !== undefined ? (
+            <div
+              data-sub-stage-placeholder={activeSubStage}
+              data-timeline-status="active"
+              aria-current="step"
+            >
+              {renderFabricSubStageContent(activeSubStage, props)}
             </div>
           ) : (
             /* 当前活跃阶段的内容 — 保留 data-sub-stage-placeholder 供测试断言 */
@@ -1375,17 +1508,6 @@ export const AutopilotRightRail: FC<AutopilotRightRailProps> = (props) => {
                   }
                   locale={locale}
                   subStage={activeSubStage}
-                  dataReady={
-                    completedStageSnapshotRef.current.has(activeSubStage)
-                      ? completedStageSnapshotRef.current.get(activeSubStage)!.summary.dataReady
-                      : deriveSubStageSummary(activeSubStage, props, locale).dataReady
-                  }
-                  onConfirmAdvance={
-                    manualAdvanceAction.type === "none"
-                      ? undefined
-                      : handleStageAdvance
-                  }
-                  advancing={false}
                   specTree={props.specTree}
                   job={props.job}
                   jobId={props.jobId}

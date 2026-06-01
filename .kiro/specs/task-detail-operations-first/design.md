@@ -2,7 +2,7 @@
 
 ## 概述
 
-本设计聚焦 [TaskDetailView.tsx](c:/Users/2303670/Documents/cube-pets-office/client/src/components/tasks/TaskDetailView.tsx) 的第一屏信息架构，将其从“先看 tabs 和内容块”重排为“先看操作与执行摘要，再进入细节”。
+本设计聚焦 [TaskDetailView.tsx](c:/Users/2303670/Documents/whybuddy/client/src/components/tasks/TaskDetailView.tsx) 的第一屏信息架构，将其从“先看 tabs 和内容块”重排为“先看操作与执行摘要，再进入细节”。
 
 ## 设计原则
 

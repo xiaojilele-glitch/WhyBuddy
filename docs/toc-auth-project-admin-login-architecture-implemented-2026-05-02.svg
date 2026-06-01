@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1220" viewBox="0 0 1800 1220" role="img" aria-labelledby="title desc">
-  <title id="title">Cube Pets Office ToC Auth Login Architecture Implementation Overlay</title>
+  <title id="title">WhyBuddy ToC Auth Login Architecture Implementation Overlay</title>
   <desc id="desc">Based on the provided login architecture diagram. Green boxes are implemented in the current repository, amber boxes are equivalent or partial implementations, and gray boxes are deferred or intentionally not migrated.</desc>
   <defs>
     <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">

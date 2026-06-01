@@ -64,7 +64,7 @@
 
 - 本轮新增勾选，语义上全部解释为“fleet spec 的 requirements / design 文档已经收口”，而不是“shared / server / client 已经按该结构全量实现”。尤其是 `FleetComposition / FleetRolePackage / CapabilityPackage / ExecutionUnitRef / AttachmentRef`，当前仍应视为目标设计结构，不应与主仓现有 `MissionAutopilotFleetRole` 摘要对象等同。
 - 本轮新增勾选的文档任务包括：首轮角色集合、角色矩阵、目标对象结构、`agent -> role carrier`、`node -> role action`、`skill / tool / MCP -> role attachment`、保守回退策略、节点家族分类表、能力包目录、`Route -> Fleet` 设计矩阵、`Takeover` 与角色关系、`RoleRiskProfile / RoleTakeoverProfile`、四类示例编组，以及渐进落地顺序。
-- 新增勾选之所以安全，是因为这些条目都已经在 [`design.md`](/C:/Users/wangchunji/Documents/cube-pets-office/.kiro/specs/fleet-organization-and-role-packaging/design.md) 中形成成体系定义，并且没有把当前主仓不存在的实现事实写成“已经落地”的代码结论；相反，设计稿显式增加了“当前主仓已落地的最小摘要对象”与“Lane 5 设计收口补充”两段边界说明，用来隔离目标模型与现有实现。
+- 新增勾选之所以安全，是因为这些条目都已经在 [`design.md`](/C:/Users/wangchunji/Documents/whybuddy/.kiro/specs/fleet-organization-and-role-packaging/design.md) 中形成成体系定义，并且没有把当前主仓不存在的实现事实写成“已经落地”的代码结论；相反，设计稿显式增加了“当前主仓已落地的最小摘要对象”与“Lane 5 设计收口补充”两段边界说明，用来隔离目标模型与现有实现。
 - 以下条目本轮继续保留未勾选：
   - `executor -> role actuator`
   - 角色摘要对象在驾驶舱 / 车队状态视图 / 接管面板 / 回放视图中的复用口径
@@ -77,7 +77,7 @@
 ## 审计备注（2026-04-25，lane 6 二次推进）
 
 - 本轮把 fleet lane 中最后 3 个未勾项收口为“设计已定稿”状态：`executor -> role actuator`、多视图复用口径、与 runtime 兼容的集成测试计划。
-- 勾选依据全部来自 [`design.md`](/C:/Users/wangchunji/Documents/cube-pets-office/.kiro/specs/fleet-organization-and-role-packaging/design.md) 本轮新增的明确段落，而不是对当前代码事实的额外外推：
+- 勾选依据全部来自 [`design.md`](/C:/Users/wangchunji/Documents/whybuddy/.kiro/specs/fleet-organization-and-role-packaging/design.md) 本轮新增的明确段落，而不是对当前代码事实的额外外推：
   - `executors -> role actuators` 现在已经把 executor 如何下沉到 `executionUnits` 与 `executorTypes`、以及 browser/native/sandbox/mock executor 在不同角色中的归属规则写成统一口径。
   - `多视图复用口径` 现在已经明确同一份角色摘要对象在驾驶舱、车队状态视图、接管面板和回放视图中的主消费字段、可补充字段与禁止自行发明的内容。
   - `runtime 兼容集成测试计划` 现在已经明确集成测试目标、关键场景、测试分层建议以及与当前主仓已有测试锚点的关系。

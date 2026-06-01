@@ -2,7 +2,7 @@
 
 ## 目标
 
-定义 `Cube Pets Office` 从“任务自动驾驶平台”进一步升级为“项目级 AI 自动驾驶操作系统”的产品架构。该 spec 是后续 Project Domain、Project Cockpit、Spec Center、FSD Route Planner、Execution Center 等 spec 的总纲。
+定义 `WhyBuddy` 从“任务自动驾驶平台”进一步升级为“项目级 AI 自动驾驶操作系统”的产品架构。该 spec 是后续 Project Domain、Project Cockpit、Spec Center、FSD Route Planner、Execution Center 等 spec 的总纲。
 
 核心结论：
 

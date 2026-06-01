@@ -2,7 +2,7 @@
 
 ## 概述
 
-协作回放系统为 Cube Pets Office 平台提供 Mission 执行过程的完整录制与回放能力。系统分为三大层次：
+协作回放系统为 WhyBuddy 平台提供 Mission 执行过程的完整录制与回放能力。系统分为三大层次：
 
 1. **采集层**：通过事件拦截器（Event Interceptor）挂载到现有 Mission Runtime 和 Message Bus，异步采集所有执行事件
 2. **存储与索引层**：将事件持久化到 IndexedDB（前端热数据）和服务端 JSON 文件（冷数据），构建多维索引

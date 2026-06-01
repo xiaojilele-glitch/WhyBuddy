@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档定义 Cube Pets Office UE5 场景中房间外壳（墙体、地板、天花板）的精确尺寸与放置规格。所有数据均从 Three.js `OfficeRoom` 组件提取，并按 UE5 坐标系与单位系统转换。
+本文档定义 WhyBuddy UE5 场景中房间外壳（墙体、地板、天花板）的精确尺寸与放置规格。所有数据均从 Three.js `OfficeRoom` 组件提取，并按 UE5 坐标系与单位系统转换。
 
 ---
 

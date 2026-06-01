@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="1600" height="1260" viewBox="0 0 1600 1260" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">Cube Pets Office ToC Auth Project Admin Spec Progress Overview</title>
+  <title id="title">WhyBuddy ToC Auth Project Admin Spec Progress Overview</title>
   <desc id="desc">ToC MySQL Redis persistence, auth contract gate, DB-backed email auth, personal project isolation, admin console, optional admin audit, and trimmed login architecture progress overview.</desc>
   <defs>
     <linearGradient id="heroGradient" x1="40" y1="30" x2="1560" y2="250" gradientUnits="userSpaceOnUse">
@@ -52,7 +52,7 @@
 
   <rect x="40" y="30" width="1520" height="220" rx="24" fill="url(#heroGradient)"/>
   <text x="80" y="92" class="hero-meta">TOC AUTH / MYSQL-FIRST / REDIS-OPTIONAL / PROJECT ISOLATION / 2026-04-30</text>
-  <text x="80" y="142" class="hero-title">Cube Pets Office - ToC 权限规格执行进度总览</text>
+  <text x="80" y="142" class="hero-title">WhyBuddy - ToC 权限规格执行进度总览</text>
   <text x="80" y="183" class="hero-subtitle">先立 MySQL + 可选 Redis 持久化底座，再做 DB-backed 邮箱登录、我的项目隔离、管理员后台和后置运营审计。</text>
   <text x="80" y="214" class="hero-meta">统计口径：5 个 spec，15 份文档，MVP 必做包含 Wave 0 基础设施与前三个权限 spec；配套裁剪版登录架构图已生成。</text>
   <rect x="1170" y="72" width="310" height="128" rx="18" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.24)"/>
@@ -217,7 +217,7 @@
     <text x="28" y="38" class="footer-strong">当前状态：</text>
     <text x="116" y="38" class="footer-text">Wave 0 已完成 15 项；Auth 12 / 14，Project 15 / 15，Admin Gate 15 / 15；MVP 57 / 59，全部 57 / 74。</text>
     <text x="28" y="64" class="footer-strong">资源边界：</text>
-    <text x="116" y="64" class="footer-text">MySQL 使用独立库 cube_pets_office；不删除、不清空、不修改 rbac_multitenant；Redis 仅做可选缓存/限流/队列。</text>
+    <text x="116" y="64" class="footer-text">MySQL 使用独立库 whybuddy；不删除、不清空、不修改 rbac_multitenant；Redis 仅做可选缓存/限流/队列。</text>
     <text x="1008" y="64" class="tiny">总览图：docs/toc-auth-project-admin-spec-progress-overview-2026-04-30.svg</text>
   </g>
 </svg>

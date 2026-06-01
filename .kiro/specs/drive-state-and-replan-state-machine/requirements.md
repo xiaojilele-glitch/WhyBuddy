@@ -2,7 +2,7 @@
 
 ## 目标
 
-定义 Cube Pets Office 在“任务自动驾驶”产品叙事下的高层驾驶状态机，使系统能够把当前 mission-first、Mission Runtime、workflow runtime、replay、audit 等已有能力，统一投影为用户可理解的任务行驶状态。
+定义 WhyBuddy 在“任务自动驾驶”产品叙事下的高层驾驶状态机，使系统能够把当前 mission-first、Mission Runtime、workflow runtime、replay、audit 等已有能力，统一投影为用户可理解的任务行驶状态。
 
 本 spec 的目标包括：
 

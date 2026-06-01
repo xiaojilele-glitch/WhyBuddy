@@ -2,7 +2,7 @@
 
 ## 简介
 
-在 multi-modal-vision 已实现的图片理解能力基础上，为 Cube Pets Office 平台的 Agent 增加语音输入（STT）和语音输出（TTS）能力，并将 Vision + Voice 统一编排为完整的多模态 Agent 体验。Agent 能够"看图、说话、听话"：用户可通过语音下达指令，Agent 可通过语音朗读回复，3D 场景实时展示"正在听""正在说话"动画。同时支持纯前端模式（浏览器 Web Speech API）和服务端模式（服务端 TTS/STT 服务），并与现有附件工作流、Mission、动态组织无缝集成。
+在 multi-modal-vision 已实现的图片理解能力基础上，为 WhyBuddy 平台的 Agent 增加语音输入（STT）和语音输出（TTS）能力，并将 Vision + Voice 统一编排为完整的多模态 Agent 体验。Agent 能够"看图、说话、听话"：用户可通过语音下达指令，Agent 可通过语音朗读回复，3D 场景实时展示"正在听""正在说话"动画。同时支持纯前端模式（浏览器 Web Speech API）和服务端模式（服务端 TTS/STT 服务），并与现有附件工作流、Mission、动态组织无缝集成。
 
 本 Spec 依赖 `.kiro/specs/multi-modal-vision/`，不重复 Vision 相关需求。
 

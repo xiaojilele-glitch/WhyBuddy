@@ -13,6 +13,8 @@ import { useAppStore } from "@/lib/store";
 import { useWorkflowStore } from "@/lib/workflow-store";
 import { selectWorkflowOrganization } from "@/lib/workflow-selectors";
 
+import type { SceneFusionMode } from "./scene-fusion/role-id-bridge";
+
 type SceneDepartmentInfo = {
   id: string;
   title: string;
@@ -116,7 +118,7 @@ function FurnitureModel({
   );
 }
 
-function Floor() {
+function Floor({ showFloorLines = true }: { showFloorLines?: boolean }) {
   return (
     <>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
@@ -156,42 +158,50 @@ function Floor() {
         />
       </mesh>
 
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, 0.006, -4.42]}
-        receiveShadow
-      >
-        <planeGeometry args={[15.1, 0.85]} />
-        <meshStandardMaterial
-          color={FUTURE_OFFICE_COLORS.floorLine}
-          transparent
-          opacity={0.1}
-        />
-      </mesh>
-      <mesh
-        rotation={[-Math.PI / 2, Math.PI / 2, 0]}
-        position={[-7.38, 0.006, 0]}
-        receiveShadow
-      >
-        <planeGeometry args={[9.6, 0.78]} />
-        <meshStandardMaterial
-          color={FUTURE_OFFICE_COLORS.floorLine}
-          transparent
-          opacity={0.08}
-        />
-      </mesh>
-      <mesh
-        rotation={[-Math.PI / 2, -Math.PI / 2, 0]}
-        position={[7.38, 0.006, 0]}
-        receiveShadow
-      >
-        <planeGeometry args={[9.6, 0.78]} />
-        <meshStandardMaterial
-          color={FUTURE_OFFICE_COLORS.floorLine}
-          transparent
-          opacity={0.07}
-        />
-      </mesh>
+      {/* whybuddy-3d-real-role-driven-scene-2026-05-29: the thin slate floor
+          lines read as a stray "black line" in the blueprint scene, so they
+          are suppressed there (showFloorLines = false). Mission-first keeps
+          them as part of its cool-office floor inlay. */}
+      {showFloorLines ? (
+        <>
+          <mesh
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, 0.006, -4.42]}
+            receiveShadow
+          >
+            <planeGeometry args={[15.1, 0.85]} />
+            <meshStandardMaterial
+              color={FUTURE_OFFICE_COLORS.floorLine}
+              transparent
+              opacity={0.1}
+            />
+          </mesh>
+          <mesh
+            rotation={[-Math.PI / 2, Math.PI / 2, 0]}
+            position={[-7.38, 0.006, 0]}
+            receiveShadow
+          >
+            <planeGeometry args={[9.6, 0.78]} />
+            <meshStandardMaterial
+              color={FUTURE_OFFICE_COLORS.floorLine}
+              transparent
+              opacity={0.08}
+            />
+          </mesh>
+          <mesh
+            rotation={[-Math.PI / 2, -Math.PI / 2, 0]}
+            position={[7.38, 0.006, 0]}
+            receiveShadow
+          >
+            <planeGeometry args={[9.6, 0.78]} />
+            <meshStandardMaterial
+              color={FUTURE_OFFICE_COLORS.floorLine}
+              transparent
+              opacity={0.07}
+            />
+          </mesh>
+        </>
+      ) : null}
 
       {[
         [-5.8, 0.01, -4.15],
@@ -323,7 +333,7 @@ function Walls() {
   );
 }
 
-function ArchitecturalAccents() {
+function ArchitecturalAccents({ showLamps = true }: { showLamps?: boolean }) {
   return (
     <group>
       <FurnitureModel
@@ -339,32 +349,40 @@ function ArchitecturalAccents() {
         rotation={[0, -Math.PI / 3, 0]}
       />
 
-      <FurnitureModel
-        url={FURNITURE_MODELS.lampRoundFloor}
-        position={[-6.3, 0, 0.6]}
-        rotation={[0, Math.PI / 6, 0]}
-      />
+      {/* whybuddy-3d-real-role-driven-scene-2026-05-29: the standing floor lamp
+          + wall lamp (and their point lights) read as a stray "floating lamp"
+          in the blueprint scene, so they are suppressed there. Mission-first
+          keeps them as part of its decorated office. */}
+      {showLamps ? (
+        <>
+          <FurnitureModel
+            url={FURNITURE_MODELS.lampRoundFloor}
+            position={[-6.3, 0, 0.6]}
+            rotation={[0, Math.PI / 6, 0]}
+          />
 
-      <pointLight
-        position={[-6.15, 1.85, 0.65]}
-        intensity={0.32}
-        color={FUTURE_OFFICE_COLORS.practicalLight}
-        distance={4.6}
-        decay={2}
-      />
+          <pointLight
+            position={[-6.15, 1.85, 0.65]}
+            intensity={0.32}
+            color={FUTURE_OFFICE_COLORS.practicalLight}
+            distance={4.6}
+            decay={2}
+          />
 
-      <FurnitureModel
-        url={FURNITURE_MODELS.lampWall}
-        position={[0, 1.08, -4.72]}
-        scale={1.05}
-      />
-      <pointLight
-        position={[0, 1.22, -4.4]}
-        intensity={0.16}
-        color={FUTURE_OFFICE_COLORS.cyanSoft}
-        distance={3}
-        decay={2}
-      />
+          <FurnitureModel
+            url={FURNITURE_MODELS.lampWall}
+            position={[0, 1.08, -4.72]}
+            scale={1.05}
+          />
+          <pointLight
+            position={[0, 1.22, -4.4]}
+            intensity={0.16}
+            color={FUTURE_OFFICE_COLORS.cyanSoft}
+            distance={3}
+            decay={2}
+          />
+        </>
+      ) : null}
     </group>
   );
 }
@@ -659,9 +677,11 @@ function DesktopDesk({
 function LaptopDesk({
   position,
   rotation = [0, 0, 0],
+  showLamp = true,
 }: {
   position: [number, number, number];
   rotation?: [number, number, number];
+  showLamp?: boolean;
 }) {
   const desktopSurfaceY = 0.392;
 
@@ -679,11 +699,13 @@ function LaptopDesk({
         position={[0, desktopSurfaceY, 0.08]}
         centerXZ
       />
-      <FurnitureModel
-        url={FURNITURE_MODELS.lampRoundTable}
-        position={[0.24, desktopSurfaceY, 0.04]}
-        centerXZ
-      />
+      {showLamp ? (
+        <FurnitureModel
+          url={FURNITURE_MODELS.lampRoundTable}
+          position={[0.24, desktopSurfaceY, 0.04]}
+          centerXZ
+        />
+      ) : null}
     </group>
   );
 }
@@ -717,7 +739,13 @@ function MeetingSet({
   );
 }
 
-function LoungeArea({ position }: { position: [number, number, number] }) {
+function LoungeArea({
+  position,
+  showLamp = true,
+}: {
+  position: [number, number, number];
+  showLamp?: boolean;
+}) {
   return (
     <group position={position}>
       <FurnitureModel
@@ -737,10 +765,12 @@ function LoungeArea({ position }: { position: [number, number, number] }) {
         url={FURNITURE_MODELS.sideTable}
         position={[-1.45, 0, 0.3]}
       />
-      <FurnitureModel
-        url={FURNITURE_MODELS.lampRoundTable}
-        position={[-1.45, 0.7, 0.3]}
-      />
+      {showLamp ? (
+        <FurnitureModel
+          url={FURNITURE_MODELS.lampRoundTable}
+          position={[-1.45, 0.7, 0.3]}
+        />
+      ) : null}
     </group>
   );
 }
@@ -1047,14 +1077,22 @@ function DecorativePlants() {
 export function OfficeRoom({
   showSecondaryDecor = true,
   reducedEffects = false,
+  mode = "mission-first",
 }: {
   showSecondaryDecor?: boolean;
   reducedEffects?: boolean;
+  mode?: SceneFusionMode;
 }) {
   const setSceneReady = useAppStore(state => state.setSceneReady);
   const setLoadingProgress = useAppStore(state => state.setLoadingProgress);
   const currentWorkflow = useWorkflowStore(state => state.currentWorkflow);
   const locale = useAppStore(state => state.locale);
+  // whybuddy-3d-real-role-driven-scene-2026-05-29: in blueprint mode the shared
+  // office's decorative lamps + thin floor lines read as a stray "floating
+  // lamp" / "black line" behind the real role scene, so they are suppressed.
+  // Mission-first keeps the full decorated office.
+  const showRoomDecorLamps = mode !== "blueprint";
+  const showFloorLines = mode !== "blueprint";
   const organization = useMemo(
     () => selectWorkflowOrganization(currentWorkflow),
     [currentWorkflow]
@@ -1131,9 +1169,11 @@ export function OfficeRoom({
 
   return (
     <group>
-      <Floor />
+      <Floor showFloorLines={showFloorLines} />
       <Walls />
-      {showSecondaryDecor ? <ArchitecturalAccents /> : null}
+      {showSecondaryDecor ? (
+        <ArchitecturalAccents showLamps={showRoomDecorLamps} />
+      ) : null}
       <CorkBoard />
       {showSecondaryDecor ? (
         <DepartmentDecor departments={sceneDepartments} />
@@ -1164,7 +1204,7 @@ export function OfficeRoom({
         />
       ) : null}
 
-      <DesktopDesk position={[0, 0, -3.55]} withLamp />
+      <DesktopDesk position={[0, 0, -3.55]} withLamp={showRoomDecorLamps} />
       {/* 自动驾驶 3D 场景融合 follow-up（2026-05-13）：CEO desk 由 z=-3.15
           后移到 z=-3.55，腾出 mission ring (z=-2.45) 与 desk front 之间的距离
           到 ~1.1m，避免 CEO（站在 mission ring 上）视觉穿桌。chair 在
@@ -1190,6 +1230,7 @@ export function OfficeRoom({
       <LaptopDesk
         position={[-2.45, 0, -1.15]}
         rotation={[0, -Math.PI / 7, 0]}
+        showLamp={showRoomDecorLamps}
       />
       <FurnitureModel
         url={FURNITURE_MODELS.chairRounded}
@@ -1226,7 +1267,7 @@ export function OfficeRoom({
         rotation={[0, -Math.PI / 10, 0]}
         scale={1.22}
       />
-      <LaptopDesk position={[2.35, 0, -1.08]} rotation={[0, Math.PI / 6, 0]} />
+      <LaptopDesk position={[2.35, 0, -1.08]} rotation={[0, Math.PI / 6, 0]} showLamp={showRoomDecorLamps} />
       <MeetingSet position={[4.85, 0, -1.42]} rotation={[0, -Math.PI / 8, 0]} />
       {showSecondaryDecor ? (
         <>
@@ -1268,7 +1309,7 @@ export function OfficeRoom({
         scale={1.3}
       />
       <MeetingSet position={[-3.55, 0, 2.28]} rotation={[0, Math.PI / 10, 0]} />
-      <LaptopDesk position={[-5.3, 0, 2.9]} rotation={[0, Math.PI / 2.4, 0]} />
+      <LaptopDesk position={[-5.3, 0, 2.9]} rotation={[0, Math.PI / 2.4, 0]} showLamp={showRoomDecorLamps} />
       {showSecondaryDecor ? (
         <>
           <FurnitureModel
@@ -1323,6 +1364,7 @@ export function OfficeRoom({
           <LaptopDesk
             position={[5.25, 0, 2.26]}
             rotation={[0, -Math.PI / 2.2, 0]}
+            showLamp={showRoomDecorLamps}
           />
           <StorageColumn
             position={[5.92, 0, 3.42]}
@@ -1344,7 +1386,7 @@ export function OfficeRoom({
             color={sceneDepartments[3]?.color || SCENE_DEPARTMENT_COLORS[3]}
           />
 
-          <LoungeArea position={[0.2, 0, 4.1]} />
+          <LoungeArea position={[0.2, 0, 4.1]} showLamp={showRoomDecorLamps} />
           <FurnitureModel
             url={FURNITURE_MODELS.tableCoffee}
             position={[-0.3, 0, 1.15]}

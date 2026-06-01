@@ -217,3 +217,147 @@ const room = `blueprint:${event.jobId}`;
 - 不修改 `agentReasoning` slice 的现有派生规则与 cap=500。
 - 不改 `BLUEPRINT_AGENT_REASONING_STREAM_ENABLED` 默认值；保留 `BUILD_TARGET=test` 时强制为 false 的既有约束。
 - 不重做 `AgentReasoningSubTimeline` 的视觉与动画。
+
+## 后续增强：观察行携带真实事实（reasoning-detail 2026-05-31）
+
+> 配合 `whybuddy-3d-real-role-driven-scene-2026-05-29` reasoning-detail：前端
+> `ReasoningCard` 已从「fallback 选一个字段」升级为「每个存在字段各自成行」。为了
+> 让推理流不只是更会排版、而是真的更有信息量，本规格的 stage-progress-emitter
+> 调用点同步把**已经算出来的真实事实**塞进观察行（不造任何假步骤、假数据）：
+
+- `route_generation`：`observing(true, ...)` 文案从「生成了 N 条候选路线」升级为
+  附带真实路线标题列表「生成了 N 条候选路线：主路线 / 保守路线 / ...」；`completed`
+  文案也带上条数。事实来源：`result.routeSet.routes[].title`。
+- `spec_tree`：`thinking` 文案带上真实被选中的路线标题
+  （`input.selectedRoute.title`）；`observing(true, ...)` 从「N 个节点」升级为附带
+  真实节点类型分布「N 个节点（route_step×4 · spec_document×26；model=...）」，由
+  `derivationResult.tree.nodes[].type` 现场聚合得到。
+
+约束与不变量：
+- 仍然只发既有的 `role.agent.thinking | acting | observing | completed` 事件，
+  不新增事件类型、不新增 stage、不改 stream key，因此本规格需求 1–5 的订阅时机 /
+  relay / 子时间线挂载 / spec_tree 不自动推进契约全部不受影响。
+- 前端去重键是 `${jobId}:${iteration}:${phase}:${timestamp}`，phase 不同的四条
+  事件天然不冲突；本次只丰富每条事件的真实文案，不靠同 phase 重复发事件刷条数。
+- 「条数更多」（把单阶段拆成更细的多轮 thinking/acting/observing）属于更大的
+  emitter 改造，本节为 reasoning-detail Wave 1（仅做「每条更有料」）的历史记录；
+  Wave 2 在下一节里补「每阶段拆出第二轮 ReAct」的实现，请把两节串起来读，本节
+  最后一行不再代表当前最新边界。
+
+
+## 进一步增强：每阶段拆出第二轮 ReAct（reasoning-detail Wave 2 / 2026-05-31）
+
+在「每条事件更有料」之上，再让 `route_generation` 和 `spec_tree` 各自显式拆出**第二轮**
+真实 ReAct（thinking → acting → observing），让用户看到的不只是"做了一件事"，而是
+"做完之后又做了对应的形态分析"。这一轮**完全基于已经算出来的真实数据**，不造步骤：
+
+- `route_generation` 第二轮（仅在路线集非空时进入）：
+  - `nextIteration()` 推进迭代号（前端显示成 `#2`）。
+  - `thinking`：「正在评估候选路线的复杂度与成本分布，标记主路线和备选路线...」。
+  - `acting`：`blueprint.route_set.analyze`（虚拟工具 id，标识"对路线集的分析"，
+    不发起任何外部调用，只读 `generatedRoutes`）。
+  - `observing(true, ...)`：把 `routes[].kind` / `complexity` / `costLevel` 现场聚合
+    成「主路线「X」（balanced · cost=medium）；2 条备选；复杂度分布 balanced×2 · light×1」。
+- `spec_tree` 第二轮（仅在派生出非空 root branches 时进入）：
+  - `nextIteration()` 推进迭代号。
+  - `thinking`：「正在分析派生出的 SPEC 树结构（共 N 个节点），统计根节点分支与最大深度...」。
+  - `acting`：`blueprint.spec_tree.analyze`（虚拟工具 id，仅读 `derivedNodes`）。
+  - `observing(true, ...)`：通过 `parentId` 链算出 `rootChildren` 与最大深度，输出
+    「根节点下 N 条主分支：A / B / C；最大深度 K 层」（≤6 条节选 + 溢出折叠）。
+
+不变量：
+- 仍只用既有 `role.agent.thinking | acting | observing | completed | iteration_started`
+  五类事件（`iteration_started` 由 `nextIteration()` 自动发），不新增类型；
+- `nextIteration()` 是 `StageProgressEmitter` 已有 API，前端去重键里的 `iteration`
+  不同自然分隔两轮，不会互相覆盖；
+- **每阶段实际触达 eventBus 的事件序列固定为**（以 route_generation 为例，
+  spec_tree 同形）：
+
+  ```text
+  #1 thinking → #1 acting → #1 observing       (4 → 实为 3 条；第一轮不发 completed)
+  #2 iteration_started                         (由 nextIteration() 自动发)
+  #2 thinking → #2 acting → #2 observing
+  #2 completed                                 (整个阶段结束才发，且只发一次)
+  ```
+
+  共 **8 条 role.agent.\* 事件**；但前端 `MiroFishCardStream` 在
+  `derive-mirofish-stream-entries.ts` 里会过滤 `iteration_started`，所以**用户
+  实际可见 7 条 reasoning 卡**。第一轮**不**单独发 `role.agent.completed`：发
+  `completed` 会让 `rolePhases[roleId]` 被映射到终态 `completed` 这个 faded
+  Phase_Tier，导致 3D 场景里该角色中途变灰再 re-activate；终态 completed 留给
+  整个阶段真正结束（即第二轮之后）只发一次。
+- 「真实数据为空就不发第二轮」是硬约束：路线集为 0 / SPEC 树根分支为 0 时不进第二轮，
+  避免出现「空形态分析」假事件；
+- 不调用任何真实工具（`blueprint.route_set.analyze` / `blueprint.spec_tree.analyze`
+  仅是事件文案里的 toolId 标签），保证零副作用、零延迟新增。
+
+
+## 测试守门：Wave 2 摘要函数 + 事件链
+
+为了让 Wave 2 的"第二轮 ReAct"不被后续重构悄悄删掉，把两条 observation 文案
+所依赖的事实聚合抽成 `server/routes/blueprint.ts` 中的纯函数 / 窄 helper export：
+
+- `summarizeRouteSetShape(routes)`：空数组返回 `null`（→ 不发 analyze 事件），
+  非空时返回包含 `主路线「X」（complexity · cost=…）`、`N 条备选`、`复杂度分布
+  level×count` 的可读字符串。
+- `summarizeSpecTreeShape(rootNodeId, nodes)`：根分支为 0 时返回 `null`（→ 不发
+  analyze 事件），非空时返回包含 `根节点下 N 条主分支：A / B / C`、最大深度、
+  >6 分支时的溢出折叠的可读字符串。
+- `emitSpecTreeShapeAnalysis(emitter, rootNodeId, nodes)`：只在
+  `summarizeSpecTreeShape(...) !== null` 且 emitter 存在时发
+  `nextIteration → thinking → acting("blueprint.spec_tree.analyze") → observing`，
+  并返回 `true`；否则返回 `false`，不发任何 analyze 事件。
+
+回归覆盖（`server/tests/blueprint-routes.test.ts` 内的 spec-tree LLM e2e
+describe 末尾追加）：
+
+1. **5 条纯函数单测**（不依赖 `BUILD_TARGET` / `LLM_*` env 与生成器 fallback 链路）：
+   - `summarizeRouteSetShape([])` 返回 `null`；
+   - `summarizeRouteSetShape(routes)` 聚合 `kind / complexity / costLevel`；
+   - `summarizeSpecTreeShape(root, [root only])` 与 `summarizeSpecTreeShape(root, [])`
+     均返回 `null`；
+   - `summarizeSpecTreeShape(...)` 真实算出根分支数 + 标题 + 最大深度；
+   - `summarizeSpecTreeShape(...)` 在根分支 > 6 时折叠为 `（共 N 条分支）` + 仅
+     显示前 6 个标题。
+2. **1 条 e2e happy-path**：`route_generation Wave 2 emits ... to the real event
+   bus`，订阅 ctx 真实 eventBus，断言：
+   - 第二轮（`iteration === 2`）的 `role.agent.thinking | acting | observing` 都
+     真的被 emit；
+   - `acting.actionToolId === "blueprint.route_set.analyze"`；
+   - `observing.payload.observationSummary` 含「路线集形态」+ `cost=` + 复杂度词
+     （balanced / light / deep 任一）；
+   - 整个阶段 `role.agent.completed` 只在 `iteration === 2` 发了一次（验证第一
+     轮**不**发 completed，避免把 `rolePhases[roleId]` 闪到终态 faded tier）。
+3. **2 条 spec_tree 事件链 helper 测试**：不走 HTTP e2e，但用 fake emitter
+   锁住真实调用顺序：
+   - 非空根分支会按顺序调用
+     `nextIteration → thinking → acting("blueprint.spec_tree.analyze") → observing`，
+     且 observing 的 summary 等于 `summarizeSpecTreeShape(...)`；
+   - 根分支为空时返回 `false`，`nextIteration / thinking / acting / observing`
+     均不调用。
+
+不写 `spec_tree` 第二轮的 e2e（避免与 `vitest.setup.ts` 的 `BUILD_TARGET=test`
+全局短路打架），但 `spec_tree` 的事件语义不再只靠纯函数：由
+`emitSpecTreeShapeAnalysis` 的 fake-emitter 测试守护。空路线集也只用纯函数测试
+守护，因为 e2e 链路里 `createGenerationJob` 有模板兜底，无法在路由层造出
+`routes.length === 0` 的真实状态。
+
+## 2026-05-31 Step 06 effect_preview 修复
+
+`autopilot-step-06-effect-preview-fix-2026-05-31` 锁定了 Step 06 的右栏渲染
+边界：
+
+- `effect_preview → prompt_packaging` 不再由 `useAutoAdvance` 的 useEffect 自动推进；
+  用户必须通过 StageViewport footer CTA 触发 `forceAdvance()`，才会调用
+  `generateBlueprintPromptPackages({ includeDrafts: true, includePreviewDrafts: true })`。
+- `spec_tree` 的手动推进契约保持不变：仍必须通过用户手动 `forceAdvance` /
+  StageViewport CTA 推进，不能恢复自动跳过；该契约不再绑定到 legacy
+  `timeline-confirm-advance` testId。
+- fabric 5-in-1 视觉折叠保留：`effect_preview / prompt_package /
+  runtime_capability / engineering_handoff / artifact_memory` 仍映射到视觉上的
+  STEP 06 · 效果预览；但右栏主内容改为按 `activeSubStage` 分流到对应 canonical
+  panel，而不是统一走 `ActiveNodeContent` 的 `POST /api/...` 占位摘要。
+- `ActiveNodeContent` 内嵌 `timeline-confirm-advance` 按钮已删除，唯一阶段前进
+  入口是 StageViewport 的 `autopilot-stage-continue-button`。
+- `EffectPreviewPanel` 的来源文档池从 accepted-only 改为 `status !== "rejected"`，
+  并且生成请求同步使用 `includeDrafts: true`，与“进入效果预演”的 draft 口径一致。

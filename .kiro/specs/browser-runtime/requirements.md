@@ -28,7 +28,7 @@
 作为用户，我希望浏览器端的配置、工作流历史、智能体人设和报告可以持久化到 IndexedDB，刷新页面后不丢失。
 
 #### 验收标准
-- AC-3.1: IndexedDB 数据库名 `cube-pets-office-runtime`，包含 meta/aiConfig/agents/souls/heartbeats/workflows/workflowDetails/recentMemory/memorySearch/heartbeatStatuses/heartbeatReports 等 store
+- AC-3.1: IndexedDB 数据库名 `whybuddy-runtime`，包含 meta/aiConfig/agents/souls/heartbeats/workflows/workflowDetails/recentMemory/memorySearch/heartbeatStatuses/heartbeatReports 等 store
 - AC-3.2: `persistAIConfig()` / `getAIConfigSnapshot()` 管理 AI 配置
 - AC-3.3: `persistAgents()` / `getAgentsSnapshot()` 管理智能体列表
 - AC-3.4: `persistSoul()` / `getSoulSnapshot()` 管理人设快照

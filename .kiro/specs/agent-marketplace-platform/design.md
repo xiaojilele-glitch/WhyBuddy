@@ -2,7 +2,7 @@
 
 ## 概述
 
-Agent Marketplace Platform 是 Cube Pets Office 的开放 Agent 交易市场模块。本设计遵循项目现有的架构模式：`shared/` 定义契约类型和 API 路由常量，`server/` 实现 Express 路由和业务逻辑，`client/` 使用 React + Zustand 构建前端界面，通过 Socket.IO 实现实时通信。
+Agent Marketplace Platform 是 WhyBuddy 的开放 Agent 交易市场模块。本设计遵循项目现有的架构模式：`shared/` 定义契约类型和 API 路由常量，`server/` 实现 Express 路由和业务逻辑，`client/` 使用 React + Zustand 构建前端界面，通过 Socket.IO 实现实时通信。
 
 系统分为六个核心子系统：
 1. **开发者与账户子系统** — 开发者注册、认证、团队管理

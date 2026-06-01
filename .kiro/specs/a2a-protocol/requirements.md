@@ -2,7 +2,7 @@
 
 ## 简介
 
-Agent-to-Agent (A2A) 标准化协议为 Cube Pets Office 提供跨框架 Agent 互操作能力。Cube 内部 Agent 可通过统一协议无缝调用外部框架的 Agent（CrewAI、LangGraph、Claude 等），同时外部 Agent 也能通过标准端点反向调用 Cube Agent。协议基于 JSON-RPC over WebSocket/HTTP 设计，与现有 MessageBus、动态组织和 Mission 系统无缝集成，调用过程在 3D 场景中以"跨框架消息粒子流"形式可视化展示。
+Agent-to-Agent (A2A) 标准化协议为 WhyBuddy 提供跨框架 Agent 互操作能力。Cube 内部 Agent 可通过统一协议无缝调用外部框架的 Agent（CrewAI、LangGraph、Claude 等），同时外部 Agent 也能通过标准端点反向调用 Cube Agent。协议基于 JSON-RPC over WebSocket/HTTP 设计，与现有 MessageBus、动态组织和 Mission 系统无缝集成，调用过程在 3D 场景中以"跨框架消息粒子流"形式可视化展示。
 
 ## 术语表
 

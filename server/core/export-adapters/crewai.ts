@@ -165,7 +165,7 @@ function generateCrewPy(ir: ExportIR): string {
 
   const lines: string[] = [];
 
-  lines.push(`"""Cube Pets Office — CrewAI Export"""`);
+  lines.push(`"""WhyBuddy — CrewAI Export"""`);
   lines.push(``);
   lines.push(`import yaml`);
   lines.push(`from crewai import Agent, Task, Crew, Process`);

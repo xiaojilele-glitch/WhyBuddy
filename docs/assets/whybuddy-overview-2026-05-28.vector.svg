@@ -1,0 +1,528 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1055 1491" width="1055" height="1491" role="img" aria-labelledby="title desc">
+  <title id="title">WhyBuddy (Task Autopilot) 仓库侦察总关联关系图 - vector redraw</title>
+  <desc id="desc">A true vector SVG redraw of the 2026-05-28 reconnaissance overview, rebuilt with editable SVG shapes and text instead of an embedded raster image. Title aligned with the canonical project name (WhyBuddy); numbers cite spec-audit-table.md / module-inventory.md / project-overview.md § 项目规模 at frozen HEAD d181be2f.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06111d"/>
+      <stop offset=".45" stop-color="#071527"/>
+      <stop offset="1" stop-color="#040812"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#092038"/>
+      <stop offset="1" stop-color="#07101d"/>
+    </linearGradient>
+    <linearGradient id="greenFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d3b1f"/>
+      <stop offset="1" stop-color="#071b11"/>
+    </linearGradient>
+    <linearGradient id="purpleFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#251845"/>
+      <stop offset="1" stop-color="#120c24"/>
+    </linearGradient>
+    <linearGradient id="amberFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#35210b"/>
+      <stop offset="1" stop-color="#140d05"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <marker id="arrowBlue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2 L10 6 L2 10 Z" fill="#49a7ff"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2 L10 6 L2 10 Z" fill="#60d05e"/>
+    </marker>
+    <marker id="arrowPurple" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2 L10 6 L2 10 Z" fill="#b079ff"/>
+    </marker>
+    <marker id="arrowAmber" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2 L10 6 L2 10 Z" fill="#ffb233"/>
+    </marker>
+    <style>
+      .canvas{fill:url(#bg)}
+      .title{font:700 34px "Microsoft YaHei","Noto Sans SC",Arial,sans-serif;fill:#f4f7fb}
+      .subtitle{font:500 14px "Microsoft YaHei","Noto Sans SC",Arial,sans-serif;fill:#b8c7d9}
+      .metric{fill:#0b1626;stroke:#6b7e96;stroke-width:1.4}
+      .metricText{font:700 22px "Microsoft YaHei","Noto Sans SC",Arial,sans-serif;fill:#f6f8fb}
+      .metricSub{font:500 11px "Microsoft YaHei","Noto Sans SC",Arial,sans-serif;fill:#cad7e8}
+      .panel{fill:url(#panel);stroke:#496176;stroke-width:1.2}
+      .sectionTitle{font:700 21px "Microsoft YaHei","Noto Sans SC",Arial,sans-serif;fill:#f5f7fb}
+      .chipText{font:700 13px "Microsoft YaHei","Noto Sans SC",Arial,sans-serif;fill:#f7f5ff}
+      .small{font:500 11px "Microsoft YaHei","Noto Sans SC",Arial,sans-serif;fill:#c6d5e5}
+      .tiny{font:500 9.5px "Microsoft YaHei","Noto Sans SC",Arial,sans-serif;fill:#aebdd1}
+      .label{font:600 13px "Microsoft YaHei","Noto Sans SC",Arial,sans-serif;fill:#f4f7fb}
+      .label2{font:500 12px "Microsoft YaHei","Noto Sans SC",Arial,sans-serif;fill:#c6d5e5}
+      .num{font:700 14px "Microsoft YaHei","Noto Sans SC",Arial,sans-serif;fill:#ffffff}
+      .blueBox{fill:#081c31;stroke:#2994ff;stroke-width:1.5}
+      .greenBox{fill:url(#greenFill);stroke:#54d75c;stroke-width:1.5}
+      .purpleBox{fill:url(#purpleFill);stroke:#b078ff;stroke-width:1.5}
+      .amberBox{fill:url(#amberFill);stroke:#ffac26;stroke-width:1.5}
+      .grayBox{fill:#101923;stroke:#7b8796;stroke-width:1.2}
+      .dashPurple{fill:none;stroke:#a568ff;stroke-width:1.3;stroke-dasharray:6 6}
+      .dashGray{fill:none;stroke:#99a8ba;stroke-width:1.2;stroke-dasharray:5 5}
+      .lineBlue{fill:none;stroke:#49a7ff;stroke-width:1.8;marker-end:url(#arrowBlue)}
+      .lineGreen{fill:none;stroke:#60d05e;stroke-width:1.8;marker-end:url(#arrowGreen)}
+      .linePurple{fill:none;stroke:#b079ff;stroke-width:1.8;marker-end:url(#arrowPurple)}
+      .lineAmber{fill:none;stroke:#ffb233;stroke-width:1.8;marker-end:url(#arrowAmber)}
+      .thinBlue{fill:none;stroke:#49a7ff;stroke-width:1.1}
+      .thinPurple{fill:none;stroke:#b079ff;stroke-width:1.1;stroke-dasharray:5 5}
+      .sectionBadge{fill:#2f8cff;stroke:#8bc2ff;stroke-width:1}
+      .purpleBadge{fill:#8b55d9;stroke:#d0b4ff;stroke-width:1}
+      .footer{font:500 10px "Microsoft YaHei","Noto Sans SC",Arial,sans-serif;fill:#b9c8d8}
+    </style>
+  </defs>
+
+  <rect class="canvas" x="0" y="0" width="1055" height="1491"/>
+  <rect x="6" y="138" width="1043" height="1308" rx="8" fill="none" stroke="#2e465b" stroke-width="1.2"/>
+
+  <text class="title" x="528" y="37" text-anchor="middle">WhyBuddy (Task Autopilot) 仓库侦察总关联关系图</text>
+  <text class="subtitle" x="528" y="63" text-anchor="middle">把架构图、文档、代码域、运行时和演示主线放到同一张图上 · A+ Reconnaissance Snapshot 2026-05-28</text>
+
+  <g id="metrics">
+    <g transform="translate(49 78)">
+      <rect class="metric" width="153" height="48" rx="8"/>
+      <rect x="21" y="12" width="31" height="25" rx="4" fill="#0c2645" stroke="#2f9bff"/>
+      <path d="M32 18 L25 25 L32 32 M42 18 L49 25 L42 32" fill="none" stroke="#50aaff" stroke-width="2"/>
+      <text class="metricText" x="70" y="24">2,130</text>
+      <text class="metricSub" x="70" y="39">TS/TSX files</text>
+    </g>
+    <g transform="translate(223 78)">
+      <rect class="metric" width="168" height="48" rx="8"/>
+      <rect x="22" y="12" width="30" height="25" rx="4" fill="#2b1a05" stroke="#ffa51f"/>
+      <path d="M27 31 L35 24 L42 27 L49 17" fill="none" stroke="#ffad2d" stroke-width="2"/>
+      <text class="metricText" x="74" y="24">~545K</text>
+      <text class="metricSub" x="74" y="39">总行数 (lines)</text>
+    </g>
+    <g transform="translate(414 78)">
+      <rect class="metric" width="168" height="48" rx="8"/>
+      <path d="M28 13 H43 L53 23 V39 H28 Z M43 13 V23 H53" fill="none" stroke="#b47dff" stroke-width="2"/>
+      <text class="metricText" x="73" y="24">1,074</text>
+      <text class="metricSub" x="73" y="39">Markdown 文件</text>
+    </g>
+    <g transform="translate(605 78)">
+      <rect class="metric" width="96" height="48" rx="8"/>
+      <path d="M23 16 H43 M23 25 H43 M23 34 H43 M18 14 h-4 v4 h4 M18 23 h-4 v4 h4 M18 32 h-4 v4 h4" fill="none" stroke="#ffd52e" stroke-width="2"/>
+      <text class="metricText" x="58" y="24">289</text>
+      <text class="metricSub" x="58" y="39" text-anchor="middle">Specs</text>
+    </g>
+    <g transform="translate(708 78)">
+      <rect class="metric" width="158" height="48" rx="8"/>
+      <path d="M25 15 h25 v25 h-25 z M31 27 l6 6 13-15" fill="none" stroke="#62db68" stroke-width="2.2"/>
+      <text class="metricText" x="73" y="24">8,806</text>
+      <text class="metricSub" x="73" y="39">任务复选框</text>
+    </g>
+    <g transform="translate(874 78)">
+      <rect class="metric" width="134" height="48" rx="8"/>
+      <path d="M31 12 L45 20 V36 L31 44 L17 36 V20 Z M17 20 L31 28 L45 20 M31 28 V44" fill="none" stroke="#b8c5d2" stroke-width="1.8"/>
+      <text class="metricText" x="64" y="24">969</text>
+      <text class="metricSub" x="64" y="39">Modules</text>
+    </g>
+  </g>
+
+  <g id="left-index">
+    <rect class="panel" x="13" y="138" width="168" height="664" rx="8"/>
+    <rect class="sectionBadge" x="17" y="144" width="22" height="22" rx="3"/>
+    <text class="chipText" x="28" y="161" text-anchor="middle">1</text>
+    <text class="sectionTitle" x="48" y="162">文档与图谱索引</text>
+    <g transform="translate(18 177)">
+      <rect class="blueBox" width="151" height="40" rx="5"/>
+      <text class="label" x="13" y="17">00 项目总定义</text>
+      <text class="tiny" x="13" y="32">Project Definition</text>
+      <rect class="blueBox" y="45" width="151" height="40" rx="5"/>
+      <text class="label" x="13" y="62">01 主业务闭环  D1</text>
+      <text class="tiny" x="13" y="77">Main Business Loop</text>
+      <rect class="blueBox" y="90" width="151" height="40" rx="5"/>
+      <text class="label" x="13" y="107">02 核心对象模型  D2</text>
+      <text class="tiny" x="13" y="122">Core Object Model</text>
+      <rect class="blueBox" y="135" width="151" height="40" rx="5"/>
+      <text class="label" x="13" y="152">03 系统分层  D3</text>
+      <text class="tiny" x="13" y="167">System Layering</text>
+      <rect class="greenBox" y="180" width="151" height="40" rx="5"/>
+      <text class="label" x="13" y="197">04 域地图  D4</text>
+      <text class="tiny" x="13" y="212">Domain Map</text>
+      <rect class="purpleBox" y="225" width="151" height="40" rx="5"/>
+      <text class="label" x="13" y="242">05 前端导航地图  D5</text>
+      <text class="tiny" x="13" y="257">Frontend Navigation Map</text>
+      <rect class="purpleBox" y="270" width="151" height="40" rx="5"/>
+      <text class="label" x="13" y="287">06 后端能力地图  D6</text>
+      <text class="tiny" x="13" y="302">Backend Capability Map</text>
+      <rect class="purpleBox" y="315" width="151" height="40" rx="5"/>
+      <text class="label" x="13" y="332">07 Spec 当前状态审计 D7</text>
+      <text class="tiny" x="13" y="347">Spec Audit</text>
+      <rect class="grayBox" y="360" width="151" height="40" rx="5"/>
+      <text class="label" x="13" y="377">08 代码-文档对账</text>
+      <text class="tiny" x="13" y="392">Code-Doc Reconciliation</text>
+      <rect class="blueBox" y="405" width="151" height="40" rx="5"/>
+      <text class="label" x="13" y="422">09 运行时状态时序  D8</text>
+      <text class="tiny" x="13" y="437">Runtime State Sequence</text>
+      <rect class="amberBox" y="450" width="151" height="40" rx="5"/>
+      <text class="label" x="13" y="467">10 演示主线</text>
+      <text class="tiny" x="13" y="482">Demo Storyline</text>
+      <rect x="0" y="500" width="151" height="90" rx="5" fill="#0e2434" stroke="#60758a"/>
+      <text class="label" x="13" y="518">支持文档（支撑资料）</text>
+      <text class="tiny" x="15" y="537">requirements.md</text>
+      <text class="tiny" x="15" y="553">design.md</text>
+      <text class="tiny" x="15" y="569">tasks.md</text>
+      <text class="tiny" x="15" y="585">spec-audit-table.md</text>
+    </g>
+    <path class="lineBlue" d="M181 188 C220 188 232 187 264 187"/>
+    <path class="lineBlue" d="M181 241 C216 241 217 325 268 325"/>
+    <path class="lineGreen" d="M181 378 C223 378 218 352 268 352"/>
+    <path class="linePurple" d="M181 468 C223 468 221 682 279 682"/>
+    <path class="lineAmber" d="M181 619 C225 619 224 641 279 641"/>
+    <text class="tiny" x="198" y="166">总览与索引</text>
+    <text class="tiny" x="204" y="226">主线定义</text>
+    <text class="tiny" x="207" y="334">结构映射</text>
+    <text class="tiny" x="209" y="456">审计输入</text>
+    <text class="tiny" x="209" y="612">演示输出</text>
+  </g>
+
+  <g id="main-loop">
+    <rect class="panel" x="281" y="138" width="727" height="340" rx="8"/>
+    <rect class="purpleBadge" x="292" y="144" width="22" height="22" rx="3"/>
+    <text class="chipText" x="303" y="161" text-anchor="middle">2</text>
+    <text class="sectionTitle" x="326" y="162">核心业务主线 — 从想法到证据的闭环</text>
+    <text class="small" x="594" y="162">（控制权恢复）</text>
+    <rect class="purpleBox" x="928" y="144" width="73" height="24" rx="5"/>
+    <text class="chipText" x="965" y="161" text-anchor="middle">主业务闭环</text>
+
+    <g transform="translate(292 175)">
+      <rect class="blueBox" width="102" height="88" rx="7"/>
+      <path d="M51 20 C41 11 25 17 25 31 C16 34 15 49 27 52 H73 C86 50 87 32 75 28 C72 18 61 14 51 20Z" fill="none" stroke="#d7ecff" stroke-width="2"/>
+      <text class="label" x="51" y="62" text-anchor="middle">模糊想法</text>
+      <text class="label2" x="51" y="78" text-anchor="middle">用户目标</text>
+    </g>
+    <path class="lineBlue" d="M395 219 H414"/>
+    <g transform="translate(416 175)">
+      <rect class="greenBox" width="97" height="88" rx="7"/>
+      <circle cx="49" cy="32" r="18" fill="none" stroke="#daf8df" stroke-width="2"/>
+      <text x="49" y="39" text-anchor="middle" font-size="28" fill="#daf8df" font-family="Arial">?</text>
+      <text class="label" x="49" y="62" text-anchor="middle">Clarification</text>
+      <text class="label2" x="49" y="78" text-anchor="middle">澄清</text>
+    </g>
+    <path class="lineBlue" d="M514 219 H535"/>
+    <g transform="translate(538 175)">
+      <rect class="blueBox" width="97" height="88" rx="7"/>
+      <path d="M38 21 H56 L67 32 V61 H38 Z M56 21 V32 H67" fill="none" stroke="#eff7ff" stroke-width="2"/>
+      <text class="label" x="49" y="62" text-anchor="middle">Spec</text>
+      <text class="label2" x="49" y="78" text-anchor="middle">规格</text>
+    </g>
+    <path class="lineBlue" d="M636 219 H659"/>
+    <g transform="translate(662 175)">
+      <rect class="purpleBox" width="97" height="88" rx="7"/>
+      <path d="M49 18 V66 M31 31 H67 M38 31 L49 20 L60 31 M39 54 L49 66 L60 54" fill="none" stroke="#f0e8ff" stroke-width="2"/>
+      <text class="label" x="49" y="62" text-anchor="middle">Route</text>
+      <text class="label2" x="49" y="78" text-anchor="middle">路线选择</text>
+    </g>
+    <path class="lineBlue" d="M760 219 H783"/>
+    <g transform="translate(786 175)">
+      <rect class="amberBox" width="94" height="88" rx="7"/>
+      <path d="M38 50 C52 30 66 25 73 18 C70 36 60 51 43 61 M34 55 L28 68 L42 62 M58 31 l8 8" fill="none" stroke="#ffca3a" stroke-width="2"/>
+      <text class="label" x="47" y="62" text-anchor="middle">Execution</text>
+      <text class="label2" x="47" y="78" text-anchor="middle">执行</text>
+    </g>
+    <path class="lineBlue" d="M881 219 H901"/>
+    <g transform="translate(904 175)">
+      <rect class="purpleBox" width="94" height="88" rx="7"/>
+      <path d="M47 18 L62 27 V42 C62 55 55 64 47 68 C39 64 32 55 32 42 V27 Z M47 31 v17 l10 6" fill="none" stroke="#f1eaff" stroke-width="2"/>
+      <text class="label" x="47" y="62" text-anchor="middle">Evidence /</text>
+      <text class="label2" x="47" y="78" text-anchor="middle">Replay</text>
+    </g>
+
+    <rect class="dashPurple" x="292" y="273" width="706" height="68" rx="7"/>
+    <text class="label2" x="645" y="288" text-anchor="middle" fill="#c98cff">工程骨架（贯穿全链路）</text>
+    <g transform="translate(305 292)">
+      <rect class="blueBox" width="123" height="38" rx="5"/>
+      <text class="label" x="62" y="24" text-anchor="middle">◎ Mission</text>
+      <rect class="blueBox" x="132" width="123" height="38" rx="5"/>
+      <text class="label" x="194" y="24" text-anchor="middle">♙ Workflow</text>
+      <rect class="blueBox" x="264" width="123" height="38" rx="5"/>
+      <text class="label" x="326" y="24" text-anchor="middle">◷ Runtime</text>
+      <rect class="blueBox" x="396" width="123" height="38" rx="5"/>
+      <text class="label" x="458" y="24" text-anchor="middle">⚑ Decision</text>
+      <rect class="blueBox" x="528" width="123" height="38" rx="5"/>
+      <text class="label" x="590" y="24" text-anchor="middle">盾 Audit</text>
+      <rect class="blueBox" x="660" width="60" height="38" rx="5"/>
+      <text class="label" x="690" y="24" text-anchor="middle">↻ Replay</text>
+    </g>
+
+    <rect x="292" y="354" width="706" height="105" rx="7" fill="#08121e" stroke="#506780"/>
+    <text class="label2" x="645" y="371" text-anchor="middle" fill="#c98cff">8 步使命执行循环（简化版）</text>
+    <g transform="translate(301 381)">
+      <rect class="blueBox" width="78" height="44" rx="5"/><text class="tiny" x="39" y="18" text-anchor="middle">1 用户/Feishu</text><text class="tiny" x="39" y="33" text-anchor="middle">发布任务</text>
+      <rect class="greenBox" x="86" width="78" height="44" rx="5"/><text class="tiny" x="125" y="18" text-anchor="middle">2 MissionStore</text><text class="tiny" x="125" y="33" text-anchor="middle">持久化使命</text>
+      <rect class="greenBox" x="172" width="86" height="44" rx="5"/><text class="tiny" x="215" y="18" text-anchor="middle">3 Orchestrator</text><text class="tiny" x="215" y="33" text-anchor="middle">启动 FSM</text>
+      <rect class="purpleBox" x="266" width="78" height="44" rx="5"/><text class="tiny" x="305" y="18" text-anchor="middle">4 节点判定</text><text class="tiny" x="305" y="33" text-anchor="middle">生成计划</text>
+      <rect class="amberBox" x="352" width="78" height="44" rx="5"/><text class="tiny" x="391" y="18" text-anchor="middle">5 执行器</text><text class="tiny" x="391" y="33" text-anchor="middle">分派计划</text>
+      <rect class="greenBox" x="438" width="78" height="44" rx="5"/><text class="tiny" x="477" y="18" text-anchor="middle">6 事件回写</text><text class="tiny" x="477" y="33" text-anchor="middle">状态更新</text>
+      <rect class="blueBox" x="524" width="78" height="44" rx="5"/><text class="tiny" x="563" y="18" text-anchor="middle">7 Socket 事件</text><text class="tiny" x="563" y="33" text-anchor="middle">前端投影</text>
+      <rect class="blueBox" x="610" width="78" height="44" rx="5"/><text class="tiny" x="649" y="18" text-anchor="middle">8 Feishu ACK</text><text class="tiny" x="649" y="33" text-anchor="middle">完成</text>
+    </g>
+    <path class="thinPurple" d="M335 427 V448 M420 427 V448 M505 427 V448 M592 427 V448 M681 427 V448 M764 427 V448 M852 427 V448 M951 427 V448"/>
+  </g>
+
+  <g id="structure">
+    <rect class="panel" x="281" y="487" width="727" height="314" rx="8"/>
+    <rect class="sectionBadge" x="292" y="494" width="22" height="22" rx="3"/>
+    <text class="chipText" x="303" y="511" text-anchor="middle">3</text>
+    <text class="sectionTitle" x="326" y="512">结构层与对象关系 — 代码结构 × 核心对象模型</text>
+    <g transform="translate(292 531)">
+      <rect class="blueBox" width="290" height="48" rx="6"/>
+      <text class="num" x="14" y="30">1</text>
+      <text class="label" x="37" y="22">Client</text>
+      <text class="label2" x="84" y="22">— client/src/</text>
+      <text class="tiny" x="37" y="38">cockpit · 3D 场景 · stores · 路由 · 运行时</text>
+      <text class="tiny" x="227" y="22" fill="#55a9ff">916 files</text>
+      <text class="tiny" x="225" y="38" fill="#55a9ff">217K lines</text>
+      <rect class="purpleBox" y="58" width="290" height="48" rx="6"/>
+      <text class="num" x="14" y="88">2</text>
+      <text class="label" x="37" y="80">Shared</text>
+      <text class="label2" x="97" y="80">— shared/（边界契约层）</text>
+      <text class="tiny" x="37" y="96">14 个契约模块 · 跨 HTTP / Socket / 执行 / 索引</text>
+      <text class="tiny" x="227" y="80" fill="#c596ff">139 files</text>
+      <text class="tiny" x="229" y="96" fill="#c596ff">26K lines</text>
+      <rect class="greenBox" y="116" width="290" height="48" rx="6"/>
+      <text class="num" x="14" y="146">3</text>
+      <text class="label" x="37" y="138">Server</text>
+      <text class="label2" x="92" y="138">— server/</text>
+      <text class="tiny" x="37" y="154">真相层 · Mission FSM · 工作流引擎 · 审计链</text>
+      <text class="tiny" x="225" y="138" fill="#6feb72">1,004 files</text>
+      <text class="tiny" x="226" y="154" fill="#6feb72">290K lines</text>
+      <rect class="amberBox" y="174" width="290" height="48" rx="6"/>
+      <text class="num" x="14" y="204">4</text>
+      <text class="label" x="37" y="196">Executor</text>
+      <text class="label2" x="106" y="196">— services/lobster-executor/</text>
+      <text class="tiny" x="37" y="212">真实 Docker 容器生命周期 · A2A · HMAC 回调</text>
+      <text class="tiny" x="231" y="196" fill="#ffbf3d">68 files</text>
+      <text class="tiny" x="232" y="212" fill="#ffbf3d">12K lines</text>
+      <rect class="grayBox" y="232" width="290" height="48" rx="6"/>
+      <text class="num" x="14" y="262">5</text>
+      <text class="label" x="37" y="254">Docs</text>
+      <text class="label2" x="80" y="254">— .kiro/</text>
+      <text class="tiny" x="37" y="270">版本化契约 · 设计 · 任务 · Specs</text>
+      <text class="tiny" x="223" y="254">289 spec dirs</text>
+    </g>
+    <path class="dashPurple" d="M590 527 V775 H995"/>
+    <g transform="translate(635 523)">
+      <rect class="blueBox" x="0" y="0" width="78" height="52" rx="6"/>
+      <text class="label" x="39" y="23" text-anchor="middle">Goal</text>
+      <text class="tiny" x="39" y="39" text-anchor="middle">用户目标</text>
+      <rect class="purpleBox" x="122" y="0" width="78" height="52" rx="6"/>
+      <text class="label" x="161" y="23" text-anchor="middle">Spec</text>
+      <text class="tiny" x="161" y="39" text-anchor="middle">规格/契约</text>
+      <rect class="greenBox" x="244" y="0" width="78" height="52" rx="6"/>
+      <text class="label" x="283" y="23" text-anchor="middle">Run</text>
+      <text class="tiny" x="283" y="39" text-anchor="middle">运行实例</text>
+      <rect class="greenBox" x="39" y="104" width="98" height="52" rx="6"/>
+      <text class="label" x="88" y="127" text-anchor="middle">Task</text>
+      <text class="tiny" x="88" y="143" text-anchor="middle">任务/步骤</text>
+      <rect class="amberBox" x="178" y="104" width="138" height="52" rx="6"/>
+      <text class="label" x="247" y="127" text-anchor="middle">Artifact</text>
+      <text class="tiny" x="247" y="143" text-anchor="middle">产出物/报告</text>
+      <rect class="purpleBox" x="64" y="194" width="234" height="52" rx="6"/>
+      <text class="label" x="181" y="216" text-anchor="middle">Replay</text>
+      <text class="tiny" x="181" y="234" text-anchor="middle">回放 / 重建运行状态</text>
+      <path class="linePurple" d="M79 26 H119"/>
+      <path class="lineBlue" d="M202 26 H240"/>
+      <path class="lineGreen" d="M283 54 V101"/>
+      <path class="lineGreen" d="M247 157 V190"/>
+      <path class="lineBlue" d="M88 54 V100"/>
+      <path class="lineBlue" d="M88 157 V190"/>
+      <path class="thinPurple" d="M322 26 H354 V220 H301"/>
+      <path class="thinPurple" d="M161 53 C158 88 123 92 94 103"/>
+    </g>
+  </g>
+
+  <g id="domain-map">
+    <rect class="panel" x="47" y="814" width="960" height="326" rx="8"/>
+    <rect class="sectionBadge" x="54" y="821" width="22" height="22" rx="3"/>
+    <text class="chipText" x="65" y="838" text-anchor="middle">4</text>
+    <text class="sectionTitle" x="86" y="839">域与前后端能力分布 — 代码域地图 × 导航结构 × 能力边界</text>
+    <g transform="translate(68 854)">
+      <rect class="blueBox" width="145" height="60" rx="6"/>
+      <text class="label" x="73" y="22" text-anchor="middle">frontend-cockpit</text>
+      <text class="metricText" x="73" y="44" text-anchor="middle" font-size="18">459</text>
+      <text class="tiny" x="73" y="56" text-anchor="middle">modules</text>
+      <rect class="grayBox" x="154" width="124" height="60" rx="6"/>
+      <text class="label" x="216" y="22" text-anchor="middle">infrastructure *</text>
+      <text class="metricText" x="216" y="44" text-anchor="middle" font-size="18">403</text>
+      <text class="tiny" x="216" y="56" text-anchor="middle">modules</text>
+      <rect class="blueBox" x="287" width="114" height="60" rx="6"/>
+      <text class="label" x="344" y="22" text-anchor="middle">executor</text>
+      <text class="metricText" x="344" y="44" text-anchor="middle" font-size="18">33</text>
+      <text class="tiny" x="344" y="56" text-anchor="middle">modules</text>
+      <rect class="greenBox" x="410" width="114" height="60" rx="6"/>
+      <text class="label" x="467" y="22" text-anchor="middle">interop</text>
+      <text class="metricText" x="467" y="44" text-anchor="middle" font-size="18">17</text>
+      <text class="tiny" x="467" y="56" text-anchor="middle">modules</text>
+      <rect class="greenBox" x="533" width="114" height="60" rx="6"/>
+      <text class="label" x="590" y="22" text-anchor="middle">frontend-3d</text>
+      <text class="metricText" x="590" y="44" text-anchor="middle" font-size="18">15</text>
+      <text class="tiny" x="590" y="56" text-anchor="middle">modules</text>
+      <rect class="blueBox" y="70" width="99" height="55" rx="6"/>
+      <text class="label" x="50" y="92" text-anchor="middle">mission</text>
+      <text class="metricText" x="50" y="112" text-anchor="middle" font-size="17">14</text>
+      <text class="tiny" x="50" y="123" text-anchor="middle">modules</text>
+      <rect class="blueBox" x="108" y="70" width="99" height="55" rx="6"/>
+      <text class="label" x="158" y="92" text-anchor="middle">workflow</text>
+      <text class="metricText" x="158" y="112" text-anchor="middle" font-size="17">13</text>
+      <text class="tiny" x="158" y="123" text-anchor="middle">modules</text>
+      <rect class="blueBox" x="216" y="70" width="99" height="55" rx="6"/>
+      <text class="label" x="266" y="92" text-anchor="middle">audit</text>
+      <text class="metricText" x="266" y="112" text-anchor="middle" font-size="17">5</text>
+      <text class="tiny" x="266" y="123" text-anchor="middle">modules</text>
+      <rect class="blueBox" x="324" y="70" width="99" height="55" rx="6"/>
+      <text class="label" x="374" y="92" text-anchor="middle">lineage</text>
+      <text class="metricText" x="374" y="112" text-anchor="middle" font-size="17">5</text>
+      <text class="tiny" x="374" y="123" text-anchor="middle">modules</text>
+      <rect class="greenBox" x="432" y="70" width="99" height="55" rx="6"/>
+      <text class="label" x="482" y="92" text-anchor="middle">memory</text>
+      <text class="metricText" x="482" y="112" text-anchor="middle" font-size="17">4</text>
+      <text class="tiny" x="482" y="123" text-anchor="middle">modules</text>
+      <rect class="greenBox" x="540" y="70" width="99" height="55" rx="6"/>
+      <text class="label" x="590" y="92" text-anchor="middle">feishu</text>
+      <text class="metricText" x="590" y="112" text-anchor="middle" font-size="17">1</text>
+      <text class="tiny" x="590" y="123" text-anchor="middle">modules</text>
+    </g>
+    <rect class="dashGray" x="732" y="853" width="270" height="126" rx="7"/>
+    <text class="label" x="867" y="878" text-anchor="middle">汇总（按代码线归属）</text>
+    <rect class="blueBox" x="746" y="890" width="229" height="30" rx="5"/><text class="label2" x="760" y="910">TRUNK（主干）</text><text class="label" x="910" y="910" fill="#62b4ff">530 modules</text>
+    <rect class="greenBox" x="746" y="926" width="229" height="30" rx="5"/><text class="label2" x="760" y="946">BRANCH（分支）</text><text class="label" x="902" y="946" fill="#6ee972">439 modules</text>
+    <rect class="grayBox" x="746" y="962" width="229" height="30" rx="5"/><text class="label2" x="760" y="982">LEGACY（遗留）</text><text class="label" x="915" y="982">0 modules</text>
+    <text class="tiny" x="68" y="995" fill="#aebdd1">* infrastructure 含 blueprint runtime 主干（C-tier 重组候选见 B_Tier_Recommendation.md § C1）</text>
+
+    <g transform="translate(61 1005)">
+      <rect x="0" y="0" width="373" height="119" rx="7" fill="#0a1725" stroke="#456378"/>
+      <text class="label" x="187" y="22" text-anchor="middle" fill="#79b8ff">前端视图（基于 D5 导航地图）</text>
+      <rect class="grayBox" x="22" y="38" width="63" height="42" rx="5"/><text class="tiny" x="53" y="56" text-anchor="middle">Cockpit</text><text class="tiny" x="53" y="70" text-anchor="middle">控制台</text>
+      <rect class="grayBox" x="93" y="38" width="63" height="42" rx="5"/><text class="tiny" x="124" y="56" text-anchor="middle">3D / Scene</text><text class="tiny" x="124" y="70" text-anchor="middle">场景视图</text>
+      <rect class="grayBox" x="164" y="38" width="63" height="42" rx="5"/><text class="tiny" x="195" y="56" text-anchor="middle">Pages</text><text class="tiny" x="195" y="70" text-anchor="middle">页面(129)</text>
+      <rect class="grayBox" x="235" y="38" width="63" height="42" rx="5"/><text class="tiny" x="266" y="56" text-anchor="middle">Right Rail</text><text class="tiny" x="266" y="70" text-anchor="middle">右侧栏</text>
+      <rect class="grayBox" x="306" y="38" width="51" height="42" rx="5"/><text class="tiny" x="331" y="56" text-anchor="middle">Store</text><text class="tiny" x="331" y="70" text-anchor="middle">回放</text>
+      <rect class="blueBox" x="18" y="88" width="52" height="24" rx="5"/><text class="tiny" x="44" y="104" text-anchor="middle">Tasks</text>
+      <rect class="blueBox" x="76" y="88" width="52" height="24" rx="5"/><text class="tiny" x="102" y="104" text-anchor="middle">Audit</text>
+      <rect class="blueBox" x="134" y="88" width="52" height="24" rx="5"/><text class="tiny" x="160" y="104" text-anchor="middle">Lineage</text>
+      <rect class="blueBox" x="192" y="88" width="52" height="24" rx="5"/><text class="tiny" x="218" y="104" text-anchor="middle">RAG</text>
+      <rect class="blueBox" x="250" y="88" width="52" height="24" rx="5"/><text class="tiny" x="276" y="104" text-anchor="middle">Replay</text>
+    </g>
+    <path class="linePurple" d="M446 1065 H548"/>
+    <text class="label2" x="497" y="1049" text-anchor="middle" fill="#d0a7ff">通过</text>
+    <text class="label" x="497" y="1093" text-anchor="middle" fill="#d0a7ff">边界契约层</text>
+    <text class="tiny" x="497" y="1110" text-anchor="middle">(Shared)</text>
+    <g transform="translate(546 1005)">
+      <rect x="0" y="0" width="441" height="119" rx="7" fill="#0a1725" stroke="#456378"/>
+      <text class="label" x="221" y="22" text-anchor="middle" fill="#79b8ff">后端能力（基于 D6 能力地图）</text>
+      <rect class="blueBox" x="20" y="38" width="64" height="42" rx="5"/><text class="tiny" x="52" y="56" text-anchor="middle">Mission</text><text class="tiny" x="52" y="70" text-anchor="middle">使命管理</text>
+      <rect class="blueBox" x="94" y="38" width="64" height="42" rx="5"/><text class="tiny" x="126" y="56" text-anchor="middle">Workflow</text><text class="tiny" x="126" y="70" text-anchor="middle">工作流引擎</text>
+      <rect class="blueBox" x="168" y="38" width="64" height="42" rx="5"/><text class="tiny" x="200" y="56" text-anchor="middle">Executor</text><text class="tiny" x="200" y="70" text-anchor="middle">执行器/容器</text>
+      <rect class="blueBox" x="242" y="38" width="64" height="42" rx="5"/><text class="tiny" x="274" y="56" text-anchor="middle">Audit</text><text class="tiny" x="274" y="70" text-anchor="middle">审计链</text>
+      <rect class="greenBox" x="316" y="38" width="64" height="42" rx="5"/><text class="tiny" x="348" y="56" text-anchor="middle">Lineage</text><text class="tiny" x="348" y="70" text-anchor="middle">血缘追踪</text>
+      <rect class="greenBox" x="20" y="88" width="64" height="24" rx="5"/><text class="tiny" x="52" y="104" text-anchor="middle">Replay</text>
+      <rect class="greenBox" x="94" y="88" width="64" height="24" rx="5"/><text class="tiny" x="126" y="104" text-anchor="middle">A2A</text>
+      <rect class="greenBox" x="168" y="88" width="64" height="24" rx="5"/><text class="tiny" x="200" y="104" text-anchor="middle">Feishu</text>
+      <rect class="greenBox" x="242" y="88" width="64" height="24" rx="5"/><text class="tiny" x="274" y="104" text-anchor="middle">RAG</text>
+      <rect class="greenBox" x="316" y="88" width="64" height="24" rx="5"/><text class="tiny" x="348" y="104" text-anchor="middle">Vector DB</text>
+    </g>
+  </g>
+
+  <g id="audit-runtime-story">
+    <rect class="panel" x="7" y="1151" width="1041" height="292" rx="8"/>
+    <rect class="sectionBadge" x="15" y="1158" width="22" height="22" rx="3"/>
+    <text class="chipText" x="26" y="1175" text-anchor="middle">5</text>
+    <text class="sectionTitle" x="48" y="1176">审计、运行时与对外叙事 — 证据链 + 运行轨迹 + 用户讲述</text>
+
+    <g transform="translate(17 1190)">
+      <rect class="blueBox" width="287" height="218" rx="7"/>
+      <text class="label" x="16" y="25" fill="#7bbcff">A. Spec 审计分布（共 289 个 Specs）</text>
+      <g transform="translate(16 47)">
+        <text class="tiny" x="0" y="13">IMPLEMENTED_AND_VALID</text>
+        <rect x="138" y="0" width="126" height="19" fill="#19aa3e"/><text class="tiny" x="210" y="14" fill="#fff">157 (54.32%)</text>
+        <text class="tiny" x="0" y="43">DESIGNED_NEVER_BUILT</text>
+        <rect x="138" y="30" width="73" height="19" fill="#f26b12"/><text class="tiny" x="218" y="44" fill="#fff">122 (42.21%)</text>
+        <text class="tiny" x="0" y="73">PARTIALLY_IMPLEMENTED</text>
+        <rect x="138" y="60" width="9" height="19" fill="#9aa5b1"/><text class="tiny" x="158" y="74" fill="#fff">9 (3.11%)</text>
+        <text class="tiny" x="0" y="103">DUPLICATE</text>
+        <rect x="138" y="90" width="2" height="19" fill="#9aa5b1"/><text class="tiny" x="158" y="104" fill="#fff">1 (0.35%)</text>
+        <text class="tiny" x="0" y="133">DRIFTED</text>
+        <rect x="138" y="120" width="1" height="19" fill="#9aa5b1"/><text class="tiny" x="158" y="134" fill="#fff">0 (0.00%)</text>
+      </g>
+      <rect x="18" y="185" width="10" height="10" fill="#19aa3e"/><text class="tiny" x="34" y="194">生产代码锚点</text>
+      <rect x="105" y="185" width="10" height="10" fill="#f26b12"/><text class="tiny" x="121" y="194">概念 / 规划面</text>
+      <rect x="190" y="185" width="10" height="10" fill="#9aa5b1"/><text class="tiny" x="206" y="194">其他（小数量桶）</text>
+      <text class="tiny" x="18" y="211">关键信号：122 / 289 (42.21%) DESIGNED_NEVER_BUILT</text>
+    </g>
+
+    <g transform="translate(314 1190)">
+      <rect class="greenBox" width="357" height="218" rx="7"/>
+      <text class="label" x="16" y="25" fill="#85ef89">B. 运行时状态时序（D8 概览）</text>
+      <text class="tiny" x="182" y="25">决策：POST /api/tasks/:id/decision</text>
+      <g transform="translate(20 55)">
+        <circle cx="24" cy="52" r="28" fill="#08203a" stroke="#42b3ff" stroke-width="2"/><text class="tiny" x="24" y="48" text-anchor="middle">queued</text><text class="tiny" x="24" y="63" text-anchor="middle">已排队</text>
+        <path class="lineBlue" d="M54 52 H92"/>
+        <circle cx="123" cy="52" r="28" fill="#0d351d" stroke="#61d867" stroke-width="2"/><text class="tiny" x="123" y="48" text-anchor="middle">running</text><text class="tiny" x="123" y="63" text-anchor="middle">运行中</text>
+        <path class="lineGreen" d="M153 52 H195"/>
+        <circle cx="226" cy="52" r="28" fill="#28183d" stroke="#b079ff" stroke-width="2"/><text class="tiny" x="226" y="48" text-anchor="middle">waiting</text><text class="tiny" x="226" y="63" text-anchor="middle">等待中</text>
+        <path class="linePurple" d="M256 52 H294"/>
+        <circle cx="324" cy="52" r="28" fill="#0d351d" stroke="#61d867" stroke-width="2"/><text class="tiny" x="324" y="48" text-anchor="middle">done</text><text class="tiny" x="324" y="63" text-anchor="middle">完成</text>
+        <path class="lineAmber" d="M123 82 V126"/>
+        <circle cx="123" cy="154" r="28" fill="#2c1418" stroke="#ff5555" stroke-width="2"/><text class="tiny" x="123" y="150" text-anchor="middle">failed</text><text class="tiny" x="123" y="165" text-anchor="middle">失败</text>
+        <path class="linePurple" d="M226 82 V126"/>
+        <circle cx="226" cy="154" r="28" fill="#1d2330" stroke="#9aa5b1" stroke-width="2"/><text class="tiny" x="226" y="150" text-anchor="middle">cancelled</text><text class="tiny" x="226" y="165" text-anchor="middle">已取消</text>
+      </g>
+      <text class="tiny" x="19" y="202">每次状态变更同步追加到审计链 (audit-chain) 与血缘 (lineage)，可在 replay 中回放。</text>
+    </g>
+
+    <g transform="translate(680 1190)">
+      <rect class="amberBox" width="348" height="218" rx="7"/>
+      <text class="label" x="16" y="25" fill="#ffc95d">C. 对外讲述主线（从技术到用户价值）</text>
+      <text x="174" y="62" text-anchor="middle" font-family="Microsoft YaHei,Noto Sans SC,Arial,sans-serif" font-size="18" font-weight="700" fill="#fff">“写代码前，先把问题想清楚”</text>
+      <g transform="translate(14 84)">
+        <path d="M25 18 C17 9 5 15 5 27 C-3 30 -2 42 10 44 H44 C55 42 56 29 45 25 C43 15 34 11 25 18Z" fill="none" stroke="#fff" stroke-width="1.7"/>
+        <text class="tiny" x="25" y="62" text-anchor="middle">模糊想法</text>
+        <path class="lineAmber" d="M52 34 H78"/>
+        <circle cx="96" cy="34" r="18" fill="none" stroke="#fff" stroke-width="1.8"/><text x="96" y="41" text-anchor="middle" font-size="24" fill="#fff">?</text><text class="tiny" x="96" y="62" text-anchor="middle">目标澄清</text>
+        <path class="lineAmber" d="M116 34 H140"/>
+        <path d="M151 16 H168 L178 26 V52 H151 Z M168 16 V26 H178" fill="none" stroke="#fff" stroke-width="1.7"/><text class="tiny" x="164" y="62" text-anchor="middle">规格生成</text>
+        <path class="lineAmber" d="M181 34 H203"/>
+        <path d="M214 14 H236 M214 24 H236 M214 34 H236 M210 12 h-4 v4 h4 M210 22 h-4 v4 h4 M210 32 h-4 v4 h4" fill="none" stroke="#fff" stroke-width="1.7"/><text class="tiny" x="222" y="62" text-anchor="middle">任务拆解</text>
+        <path class="lineAmber" d="M240 34 H262"/>
+        <rect x="270" y="17" width="33" height="25" rx="3" fill="none" stroke="#fff" stroke-width="1.7"/><text class="tiny" x="286" y="62" text-anchor="middle">Agent</text>
+        <path class="lineAmber" d="M307 34 H329"/>
+        <circle cx="344" cy="34" r="18" fill="none" stroke="#fff" stroke-width="1.7"/><path d="M339 25 l14 9 -14 9z" fill="#fff"/><text class="tiny" x="344" y="62" text-anchor="middle">Evidence</text>
+      </g>
+      <g transform="translate(15 166)">
+        <rect class="amberBox" width="75" height="37" rx="6"/><text class="tiny" x="38" y="16" text-anchor="middle">更少返工</text><text class="tiny" x="38" y="30" text-anchor="middle">澄清先行</text>
+        <rect class="amberBox" x="85" width="75" height="37" rx="6"/><text class="tiny" x="123" y="16" text-anchor="middle">更可控</text><text class="tiny" x="123" y="30" text-anchor="middle">可审计可回溯</text>
+        <rect class="amberBox" x="170" width="75" height="37" rx="6"/><text class="tiny" x="208" y="16" text-anchor="middle">更透明</text><text class="tiny" x="208" y="30" text-anchor="middle">证据链全量</text>
+        <rect class="amberBox" x="255" width="75" height="37" rx="6"/><text class="tiny" x="293" y="16" text-anchor="middle">更可信</text><text class="tiny" x="293" y="30" text-anchor="middle">可复盘可复现</text>
+      </g>
+    </g>
+  </g>
+
+  <g id="footer">
+    <rect x="7" y="1454" width="1041" height="31" rx="7" fill="#07101c" stroke="#3d5268"/>
+    <rect x="43" y="1464" width="15" height="13" rx="2" fill="#0b1b2d" stroke="#2f9bff"/>
+    <text class="footer" x="66" y="1475">主干（Trunk）</text>
+    <rect x="148" y="1464" width="15" height="13" rx="2" fill="#0e2b17" stroke="#54d75c"/>
+    <text class="footer" x="171" y="1475">分支（Branch）</text>
+    <rect x="276" y="1464" width="15" height="13" rx="2" fill="#111923" stroke="#7b8796"/>
+    <text class="footer" x="299" y="1475">基础设施（Infra）</text>
+    <text class="footer" x="466" y="1475">Snapshot: 2026-05-28 · Commit: d181be2f</text>
+    <rect x="862" y="1461" width="158" height="22" rx="5" fill="#0d1320" stroke="#6d7e91"/>
+    <text class="footer" x="941" y="1476" text-anchor="middle" fill="#ffd45d">☆ A+ Reconnaissance</text>
+  </g>
+
+  <metadata>
+    {
+      "source_png": "docs/assets/ChatGPT Image 2026年5月28日 19_21_51.png",
+      "redraw_date": "2026-05-28",
+      "method": "manual editable vector reconstruction",
+      "contains_embedded_raster": false
+    }
+  </metadata>
+</svg>

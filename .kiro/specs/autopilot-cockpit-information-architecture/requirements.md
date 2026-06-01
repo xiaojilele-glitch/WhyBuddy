@@ -2,7 +2,7 @@
 
 ## 目标
 
-定义任务自动驾驶三栏驾驶舱的信息架构，使 `Cube Pets Office` 能以“目标 -> 路线 -> 执行 -> 接管 -> 证据”的方式承载复杂任务全过程，并与现有 `mission-first`、`Mission Runtime`、`HITL`、`replay`、`audit` 基座保持兼容。
+定义任务自动驾驶三栏驾驶舱的信息架构，使 `WhyBuddy` 能以“目标 -> 路线 -> 执行 -> 接管 -> 证据”的方式承载复杂任务全过程，并与现有 `mission-first`、`Mission Runtime`、`HITL`、`replay`、`audit` 基座保持兼容。
 
 ## 需求
 

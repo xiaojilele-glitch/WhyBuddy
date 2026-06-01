@@ -2,7 +2,7 @@
 
 ## 概述
 
-本设计为 Cube Pets Office 提供基于 Docker Compose 的生产级部署方案。整体架构采用五服务编排模式：Nginx 前端静态托管、Node.js 后端、Lobster Executor 执行器、Prometheus 指标采集、Grafana 可视化仪表盘。所有服务通过 Docker 内部网络通信，仅前端 80 端口对外暴露。通过多阶段构建最小化镜像体积，通过健康检查和优雅关闭保障服务可用性，通过部署脚本实现零停机更新。
+本设计为 WhyBuddy 提供基于 Docker Compose 的生产级部署方案。整体架构采用五服务编排模式：Nginx 前端静态托管、Node.js 后端、Lobster Executor 执行器、Prometheus 指标采集、Grafana 可视化仪表盘。所有服务通过 Docker 内部网络通信，仅前端 80 端口对外暴露。通过多阶段构建最小化镜像体积，通过健康检查和优雅关闭保障服务可用性，通过部署脚本实现零停机更新。
 
 ## 架构
 

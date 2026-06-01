@@ -2,7 +2,7 @@
 	"FileVersion": 3,
 	"EngineAssociation": "5.4",
 	"Category": "Samples",
-	"Description": "Cube Pets Office - UE5 办公室场景，对标 Three.js OfficeRoom 布局，使用 Kenney Furniture Kit 风格低多边形资产，支持 Pixel Streaming 实时推流。",
+	"Description": "WhyBuddy - UE5 办公室场景，对标 Three.js OfficeRoom 布局，使用 Kenney Furniture Kit 风格低多边形资产，支持 Pixel Streaming 实时推流。",
 	"Modules": [
 		{
 			"Name": "CubePetsOffice",
