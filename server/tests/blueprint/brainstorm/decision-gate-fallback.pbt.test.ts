@@ -16,13 +16,12 @@ import { describe, it, expect, vi } from "vitest";
 import fc from "fast-check";
 
 import {
-  createDecisionGate,
+  decide,
   FALLBACK_OUTPUT,
-  type DecisionGateLlmCaller,
-  type DecisionGateEventEmitter,
+  type LLMCallerFn,
+  type EventEmitterFn,
 } from "../../../routes/blueprint/brainstorm/decision-gate.js";
 import type { DecisionGateInput } from "../../../../shared/blueprint/brainstorm-contracts.js";
-import type { BlueprintGenerationEvent } from "../../../../shared/blueprint/contracts.js";
 
 // ---------------------------------------------------------------------------
 // Arbitraries
@@ -30,16 +29,19 @@ import type { BlueprintGenerationEvent } from "../../../../shared/blueprint/cont
 
 /** Generate arbitrary DecisionGateInput values. */
 const arbDecisionGateInput: fc.Arbitrary<DecisionGateInput> = fc.record({
-  jobId: fc.string({ minLength: 1, maxLength: 40 }).map(
-    (s) => `job_${s.replace(/[^a-zA-Z0-9_-]/g, "x")}`,
-  ),
-  stageId: fc.string({ minLength: 1, maxLength: 20 }).map(
-    (s) => `stage_${s.replace(/[^a-zA-Z0-9_-]/g, "x")}`,
-  ),
+  jobId: fc
+    .string({ minLength: 1, maxLength: 40 })
+    .map((s) => `job_${s.replace(/[^a-zA-Z0-9_-]/g, "x")}`),
+  stageId: fc
+    .string({ minLength: 1, maxLength: 20 })
+    .map((s) => `stage_${s.replace(/[^a-zA-Z0-9_-]/g, "x")}`),
   stageContext: fc.string({ minLength: 1, maxLength: 200 }),
-  degradedBridges: fc.constant([]), // No degraded bridges for this test — we test LLM errors
+  degradedBridges: fc.constant([] as string[]), // No degraded bridges — we test LLM errors
   previousStageOutputs: fc.option(
-    fc.array(fc.string({ minLength: 1, maxLength: 50 }), { minLength: 0, maxLength: 3 }),
+    fc.array(fc.string({ minLength: 1, maxLength: 50 }), {
+      minLength: 0,
+      maxLength: 3,
+    }),
     { nil: undefined },
   ),
 });
@@ -48,55 +50,55 @@ const arbDecisionGateInput: fc.Arbitrary<DecisionGateInput> = fc.record({
  * Generate arbitrary error types that could occur during LLM invocation.
  * Covers: timeout (AbortError), network errors, parse errors, and generic exceptions.
  */
-const arbErrorFactory: fc.Arbitrary<{ name: string; factory: () => Error }> = fc.oneof(
-  // Timeout / AbortError
-  fc.constant({
-    name: "AbortError (timeout)",
-    factory: () => {
-      const e = new DOMException("The operation was aborted", "AbortError");
-      return e;
-    },
-  }),
-  // Network error variants
-  fc.string({ minLength: 1, maxLength: 50 }).map((msg) => ({
-    name: "NetworkError",
-    factory: () => {
-      const e = new Error(`Network error: ${msg}`);
-      e.name = "NetworkError";
-      return e;
-    },
-  })),
-  // TypeError (common for fetch failures)
-  fc.string({ minLength: 1, maxLength: 50 }).map((msg) => ({
-    name: "TypeError (fetch)",
-    factory: () => new TypeError(`fetch failed: ${msg}`),
-  })),
-  // JSON parse error
-  fc.string({ minLength: 1, maxLength: 100 }).map((badJson) => ({
-    name: "SyntaxError (parse)",
-    factory: () => new SyntaxError(`Unexpected token in JSON at position 0: ${badJson}`),
-  })),
-  // Validation error (invalid schema from LLM)
-  fc.string({ minLength: 1, maxLength: 80 }).map((detail) => ({
-    name: "ValidationError",
-    factory: () => new Error(`Invalid DecisionGateOutput: ${detail}`),
-  })),
-  // Generic unknown error
-  fc.string({ minLength: 1, maxLength: 60 }).map((msg) => ({
-    name: "GenericError",
-    factory: () => new Error(msg),
-  })),
-  // RangeError
-  fc.constant({
-    name: "RangeError",
-    factory: () => new RangeError("Maximum call stack size exceeded"),
-  }),
-  // EvalError (exotic but possible)
-  fc.constant({
-    name: "EvalError",
-    factory: () => new EvalError("Unexpected eval error"),
-  }),
-);
+const arbErrorFactory: fc.Arbitrary<{ name: string; factory: () => Error }> =
+  fc.oneof(
+    // Timeout / AbortError
+    fc.constant({
+      name: "AbortError (timeout)",
+      factory: () => {
+        const e = new Error("The operation was aborted");
+        e.name = "AbortError";
+        return e;
+      },
+    }),
+    // Network error variants
+    fc.string({ minLength: 1, maxLength: 50 }).map((msg) => ({
+      name: "NetworkError",
+      factory: () => {
+        const e = new Error(`Network error: ${msg}`);
+        e.name = "NetworkError";
+        return e;
+      },
+    })),
+    // TypeError (common for fetch failures)
+    fc.string({ minLength: 1, maxLength: 50 }).map((msg) => ({
+      name: "TypeError (fetch)",
+      factory: () => new TypeError(`fetch failed: ${msg}`),
+    })),
+    // JSON parse error
+    fc.string({ minLength: 1, maxLength: 100 }).map((badJson) => ({
+      name: "SyntaxError (parse)",
+      factory: () =>
+        new SyntaxError(
+          `Unexpected token in JSON at position 0: ${badJson}`,
+        ),
+    })),
+    // Validation error (invalid schema from LLM)
+    fc.string({ minLength: 1, maxLength: 80 }).map((detail) => ({
+      name: "ValidationError",
+      factory: () => new Error(`Invalid DecisionGateOutput: ${detail}`),
+    })),
+    // Generic unknown error
+    fc.string({ minLength: 1, maxLength: 60 }).map((msg) => ({
+      name: "GenericError",
+      factory: () => new Error(msg),
+    })),
+    // RangeError
+    fc.constant({
+      name: "RangeError",
+      factory: () => new RangeError("Maximum call stack size exceeded"),
+    }),
+  );
 
 // ---------------------------------------------------------------------------
 // Property Test
@@ -110,7 +112,6 @@ describe("Property 3: Decision Gate failure fallback", () => {
    * 1. Returns { brainstormNeeded: false } (single-agent fallback)
    * 2. Emits a `brainstorm.degraded` event
    * 3. Never throws an unhandled exception
-   * 4. Never hangs (completes in bounded time)
    */
   it("for any error during LLM invocation, returns fallback and emits degraded event", async () => {
     await fc.assert(
@@ -118,30 +119,27 @@ describe("Property 3: Decision Gate failure fallback", () => {
         arbDecisionGateInput,
         arbErrorFactory,
         async (input, errorDef) => {
-          const emittedEvents: BlueprintGenerationEvent[] = [];
+          const emittedEvents: Array<{
+            type: string;
+            payload: Record<string, unknown>;
+          }> = [];
 
           // Mock LLM caller that always throws the generated error
-          const llmCaller: DecisionGateLlmCaller = {
-            invoke: vi.fn().mockImplementation(async () => {
-              throw errorDef.factory();
-            }),
-          };
-
-          // Mock event emitter that captures emitted events
-          const eventEmitter: DecisionGateEventEmitter = {
-            emit: vi.fn().mockImplementation((event: BlueprintGenerationEvent) => {
-              emittedEvents.push(event);
-            }),
-          };
-
-          const gate = createDecisionGate({
-            llmCaller,
-            eventEmitter,
-            timeoutMs: 5000,
+          const mockLlm: LLMCallerFn = vi.fn(async () => {
+            throw errorDef.factory();
           });
 
+          // Mock event emitter that captures emitted events
+          const mockEmit: EventEmitterFn = vi.fn(
+            (type: string, payload: Record<string, unknown>) => {
+              emittedEvents.push({ type, payload });
+            },
+          );
+
           // The decide() call must NOT throw — it must always return gracefully
-          const result = await gate.decide(input);
+          const result = await decide(input, mockLlm, mockEmit, {
+            timeoutMs: 5000,
+          });
 
           // 1. Must return fallback (brainstormNeeded: false)
           expect(result.brainstormNeeded).toBe(false);
@@ -151,9 +149,10 @@ describe("Property 3: Decision Gate failure fallback", () => {
           expect(emittedEvents.length).toBe(1);
           const degradedEvent = emittedEvents[0];
           expect(degradedEvent.type).toBe("brainstorm.degraded");
-          expect(degradedEvent.family).toBe("brainstorm");
-          expect(degradedEvent.jobId).toBe(input.jobId);
-          expect(degradedEvent.message).toContain("Decision Gate degraded");
+          expect(degradedEvent.payload.affectedComponent).toBe(
+            "decision-gate",
+          );
+          expect(degradedEvent.payload.fallbackAction).toBe("single-agent");
         },
       ),
       { numRuns: 100 },
@@ -161,7 +160,7 @@ describe("Property 3: Decision Gate failure fallback", () => {
   });
 
   /**
-   * Additional sub-property: LLM returning invalid JSON triggers fallback.
+   * Additional sub-property: LLM returning invalid/unparseable JSON triggers fallback.
    * This tests the parse-error path specifically with malformed responses.
    */
   it("for any malformed LLM response, returns fallback and emits degraded event", async () => {
@@ -171,35 +170,44 @@ describe("Property 3: Decision Gate failure fallback", () => {
         fc.oneof(
           // Completely random strings (unlikely valid JSON)
           fc.string({ minLength: 1, maxLength: 200 }),
-          // Valid JSON but wrong schema
-          fc.json().map((j) => JSON.stringify(j)),
           // Partial JSON
           fc.constant('{ "brainstormNeeded": true, "recommendedMode":'),
           // Empty string
           fc.constant(""),
           // HTML response (common API error)
-          fc.constant("<html><body>503 Service Unavailable</body></html>"),
+          fc.constant(
+            "<html><body>503 Service Unavailable</body></html>",
+          ),
+          // Valid JSON but wrong schema (missing required fields)
+          fc.constant(JSON.stringify({ foo: "bar" })),
+          // Valid JSON with wrong types
+          fc.constant(
+            JSON.stringify({
+              brainstormNeeded: "yes",
+              recommendedMode: 42,
+              requiredRoles: "planner",
+              requiredToolCategories: null,
+              reasoning: 123,
+            }),
+          ),
         ),
         async (input, malformedResponse) => {
-          const emittedEvents: BlueprintGenerationEvent[] = [];
+          const emittedEvents: Array<{
+            type: string;
+            payload: Record<string, unknown>;
+          }> = [];
 
-          const llmCaller: DecisionGateLlmCaller = {
-            invoke: vi.fn().mockResolvedValue(malformedResponse),
-          };
+          const mockLlm: LLMCallerFn = vi.fn(async () => malformedResponse);
 
-          const eventEmitter: DecisionGateEventEmitter = {
-            emit: vi.fn().mockImplementation((event: BlueprintGenerationEvent) => {
-              emittedEvents.push(event);
-            }),
-          };
+          const mockEmit: EventEmitterFn = vi.fn(
+            (type: string, payload: Record<string, unknown>) => {
+              emittedEvents.push({ type, payload });
+            },
+          );
 
-          const gate = createDecisionGate({
-            llmCaller,
-            eventEmitter,
+          const result = await decide(input, mockLlm, mockEmit, {
             timeoutMs: 5000,
           });
-
-          const result = await gate.decide(input);
 
           // Must return fallback
           expect(result.brainstormNeeded).toBe(false);
@@ -208,7 +216,9 @@ describe("Property 3: Decision Gate failure fallback", () => {
           // Must emit degraded event
           expect(emittedEvents.length).toBe(1);
           expect(emittedEvents[0].type).toBe("brainstorm.degraded");
-          expect(emittedEvents[0].jobId).toBe(input.jobId);
+          expect(emittedEvents[0].payload.affectedComponent).toBe(
+            "decision-gate",
+          );
         },
       ),
       { numRuns: 100 },

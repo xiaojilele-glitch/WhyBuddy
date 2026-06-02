@@ -58,6 +58,7 @@ const DEFAULT_RELAY_FAMILIES: Set<string> = new Set<string>([
   "job",
   "evidence",
   "sandbox",
+  "brainstorm",
 ]);
 
 /** 默认批量聚合窗口 */

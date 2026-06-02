@@ -21,6 +21,14 @@ import {
   createRouteSetLlmGenerator,
   type RouteSetLlmGenerator,
 } from "./blueprint/routeset/route-llm-generator.js";
+import { getBrainstormDiagnostics } from "./blueprint/brainstorm/pipeline-integration.js";
+import {
+  wrapStageWithBrainstorm,
+} from "./blueprint/brainstorm/stage-wrapper.js";
+import {
+  isStageEnabled,
+  type BrainstormEligibleStage,
+} from "./blueprint/brainstorm/stage-config.js";
 import {
   buildBlueprintServiceContext,
   rebindBlueprintServiceContextRuntimeAdapters,
@@ -556,7 +564,12 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
       const snapshot = blueprintServiceContext.runtimeDiagnostics.snapshot(
         blueprintServiceContext.now,
       );
-      res.status(200).json(snapshot);
+      res.status(200).json({
+        ...snapshot,
+        brainstorm: getBrainstormDiagnostics(
+          blueprintServiceContext.brainstormContext ?? null,
+        ),
+      });
     } catch {
       res.status(500).json({ error: "diagnostics unavailable" });
     }
@@ -1368,10 +1381,19 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
       return;
     }
 
-    const response = await selectRouteForSpecTree(job, routeSet, parsed.request, {
-      now: deps.now,
-      store: jobStore,
+    const response = await wrapTypedBlueprintStage({
       ctx: blueprintServiceContext,
+      jobId: job.id,
+      projectId: job.projectId,
+      stageId: "spec_tree",
+      stageDescription:
+        "Derive the durable SPEC tree from the selected route and upstream route generation evidence.",
+      singleAgentFn: () =>
+        selectRouteForSpecTree(job, routeSet, parsed.request, {
+          now: deps.now,
+          store: jobStore,
+          ctx: blueprintServiceContext,
+        }),
     });
 
     // autopilot-mirofish-stream（2026-05-17）：
@@ -1551,17 +1573,26 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
       return;
     }
 
-    const response = await generateSpecDocuments(
-      blueprintServiceContext,
-      job,
-      specTree,
-      parsed.request,
-      {
-        now: deps.now,
-        store: jobStore,
-        locale: parsed.request.locale ?? resolveRequestLocale(req.body),
-      }
-    );
+    const response = await wrapTypedBlueprintStage({
+      ctx: blueprintServiceContext,
+      jobId: job.id,
+      projectId: job.projectId,
+      stageId: "spec_docs",
+      stageDescription:
+        "Generate SPEC requirements, design, and task documents for the selected SPEC tree nodes.",
+      singleAgentFn: () =>
+        generateSpecDocuments(
+          blueprintServiceContext,
+          job,
+          specTree,
+          parsed.request,
+          {
+            now: deps.now,
+            store: jobStore,
+            locale: parsed.request.locale ?? resolveRequestLocale(req.body),
+          }
+        ),
+    });
 
     res.status(201).json(response);
   });
@@ -1708,19 +1739,28 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
         )
       : undefined;
 
-    const result = await generateEffectPreviews(
-      blueprintServiceContext,
-      job,
-      specTree,
-      parsed.request,
-      {
-        now: deps.now,
-        store: jobStore,
-        clarificationSession,
-        domainContext,
-        primaryRoute,
-      }
-    );
+    const result = await wrapTypedBlueprintStage({
+      ctx: blueprintServiceContext,
+      jobId: job.id,
+      projectId: job.projectId,
+      stageId: "effect_preview",
+      stageDescription:
+        "Generate effect preview artifacts from SPEC documents and upstream project context.",
+      singleAgentFn: () =>
+        generateEffectPreviews(
+          blueprintServiceContext,
+          job,
+          specTree,
+          parsed.request,
+          {
+            now: deps.now,
+            store: jobStore,
+            clarificationSession,
+            domainContext,
+            primaryRoute,
+          }
+        ),
+    });
 
     if (!result.ok) {
       res.status(result.status).json({
@@ -1810,16 +1850,25 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
       return;
     }
 
-    const result = await generateImplementationPromptPackages(
-      blueprintServiceContext,
-      job,
-      specTree,
-      parsed.request,
-      {
-        now: deps.now,
-        store: jobStore,
-      }
-    );
+    const result = await wrapTypedBlueprintStage({
+      ctx: blueprintServiceContext,
+      jobId: job.id,
+      projectId: job.projectId,
+      stageId: "prompt_packaging",
+      stageDescription:
+        "Package implementation prompts from SPEC documents, effect previews, and target platform choices.",
+      singleAgentFn: () =>
+        generateImplementationPromptPackages(
+          blueprintServiceContext,
+          job,
+          specTree,
+          parsed.request,
+          {
+            now: deps.now,
+            store: jobStore,
+          }
+        ),
+    });
 
     if (!result.ok) {
       res.status(result.status).json({
@@ -1898,16 +1947,25 @@ export function createBlueprintRouter(deps: BlueprintRouterDeps = {}): Router {
       return;
     }
 
-    const result = await generateEngineeringLandingPlans(
-      blueprintServiceContext,
-      job,
-      specTree,
-      parsed.request,
-      {
-        now: deps.now,
-        store: jobStore,
-      }
-    );
+    const result = await wrapTypedBlueprintStage({
+      ctx: blueprintServiceContext,
+      jobId: job.id,
+      projectId: job.projectId,
+      stageId: "engineering_handoff",
+      stageDescription:
+        "Prepare engineering handoff plans from implementation prompt packages and downstream evidence.",
+      singleAgentFn: () =>
+        generateEngineeringLandingPlans(
+          blueprintServiceContext,
+          job,
+          specTree,
+          parsed.request,
+          {
+            now: deps.now,
+            store: jobStore,
+          }
+        ),
+    });
 
     if (!result.ok) {
       res.status(result.status).json({
@@ -2975,6 +3033,67 @@ async function resolveDefaultBlueprintServiceContext(deps: {
   });
 }
 
+async function wrapTypedBlueprintStage<T>(input: {
+  ctx: BlueprintServiceContext;
+  jobId: string;
+  projectId?: string;
+  stageId: BrainstormEligibleStage;
+  stageDescription: string;
+  singleAgentFn: () => Promise<T>;
+  serialize?: (value: T) => string;
+  parse?: (value: string) => T;
+}): Promise<T> {
+  if (!isStageEnabled(input.stageId) || !input.ctx.brainstormContext) {
+    return input.singleAgentFn();
+  }
+
+  const serialize = input.serialize ?? ((value: T) => JSON.stringify(value));
+  const parse = input.parse ?? ((value: string) => JSON.parse(value) as T);
+  let fallbackValue: T | undefined;
+
+  const wrappedOutput = await wrapStageWithBrainstorm({
+    brainstormContext: input.ctx.brainstormContext,
+    llm: {
+      callJson: async (messages, options) => {
+        const result = await input.ctx.llm.callJson(
+          messages as any,
+          options as any,
+        );
+        return {
+          content:
+            typeof result === "string" ? result : JSON.stringify(result),
+        };
+      },
+    },
+    eventBus: {
+      emit: event => input.ctx.eventBus.emit(event as any),
+    },
+    logger: input.ctx.logger,
+    jobId: input.jobId,
+    projectId: input.projectId,
+    stageId: input.stageId,
+    stageDescription: input.stageDescription,
+    singleAgentFn: async () => {
+      fallbackValue = await input.singleAgentFn();
+      return serialize(fallbackValue);
+    },
+  });
+
+  try {
+    return parse(wrappedOutput);
+  } catch (error) {
+    input.ctx.logger.warn(
+      `[brainstorm] Typed stage output could not be parsed for "${input.stageId}"; using single-agent fallback`,
+      {
+        jobId: input.jobId,
+        stageId: input.stageId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
+    return fallbackValue ?? input.singleAgentFn();
+  }
+}
+
 export async function createGenerationJob(
   request: BlueprintGenerationRequest,
   options: CreateGenerationJobOptions
@@ -3041,16 +3160,25 @@ export async function createGenerationJob(
     routeSet = agentResult.routeSet;
   } else {
     // Legacy path (unchanged)
-    routeSet = await buildRouteSet(
-      request,
+    routeSet = await wrapTypedBlueprintStage({
+      ctx,
       jobId,
-      createdAt,
-      options.clarificationSession,
-      options.routeSetLlmGenerator,
-      options.intake,
-      options.context,
-      options.locale
-    );
+      projectId: request.projectId,
+      stageId: "route_generation",
+      stageDescription:
+        "Generate primary and alternative autopilot routes from the request, intake, clarification, and project context.",
+      singleAgentFn: () =>
+        buildRouteSet(
+          request,
+          jobId,
+          createdAt,
+          options.clarificationSession,
+          options.routeSetLlmGenerator,
+          options.intake,
+          options.context,
+          options.locale
+        ),
+    });
   }
   const routeArtifact: BlueprintGenerationArtifact = {
     id: createId("blueprint-artifact"),

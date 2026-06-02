@@ -65,6 +65,9 @@ import {
   createRouteSetLlmGenerator,
   type RouteSetLlmGenerator,
 } from "./routeset/route-llm-generator.js";
+import { createEventEmitterAdapter } from "./brainstorm/event-emitter-adapter.js";
+import { createLlmCallerAdapter } from "./brainstorm/llm-adapter.js";
+import { assembleBrainstormContext } from "./brainstorm/pipeline-integration.js";
 import type {
   BlueprintExecutorCallbackDispatcher,
   DockerCapabilityBridge,
@@ -737,6 +740,21 @@ export interface BlueprintServiceContext {
    *   测试基线影响面。
    */
   callbackReceiver?: CallbackReceiver;
+
+  /**
+   * Optional: Multi-Agent Brainstorm subsystem context.
+   *
+   * Non-null when `BLUEPRINT_BRAINSTORM_ENABLED === "true"` AND
+   * `BUILD_TARGET !== "test"`. Assembled by `buildBlueprintServiceContext`
+   * using LLM/EventBus adapters from the brainstorm hookup modules.
+   *
+   * When null, `wrapStageWithBrainstorm` skips brainstorm entirely and
+   * runs the single-agent fallback. This field is additive — existing code
+   * that doesn't reference it continues to compile unchanged.
+   *
+   * @see .kiro/specs/brainstorm-pipeline-hookup/design.md §6
+   */
+  brainstormContext?: import("./brainstorm/pipeline-integration.js").BrainstormServiceContext | null;
 }
 
 /**
@@ -1700,6 +1718,44 @@ export function buildBlueprintServiceContext(
       logger.warn("[context] Failed to assemble roleAgentDelegator", {
         error: err instanceof Error ? err.message : String(err),
       });
+    }
+  }
+
+  // ── Brainstorm Pipeline Hookup (brainstorm-pipeline-hookup spec Task 7.2) ──
+  // Assemble BrainstormServiceContext when master switch is on and not in test.
+  // Uses the same env-gate + BUILD_TARGET pattern as roleAgentDelegator above.
+  if (
+    !ctx.brainstormContext &&
+    process.env.BLUEPRINT_BRAINSTORM_ENABLED === "true" &&
+    process.env.BUILD_TARGET !== "test"
+  ) {
+    try {
+      const brainstormLlmCaller = createLlmCallerAdapter({
+        callJson: async (messages, options) => {
+          const result = await ctx.llm.callJson(
+            messages as any,
+            options as any,
+          );
+          return { content: typeof result === "string" ? result : JSON.stringify(result) };
+        },
+      });
+
+      const brainstormEmitter = createEventEmitterAdapter({
+        eventBus: { emit: (event: Record<string, unknown>) => ctx.eventBus.emit(event as any) },
+        logger: ctx.logger,
+        jobId: "",
+        stage: "",
+      });
+
+      ctx.brainstormContext = assembleBrainstormContext(
+        brainstormLlmCaller,
+        brainstormEmitter,
+      );
+    } catch (err) {
+      logger.warn("[context] Failed to assemble brainstormContext", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      ctx.brainstormContext = null;
     }
   }
 

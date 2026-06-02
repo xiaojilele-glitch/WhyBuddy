@@ -28,7 +28,8 @@ import {
   decide,
   routeDecision,
   FALLBACK_OUTPUT,
-  parseDecisionGateResponse,
+  type LLMCallerFn,
+  type EventEmitterFn,
 } from "../../../routes/blueprint/brainstorm/decision-gate.js";
 
 // ---------------------------------------------------------------------------

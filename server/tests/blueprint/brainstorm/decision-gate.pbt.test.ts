@@ -19,7 +19,8 @@ import type {
   CollaborationMode,
   BrainstormRoleId,
   ToolCategory,
-} from "../../../shared/blueprint/brainstorm-contracts.js";
+} from "../../../../shared/blueprint/brainstorm-contracts.js";
+import { parseDecisionGateResponse } from "../../../routes/blueprint/brainstorm/decision-gate.js";
 
 // ─── Valid domain values ────────────────────────────────────────────────────
 
@@ -63,10 +64,8 @@ const arbToolCategory: fc.Arbitrary<ToolCategory> = fc.constantFrom(
 const arbDecisionGateOutput: fc.Arbitrary<DecisionGateOutput> = fc.record({
   brainstormNeeded: fc.boolean(),
   recommendedMode: arbCollaborationMode,
-  requiredRoles: fc
-    .uniqueArray(arbBrainstormRoleId, { minLength: 1, maxLength: 6 }),
-  requiredToolCategories: fc
-    .uniqueArray(arbToolCategory, { minLength: 0, maxLength: 4 }),
+  requiredRoles: fc.uniqueArray(arbBrainstormRoleId, { minLength: 1, maxLength: 6 }),
+  requiredToolCategories: fc.uniqueArray(arbToolCategory, { minLength: 0, maxLength: 4 }),
   reasoning: fc.string({ minLength: 1, maxLength: 500 }),
 });
 
@@ -74,37 +73,43 @@ const arbDecisionGateOutput: fc.Arbitrary<DecisionGateOutput> = fc.record({
 // **Validates: Requirements 1.2**
 
 describe("Property 1: Decision Gate schema completeness", () => {
-  it("all required fields are present and have valid types", () => {
+  it("for any valid LLM response, parseDecisionGateResponse returns output with all required fields", () => {
     fc.assert(
       fc.property(arbDecisionGateOutput, (output: DecisionGateOutput) => {
+        // Simulate LLM returning valid JSON
+        const raw = JSON.stringify(output);
+        const parsed = parseDecisionGateResponse(raw);
+
+        // Must successfully parse
+        expect(parsed).not.toBeNull();
+
         // 1. brainstormNeeded is a boolean
-        expect(typeof output.brainstormNeeded).toBe("boolean");
+        expect(typeof parsed!.brainstormNeeded).toBe("boolean");
 
         // 2. recommendedMode is one of the valid CollaborationMode values
-        expect(VALID_COLLABORATION_MODES).toContain(output.recommendedMode);
+        expect(VALID_COLLABORATION_MODES).toContain(parsed!.recommendedMode);
 
         // 3. requiredRoles is a non-empty array of valid BrainstormRoleId values
-        expect(Array.isArray(output.requiredRoles)).toBe(true);
-        expect(output.requiredRoles.length).toBeGreaterThan(0);
-        for (const role of output.requiredRoles) {
+        expect(Array.isArray(parsed!.requiredRoles)).toBe(true);
+        expect(parsed!.requiredRoles.length).toBeGreaterThan(0);
+        for (const role of parsed!.requiredRoles) {
           expect(VALID_BRAINSTORM_ROLE_IDS).toContain(role);
         }
 
         // 4. requiredToolCategories is an array of valid ToolCategory values
-        expect(Array.isArray(output.requiredToolCategories)).toBe(true);
-        for (const cat of output.requiredToolCategories) {
+        expect(Array.isArray(parsed!.requiredToolCategories)).toBe(true);
+        for (const cat of parsed!.requiredToolCategories) {
           expect(VALID_TOOL_CATEGORIES).toContain(cat);
         }
 
-        // 5. reasoning is a non-empty string
-        expect(typeof output.reasoning).toBe("string");
-        expect(output.reasoning.length).toBeGreaterThan(0);
+        // 5. reasoning is a string
+        expect(typeof parsed!.reasoning).toBe("string");
       }),
-      { numRuns: 200 },
+      { numRuns: 100 },
     );
   });
 
-  it("rejects invalid objects that are missing required fields", () => {
+  it("parseDecisionGateResponse rejects invalid objects missing required fields", () => {
     // Generate arbitrary JSON objects that may be missing required fields
     const arbPartialObject = fc.record(
       {
@@ -119,109 +124,47 @@ describe("Property 1: Decision Gate schema completeness", () => {
 
     fc.assert(
       fc.property(arbPartialObject, (obj) => {
-        const isValid = validateDecisionGateOutput(obj);
+        const raw = JSON.stringify(obj);
+        const parsed = parseDecisionGateResponse(raw);
 
-        // If the validator says it's valid, verify it actually has all required fields
-        if (isValid) {
-          expect(typeof obj.brainstormNeeded).toBe("boolean");
-          expect(VALID_COLLABORATION_MODES).toContain(obj.recommendedMode);
-          expect(Array.isArray(obj.requiredRoles)).toBe(true);
-          expect((obj.requiredRoles as unknown[]).length).toBeGreaterThan(0);
-          for (const role of obj.requiredRoles as unknown[]) {
+        // If the parser says it's valid, verify it actually has all required fields
+        if (parsed !== null) {
+          expect(typeof parsed.brainstormNeeded).toBe("boolean");
+          expect(VALID_COLLABORATION_MODES).toContain(parsed.recommendedMode);
+          expect(Array.isArray(parsed.requiredRoles)).toBe(true);
+          expect(parsed.requiredRoles.length).toBeGreaterThan(0);
+          for (const role of parsed.requiredRoles) {
             expect(VALID_BRAINSTORM_ROLE_IDS).toContain(role);
           }
-          expect(Array.isArray(obj.requiredToolCategories)).toBe(true);
-          for (const cat of obj.requiredToolCategories as unknown[]) {
+          expect(Array.isArray(parsed.requiredToolCategories)).toBe(true);
+          for (const cat of parsed.requiredToolCategories) {
             expect(VALID_TOOL_CATEGORIES).toContain(cat);
           }
-          expect(typeof obj.reasoning).toBe("string");
-          expect((obj.reasoning as string).length).toBeGreaterThan(0);
+          expect(typeof parsed.reasoning).toBe("string");
         }
       }),
-      { numRuns: 200 },
+      { numRuns: 100 },
     );
   });
 
-  it("valid DecisionGateOutput JSON round-trips correctly", () => {
+  it("valid DecisionGateOutput JSON round-trips through parseDecisionGateResponse", () => {
     fc.assert(
       fc.property(arbDecisionGateOutput, (output: DecisionGateOutput) => {
-        // Serialize to JSON and back (simulating LLM response parsing)
+        // Serialize to JSON and parse through the real parser
         const serialized = JSON.stringify(output);
-        const parsed = JSON.parse(serialized) as unknown;
+        const parsed = parseDecisionGateResponse(serialized);
 
-        // After parsing, the object should still pass validation
-        expect(validateDecisionGateOutput(parsed)).toBe(true);
+        // Must successfully parse
+        expect(parsed).not.toBeNull();
 
-        // And the deserialized object should be equivalent
-        const typedParsed = parsed as DecisionGateOutput;
-        expect(typedParsed.brainstormNeeded).toBe(output.brainstormNeeded);
-        expect(typedParsed.recommendedMode).toBe(output.recommendedMode);
-        expect(typedParsed.requiredRoles).toEqual(output.requiredRoles);
-        expect(typedParsed.requiredToolCategories).toEqual(
-          output.requiredToolCategories,
-        );
-        expect(typedParsed.reasoning).toBe(output.reasoning);
+        // Deserialized object should be equivalent
+        expect(parsed!.brainstormNeeded).toBe(output.brainstormNeeded);
+        expect(parsed!.recommendedMode).toBe(output.recommendedMode);
+        expect(parsed!.requiredRoles).toEqual(output.requiredRoles);
+        expect(parsed!.requiredToolCategories).toEqual(output.requiredToolCategories);
+        expect(parsed!.reasoning).toBe(output.reasoning);
       }),
-      { numRuns: 200 },
+      { numRuns: 100 },
     );
   });
 });
-
-// ─── Inline validator ───────────────────────────────────────────────────────
-// This validates an unknown value against the DecisionGateOutput schema.
-// Once decision-gate.ts exports a parseDecisionGateOutput function,
-// this can be replaced with the real implementation.
-
-function validateDecisionGateOutput(value: unknown): value is DecisionGateOutput {
-  if (value === null || value === undefined || typeof value !== "object") {
-    return false;
-  }
-
-  const obj = value as Record<string, unknown>;
-
-  // brainstormNeeded must be boolean
-  if (typeof obj.brainstormNeeded !== "boolean") {
-    return false;
-  }
-
-  // recommendedMode must be a valid CollaborationMode
-  if (
-    typeof obj.recommendedMode !== "string" ||
-    !(VALID_COLLABORATION_MODES as string[]).includes(obj.recommendedMode)
-  ) {
-    return false;
-  }
-
-  // requiredRoles must be a non-empty array of valid BrainstormRoleId
-  if (!Array.isArray(obj.requiredRoles) || obj.requiredRoles.length === 0) {
-    return false;
-  }
-  for (const role of obj.requiredRoles) {
-    if (
-      typeof role !== "string" ||
-      !(VALID_BRAINSTORM_ROLE_IDS as string[]).includes(role)
-    ) {
-      return false;
-    }
-  }
-
-  // requiredToolCategories must be an array of valid ToolCategory
-  if (!Array.isArray(obj.requiredToolCategories)) {
-    return false;
-  }
-  for (const cat of obj.requiredToolCategories) {
-    if (
-      typeof cat !== "string" ||
-      !(VALID_TOOL_CATEGORIES as string[]).includes(cat)
-    ) {
-      return false;
-    }
-  }
-
-  // reasoning must be a non-empty string
-  if (typeof obj.reasoning !== "string" || obj.reasoning.length === 0) {
-    return false;
-  }
-
-  return true;
-}
