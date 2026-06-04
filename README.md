@@ -2,12 +2,10 @@
   <img src="./docs/assets/banner.png" alt="WhyBuddy" width="100%" />
 </p>
 
-<h1 align="center">🌐 WhyBuddy</h1>
+<h1 align="center">🏢 WhyBuddy</h1>
 
 <p align="center">
-  <strong>
-WhyBuddy — an AI agent crew that questions your product idea and rehearses it before you build.</strong><br/>
-  <em>Edge execution · Cloud orchestration · One sentence in, full spec out</em>
+  <strong>WhyBuddy — an AI agent team that challenges your product idea and rehearses it before you start building.</strong>
 </p>
 
 <p align="center">
@@ -16,138 +14,46 @@ WhyBuddy — an AI agent crew that questions your product idea and rehearses it 
 </p>
 
 <p align="center">
-  <a href="https://opencroc.github.io/whybuddy/"><img alt="demo" src="https://img.shields.io/badge/🌐_Live_Demo-blue?style=for-the-badge" /></a>
+  <a href="https://github.com/xiaojilele-glitch/WhyBuddy"><img alt="repo" src="https://img.shields.io/badge/🌐_GitHub_Repo-blue?style=for-the-badge" /></a>
   <a href="./ROADMAP.md"><img alt="roadmap" src="https://img.shields.io/badge/🗺️_Roadmap-111827?style=for-the-badge" /></a>
   <a href="./CONTRIBUTING.md"><img alt="contribute" src="https://img.shields.io/badge/🤝_Contribute-16a34a?style=for-the-badge" /></a>
 </p>
 
----
-
-## 🚀 Quick Start (1 minute · 2 commands)
-
-```bash
-cp .env.example .env       # then fill in LLM_API_KEY (see "MUST FILL" section)
-docker compose up
-```
-
-Open <http://localhost:3000> and you're in. The WhyBuddy server (3001 internally) is published on host port **3000** so you can navigate directly without remembering port numbers.
-
-> **Three ways to run** — pick whichever matches your environment:
-> 1. **Online demo** — <https://opencroc.github.io/whybuddy/> (browser-only mode, no install).
-> 2. **Docker compose** — the snippet above; one MySQL + one WhyBuddy container.
-> 3. **Local dev** — `pnpm install && pnpm run dev:all` (full stack, hot reload, see [Local Dev](#-local-dev) below).
+<p align="center">
+  <img alt="status" src="https://img.shields.io/badge/Status-Early_Testing-orange?style=flat-square" />
+  <img alt="license" src="https://img.shields.io/badge/License-MIT-111827?style=flat-square" />
+  <img alt="stars" src="https://img.shields.io/github/stars/xiaojilele-glitch/WhyBuddy?style=flat-square" />
+  <img alt="ts" src="https://img.shields.io/badge/TypeScript-486k_Lines-2563eb?style=flat-square" />
+  <img alt="tests" src="https://img.shields.io/badge/Tests-7,771_Cases-0f766e?style=flat-square" />
+  <img alt="specs" src="https://img.shields.io/badge/Specs-273_Dirs-7c3aed?style=flat-square" />
+</p>
 
 ---
 
-## 🔑 MUST FILL — without these you'll get template-only output
+## ⚡ 30 Second Overview
 
-The server starts even when these are blank, but every autopilot bridge silently
-falls back to deterministic templates and you'll see the same canned answers
-regardless of input. Fill these two and you'll get real LLM-driven generation:
+> **You enter one sentence. The system rehearses a complete product plan for you.**
+>
+> Spec documents · System architecture · Route planning · Prompt pack · Effect preview
+>
+> Fully visible. Fully exportable. Fully backed by an evidence trail.
 
-| Variable | What to put | Where to get one |
-|:---------|:------------|:-----------------|
-| **`LLM_API_KEY`** | An OpenAI-compatible API key | OpenAI · DashScope · OpenRouter · Moonshot · SiliconFlow · Zhipu · DeepSeek · any provider that speaks the OpenAI Chat / Responses API |
-| **`SESSION_SECRET`** | Any 64-char hex string | `openssl rand -hex 32` |
-
-`LLM_BASE_URL` and `LLM_MODEL` should match the provider you picked
-(default values target `api.openai.com` + `gpt-5.4`). Everything else in
-`.env.example` ships with safe defaults — leave them alone unless you have
-a reason.
-
----
-
-## 💡 What it does (in 30 seconds)
-
-You type one sentence. The system rehearses the entire product for you:
-
-```
-    💬 "AI comic platform"
-        │
-        ▼
-    ① 🔍 Smart Clarification    Goals · Constraints · Personas · Success criteria
-        │
-        ▼
-    ② 🗺️ Route Planning         Main route + Alternatives + Risk + Cost
-        │
-        ▼
-    ③ 🌳 SPEC Tree              Modular spec node decomposition
-        │
-        ▼
-    ④ 📄 Spec Documents         Requirements / Design / Tasks (streaming)
-        │
-        ▼
-    ⑤ 🎨 Effect Preview         Architecture + Prompts + Next steps
-        │
-        ▼
-    📦 Export → Markdown / ZIP / Online
-```
-
-> 💡 The entire process is **observable in real time**: a 3D office scene shows
-> the agent fleet collaborating, while the right-rail workbench streams
-> generation progress with stage indicators.
-
----
-
-## 🤖 The FSD Fleet
-
-Seven specialized AI roles collaborate on every rehearsal:
-
-| Role | Responsibility |
-|:----:|:--------------|
-| 🧠 **Planner** | Breaks the goal into executable routes |
-| ❓ **Clarifier** | Fills gaps, resolves ambiguity |
-| 🔬 **Researcher** | Gathers context, validates assumptions |
-| ✍️ **Generator** | Produces spec documents & artifacts |
-| ⚙️ **Operator** | Executes in Docker sandbox when needed |
-| 👁️ **Reviewer** | Checks quality, flags issues |
-| 📋 **Auditor** | Maintains evidence trail & compliance |
-
-Each role has access to **50+ AIGC capability nodes**, Docker sandbox, MCP
-tools, Skills, and domain knowledge injection.
-
----
-
-## ✨ Key Features
+<br/>
 
 <table>
 <tr>
-<td width="33%" valign="top">
+<td width="50%">
 
-### 👁️ Full Observability
-See every step: active roles, invoked capabilities, ReAct cycle stage, produced artifacts. **No black boxes.**
+### 🎯 Pain
 
-</td>
-<td width="33%" valign="top">
-
-### 🗺️ Multi-Route Planning
-Quick / Standard / Deep / Conservative routes with risk, cost, and takeover points. **Choose before anything runs.**
+You spend **days** writing a PRD, **weeks** aligning the team, and **months** before you know whether the direction is right.
 
 </td>
-<td width="33%" valign="top">
+<td width="50%">
 
-### 🛑 Human Takeover
-Clarification, approval, risk, budget, delivery — all explicit pause points. **Never silently fails.**
+### 💡 Solution
 
-</td>
-</tr>
-<tr>
-<td width="33%" valign="top">
-
-### 🔁 Evidence & Replay
-Exportable artifacts, audit logs, replay timeline. **Inspect any decision at any moment.**
-
-</td>
-<td width="33%" valign="top">
-
-### 🐳 Docker Sandbox
-Real code execution in isolated containers with HMAC callbacks and live terminal streaming.
-
-</td>
-<td width="33%" valign="top">
-
-### 📦 Export Everything
-Markdown, ZIP, or online preview. Every rehearsal is a shareable document package.
+Enter an idea → **5 minutes** → full rehearsal → decide whether it is worth building → if not, move to the next idea.
 
 </td>
 </tr>
@@ -155,22 +61,194 @@ Markdown, ZIP, or online preview. Every rehearsal is a shareable document packag
 
 ---
 
-## 🛠️ Local Dev
+## 🧩 The `whybuddy` Skill Package (Portable · Embeddable in Any Agent)
+
+Besides the full app, WhyBuddy also ships a **self-contained Skill package** that can be dropped into Trae, Claude, or any host that supports Agent Skills. One sentence in → a reviewable, deliverable spec package out, with every gate **actually run by scripts** instead of merely claimed by the model.
+
+> **Guarantee the floor, not the ceiling.** Deterministic scripts guarantee the *floor* — valid structure, success criteria covered by requirements, EARS acceptance, cited evidence, gate results logged, every artifact provenance-labeled. They do not promise the *ceiling*; real depth still needs a real repo and a human. Everything it generates is labeled with how much you can trust it.
+
+### How to Use
+
+The ready-to-import Skill archive is included at [`skills/whybuddy.zip`](./skills/whybuddy.zip).
 
 ```bash
-git clone https://github.com/opencroc/whybuddy.git && cd whybuddy
+# 1. Drop the skill package into your agent host's skills directory
+#    (Trae: Skills · Claude: skill)
+# 2. Give it a one-sentence idea — it produces the full spec package below
+# 3. For image previews, provide an image endpoint key:
+export IMAGE_API_KEY=sk-...           # or fill image_config.json -> api_key
+# default: gpt-image-2 · 2K · 16:9 · 600s timeout (all configurable)
+
+# Generate or regenerate images yourself at any time, one per module:
+python scripts/finalize_previews.py           # module images from spec_tree
+python scripts/batch_images.py prompts.txt    # batch generation against your endpoint
+
+# Audit any image run in one command, catching fake, fallback, or duplicated images:
+python scripts/check_previews_real.py
+```
+
+### Use Cases
+
+| Category | Examples |
+|:---------|:---------|
+| 🆕 Build a product from zero | AI meeting minutes · income dashboard · OKR tracker · lightweight CRM · resume optimizer |
+| 🤖 Build an AI agent | PRD generator · issue triage · code review · investment research · sentiment analysis |
+| 🧩 Add a feature to an existing project | RBAC for React · i18n for Next.js · audit logging for a Node API · OpenAPI enhancement for FastAPI |
+
+### Output Package Structure
+
+```text
+<project-name>/
+├─ spec_tree.json            ← structure source; docs / matrix / images all derive from it
+├─ clarified_brief.json      goal · constraints · numbered success criteria
+├─ route_options.json · selected_route.json · decision_mode.json
+├─ traceability_matrix.json  traceability matrix: requirement ↔ design ↔ task ↔ evidence ↔ test case
+├─ docs/
+│  ├─ requirements.md · design.md · tasks.md
+│  ├─ interface_contracts.md · test_cases.md · open_items.md
+│  └─ prompt_pack.md · effect_preview.md · architecture.mmd
+├─ checks_ledger.json        every gate's real script + exit code + output (not hand-waved)
+├─ companion_log.json        companion trace: what the critic flagged · which real sources were cited
+├─ handoff_manifest.json     delivery manifest: every artifact carries source + confidence labels
+├─ previews/                 per-module UI mockups ("preview · unverified") + provenance.json
+└─ scripts/                  deterministic scripts — the floor itself
+   ├─ gate.py                     ledger wrapper: run any check and record the result
+   ├─ validate_spec_tree.py       SPEC tree validation: structure · coverage · EARS · evidence sources
+   ├─ check_content_quality.py    document validation: required sections · length · EARS acceptance
+   ├─ check_companion.py          companion trace must be real
+   ├─ finalize_previews.py        image gate: generate real module images, judged by real success count
+   ├─ check_previews_real.py      audit: catch fake / fallback / duplicate images
+   ├─ batch_images.py             standalone batch image generation
+   └─ fallback_tree.py            naturally valid minimal tree when the LLM is unavailable
+```
+
+### How to Know It Is Not Faking It
+
+- **`checks_ledger.json`** — what ran, exit code, and output. Written automatically by scripts.
+- **`companion_log.json`** — what the critic flagged and which real sources the grounding cited.
+- **Provenance labels** — `previews/*.png` are marked "preview · unverified"; `interface_contracts.md` is marked "draft · unverified".
+- **`check_previews_real.py`** — one command tells you whether images are real generations or placeholders.
+
+---
+
+## 🔄 Workflow
+
+```
+    ╭──────────────────────────────────────────────────────────╮
+    │                                                          │
+    │   💬 "AI comic platform"                                │
+    │       │                                                  │
+    │       ▼                                                  │
+    │   ① 🔍 Smart clarification                              │
+    │       Goals · Constraints · Personas · Success criteria  │
+    │       │                                                  │
+    │       ▼                                                  │
+    │   ② 🗺️ Route planning                                   │
+    │       Main route + Alternatives + Risk + Cost estimate   │
+    │       │                                                  │
+    │       ▼                                                  │
+    │   ③ 🌱 SPEC tree                                        │
+    │       Decomposed into modular spec document nodes        │
+    │       │                                                  │
+    │       ▼                                                  │
+    │   ④ 📄 Spec documents (streaming)                        │
+    │       Requirements / Design / Tasks · visible in time    │
+    │       │                                                  │
+    │       ▼                                                  │
+    │   ⑤ 🎬 Effect preview                                   │
+    │       Architecture + prompt pack + actionable next steps │
+    │       │                                                  │
+    │       ▼                                                  │
+    │   📦 Export → Markdown / ZIP / Online preview            │
+    │                                                          │
+    ╰──────────────────────────────────────────────────────────╯
+```
+
+> 💡 The entire process is **visible in real time**: a 3D office scene shows the agent team collaborating, while the right-side workbench streams generation progress and stage indicators.
+
+---
+
+## 🤖 FSD Agent Fleet
+
+Seven specialized AI roles collaborate in every rehearsal:
+
+| Role | Responsibility |
+|:----:|:---------------|
+| 🧭 **Planner** | Breaks the goal into executable routes |
+| ❤️ **Clarifier** | Fills gaps and resolves ambiguity |
+| 🔍 **Researcher** | Collects context and validates assumptions |
+| ✍️ **Generator** | Produces spec documents and artifacts |
+| ⚙️ **Executor** | Runs code in the Docker sandbox |
+| 👁️ **Reviewer** | Checks quality and marks issues |
+| 📊 **Auditor** | Maintains the evidence chain and compliance trail |
+
+Each role can access **50+ AIGC capability nodes**, Docker sandbox, MCP tools, Skills, and domain knowledge injection.
+
+---
+
+## ✨ Core Capabilities
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 👁️ Full Observability
+See every step: active roles, invoked capabilities, ReAct cycle stage, and produced artifacts. **No black boxes.**
+
+</td>
+<td width="33%" valign="top">
+
+### 🗺️ Multi-Route Planning
+Quick / Standard / Deep / Conservative routes, each with risk, cost, and takeover points. **Choose before it runs.**
+
+</td>
+<td width="33%" valign="top">
+
+### 🛑 Boundary Takeover
+Clarification, approval, risk, budget, and delivery are explicit pause points. **It never fails silently.**
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+### 🔁 Evidence & Replay
+Exportable artifacts, audit logs, and replay timelines. **Trace any decision at any time.**
+
+</td>
+<td width="33%" valign="top">
+
+### 🐳 Docker Sandbox
+Real code execution in isolated containers, with HMAC callbacks and real-time terminal streaming.
+
+</td>
+<td width="33%" valign="top">
+
+### 📦 Fully Exportable
+Export Markdown, ZIP, or online previews. Every rehearsal becomes a shareable document package.
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🚀 Quick Start
+
+```bash
+git clone https://github.com/xiaojilele-glitch/WhyBuddy.git && cd WhyBuddy
 pnpm install
-pnpm run dev:all          # Full stack: frontend + server + executor
+pnpm run dev:all          # full stack: frontend + server + executor
 ```
 
 <details>
 <summary>💻 <strong>Browser-only mode</strong> (no server, no .env)</summary>
 
 ```bash
-pnpm run dev:frontend     # Opens at localhost:5173
+pnpm run dev:frontend     # open localhost:5173
 ```
 
-Or visit the [Live Demo](https://opencroc.github.io/whybuddy/) directly on GitHub Pages.
+Or open the repository at [xiaojilele-glitch/WhyBuddy](https://github.com/xiaojilele-glitch/WhyBuddy).
 
 </details>
 
@@ -179,46 +257,26 @@ Or visit the [Live Demo](https://opencroc.github.io/whybuddy/) directly on GitHu
 
 - Node.js 22+
 - pnpm
-- Docker (optional, only required for full sandbox executor mode; WhyBuddy
-  falls back to a native runner when Docker is unavailable)
-
-</details>
-
-<details>
-<summary>🐳 <strong>Notes on the Docker setup</strong></summary>
-
-- The compose file boots **two containers**: `whybuddy-app` (the server +
-  bundled frontend) and `whybuddy-mysql` (MySQL 8 with the
-  `whybuddy` schema kept for backward compat — the data shape is
-  unchanged, only the project brand changed).
-- The Lobster Executor sandbox is **not** in the compose file by default.
-  Docker-in-Docker introduces extra surface area and isn't required for
-  the spec generation loop. Opt in by setting
-  `LOBSTER_EXECUTION_MODE=real` and pointing the host's Docker daemon at
-  the executor service yourself.
-- All `BLUEPRINT_*_ENABLED` flags default to safe values matched to a
-  fresh dev environment; the **AUTOPILOT_REAL_RUNTIME** master switch is
-  on by default — bridges that find their dependencies will run real,
-  bridges that don't will fall back gracefully.
+- Docker (optional, for full executor mode)
 
 </details>
 
 ---
 
-## 🖼️ Screenshots
+## 🖼️ Product Screens
 
 <table>
   <tr>
-    <td width="50%"><img src="./docs/assets/A.png" alt="3D Office + SPEC Tree" /></td>
-    <td width="50%"><img src="./docs/assets/B.png" alt="Route Planning" /></td>
+    <td width="50%"><img src="./docs/assets/A.png" alt="3D office + SPEC tree" /></td>
+    <td width="50%"><img src="./docs/assets/B.png" alt="Route planning" /></td>
   </tr>
   <tr>
-    <td width="50%"><img src="./docs/assets/C.png" alt="Streaming Spec Documents" /></td>
-    <td width="50%"><img src="./docs/assets/D.png" alt="Execution Panel" /></td>
+    <td width="50%"><img src="./docs/assets/C.png" alt="Streaming spec documents" /></td>
+    <td width="50%"><img src="./docs/assets/D.png" alt="Execution panel" /></td>
   </tr>
   <tr>
-    <td width="50%"><img src="./docs/assets/E.png" alt="Agent Fleet Status" /></td>
-    <td width="50%"><img src="./docs/assets/F.png" alt="Evidence & Replay" /></td>
+    <td width="50%"><img src="./docs/assets/E.png" alt="Agent fleet status" /></td>
+    <td width="50%"><img src="./docs/assets/F.png" alt="Evidence and replay" /></td>
   </tr>
 </table>
 
@@ -226,43 +284,42 @@ Or visit the [Live Demo](https://opencroc.github.io/whybuddy/) directly on GitHu
 
 ## 📝 Rehearsal Examples
 
-> Every rehearsal is a shareable piece of content. **50 rehearsals = 50
-> distribution opportunities.**
+> Every rehearsal is a shareable piece of content. **50 rehearsals = 50 distribution opportunities.**
 
 | 💬 Input | 📦 Output |
 |:---------|:----------|
-| "AI comic platform" | 6 SPEC modules · content pipeline · monetization · architecture |
+| "AI comic platform" | 6 SPEC modules · content pipeline · monetization model · system architecture |
 | "Permission management SaaS" | 8 SPEC modules · RBAC · multi-tenant · API contracts |
-| "Sentiment analysis tool" | 5 SPEC modules · data pipeline · model selection · alerts |
-| "Indie dev bookkeeping app" | 4 SPEC modules · local-first · sync · privacy compliance |
-| "Enterprise knowledge base" | 7 SPEC modules · RAG pipeline · permissions · indexing |
-| "Cross-border product picker" | 6 SPEC modules · data sources · scoring · competitor analysis |
+| "Sentiment analysis tool" | 5 SPEC modules · data pipeline · model selection · alert engine |
+| "Indie developer bookkeeping app" | 4 SPEC modules · local-first · sync plan · privacy compliance |
+| "Enterprise knowledge base" | 7 SPEC modules · RAG pipeline · permission model · incremental indexing |
+| "Cross-border product picker" | 6 SPEC modules · data sources · scoring algorithm · competitor analysis |
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  🌐 ENTRY          Browser · Feishu Relay · Destination Input   │
+│  🌐 Entry Layer       Browser · Feishu Relay · destination input│
 ├─────────────────────────────────────────────────────────────────┤
-│  🖥️ FRONTEND       3D Scene · Task Cockpit · Route View        │
-│                    Drive State · Takeover Panel · Replay         │
+│  🖥️ Frontend Layer    3D scene · task cockpit · route view      │
+│                       drive state · takeover panel · replay     │
 ├─────────────────────────────────────────────────────────────────┤
-│  🧠 CUBE BRAIN     10-Stage Workflow · Mission Runtime          │
-│                    Dynamic Roles · Cost Governance · Review      │
+│  🧠 Cube Brain        10-stage workflow · Mission Runtime       │
+│                       dynamic roles · cost governance · review  │
 ├─────────────────────────────────────────────────────────────────┤
-│  🔮 PROJECTION     Mission→Destination · Workflow→Route         │
-│                    State→DriveState · Decision→Takeover          │
+│  🔮 Projection Layer  Mission→Destination · Workflow→Route      │
+│                       State→DriveState · Decision→Takeover      │
 ├─────────────────────────────────────────────────────────────────┤
-│  💡 INTELLIGENCE   3-Level Memory · Knowledge Graph · RAG       │
-│                    Self-Evolution · LLM Multi-Provider           │
+│  💡 Intelligence      3-level memory · knowledge graph · RAG    │
+│                       self-evolution · LLM multi-provider       │
 ├─────────────────────────────────────────────────────────────────┤
-│  🛡️ TRUST          Hash-Chain Audit · Lineage DAG · Evidence    │
+│  🛡️ Trust Layer       hash-chain audit · lineage DAG · evidence │
 ├─────────────────────────────────────────────────────────────────┤
-│  ⚙️ EXECUTION      Docker Containers · HMAC · Sandbox · Terminal│
+│  ⚙️ Execution Layer   Docker containers · HMAC · sandbox · TTY  │
 ├─────────────────────────────────────────────────────────────────┤
-│  🔗 INTEROP        A2A Protocol · Swarm · Guest Agent Market    │
+│  🔗 Interop Layer     A2A protocol · Swarm · Guest Agent market │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -274,8 +331,8 @@ Or visit the [Live Demo](https://opencroc.github.io/whybuddy/) directly on GitHu
 |:------|:-----------|
 | Frontend | React 19 · Vite · TypeScript · Zustand · Three.js (R3F) · Framer Motion |
 | Server | Express · Socket.IO · TypeScript |
-| AI | OpenAI-compatible API (any provider) |
-| Execution | Docker (dockerode) · Browser Runtime · Native Runtime |
+| AI | OpenAI-compatible APIs (any provider) |
+| Execution | Docker (dockerode) · browser runtime · native runtime |
 | Testing | Vitest · fast-check (PBT) |
 | Storage | IndexedDB (browser) · JSON (server) |
 
@@ -286,27 +343,28 @@ Or visit the [Live Demo](https://opencroc.github.io/whybuddy/) directly on GitHu
 | Metric | Count |
 |:-------|------:|
 | Project files | 4,707 |
-| TypeScript/TSX files | 2,130 |
-| Lines of TypeScript | 545,000 |
-| Test files | 866 |
-| Spec directories | 287 |
-| Spec markdown files | 1,074 |
-| Task checkboxes | 7,887 ✅ / 919 ⬜ |
+| TypeScript/TSX files | 1,837 |
+| TypeScript lines | 486,932 |
+| Test files | 723 |
+| Test cases | 7,771 |
+| Spec directories | 273 |
+| Spec Markdown files | 879 |
+| Task checkboxes | 7,093 ✅ / 1,072 ⬜ |
 
 ---
 
-## ⚔️ Comparison
+## ⚔️ Comparison With Other Platforms
 
 | Feature | Dify | n8n | CrewAI | LangGraph | **WhyBuddy** |
 |:--------|:---:|:---:|:---:|:---:|:---:|
-| Open Source | ✅ | ✅ | ✅ | ✅ | ✅ |
-| One sentence → full product | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Spec generation (Req+Design+Tasks) | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Open source | ✅ | ✅ | ✅ | ✅ | ✅ |
+| One sentence to a complete product | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Spec document generation (requirements + design + tasks) | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Multi-route planning | ❌ | ❌ | ❌ | ⚠️ | ✅ |
 | Multi-role agent fleet | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Real-time 3D observability | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Human takeover governance | ⚠️ | ⚠️ | ❌ | ❌ | ✅ |
-| Replay & audit trail | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Replay and audit | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Docker sandbox | ❌ | ⚠️ | ❌ | ❌ | ✅ |
 | Export Markdown/ZIP | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Browser-only demo | ❌ | ❌ | ❌ | ❌ | ✅ |
@@ -315,35 +373,24 @@ Or visit the [Live Demo](https://opencroc.github.io/whybuddy/) directly on GitHu
 
 ## 🤝 Contributing
 
-```
+```bash
 1. Fork & clone → pnpm install
 2. pnpm run dev:frontend (UI) or pnpm run dev:all (full stack)
-3. Before PR: node --run check && pnpm run test
+3. Before submitting: node --run check && pnpm run test
 ```
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
 ---
 
-## 🪪 About the name
+## ⭐ Star History
 
-**WhyBuddy** is two characters: 端 (edge / endpoint) and 云 (cloud).
-Together they describe the model the project converges on — workloads execute
-**at the edge** when they can (browser runtime, native sandbox, your laptop's
-Docker), and **fall back to the cloud** when they need shared coordination
-(LLM, MCP servers, the Lobster Executor service). The codebase still carries
-the legacy package name `whybuddy` in some internal modules; that is
-intentional and tracked under
-[`whybuddy-internal-rename`](./.kiro/specs/) for a future sweep, not the entry
-point you read first.
+> Every rehearsal generated by the engine is content that helps others discover new possibilities. Star this repository to help more people find it.
 
-The domain `whybuddy.com` is reserved for the hosted edition.
+[![Star History Chart](https://api.star-history.com/svg?repos=xiaojilele-glitch/WhyBuddy&type=Date)](https://star-history.com/#xiaojilele-glitch/WhyBuddy&Date)
 
 ---
 
-## ⭐ Star History
-
-> Every rehearsal is content that helps others discover possibilities. Star
-> this repo to help more people find it.
-
-[![Star History Chart](https://api.star-history.com/svg?repos=opencroc/whybuddy&type=Date)](https://star-history.com/#opencroc/whybuddy&Date)
+<p align="center">
+  <a href="./LICENSE"><strong>MIT License</strong></a> · Hosted at <a href="https://github.com/xiaojilele-glitch/WhyBuddy">xiaojilele-glitch/WhyBuddy</a>
+</p>
