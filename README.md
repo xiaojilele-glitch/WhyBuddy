@@ -12,15 +12,36 @@
 </p>
 
 <p align="center">
-  <sub>Sponsored by</sub><br/><br/>
-  <a href="https://isqqw.com"><img src="https://img.shields.io/badge/%F0%9F%93%8A_ISQQW.com-Echarts_Demo_集-0969da?style=for-the-badge&labelColor=1a7f37" alt="ISQQW.com" /></a>
-  &nbsp;&nbsp;
-  <a href="https://codex-for.me"><img src="https://img.shields.io/badge/%E2%98%81%EF%B8%8F_Codex--For.Me-Cloud_Platform-e36209?style=for-the-badge&labelColor=6e5494" alt="Codex-For.Me" /></a>
-  &nbsp;&nbsp;
-  <a href="https://linux.do"><img src="https://img.shields.io/badge/%F0%9F%90%A7_Linux.do-Developer_Community-0d1117?style=for-the-badge&labelColor=ffd33d" alt="Linux.do" /></a>
-  &nbsp;&nbsp;
-  <a href="https://diygw.com"><img src="https://img.shields.io/badge/%F0%9F%94%A7_DIYGW-可视化低代码平台-0078d4?style=for-the-badge&labelColor=22863a" alt="DIYGW" /></a>
+  <strong>🎖️ Sponsors</strong>
 </p>
+<table align="center">
+  <tr>
+    <td align="center" width="160">
+      <a href="https://isqqw.com">
+        <strong>📊 ISQQW.com</strong><br/>
+        <sub>Echarts Demo 集</sub>
+      </a>
+    </td>
+    <td align="center" width="160">
+      <a href="https://codex-for.me">
+        <strong>☁️ Codex-For.Me</strong><br/>
+        <sub>Cloud Platform</sub>
+      </a>
+    </td>
+    <td align="center" width="160">
+      <a href="https://linux.do">
+        <strong>🐧 Linux.do</strong><br/>
+        <sub>Developer Community</sub>
+      </a>
+    </td>
+    <td align="center" width="160">
+      <a href="https://diygw.com">
+        <strong>🔧 DIYGW</strong><br/>
+        <sub>可视化低代码平台</sub>
+      </a>
+    </td>
+  </tr>
+</table>
 
 <blockquote>
 <strong>Progress note:</strong> The engineering app currently trails the WhyBuddy Skill. For the complete product rehearsal experience, use the <a href="./skills/whybuddy.zip">WhyBuddy Skill</a> first; the engineered project is still moving forward.
