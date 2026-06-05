@@ -112,6 +112,47 @@ python scripts/batch_images.py prompts.txt    # batch generation against your en
 python scripts/check_previews_real.py
 ```
 
+### Image Generation Configuration
+
+All image settings live in a single file: **`image_config.json`** at the project root.
+
+```jsonc
+{
+  "enabled": true,
+  "mode": "http",                    // "http" | "dry_run" | "mcp" | "command"
+  "model": "gpt-image-2",           // ← change model here
+  "api_key": "",                     // ← put your key here (or use env var below)
+  "timeout": 600,                    // seconds per image request
+  "out_dir": "previews",
+  "http": {
+    "url": "",                       // ← put your endpoint URL here
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer ${IMAGE_API_KEY}"   // resolves from env
+    },
+    "body_template": {
+      "model": "${MODEL}",           // auto-filled from top-level "model"
+      "prompt": "${PROMPT}",         // auto-filled per module
+      "response_format": "b64_json",
+      "image_size": "2K",            // "512" | "1K" | "2K" | "4K"
+      "aspect_ratio": "16:9",
+      "n": 1
+    }
+  }
+}
+```
+
+**Three things to configure:**
+
+| What | Where | Example |
+|:-----|:------|:--------|
+| **API Key** | Env var `IMAGE_API_KEY` (recommended) OR `image_config.json → api_key` | `export IMAGE_API_KEY=sk-abc123...` |
+| **Endpoint URL** | `image_config.json → http.url` | `https://api.openai.com/v1/images/generations` |
+| **Model** | `image_config.json → model` | `gpt-image-2` / `gemini-2.5-flash-image` / `gemini-3.1-flash-image-preview` |
+
+> Priority: environment variable `IMAGE_API_KEY` > config file `api_key`. If both are empty, image generation is skipped and the gate records "no key".
+
 ### Use Cases
 
 | Category | Examples |

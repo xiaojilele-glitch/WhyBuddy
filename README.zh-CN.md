@@ -111,6 +111,47 @@ python scripts/batch_images.py prompts.txt    # 批量,直连你的端点
 python scripts/check_previews_real.py
 ```
 
+### 生图配置说明
+
+所有生图设置集中在项目根目录的 **`image_config.json`** 一个文件里。
+
+```jsonc
+{
+  "enabled": true,
+  "mode": "http",                    // "http" | "dry_run" | "mcp" | "command"
+  "model": "gpt-image-2",           // ← 在这里改模型
+  "api_key": "",                     // ← 在这里填 Key(或用下面的环境变量)
+  "timeout": 600,                    // 每张图请求的超时秒数
+  "out_dir": "previews",
+  "http": {
+    "url": "",                       // ← 在这里填生图端点地址
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer ${IMAGE_API_KEY}"   // 从环境变量解析
+    },
+    "body_template": {
+      "model": "${MODEL}",           // 自动取顶层 "model" 值
+      "prompt": "${PROMPT}",         // 按模块自动填入
+      "response_format": "b64_json",
+      "image_size": "2K",            // "512" | "1K" | "2K" | "4K"
+      "aspect_ratio": "16:9",
+      "n": 1
+    }
+  }
+}
+```
+
+**只需配三样东西：**
+
+| 配什么 | 改哪里 | 示例 |
+|:-------|:------|:-----|
+| **API Key** | 环境变量 `IMAGE_API_KEY`(推荐) 或 `image_config.json → api_key` | `export IMAGE_API_KEY=sk-abc123...` |
+| **端点地址** | `image_config.json → http.url` | `https://api.openai.com/v1/images/generations` |
+| **模型名** | `image_config.json → model` | `gpt-image-2` / `gemini-2.5-flash-image` / `gemini-3.1-flash-image-preview` |
+
+> 优先级：环境变量 `IMAGE_API_KEY` > 配置文件 `api_key`。两者都空时,出图跳过,gate 记录 "no key"。
+
 ### 各种使用情况
 
 | 类别 | 示例 |
