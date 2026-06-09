@@ -183,7 +183,7 @@ describe("BRAINSTORM_NODE_COLORS", () => {
 describe("Layout constants", () => {
   it("has correct node dimensions", () => {
     expect(BRAINSTORM_NODE_W).toBe(540);
-    expect(BRAINSTORM_NODE_H).toBe(168);
+    expect(BRAINSTORM_NODE_H).toBe(232);
     expect(BRAINSTORM_PADDING).toBe(180);
   });
 
@@ -279,7 +279,7 @@ describe("computeBrainstormLayout", () => {
     expect(challenge?.y).not.toBeCloseTo(CANVAS_H / 2, 0);
   });
 
-  it("fans runtime role anchors across the wall instead of stacking them in one vertical column", () => {
+  it("places parent→child role nodes into left-to-right topological layer columns", () => {
     const roles = ["decider", "planner", "architect", "executor", "auditor"] as const;
     const nodes: BranchNode[] = roles.map((role, index) => ({
       id: `role:${role}`,
@@ -301,18 +301,19 @@ describe("computeBrainstormLayout", () => {
     ];
 
     const layout = computeBrainstormLayout(nodes, edges);
-    const xs = layout?.nodes.map((node) => node.x) ?? [];
-    const ys = layout?.nodes.map((node) => node.y) ?? [];
-    const xSpread = Math.max(...xs) - Math.min(...xs);
-    const ySpread = Math.max(...ys) - Math.min(...ys);
-
+    const byId = new Map(layout?.nodes.map((n) => [n.id, n]));
     expect(layout).not.toBeNull();
-    expect(new Set(xs.map((x) => Math.round(x))).size).toBeGreaterThanOrEqual(4);
-    expect(xSpread).toBeGreaterThan(CANVAS_W * 0.42);
-    expect(ySpread).toBeGreaterThan(CANVAS_H * 0.24);
+    // Chain decider→planner→architect→executor→auditor → 5 distinct columns,
+    // strictly increasing x left-to-right (cycle edge auditor→planner ignored).
+    expect(byId.get("role:decider")!.x).toBeLessThan(byId.get("role:planner")!.x);
+    expect(byId.get("role:planner")!.x).toBeLessThan(byId.get("role:architect")!.x);
+    expect(byId.get("role:architect")!.x).toBeLessThan(byId.get("role:executor")!.x);
+    expect(byId.get("role:executor")!.x).toBeLessThan(byId.get("role:auditor")!.x);
+    const xs = layout!.nodes.map((n) => n.x);
+    expect(new Set(xs.map((x) => Math.round(x))).size).toBe(5);
   });
 
-  it("lays out multi-role brainstorm nodes in role lanes instead of a single waterfall", () => {
+  it("forces synthesis to the rightmost column of the layered DAG", () => {
     const roles = ["decider", "planner", "architect", "auditor"];
     const nodes: BranchNode[] = Array.from({ length: 12 }, (_, index) => ({
       id: `node-${index}`,
@@ -322,6 +323,7 @@ describe("computeBrainstormLayout", () => {
       type: index === 11 ? "synthesis" : "thinking",
       status: "completed",
       title: "",
+      content: `claim ${index}`,
       createdAt: new Date(index * 1000).toISOString(),
       updatedAt: new Date(index * 1000).toISOString(),
     }));
@@ -335,8 +337,14 @@ describe("computeBrainstormLayout", () => {
     expect(layout).not.toBeNull();
     expect(layout?.nodes).toHaveLength(12);
     expect(layout?.edges).toHaveLength(11);
-    expect(new Set(layout?.nodes.map((node) => Math.round(node.y))).size).toBeGreaterThan(3);
-    expect(new Set(layout?.nodes.map((node) => Math.round(node.x))).size).toBeGreaterThan(2);
+    // A 12-node chain spreads across many layer columns.
+    expect(new Set(layout?.nodes.map((node) => Math.round(node.x))).size).toBeGreaterThan(3);
+    // Every parent→child edge carries a semantic relation label.
+    expect(layout?.edges.every((e) => typeof e.label === "string" && e.label.length > 0)).toBe(true);
+    // The synthesis node sits in the rightmost column.
+    const synth = layout?.nodes.find((n) => n.id === "node-11");
+    const maxX = Math.max(...(layout?.nodes.map((n) => n.x) ?? [0]));
+    expect(synth?.x).toBeCloseTo(maxX, 0);
   });
 });
 
@@ -646,5 +654,54 @@ describe("drawBrainstormGraph node body content", () => {
     drawBrainstormGraph(ctx, layout, CANVAS_W, CANVAS_H, {});
 
     expect(textCalls.some((t) => t.startsWith("Decision: BRANCH"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Role-anchor nodes (role:<id>) surface that role's latest claim content so
+// every lane-header card shows dialogue, not just a bare role label.
+// ---------------------------------------------------------------------------
+
+describe("computeBrainstormLayout role-anchor de-duplication", () => {
+  function branch(
+    id: string,
+    roleId: BranchNode["roleId"],
+    overrides: Partial<BranchNode> = {},
+  ): BranchNode {
+    return {
+      id,
+      sessionId: "s1",
+      parentNodeId: null,
+      roleId,
+      type: "thinking",
+      status: "completed",
+      title: "",
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+      ...overrides,
+    } as BranchNode;
+  }
+
+  it("drops the redundant role-anchor card once that role has a claim node", () => {
+    const nodes: BranchNode[] = [
+      // 3+ runtime role anchors trigger the anchor-based fan-out layout.
+      branch("role:planner", "planner", { type: "decision", title: "planner" }),
+      branch("role:architect", "architect", { type: "decision", title: "architect" }),
+      branch("role:executor", "executor", { type: "decision", title: "executor" }),
+      // A claim node carrying the planner's actual debate text.
+      branch("claim-1", "planner", {
+        content: "Planner proposes a phased rollout with rollback gates.",
+      }),
+    ];
+
+    const layout = computeBrainstormLayout(nodes, []);
+    expect(layout).not.toBeNull();
+    // planner has a claim → its bare anchor card is dropped (no duplicate card).
+    expect(layout!.nodes.find((n) => n.id === "role:planner")).toBeUndefined();
+    // the claim node remains and carries the real content.
+    const claim = layout!.nodes.find((n) => n.id === "claim-1");
+    expect(claim?.content).toContain("phased rollout");
+    // a role with no claim yet keeps its anchor so the participant stays visible.
+    expect(layout!.nodes.find((n) => n.id === "role:executor")).toBeDefined();
   });
 });

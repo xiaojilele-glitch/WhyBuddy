@@ -73,15 +73,6 @@ export interface BrainstormWallGraphProps {
   deliberation?: BrainstormDeliberationOverlay;
 }
 
-function isCentralDecisionMarker(node: BranchNode): boolean {
-  if (node.id === "decision-gate" || node.id === "decision-marker") return true;
-  const normalizedTitle = node.title.trim().toUpperCase();
-  return (
-    normalizedTitle === "DECISION: BRANCH" ||
-    normalizedTitle === "DECISION: BRAINSTORM"
-  );
-}
-
 // ---------------------------------------------------------------------------
 // dagre Layout Computation
 // ---------------------------------------------------------------------------
@@ -102,83 +93,114 @@ export function computeBrainstormLayout(
     "auditor",
     "ui_previewer",
   ];
-  const fallbackRoles = Array.from(new Set(nodes.map((node) => node.roleId)));
-  const roles = [
-    ...roleOrder.filter((role) => fallbackRoles.includes(role)),
-    ...fallbackRoles.filter((role) => !roleOrder.includes(role)),
-  ];
-  const laneRoles: Array<BranchNode["roleId"]> = roles.length > 0 ? roles : ["decider"];
-  const runtimeRoleNodes = nodes.filter((node) => node.id === `role:${node.roleId}`);
+  const roleIndex = (roleId: BranchNode["roleId"]): number => {
+    const idx = roleOrder.indexOf(roleId);
+    return idx >= 0 ? idx : roleOrder.length;
+  };
 
-  if (runtimeRoleNodes.length >= 3) {
-    const synthesisNodes = nodes.filter((node) => node.type === "synthesis");
-    const normalNodes = nodes.filter((node) => node.type !== "synthesis");
-    const decisionMarker = nodes.find(
-      (node) => !node.id.startsWith("role:") && isCentralDecisionMarker(node),
+  // A `role:<id>` anchor node (from runtime-graph decision/edge events) is
+  // redundant once that role has a real content claim. Drop the bare anchor so
+  // we never render a duplicate card; keep it only for roles with no claim yet.
+  const rolesWithClaims = new Set<BranchNode["roleId"]>(
+    nodes
+      .filter(
+        (node) =>
+          node.id !== `role:${node.roleId}` &&
+          typeof node.content === "string" &&
+          node.content.trim().length > 0,
+      )
+      .map((node) => node.roleId),
+  );
+  const visibleNodes = nodes.filter(
+    (node) => !(node.id === `role:${node.roleId}` && rolesWithClaims.has(node.roleId)),
+  );
+  if (visibleNodes.length === 0) return null;
+
+  const nodeById = new Map(visibleNodes.map((node) => [node.id, node]));
+
+  // First parent per node (parent-child sequence edges), restricted to the
+  // visible set so dropped anchors don't anchor a layer.
+  const parentOf = new Map<string, string>();
+  for (const edge of edges) {
+    if (
+      nodeById.has(edge.sourceNodeId) &&
+      nodeById.has(edge.targetNodeId) &&
+      !parentOf.has(edge.targetNodeId)
+    ) {
+      parentOf.set(edge.targetNodeId, edge.sourceNodeId);
+    }
+  }
+  // Fall back to the persisted parentNodeId when no explicit edge exists.
+  for (const node of visibleNodes) {
+    if (!parentOf.has(node.id) && node.parentNodeId && nodeById.has(node.parentNodeId)) {
+      parentOf.set(node.id, node.parentNodeId);
+    }
+  }
+
+  // Longest-path layer assignment from roots (中心议题 → 主张 → 质疑 → 收敛).
+  // Cycle-guarded so malformed graphs never recurse forever (never-throw).
+  const layerCache = new Map<string, number>();
+  const visiting = new Set<string>();
+  const layerOf = (id: string): number => {
+    const cached = layerCache.get(id);
+    if (cached !== undefined) return cached;
+    if (visiting.has(id)) return 0;
+    visiting.add(id);
+    const parent = parentOf.get(id);
+    const layer = parent && nodeById.has(parent) ? layerOf(parent) + 1 : 0;
+    visiting.delete(id);
+    layerCache.set(id, layer);
+    return layer;
+  };
+
+  let maxBaseLayer = 0;
+  for (const node of visibleNodes) {
+    maxBaseLayer = Math.max(maxBaseLayer, layerOf(node.id));
+  }
+  const hasSynthesis = visibleNodes.some((node) => node.type === "synthesis");
+  const finalLayer = hasSynthesis ? maxBaseLayer + 1 : maxBaseLayer;
+  const layerByNode = new Map<string, number>();
+  for (const node of visibleNodes) {
+    layerByNode.set(
+      node.id,
+      node.type === "synthesis" ? finalLayer : layerOf(node.id),
     );
-    const anchorByRole = new Map(runtimeRoleNodes.map((node) => [node.roleId, node]));
-    const orderedRuntimeRoles = [
-      ...laneRoles.filter((role) => anchorByRole.has(role)),
-      ...runtimeRoleNodes
-        .map((node) => node.roleId)
-        .filter((role) => !laneRoles.includes(role)),
-    ];
-    const left = BRAINSTORM_PADDING + BRAINSTORM_NODE_W / 2;
-    const right = canvasWidth - BRAINSTORM_PADDING - BRAINSTORM_NODE_W / 2;
-    const roleLeft = decisionMarker
-      ? Math.min(right, left + BRAINSTORM_NODE_W + 240)
-      : left;
-    const top = BRAINSTORM_PADDING + BRAINSTORM_NODE_H / 2;
-    const bottom = canvasHeight - BRAINSTORM_PADDING - BRAINSTORM_NODE_H / 2;
-    const centerY = canvasHeight / 2;
-    const roleAnchorPosition = new Map<BranchNode["roleId"], { x: number; y: number }>();
+  }
 
-    orderedRuntimeRoles.forEach((role, index) => {
-      const denominator = Math.max(1, orderedRuntimeRoles.length - 1);
-      const x = roleLeft + (right - roleLeft) * (index / denominator);
-      const isUpper = index % 2 === 0;
-      const bandY = isUpper ? top + canvasHeight * 0.08 : bottom - canvasHeight * 0.08;
-      const y = orderedRuntimeRoles.length === 3 && index === 1 ? centerY : bandY;
-      roleAnchorPosition.set(role, { x, y });
-    });
+  // Group nodes per layer (column) and order within a column by role then seq.
+  const byLayer = new Map<number, BranchNode[]>();
+  for (const node of visibleNodes) {
+    const layer = layerByNode.get(node.id)!;
+    const bucket = byLayer.get(layer);
+    if (bucket) bucket.push(node);
+    else byLayer.set(layer, [node]);
+  }
 
-    const roleBranchIndex = new Map<BranchNode["roleId"], number>();
-    const layoutNodes: LayoutNode[] = nodes.map((node) => {
-      const anchorPosition = roleAnchorPosition.get(node.roleId);
-      const isRuntimeAnchor = node.id === `role:${node.roleId}` && anchorPosition;
-      const synthesisIndex = synthesisNodes.findIndex((candidate) => candidate.id === node.id);
-      let x: number;
-      let y: number;
+  const columnCount = finalLayer + 1;
+  const left = BRAINSTORM_PADDING + BRAINSTORM_NODE_W / 2;
+  const top = BRAINSTORM_PADDING + BRAINSTORM_NODE_H / 2;
+  const bottom = canvasHeight - BRAINSTORM_PADDING - BRAINSTORM_NODE_H / 2;
+  const colStep = Math.max(
+    BRAINSTORM_NODE_W + 240,
+    (canvasWidth - BRAINSTORM_PADDING * 2 - BRAINSTORM_NODE_W) /
+      Math.max(1, columnCount - 1),
+  );
 
-      if (synthesisIndex >= 0) {
-        x = canvasWidth - BRAINSTORM_PADDING - BRAINSTORM_NODE_W / 2;
-        y = centerY + (synthesisIndex - (synthesisNodes.length - 1) / 2) * (BRAINSTORM_NODE_H + 72);
-      } else if (decisionMarker?.id === node.id) {
-        x = left;
-        y = centerY;
-      } else if (isRuntimeAnchor && anchorPosition) {
-        x = anchorPosition.x;
-        y = anchorPosition.y;
-      } else if (anchorPosition) {
-        const branchIndex = roleBranchIndex.get(node.roleId) ?? 0;
-        roleBranchIndex.set(node.roleId, branchIndex + 1);
-        const roleOrderIndex = Math.max(0, orderedRuntimeRoles.indexOf(node.roleId));
-        const direction = roleOrderIndex % 2 === 0 ? 1 : -1;
-        const branchOffsetX = Math.min(360, 150 + branchIndex * 96);
-        const branchOffsetY = direction * (BRAINSTORM_NODE_H + 72 + branchIndex * 54);
-        x = Math.max(left, Math.min(right, anchorPosition.x + branchOffsetX));
-        y = Math.max(top, Math.min(bottom, anchorPosition.y + branchOffsetY));
-      } else {
-        const normalIndex = normalNodes.findIndex((candidate) => candidate.id === node.id);
-        const roundIndex = Math.max(0, Math.floor(Math.max(0, normalIndex) / Math.max(1, laneRoles.length)));
-        const laneIndex = laneRoles.indexOf(node.roleId) >= 0
-          ? laneRoles.indexOf(node.roleId)
-          : Math.max(0, normalIndex % Math.max(1, laneRoles.length));
-        x = left + roundIndex * (BRAINSTORM_NODE_W + 180);
-        y = top + laneIndex * (BRAINSTORM_NODE_H + 120);
-      }
-
-      return {
+  const renderedNodes: LayoutNode[] = [];
+  for (const [layer, group] of [...byLayer.entries()].sort((a, b) => a[0] - b[0])) {
+    group.sort(
+      (a, b) =>
+        roleIndex(a.roleId) - roleIndex(b.roleId) ||
+        (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0),
+    );
+    const x = left + layer * colStep;
+    const count = group.length;
+    group.forEach((node, index) => {
+      const y =
+        count === 1
+          ? canvasHeight / 2
+          : top + (bottom - top) * (index / (count - 1));
+      renderedNodes.push({
         id: node.id,
         x,
         y,
@@ -189,76 +211,38 @@ export function computeBrainstormLayout(
         confidence: node.confidence,
         content: node.content,
         opacity: 1,
-      };
+      });
     });
-
-    const nodeMap = new Map(layoutNodes.map((n) => [n.id, n]));
-    const layoutEdges: LayoutEdge[] = edges
-      .filter((e) => nodeMap.has(e.sourceNodeId) && nodeMap.has(e.targetNodeId))
-      .map((e) => ({
-        from: { x: nodeMap.get(e.sourceNodeId)!.x, y: nodeMap.get(e.sourceNodeId)!.y },
-        to: { x: nodeMap.get(e.targetNodeId)!.x, y: nodeMap.get(e.targetNodeId)!.y },
-      }));
-
-    return { nodes: layoutNodes, edges: layoutEdges, scale: 1 };
   }
 
-  const normalNodes = nodes.filter((node) => node.type !== "synthesis");
-  const synthesisNodes = nodes.filter((node) => node.type === "synthesis");
-  const nodesPerRound = Math.max(1, laneRoles.length);
-  const roundCount = Math.max(1, Math.ceil(normalNodes.length / nodesPerRound));
-  const columnCount = roundCount + (synthesisNodes.length > 0 ? 1 : 0);
-  const laneCount = laneRoles.length + (synthesisNodes.length > 0 ? 1 : 0);
-  const xStep = Math.max(
-    BRAINSTORM_NODE_W + 180,
-    (canvasWidth - BRAINSTORM_PADDING * 2 - BRAINSTORM_NODE_W) /
-      Math.max(1, columnCount - 1),
-  );
-  const yStep = Math.max(
-    BRAINSTORM_NODE_H + 120,
-    (canvasHeight - BRAINSTORM_PADDING * 2 - BRAINSTORM_NODE_H) /
-      Math.max(1, laneCount - 1),
-  );
-  const xStart = BRAINSTORM_PADDING + BRAINSTORM_NODE_W / 2;
-  const yStart = BRAINSTORM_PADDING + BRAINSTORM_NODE_H / 2;
-  const roleLane = new Map(laneRoles.map((role, index) => [role, index]));
-
-  const layoutNodes: LayoutNode[] = nodes.map((node) => {
-    const normalIndex = normalNodes.findIndex((candidate) => candidate.id === node.id);
-    const synthesisIndex = synthesisNodes.findIndex((candidate) => candidate.id === node.id);
-    const isSynthesis = synthesisIndex >= 0;
-    const roundIndex = isSynthesis
-      ? roundCount
-      : Math.max(0, Math.floor(Math.max(0, normalIndex) / nodesPerRound));
-    const laneIndex = isSynthesis
-      ? laneRoles.length
-      : roleLane.get(node.roleId) ?? Math.max(0, normalIndex % nodesPerRound);
-    return {
-      id: node.id,
-      x: xStart + roundIndex * xStep,
-      y: yStart + laneIndex * yStep,
-      title: node.title,
-      type: node.type,
-      status: node.status,
-      roleId: node.roleId,
-      confidence: node.confidence,
-      content: node.content,
-      opacity: 1,
-    };
-  });
-
-  const nodeMap = new Map(layoutNodes.map((n) => [n.id, n]));
-  const layoutEdges: LayoutEdge[] = edges
-    .filter((e) => nodeMap.has(e.sourceNodeId) && nodeMap.has(e.targetNodeId))
-    .map((e) => ({
-      from: { x: nodeMap.get(e.sourceNodeId)!.x, y: nodeMap.get(e.sourceNodeId)!.y },
-      to: { x: nodeMap.get(e.targetNodeId)!.x, y: nodeMap.get(e.targetNodeId)!.y },
-    }));
+  const posById = new Map(renderedNodes.map((n) => [n.id, n]));
+  const edgeLabelFor = (child: BranchNode, layer: number): string => {
+    if (child.type === "synthesis") return "收敛";
+    if (child.type === "decision") return "决策";
+    if (layer <= 1) return "主张";
+    return "迭代";
+  };
+  const layoutEdges: LayoutEdge[] = [];
+  const seen = new Set<string>();
+  for (const [childId, parentId] of parentOf.entries()) {
+    const from = posById.get(parentId);
+    const to = posById.get(childId);
+    const child = nodeById.get(childId);
+    if (!from || !to || !child) continue;
+    const key = `${parentId}->${childId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    layoutEdges.push({
+      from: { x: from.x, y: from.y },
+      to: { x: to.x, y: to.y },
+      label: edgeLabelFor(child, layerByNode.get(childId)!),
+      relation: child.type === "synthesis" ? "synthesis" : "sequence",
+    });
+  }
 
   const graphWidth =
-    BRAINSTORM_NODE_W + Math.max(0, columnCount - 1) * xStep + BRAINSTORM_PADDING * 2;
-  const graphHeight =
-    BRAINSTORM_NODE_H + Math.max(0, laneCount - 1) * yStep + BRAINSTORM_PADDING * 2;
+    BRAINSTORM_NODE_W + Math.max(0, columnCount - 1) * colStep + BRAINSTORM_PADDING * 2;
+  const graphHeight = canvasHeight;
   const scale = computeAdaptiveScale(
     graphWidth,
     graphHeight,
@@ -267,7 +251,7 @@ export function computeBrainstormLayout(
     BRAINSTORM_PADDING,
   );
 
-  return { nodes: layoutNodes, edges: layoutEdges, scale };
+  return { nodes: renderedNodes, edges: layoutEdges, scale };
 }
 
 // ---------------------------------------------------------------------------

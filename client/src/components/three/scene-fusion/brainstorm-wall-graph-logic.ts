@@ -32,7 +32,7 @@ export const CANVAS_H = 1320;
 /** Node card width in layout units */
 export const BRAINSTORM_NODE_W = 540;
 /** Node card height in layout units */
-export const BRAINSTORM_NODE_H = 168;
+export const BRAINSTORM_NODE_H = 232;
 /** Canvas padding */
 export const BRAINSTORM_PADDING = 180;
 
@@ -74,6 +74,10 @@ export interface LayoutNode {
 export interface LayoutEdge {
   from: { x: number; y: number };
   to: { x: number; y: number };
+  /** Semantic relation label drawn at the edge midpoint (主张 / 质疑 / 反驳 / 收敛 …). */
+  label?: string;
+  /** Edge relation kind — drives color and the default label. */
+  relation?: "sequence" | "claim" | "critique" | "support" | "synthesis";
 }
 
 export interface LayoutResult {
@@ -326,6 +330,31 @@ export function drawBrainstormGraph(
     ctx.beginPath();
     ctx.arc(connection.to.x, connection.to.y, 9, 0, Math.PI * 2);
     ctx.fill();
+
+    // Semantic relation label at the edge midpoint (主张 / 迭代 / 收敛 …) so the
+    // flow reads as a labeled DAG rather than bare connectors.
+    if (edge.label) {
+      const midX = (connection.from.x + connection.to.x) / 2;
+      const midY = (connection.from.y + connection.to.y) / 2 - 14;
+      ctx.font = "20px system-ui, sans-serif";
+      const padX = 12;
+      const textW = ctx.measureText(edge.label).width;
+      const boxW = textW + padX * 2;
+      const boxH = 30;
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.beginPath();
+      ctx.roundRect(midX - boxW / 2, midY - boxH / 2, boxW, boxH, 10);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(45, 212, 191, 0.4)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = "#0f766e";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(edge.label, midX, midY);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+    }
     ctx.setLineDash([18, 12]);
   }
 
@@ -434,17 +463,17 @@ export function drawBrainstormGraph(
 
     // Body = the node's ACTUAL debate text (a crew member's claim, a synthesis
     // decision, a decision-marker rationale, ...). Falls back to the structural
-    // `title` when no content has arrived yet (e.g. an active node mid-thinking,
-    // or a runtime role/decision marker whose meaning lives in its title).
+    // `title` when no content has arrived yet. Wrapped to up to 4 lines so the
+    // card shows a fuller paragraph (≈ 80 chars) rather than a one-line snippet.
     const bodyText =
       node.content && node.content.trim().length > 0 ? node.content : node.title;
-    const bodyLines = wrapBrainstormBody(bodyText, 20, 2);
+    const bodyLines = wrapBrainstormBody(bodyText, 20, 4);
     ctx.fillStyle = "#1e293b";
-    ctx.font = "bold 26px system-ui, sans-serif";
+    ctx.font = "26px system-ui, sans-serif";
     let bodyY = y + 58;
     for (const line of bodyLines) {
       ctx.fillText(line, x + 36, bodyY);
-      bodyY += 38;
+      bodyY += 36;
     }
 
     // Confidence indicator (if present) — moved to the top-right so it never
