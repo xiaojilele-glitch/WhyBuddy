@@ -19,7 +19,7 @@
 import express, { Router, type Request, type Response } from "express";
 import type { V5SessionState } from "../../shared/blueprint/v5-reasoning-state.js";
 import { getAIConfig } from "../core/ai-config.js";
-import { callLLMJson } from "../core/llm-client.js";
+import { callLLMJson, callLLMJsonWithUsage } from "../core/llm-client.js";
 import { buildStructuredReport } from "../../shared/blueprint/whybuddy-report-builder.js";
 import { executeGithubMcpCapability } from "../whybuddy/github-mcp-adapter.js";
 import { executeRepoStaticInspect } from "../whybuddy/repo-static-analyzer.js";
@@ -258,7 +258,7 @@ router.post("/execute-capability", express.json({ limit: "2mb" }), async (req: R
       throw err;
     }
 
-    const result = await callLLMJson<{ title?: string; summary?: string; content?: string }>(
+    const { json: result, usage } = await callLLMJsonWithUsage<{ title?: string; summary?: string; content?: string }>(
       [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -279,6 +279,14 @@ router.post("/execute-capability", express.json({ limit: "2mb" }), async (req: R
       summary: summary ? `${summary} [server-llm:${config.model}]` : `[server-llm:${config.model}]`,
       content,
       provenance: "llm" as const,
+      usage: usage
+        ? {
+            inputTokens: usage.prompt_tokens,
+            outputTokens: usage.completion_tokens,
+            totalTokens: usage.total_tokens,
+            model: config.model,
+          }
+        : undefined,
     });
   } catch (e: any) {
     const msg = String(e?.message || e);

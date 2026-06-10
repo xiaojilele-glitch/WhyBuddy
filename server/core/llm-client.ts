@@ -1001,3 +1001,50 @@ export async function callLLMJson<T = any>(
     throw new Error("Failed to parse LLM JSON response");
   }
 }
+
+/**
+ * Knife 11.1: same as callLLMJson but also returns the raw usage from the provider
+ * (so that /execute-capability can surface real token counts to the V5 cost ledger).
+ * Does not change the shape or behavior of the original callLLMJson.
+ */
+export async function callLLMJsonWithUsage<T = any>(
+  messages: LLMMessage[],
+  options: LLMOptions = {}
+): Promise<{ json: T; usage?: LLMResponse["usage"]; finishReason?: string }> {
+  const response = await callLLM(messages, { ...options, jsonMode: true });
+
+  try {
+    let content = response.content.trim();
+    const jsonBlock = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (jsonBlock) {
+      content = jsonBlock[1].trim();
+    }
+    let parsed: T;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error("Failed to parse LLM JSON response");
+      }
+    }
+    return {
+      json: parsed,
+      usage: response.usage,
+      finishReason: response.finishReason,
+    };
+  } catch (e: any) {
+    if (response.finishReason === "length") {
+      throw new Error(
+        `LLM JSON response was truncated by the max token limit (${options.maxTokens ?? "default"}). Increase maxTokens or reduce the requested JSON size.`
+      );
+    }
+    console.error(
+      "[LLM] Failed to parse JSON response:",
+      response.content.substring(0, 200)
+    );
+    throw new Error("Failed to parse LLM JSON response");
+  }
+}

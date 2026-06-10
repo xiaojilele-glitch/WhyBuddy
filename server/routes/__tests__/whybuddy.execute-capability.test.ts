@@ -103,10 +103,13 @@ describe('POST /api/whybuddy/execute-capability (server route)', () => {
   });
 
   it('returns raw 4-field shape on mocked success for risk.analyze', async () => {
-    vi.spyOn(llmClient, 'callLLMJson').mockResolvedValueOnce({
-      title: 'Server Risk Title',
-      summary: 'server risk summary',
-      content: 'server risk content with evidence',
+    vi.spyOn(llmClient, 'callLLMJsonWithUsage').mockResolvedValueOnce({
+      json: {
+        title: 'Server Risk Title',
+        summary: 'server risk summary',
+        content: 'server risk content with evidence',
+      },
+      usage: undefined,
     });
 
     const res = await fetch(`${base}/execute-capability`, {
@@ -127,11 +130,51 @@ describe('POST /api/whybuddy/execute-capability (server route)', () => {
     expect(body.provenance).toBe('llm');
   });
 
+  it('returns normalized usage when llm-client provides usage (Knife 11.1)', async () => {
+    vi.spyOn(llmClient, 'callLLMJsonWithUsage').mockResolvedValueOnce({
+      json: {
+        title: 'Risk with Usage',
+        summary: 'has usage',
+        content: 'risk content',
+      },
+      usage: {
+        prompt_tokens: 120,
+        completion_tokens: 80,
+        total_tokens: 200,
+      },
+    });
+
+    const res = await fetch(`${base}/execute-capability`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        capabilityId: 'risk.analyze',
+        state: { sessionId: 't-usage', goal: { text: 'test' } },
+        inputArtifactIds: [],
+        turnId: 't-usage',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.title).toBe('Risk with Usage');
+    expect(body.provenance).toBe('llm');
+    expect(body.usage).toEqual({
+      inputTokens: 120,
+      outputTokens: 80,
+      totalTokens: 200,
+      model: expect.any(String), // the route uses config.model
+    });
+  });
+
   it('report.write success returns content that reflects the 9-section base structure', async () => {
-    vi.spyOn(llmClient, 'callLLMJson').mockResolvedValueOnce({
-      title: 'Server Report Title',
-      summary: 'server report summary',
-      content: '结论：...\n支撑证据：...\n反证/挑战：...\n风险：...\n分歧：...\n收敛决策：...\n未解缺口：...\n下一步工程化分支：...\nprovenance / upstream refs：...',
+    vi.spyOn(llmClient, 'callLLMJsonWithUsage').mockResolvedValueOnce({
+      json: {
+        title: 'Server Report Title',
+        summary: 'server report summary',
+        content: '结论：...\n支撑证据：...\n反证/挑战：...\n风险：...\n分歧：...\n收敛决策：...\n未解缺口：...\n下一步工程化分支：...\nprovenance / upstream refs：...',
+      },
+      usage: undefined,
     });
 
     const res = await fetch(`${base}/execute-capability`, {
@@ -239,10 +282,13 @@ describe('POST /api/whybuddy/execute-capability (server route)', () => {
 
     // Now call report.write referencing that github evidence via inputArtifactIds.
     // The server still feeds the 9-section skeleton (report path unchanged).
-    vi.spyOn(llmClient, 'callLLMJson').mockResolvedValueOnce({
-      title: 'Report with GitHub Evidence',
-      summary: 'includes github evidence',
-      content: '结论：...\n支撑证据：... (includes vercel/next.js github artifact)\n...',
+    vi.spyOn(llmClient, 'callLLMJsonWithUsage').mockResolvedValueOnce({
+      json: {
+        title: 'Report with GitHub Evidence',
+        summary: 'includes github evidence',
+        content: '结论：...\n支撑证据：... (includes vercel/next.js github artifact)\n...',
+      },
+      usage: undefined,
     });
 
     const reportRes = await fetch(`${base}/execute-capability`, {
