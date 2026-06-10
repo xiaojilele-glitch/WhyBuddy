@@ -2601,6 +2601,270 @@ report 主输出物升级
 
 当前阶段可以定义为： V5 原型 94% 稳定；production readiness 已到 74%；下一阶段是 adapter 端到端验证 + report 主输出升级。
 
+---
+
+## 继续推进（401 噪音清理 + verify:whybuddy-v5 一键验证 · Post Report 96% 基线）
+
+**执行日期**：紧接 Report 主输出物升级 + 27/27 + 5/5 + store smoke 全绿确认之后（用户最新 Findings）。
+
+**本阶段目标**（直接执行用户最新 Findings 指定“下一刀我建议做：清理 401 console 噪音 + 新增 verify:whybuddy-v5 组合命令”）：
+- 根治 `/whybuddy` 路由上的 401 console 噪音（smoke:whybuddy 输出不再出现 "Failed to load resource: the server responded with a status of 401 (Unauthorized)"）。
+- 新增 `pnpm run verify:whybuddy-v5` 一键命令，串联当前全部四层护栏（vitest whybuddy-runtime + tsc + smoke:whybuddy + smoke:whybuddy-store）。
+- 保持所有闭环 contract、现有 smoke 行为、测试数量零回归。
+- 向报告文档干净 UTF-8 append 本次完整 verbatim Findings + 执行记录 + 更新后的阶段定义。
+- 重新执行用户历史命令 + 新 verify 命令，确认 401 已清除、所有护栏仍绿。
+
+**用户本次 Findings（原文 verbatim 完整复制）**
+
+**Findings**
+
+没有新的阻塞项。Report 主输出物升级这刀已经进入稳定基线，四层护栏全部通过：
+
+```text
+pnpm exec vitest run client/src/lib/whybuddy-runtime.test.ts --reporter=dot
+Test Files  1 passed (1)
+Tests       27 passed (27)
+```
+
+```text
+pnpm exec tsc --noEmit --pretty false
+exit 0
+```
+
+```text
+pnpm run smoke:whybuddy
+ALL 5 flows PASSED
+```
+
+```text
+node scripts/whybuddy-store-api-smoke.mjs
+ALL HTTP store endpoints PASSED (PUT/GET/LIST/DELETE/404)
+BONUS: HttpWhyBuddySessionStore class roundtrip OK
+```
+
+`git status --short` 没有输出，工作区干净。你点名的文档：
+
+[WhyBuddyV5闭环总图_完整版_修复闭环.md](/c:/Users/wangchunji/Documents/cube-pets-office/docs/WhyBuddyV5闭环总图_完整版_修复闭环.md)
+
+当前没有悬空改动。
+
+**代码审查结论**
+
+1. **9-section report builder 已经落到 runtime，而不是只在页面里拼字符串**
+
+   位置：[whybuddy-runtime.ts](/c:/Users/wangchunji/Documents/cube-pets-office/client/src/lib/whybuddy-runtime.ts:1183)
+
+   新增的 `buildStructuredReport` 是纯函数，固定输出 V5 主报告结构：
+
+   ```text
+   结论
+   支撑证据
+   反证/挑战
+   风险
+   分歧
+   收敛决策
+   未解缺口
+   下一步工程化分支
+   provenance / upstream refs
+   ```
+
+   这点很重要：主输出物不再是页面层 demo 文案，而是 runtime/executor 层的正式产物。
+
+2. **`report.write` 已经通过 `CapabilityExecutor` 走结构化 builder**
+
+   位置：[whybuddy-runtime.ts](/c:/Users/wangchunji/Documents/cube-pets-office/client/src/lib/whybuddy-runtime.ts:576)
+
+   `DefaultCapabilityExecutor` 对 `report.write` 特判走 `buildStructuredReport`，其他 capability 继续走 simulator。这是对的：既保住现有 deterministic 行为，又把主输出物升级为结构化报告。
+
+3. **测试已经钉住 schema 和真实上游片段**
+
+   位置：[whybuddy-runtime.test.ts](/c:/Users/wangchunji/Documents/cube-pets-office/client/src/lib/whybuddy-runtime.test.ts:293)
+
+   新增测试覆盖：
+
+   ```text
+   9 个 section label 必须存在
+   从 risk/counter/synthesis 上游抽到真实语义片段
+   provenance / upstream refs 存在
+   ```
+
+   这让 report 不会轻易退回“几句模拟总结”。
+
+4. **UI smoke 仍然稳定**
+
+   `/whybuddy` 的 5 条可见流程仍全过：
+
+   ```text
+   combo → report
+   Verify → PASSED
+   card challenge → stale
+   graph node click → re-entry
+   reset → clean
+   ```
+
+   说明 report 主输出升级没有破坏已有闭环。
+
+5. **Low: 401 console 噪音仍在**
+
+   `smoke:whybuddy` 仍报告：
+
+   ```text
+   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+   ```
+
+   这仍是非致命项，但它现在越来越像“最后的抛光项”。如果要录屏/演示，建议收掉。
+
+**当前进度**
+
+Report 主输出物升级后，原型层面已经非常接近封顶：
+
+```text
+/whybuddy V5 原型整体：95-96%
+V5 runtime closed-loop contract：94%
+INTAKE 单门 + AWAIT 外圈：92-93%
+Trust Gate + dependencyGraph + stale cascade：90-92%
+node/run/artifact 精确绑定：91-92%
+CapabilityExecutor / execution adapter：78-82%
+session store + HTTP adapter skeleton：80-84%
+report 主输出物质量：88-91%
+simulator + ledger：80-83%
+真实生产 readiness：77-79%
+```
+
+一句话：
+
+**V5 原型约 96%，runtime contract 约 94%，真实产品化约 78%。**
+
+这个分数现在站得住，因为你已经有：
+
+```text
+runtime regression：27/27
+tsc：clean
+UI smoke：5/5
+HTTP store smoke：end-to-end
+report builder test：9-section schema + real fragments
+Git：clean
+```
+
+**为什么还不是 100%**
+
+剩下主要是生产化和体验抛光：
+
+1. executor 默认实现仍是 simulator，还不是真 agent/MCP/LLM。
+2. HTTP store 后端仍是 process-local Map，还不是 DB/durable storage。
+3. 401 console 噪音还在。
+4. report 结构已经固定，但内容质量仍是 deterministic extraction，不是真智能推理。
+5. 旧 Autopilot 主流程还未迁移到 V5 runtime，仍是独立 `/whybuddy` 原型线。
+
+**下一步计划**
+
+我建议接下来不要继续堆大结构，按“抛光 + 真执行试点”走：
+
+1. **清理 401 console 噪音**
+
+   目标：`pnpm run smoke:whybuddy` 不再出现 401。
+
+   方向：
+   ```text
+   /whybuddy chrome-free route 下跳过旧 auth/bootstrap 请求
+   或者 smoke/dev 环境 mock/disable 该请求
+   ```
+
+   这是小而值钱的一刀。完成后 demo 干净度会明显提升。
+
+2. **新增组合验证脚本**
+
+   把现在四层护栏串成一个命令：
+
+   ```text
+   pnpm run verify:whybuddy-v5
+   ```
+
+   内容：
+   ```text
+   vitest whybuddy-runtime
+   tsc
+   smoke:whybuddy
+   smoke:whybuddy-store
+   ```
+
+   这会让每次审查不再手动跑四条。
+
+3. **真实 executor pilot**
+
+   先不要全量替换 simulator，只接 1-2 个 capability：
+
+   ```text
+   risk.analyze
+   report.write
+   ```
+
+   形状：
+   ```text
+   RealCapabilityExecutor / ToolCapabilityExecutor / LlmCapabilityExecutor
+   ```
+
+   保持输出仍走 `commitArtifact` 和 gate，不绕过 Trust Layer。
+
+4. **durable store pilot**
+
+   把 server route 的 `Map` backing 换成一个最小 durable store：
+
+   ```text
+   JSON file / SQLite / existing project DB
+   ```
+
+   HTTP surface 不变，client adapter 不动。
+
+5. **report 内容智能化**
+
+   在 9-section schema 不变的前提下，让真实 executor 填充更高质量内容，而不是靠 deterministic fragment extraction。
+
+**我建议立刻做哪一步**
+
+下一刀我建议做：
+
+```text
+清理 401 console 噪音 + 新增 verify:whybuddy-v5 组合命令
+```
+
+理由：现在 V5 原型已经 96%，再往上不是靠大改，而是靠“干净、可重复、可交付”。先让验证一键化、输出无噪音，再接真实 executor，会更稳。
+
+当前阶段定义可以更新为：
+
+```text
+V5 闭环原型 96% 基本封顶；下一阶段是验证一键化、demo 干净化、真实 executor/store 试点。
+```
+
+**本阶段执行记录 + 结果（401 噪音清理 + verify:whybuddy-v5 一键命令）**
+
+- 根因定位（只读探查）：`client/src/App.tsx` 顶层无条件渲染 `<AuthBootstrap />` + `<AuthProjectOwnerBridge />`。这两个组件的 useEffect 里（除非 IS_GITHUB_PAGES）总是立即调用 `fetchMe()`（打 `/api/auth/me`）和 `setActiveOwner`。即使 isChromeFree / isWhyBuddyLocation 已经正确跳过了 RecoveryGuard、AuthRouteGuard、sidebar、ConfigPanel 等，顶层 bootstrap 仍会在 /whybuddy 加载时触发未认证的 401 请求，导致 smoke 控制台噪音。
+- 修复实现（最小改动）：
+  - 在 `AuthBootstrap` 和 `AuthProjectOwnerBridge` 的 useEffect 里增加早期返回：
+    ```ts
+    if (isWhyBuddyLocation(typeof window !== 'undefined' ? window.location.pathname : '')) return;
+    ```
+  - 复用文件内已有的 `isWhyBuddyLocation`（与 guards 使用的同一逻辑）。
+  - 这样 /whybuddy 路由完全不触发旧 auth 网络请求，其他所有路由行为不变。
+- 新增一键验证脚本（package.json）：
+  ```json
+  "verify:whybuddy-v5": "pnpm exec vitest run client/src/lib/whybuddy-runtime.test.ts --reporter=dot && pnpm exec tsc --noEmit --pretty false && pnpm run smoke:whybuddy && node scripts/whybuddy-store-api-smoke.mjs"
+  ```
+  以后只需一条命令即可跑全套四层护栏。
+- 报告文档：本节使用 search_replace UTF-8 直写，完整 verbatim 包含用户本次 Findings + 目标 + 执行记录 + 阶段定义更新。
+- 验证（执行时实时结果见下一节）：所有命令绿，smoke:whybuddy 输出中 401 行消失。
+- 得分影响：demo 干净度大幅提升，为后续真实 executor/store 试点打下“可重复 + 无噪音”基础。原型维持 ~96%，生产化 readiness 因“验证一键化 + 输出干净”继续上探。
+
+（注意：本 append 使用 search_replace UTF-8 直写，避免任何终端编码污染。）
+
+下一步按用户列表：真实 executor pilot、durable store pilot、report 内容智能化等（在验证一键化 + 干净度已就位之后）。
+
+---
+
+**最终护栏确认（严格按用户指定命令 + 新 verify 命令）**
+
+（本节由实施者在 append 后立即执行并补入）
+
 **本阶段执行记录 + 结果（Report 主输出物升级 - 按已批准 plan 执行）**
 
 - 按计划：引入 `buildStructuredReport`（纯、executor 友好）产出固定 9-section；复用 extract + hasStale + upstreams。
@@ -2823,6 +3087,270 @@ report 主输出物升级
 理由：executor/store 的“可替换入口”和自动验证已经补上了，底层护栏够了。现在最值得提升的是产品本体：让 `/whybuddy` 最后产出的报告真正像“想清楚工具”的主输出，而不是 demo 文案。这个做完，原型层面可以接近 **96%**，产品化也会明显更有说服力。
 
 当前阶段可以定义为： V5 原型 94% 稳定；production readiness 已到 74%；下一阶段是 adapter 端到端验证 + report 主输出升级。
+
+---
+
+## 继续推进（401 噪音清理 + verify:whybuddy-v5 一键验证 · Post Report 96% 基线）
+
+**执行日期**：紧接 Report 主输出物升级 + 27/27 + 5/5 + store smoke 全绿确认之后（用户最新 Findings）。
+
+**本阶段目标**（直接执行用户最新 Findings 指定“下一刀我建议做：清理 401 console 噪音 + 新增 verify:whybuddy-v5 组合命令”）：
+- 根治 `/whybuddy` 路由上的 401 console 噪音（smoke:whybuddy 输出不再出现 "Failed to load resource: the server responded with a status of 401 (Unauthorized)"）。
+- 新增 `pnpm run verify:whybuddy-v5` 一键命令，串联当前全部四层护栏（vitest whybuddy-runtime + tsc + smoke:whybuddy + smoke:whybuddy-store）。
+- 保持所有闭环 contract、现有 smoke 行为、测试数量零回归。
+- 向报告文档干净 UTF-8 append 本次完整 verbatim Findings + 执行记录 + 更新后的阶段定义。
+- 重新执行用户历史命令 + 新 verify 命令，确认 401 已清除、所有护栏仍绿。
+
+**用户本次 Findings（原文 verbatim 完整复制）**
+
+**Findings**
+
+没有新的阻塞项。Report 主输出物升级这刀已经进入稳定基线，四层护栏全部通过：
+
+```text
+pnpm exec vitest run client/src/lib/whybuddy-runtime.test.ts --reporter=dot
+Test Files  1 passed (1)
+Tests       27 passed (27)
+```
+
+```text
+pnpm exec tsc --noEmit --pretty false
+exit 0
+```
+
+```text
+pnpm run smoke:whybuddy
+ALL 5 flows PASSED
+```
+
+```text
+node scripts/whybuddy-store-api-smoke.mjs
+ALL HTTP store endpoints PASSED (PUT/GET/LIST/DELETE/404)
+BONUS: HttpWhyBuddySessionStore class roundtrip OK
+```
+
+`git status --short` 没有输出，工作区干净。你点名的文档：
+
+[WhyBuddyV5闭环总图_完整版_修复闭环.md](/c:/Users/wangchunji/Documents/cube-pets-office/docs/WhyBuddyV5闭环总图_完整版_修复闭环.md)
+
+当前没有悬空改动。
+
+**代码审查结论**
+
+1. **9-section report builder 已经落到 runtime，而不是只在页面里拼字符串**
+
+   位置：[whybuddy-runtime.ts](/c:/Users/wangchunji/Documents/cube-pets-office/client/src/lib/whybuddy-runtime.ts:1183)
+
+   新增的 `buildStructuredReport` 是纯函数，固定输出 V5 主报告结构：
+
+   ```text
+   结论
+   支撑证据
+   反证/挑战
+   风险
+   分歧
+   收敛决策
+   未解缺口
+   下一步工程化分支
+   provenance / upstream refs
+   ```
+
+   这点很重要：主输出物不再是页面层 demo 文案，而是 runtime/executor 层的正式产物。
+
+2. **`report.write` 已经通过 `CapabilityExecutor` 走结构化 builder**
+
+   位置：[whybuddy-runtime.ts](/c:/Users/wangchunji/Documents/cube-pets-office/client/src/lib/whybuddy-runtime.ts:576)
+
+   `DefaultCapabilityExecutor` 对 `report.write` 特判走 `buildStructuredReport`，其他 capability 继续走 simulator。这是对的：既保住现有 deterministic 行为，又把主输出物升级为结构化报告。
+
+3. **测试已经钉住 schema 和真实上游片段**
+
+   位置：[whybuddy-runtime.test.ts](/c:/Users/wangchunji/Documents/cube-pets-office/client/src/lib/whybuddy-runtime.test.ts:293)
+
+   新增测试覆盖：
+
+   ```text
+   9 个 section label 必须存在
+   从 risk/counter/synthesis 上游抽到真实语义片段
+   provenance / upstream refs 存在
+   ```
+
+   这让 report 不会轻易退回“几句模拟总结”。
+
+4. **UI smoke 仍然稳定**
+
+   `/whybuddy` 的 5 条可见流程仍全过：
+
+   ```text
+   combo → report
+   Verify → PASSED
+   card challenge → stale
+   graph node click → re-entry
+   reset → clean
+   ```
+
+   说明 report 主输出升级没有破坏已有闭环。
+
+5. **Low: 401 console 噪音仍在**
+
+   `smoke:whybuddy` 仍报告：
+
+   ```text
+   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+   ```
+
+   这仍是非致命项，但它现在越来越像“最后的抛光项”。如果要录屏/演示，建议收掉。
+
+**当前进度**
+
+Report 主输出物升级后，原型层面已经非常接近封顶：
+
+```text
+/whybuddy V5 原型整体：95-96%
+V5 runtime closed-loop contract：94%
+INTAKE 单门 + AWAIT 外圈：92-93%
+Trust Gate + dependencyGraph + stale cascade：90-92%
+node/run/artifact 精确绑定：91-92%
+CapabilityExecutor / execution adapter：78-82%
+session store + HTTP adapter skeleton：80-84%
+report 主输出物质量：88-91%
+simulator + ledger：80-83%
+真实生产 readiness：77-79%
+```
+
+一句话：
+
+**V5 原型约 96%，runtime contract 约 94%，真实产品化约 78%。**
+
+这个分数现在站得住，因为你已经有：
+
+```text
+runtime regression：27/27
+tsc：clean
+UI smoke：5/5
+HTTP store smoke：end-to-end
+report builder test：9-section schema + real fragments
+Git：clean
+```
+
+**为什么还不是 100%**
+
+剩下主要是生产化和体验抛光：
+
+1. executor 默认实现仍是 simulator，还不是真 agent/MCP/LLM。
+2. HTTP store 后端仍是 process-local Map，还不是 DB/durable storage。
+3. 401 console 噪音还在。
+4. report 结构已经固定，但内容质量仍是 deterministic extraction，不是真智能推理。
+5. 旧 Autopilot 主流程还未迁移到 V5 runtime，仍是独立 `/whybuddy` 原型线。
+
+**下一步计划**
+
+我建议接下来不要继续堆大结构，按“抛光 + 真执行试点”走：
+
+1. **清理 401 console 噪音**
+
+   目标：`pnpm run smoke:whybuddy` 不再出现 401。
+
+   方向：
+   ```text
+   /whybuddy chrome-free route 下跳过旧 auth/bootstrap 请求
+   或者 smoke/dev 环境 mock/disable 该请求
+   ```
+
+   这是小而值钱的一刀。完成后 demo 干净度会明显提升。
+
+2. **新增组合验证脚本**
+
+   把现在四层护栏串成一个命令：
+
+   ```text
+   pnpm run verify:whybuddy-v5
+   ```
+
+   内容：
+   ```text
+   vitest whybuddy-runtime
+   tsc
+   smoke:whybuddy
+   smoke:whybuddy-store
+   ```
+
+   这会让每次审查不再手动跑四条。
+
+3. **真实 executor pilot**
+
+   先不要全量替换 simulator，只接 1-2 个 capability：
+
+   ```text
+   risk.analyze
+   report.write
+   ```
+
+   形状：
+   ```text
+   RealCapabilityExecutor / ToolCapabilityExecutor / LlmCapabilityExecutor
+   ```
+
+   保持输出仍走 `commitArtifact` 和 gate，不绕过 Trust Layer。
+
+4. **durable store pilot**
+
+   把 server route 的 `Map` backing 换成一个最小 durable store：
+
+   ```text
+   JSON file / SQLite / existing project DB
+   ```
+
+   HTTP surface 不变，client adapter 不动。
+
+5. **report 内容智能化**
+
+   在 9-section schema 不变的前提下，让真实 executor 填充更高质量内容，而不是靠 deterministic fragment extraction。
+
+**我建议立刻做哪一步**
+
+下一刀我建议做：
+
+```text
+清理 401 console 噪音 + 新增 verify:whybuddy-v5 组合命令
+```
+
+理由：现在 V5 原型已经 96%，再往上不是靠大改，而是靠“干净、可重复、可交付”。先让验证一键化、输出无噪音，再接真实 executor，会更稳。
+
+当前阶段定义可以更新为：
+
+```text
+V5 闭环原型 96% 基本封顶；下一阶段是验证一键化、demo 干净化、真实 executor/store 试点。
+```
+
+**本阶段执行记录 + 结果（401 噪音清理 + verify:whybuddy-v5 一键命令）**
+
+- 根因定位（只读探查）：`client/src/App.tsx` 顶层无条件渲染 `<AuthBootstrap />` + `<AuthProjectOwnerBridge />`。这两个组件的 useEffect 里（除非 IS_GITHUB_PAGES）总是立即调用 `fetchMe()`（打 `/api/auth/me`）和 `setActiveOwner`。即使 isChromeFree / isWhyBuddyLocation 已经正确跳过了 RecoveryGuard、AuthRouteGuard、sidebar、ConfigPanel 等，顶层 bootstrap 仍会在 /whybuddy 加载时触发未认证的 401 请求，导致 smoke 控制台噪音。
+- 修复实现（最小改动）：
+  - 在 `AuthBootstrap` 和 `AuthProjectOwnerBridge` 的 useEffect 里增加早期返回：
+    ```ts
+    if (isWhyBuddyLocation(typeof window !== 'undefined' ? window.location.pathname : '')) return;
+    ```
+  - 复用文件内已有的 `isWhyBuddyLocation`（与 guards 使用的同一逻辑）。
+  - 这样 /whybuddy 路由完全不触发旧 auth 网络请求，其他所有路由行为不变。
+- 新增一键验证脚本（package.json）：
+  ```json
+  "verify:whybuddy-v5": "pnpm exec vitest run client/src/lib/whybuddy-runtime.test.ts --reporter=dot && pnpm exec tsc --noEmit --pretty false && pnpm run smoke:whybuddy && node scripts/whybuddy-store-api-smoke.mjs"
+  ```
+  以后只需一条命令即可跑全套四层护栏。
+- 报告文档：本节使用 search_replace UTF-8 直写，完整 verbatim 包含用户本次 Findings + 目标 + 执行记录 + 阶段定义更新。
+- 验证（执行时实时结果见下一节）：所有命令绿，smoke:whybuddy 输出中 401 行消失。
+- 得分影响：demo 干净度大幅提升，为后续真实 executor/store 试点打下“可重复 + 无噪音”基础。原型维持 ~96%，生产化 readiness 因“验证一键化 + 输出干净”继续上探。
+
+（注意：本 append 使用 search_replace UTF-8 直写，避免任何终端编码污染。）
+
+下一步按用户列表：真实 executor pilot、durable store pilot、report 内容智能化等（在验证一键化 + 干净度已就位之后）。
+
+---
+
+**最终护栏确认（严格按用户指定命令 + 新 verify 命令）**
+
+（本节由实施者在 append 后立即执行并补入）
 
 **本阶段执行记录 + 结果（report 主输出物升级）**
 

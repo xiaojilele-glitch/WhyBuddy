@@ -269,6 +269,10 @@ function AuthBootstrap() {
 
   useEffect(() => {
     if (IS_GITHUB_PAGES) return;
+    // V5 /whybuddy is chrome-free and deliberately isolated from auth/project stores.
+    // Skip fetchMe here to eliminate the unconditional 401 console noise on the demo route
+    // (the route already skips RecoveryGuard, AuthRouteGuard, sidebar, etc. via isChromeFree).
+    if (isWhyBuddyLocation(typeof window !== 'undefined' ? window.location.pathname : '')) return;
     void fetchMe();
   }, [fetchMe]);
 
@@ -281,6 +285,8 @@ function AuthProjectOwnerBridge() {
 
   useEffect(() => {
     if (IS_GITHUB_PAGES) return;
+    // Same isolation: no owner bridging for the standalone V5 whybuddy workspace.
+    if (isWhyBuddyLocation(typeof window !== 'undefined' ? window.location.pathname : '')) return;
     setActiveOwner(currentUserId);
   }, [currentUserId, setActiveOwner]);
 
