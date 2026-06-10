@@ -20,7 +20,7 @@ import express, { Router, type Request, type Response } from "express";
 import type { V5SessionState } from "../../shared/blueprint/v5-reasoning-state.js";
 import { getAIConfig } from "../core/ai-config.js";
 import { callLLMJson } from "../core/llm-client.js";
-import { buildStructuredReport } from "../../client/src/lib/whybuddy-runtime.js";
+import { buildStructuredReport } from "../../shared/blueprint/whybuddy-report-builder.js";
 import * as fs from "fs";
 import * as path from "path";
 

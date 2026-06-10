@@ -35,7 +35,7 @@
     "smoke:restart": "node scripts/mission-restart-smoke.mjs",
     "smoke:whybuddy": "node scripts/whybuddy-browser-smoke.mjs",
     "smoke:whybuddy-store": "node scripts/whybuddy-store-api-smoke.mjs",
-    "verify:whybuddy-v5": "pnpm exec vitest run client/src/lib/whybuddy-runtime.test.ts --reporter=dot && pnpm exec tsc --noEmit --pretty false && pnpm run smoke:whybuddy && node scripts/whybuddy-store-api-smoke.mjs",
+    "verify:whybuddy-v5": "pnpm exec vitest run client/src/lib/whybuddy-runtime.test.ts --reporter=dot && pnpm exec vitest run --config vitest.config.server.ts server/routes/__tests__/whybuddy.execute-capability.test.ts --reporter=dot && pnpm exec tsc --noEmit --pretty false && pnpm run smoke:whybuddy && node scripts/whybuddy-store-api-smoke.mjs",
     "smoke:release": "node --run smoke:prod && node --run smoke:executor && node --run smoke:mission && node --run smoke:restart",
     "test:release": "node --run lint && node --run typecheck && node --run test && node --run build && node --run smoke:release",
     "format": "prettier --write ."
