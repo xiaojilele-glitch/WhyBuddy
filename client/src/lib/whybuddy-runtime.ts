@@ -618,6 +618,12 @@ class DefaultCapabilityExecutor implements CapabilityExecutor {
  * Durable Store Pilot (feat commit landed): the session backing is now file-durable with live __reload
  * recovery proof in smoke. The executor seam is ready for a real LlmCapabilityExecutor / Tool impl
  * (still scoped to risk+report initially; same raw return contract).
+ *
+ * Post-durable hygiene (this phase):
+ * - verify:whybuddy-v5 is now closer to hermetic (browser smoke can auto-spawn Vite)
+ * - __clear / __reload are gated behind NODE_ENV / explicit flag
+ * - runtime data file is untracked (gitignore is effective)
+ * Next after these: replace PilotReal with a real (LLM-backed) executor behind the same interface.
  */
 class PilotRealCapabilityExecutor implements CapabilityExecutor {
   private base = new DefaultCapabilityExecutor();
