@@ -149,6 +149,16 @@ export default function WhyBuddy() {
     }]);
   };
 
+  // Knife 10: waive a coverage gap (v1 minimal: prompt for reason, call helper, derive+save+set)
+  const waiveGap = async (gapId: string) => {
+    const reason = window.prompt('Waive reason?', 'user waived (demo)') || 'user waived (demo)';
+    let working = WhyBuddyRuntime.waiveCoverageGap(sessionState, gapId, reason);
+    working = WhyBuddyRuntime.deriveNodeStatus ? WhyBuddyRuntime.deriveNodeStatus(working) : working;
+    working = await WhyBuddyRuntime.saveSessionState(working);
+    setSessionState(working);
+    // Note: gaps live on sessionState; the Control Surface will re-render on next state update.
+  };
+
   const sendMessage = async () => {
     if (!input.trim()) return;
 
@@ -607,14 +617,40 @@ export default function WhyBuddy() {
               {(() => {
                 const decs: any[] = WhyBuddyRuntime.getDecisionLedger ? WhyBuddyRuntime.getDecisionLedger(sessionState) : [];
                 const recent = [...decs].slice(-3).reverse();
-                const covGaps: any[] = (sessionState as any).coverageGaps || [];
-                const gapBadges = covGaps.length ? covGaps.map((g: any) => `${g.label} [${g.status}]`).join(' · ') : 'no gaps';
                 return (
                   <>
                     <div>decisions: <span className="font-mono">{decs.length}</span></div>
-                    <div>gaps: <span className="text-[10px]">{gapBadges}</span></div>
                   </>
                 );
+              })()}
+            </div>
+
+            {/* Knife 10: interactive gaps list with waive action for open gaps (v1 prompt) */}
+            <div className="mt-1">
+              <div className="text-slate-500 mb-0.5">Coverage Gaps (open gaps are actionable):</div>
+              {(() => {
+                const covGaps: any[] = (sessionState as any).coverageGaps || [];
+                if (!covGaps.length) return <div className="text-slate-400">no gaps</div>;
+                return covGaps.map((g: any, i: number) => (
+                  <div key={i} className="text-[10px] leading-tight mb-0.5">
+                    {g.label} [{g.status}]
+                    {g.status === 'open' && (
+                      <button
+                        onClick={() => waiveGap(g.id)}
+                        className="ml-2 rounded border px-1 text-amber-600 hover:bg-amber-50"
+                        title="waive this gap (v1: prompt for reason; runtime helper + derive + save)"
+                      >
+                        waive
+                      </button>
+                    )}
+                    {g.status === 'waived' && g.waivedReason && (
+                      <span className="ml-1 text-slate-400">(waived: {g.waivedReason})</span>
+                    )}
+                    {g.status === 'resolved' && g.resolvedByArtifactId && (
+                      <span className="ml-1 text-emerald-600">(resolved)</span>
+                    )}
+                  </div>
+                ));
               })()}
             </div>
 

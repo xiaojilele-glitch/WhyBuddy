@@ -5348,6 +5348,189 @@ V5 原型 99% 封顶 + 生产化底座 95-96%；V5.1 控制平面三件套（BUD
 
 ---
 
+## Knife 10：Gap Waive UI + Coverage Action Controls（按用户 review "收到。Knife 9 落地后..."）
+
+**执行日期**：紧接 Knife 9 CONTRACT->BUDGET stop + 用户 "可以进 Knife 10" 之后。
+
+**用户本次 Findings（原文 verbatim 完整关键部分）**
+
+```text
+收到。Knife 9 落地后，V5.1 的核心闭环已经非常完整了。
+
+我按你这次执行结果更新：
+
+V5 原型完成度：99%
+V5 生产化底座：95-96%
+V5.1 架构图效果：98%
+V5.1 控制平面完成度：96%+
+验证护栏：98%+
+
+这次最关键的一句话就是：
+
+CONTRACT 一份合约喂两个闸
+
+现在它真的成立了：
+
+GCOV：别太早停 / 别太早写结论
+BUDGET：够了就停 / 别重复消耗
+
+这很重要。因为到 Knife 8 为止，系统已经能“跑、看、挡、挑战”；Knife 9 让它进一步学会了 **不要在已经满足 contract 的情况下继续瞎跑**。这就是 V5.1 控制平面的成熟标志。
+
+**当前主链**
+
+现在可以正式写成：
+
+INTAKE
+ -> BUDGET(count + cost + contract sufficiency)
+ -> ORCH
+ -> DLEDGER(decision audit + challenge UI + stop audit)
+ -> CONTRACT(authored baseline + gap lifecycle)
+ -> GCOV(gap lifecycle gate)
+ -> FLOWB(protocol boundary)
+ -> plan / commit / AWAIT
+
+现在每个核心问题都有回答：
+
+会不会跑爆？BUDGET
+够了还跑不跑？BUDGET + CONTRACT
+为什么选这些能力？DLEDGER
+这条调度能不能质疑？decision challenge
+覆盖够不够？CONTRACT + GCOV
+正式内容干不干净？FLOWB
+花了多少？CostLedger
+状态能不能恢复？Durable store
+
+这已经是很完整的 V5.1 runtime 了。
+
+**为什么现在是 98%，不是 100%**
+
+剩下的不是“架构图主干没落地”，而是产品操作和精度层面：
+
+| 剩余项 | 当前状态 | 影响 |
+|---|---:|---|
+| gap waive UI | helper 有，UI 未操作化 | 用户还不能直接在页面 waive gap |
+| coverage action controls | 状态能看，但操作还轻 | 产品体验还差最后一层 |
+| real provider token/cost | 估算 tokens | 成本账不是精确账 |
+| FLOWB deeper protocol | v1 filter | 还不是完整 brainstorm protocol 图谱 |
+| 更完整的 Autopilot capability absorption | 已吸收 GitHub/static/LLM 等一部分 | 还能继续扩，但不是 V5.1 核心 blocker |
+
+所以 98% 我认可。  
+剩下 2% 更像“可用性和精度”，不是闭环骨架。
+
+**下一刀建议：Knife 10 Gap Waive UI + Coverage Action Controls**
+
+建议 commit：
+
+feat(whybuddy): add gap waive UI and coverage action controls
+
+目标一句话：
+
+> 把 coverage gap lifecycle 从 runtime helper 推到用户可操作层：用户能看见 open gap，能 waive，并留下 reason，GCOV/BUDGET 后续都尊重这个操作。
+
+**Knife 10 最小可交付**
+
+1. 在 Control Surface 的 gaps 列表里，对 `open` gap 加：
+
+waive
+
+2. 点击后可以用最小交互，不需要复杂 modal。比如：
+
+const reason = window.prompt("Waive reason?");
+
+保持 v1 克制。
+
+3. 调用 runtime helper：
+
+waiveCoverageGap(state, gapId, reason)
+
+然后：
+
+deriveNodeStatus
+saveSessionState
+setSessionState
+
+4. UI 展示：
+
+waived: reason
+
+5. GCOV / Budget 已经会尊重 waived gaps，所以不需要大改 runtime。
+
+6. 测试建议：
+
+如果只做 UI，可不加 runtime test，因为 `waiveCoverageGap` 已经有 Knife 7 覆盖。  
+但我建议至少加 1 个 runtime test 或 page-level 轻测：
+
+waived gap is reflected in coverage summary and sufficiency stop can proceed
+
+如果加 1 个：
+
+59 -> 60
+
+smoke 文案同步：
+
+59/59 -> 60/60
+
+7. Browser smoke 可选增强：
+
+- 打开 `/whybuddy`
+- 触发一个 blocked/open gap 场景
+- 点击 waive
+- 看到 gap 状态变 `waived`
+
+如果 smoke 太重，先不扩也可以。Knife 10 的核心是产品操作入口。
+
+**做完 Knife 10 后预计**
+
+V5.1 架构图效果：98% -> 98.5%
+产品可用性：明显提升
+
+这不会像 Knife 7/9 那样大幅涨架构分，因为架构已经到了。但它会让 V5.1 更像一个能被用户真正操控的系统。
+
+**再往后**
+
+Knife 11 可以考虑：
+
+feat(whybuddy): use provider usage for real cost telemetry
+
+把 server LLM route 返回 usage，CostLedger 记录真实 token，而不是 content length estimate。
+
+或者：
+
+feat(whybuddy): deepen FLOWB brainstorm protocol integration
+
+把 FLOWB 从 line filter 扩到结构化 debate/critique graph。
+
+**一句话**
+
+可以进 Knife 10。  
+现在 V5.1 的核心图已经基本跑通，下一步不是补骨架，而是把 gap lifecycle 的控制权交给用户，让 coverage 不只是系统判断，也能被人类明确 waive、留痕、继续推进。
+```
+
+**本阶段执行记录 + 结果（Knife 10）**
+
+- WhyBuddy.tsx：
+  - 新 `waiveGap(gapId)` handler：prompt reason -> `waiveCoverageGap` (runtime) -> derive -> save -> setSessionState。
+  - 在 Control Surface 的 gaps 列表中，对 status==='open' 的 gap 渲染 "waive" 按钮（onClick 调用）。
+  - 已 waived 的显示 "(waived: reason)"。
+  - 顶栏 coverage 摘要（open/waived 计数）自动反映更新。
+- +1 runtime test（waive 后 gap status=waived，反射到 summary；waive 后 sufficiency 变为 true，可触发 contract stop）。
+- Client 59 -> **60 passed (60)**。
+- Smokes 同步 59/59 -> **60/60**。
+- `pnpm run verify:whybuddy-v5` 全绿（60+12, tsc, 5 flows, 9 store+durability，logs 带 60/60）。
+- 主 doc append 完整 verbatim review + 记录。
+- Git 仅 V5 文件（WhyBuddy.tsx + runtime.test.ts + 2 smokes + 主 doc），commit 使用建议消息。
+- session plan.md live append。
+
+现在用户可以在页面直接对 open gap 执行 waive（留 reason），状态实时更新，后续 GCOV 判定和 Budget sufficiency stop 都会尊重（不再把 waived gap 当 blocking）。把 lifecycle 从 helper 变成可操作产品特性。
+
+**进度（用户口径）**：98% → 98.5% 架构 + 产品可用性明显提升。
+
+下一步按用户：Knife 11 real provider cost 或 deeper FLOWB。
+
+（注意：本 append 使用 search_replace UTF-8 直写，避免任何终端编码污染。）
+
+所有步骤严格 v1 克制（prompt 交互、复用已有 helper + derive/save/set 模式、一致性测试、smoke 同步、hygiene）。
+
 ## Knife 9：CoverageContract -> Budget stop policy（按用户 review "收到。Knife 8 很关键..."）
 
 **执行日期**：紧接 Knife 8 UI surface + 用户明确 "可以进 Knife 9" 之后。

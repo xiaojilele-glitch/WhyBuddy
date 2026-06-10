@@ -233,7 +233,7 @@ async function main() {
   }
 
   console.log('[whybuddy-store-smoke] ALL HTTP store endpoints PASSED (PUT/GET/LIST/DELETE/404 + durability).');
-  console.log('[whybuddy-store-smoke] This + prior 59/59 + smoke:whybuddy 5/5 + durability = durable adapter pilot nailed.');
+  console.log('[whybuddy-store-smoke] This + prior 60/60 + smoke:whybuddy 5/5 + durability = durable adapter pilot nailed.');
 }
 
 main().catch((e) => {

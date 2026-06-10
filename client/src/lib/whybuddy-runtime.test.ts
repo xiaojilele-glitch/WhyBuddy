@@ -2036,4 +2036,68 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
     const last = ledger[ledger.length - 1];
     expect(last.rationale).not.toMatch(/stopped_by_contract_sufficiency/);
   });
+
+  // ===== Knife 10: gap waive UI support (1 new test, 59 -> 60; runtime coverage for the action) =====
+  it('waived gap is reflected in coverage summary and sufficiency stop can proceed', () => {
+    let s = createInitialSessionState('有风险的权限系统报告', 'waive-1');
+    const { contract, gaps } = authorCoverageContract(s.goal.text, 't-waive');
+    // Start with open gap(s) (complex goal produces missing_capability + evidence gaps)
+    s = { ...s, coverageContract: contract, coverageGaps: gaps };
+
+    // Waive the evidence gap first (on initial gaps, before any commit that may resolve other gaps)
+    let sAfterWaive = s;
+    const evGap = (sAfterWaive.coverageGaps || []).find((g: any) => g.kind === 'missing_evidence');
+    expect(evGap).toBeTruthy(); // ensure complex goal produced the evidence gap
+    if (evGap) {
+      sAfterWaive = waiveCoverageGap(sAfterWaive, evGap.id, 'demo waive in test');
+    }
+    sAfterWaive = resolveCoverageGapsFromState(sAfterWaive);
+
+    // Evidence gap should be waived
+    const anyWaived = (sAfterWaive.coverageGaps || []).some((g: any) => g.status === 'waived' && g.kind === 'missing_evidence');
+    expect(anyWaived).toBe(true);
+
+    // Now commit risk (satisfy risk req) + report for hasRecent + suff
+    const { updatedState: sRisk } = commitArtifact(
+      sAfterWaive,
+      createRawArtifact('risk-waive', 'risk.analyze', '安全', 'risk'),
+      't-waive-run-risk',
+      false,
+      []
+    );
+    sAfterWaive = sRisk;
+    const riskArt = (sAfterWaive.artifacts || []).find((a: any) => a.id === 'risk-waive');
+    if (riskArt) {
+      (riskArt as any).trustLevel = 'gated_pass';
+      (riskArt as any).passedGates = ['commit'];
+    }
+
+    // Add a trusted report so sufficiency can be true once gaps handled
+    const { updatedState: sWithReport } = commitArtifact(
+      sAfterWaive,
+      createRawArtifact('rep-waive', 'report.write', '综合', 'report'),
+      't-waive-run-rep',
+      false,
+      []
+    );
+    const repArt = (sWithReport.artifacts || []).find((a: any) => a.id === 'rep-waive');
+    if (repArt) {
+      (repArt as any).trustLevel = 'gated_pass';
+      (repArt as any).passedGates = ['commit'];
+    }
+
+    // Now sufficiency should allow stop (waived gap no longer blocks)
+    const suff = evaluateContractSufficiencyForBudget(sWithReport);
+    expect(suff.sufficient).toBe(true);
+    expect(suff.openGapCount).toBe(0);
+
+    // And a redundant ORCH should stop (reuse the stop path)
+    const { newState: afterO, plan } = orchestrateReasoningTurn(sWithReport, {
+      turnId: 't-waive',
+      userText: '再报告',
+    });
+    expect(afterO.runtimePhase).toBe('awaiting');
+    expect(plan.selected.length).toBe(0);
+    expect(plan.reason).toMatch(/CONTRACT_SUFFICIENT|contract_sufficient/);
+  });
 });
