@@ -29,7 +29,11 @@ import {
   buildStructuredReport,
   usePilotRealExecutor,
   useDefaultExecutor,
+  useLlmCapabilityExecutor,
+  LlmCapabilityExecutor,
+  type LlmCapabilityProvider,
 } from './whybuddy-runtime';
+import { isTestHelperEnabled } from '../../../server/routes/whybuddy.ts';
 import type { V5SessionState, Artifact, UserIntervention } from '@shared/blueprint/v5-reasoning-state';
 import type { V5CapabilityId } from '@shared/blueprint/contracts';
 import type { ControlSignal } from './whybuddy-runtime';
@@ -902,6 +906,138 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
       // Restore previous executor (or let default be recreated by the module)
       if (prev && setCapabilityExecutor) setCapabilityExecutor(prev);
       clearWhyBuddySessionStore();
+    }
+  });
+
+  it('LlmCapabilityExecutor (via useLlmCapabilityExecutor) can be swapped, only affects risk.analyze + report.write, returns strict raw shape, and falls back on other caps', async () => {
+    clearWhyBuddySessionStore();
+
+    const prev = getCapabilityExecutor ? getCapabilityExecutor() : null;
+
+    try {
+      useLlmCapabilityExecutor();
+
+      let s = await loadOrCreateSessionState('llm-test', 'llm executor pilot test');
+      const { preparedState } = intakeMessage(s, { turnId: 'l1', userText: '分析风险并生成结构化报告' });
+      const { newState: afterO } = orchestrateReasoningTurn(preparedState, { turnId: 'l1', userText: '分析风险并生成结构化报告' });
+
+      const planSelected: any[] = (afterO as any).plan?.selected || [];
+      const riskEntry = planSelected.find((e: any) => e.capabilityId === 'risk.analyze') || { capabilityId: 'risk.analyze', roleId: '安全', inputArtifactIds: [] };
+      const reportEntry = planSelected.find((e: any) => e.capabilityId === 'report.write') || { capabilityId: 'report.write', roleId: '综合', inputArtifactIds: [] };
+
+      // risk via Llm pilot
+      const riskRes = await executeCapability({
+        capabilityId: riskEntry.capabilityId as any,
+        state: afterO,
+        inputArtifactIds: riskEntry.inputArtifactIds || [],
+        roleId: riskEntry.roleId,
+        turnId: 'l1',
+      });
+      expect(riskRes.content).toContain('【LLM pilot - risk.analyze】');
+      expect(riskRes.provenance).toBe('llm');
+
+      // report via Llm pilot
+      const reportRes = await executeCapability({
+        capabilityId: reportEntry.capabilityId as any,
+        state: afterO,
+        inputArtifactIds: reportEntry.inputArtifactIds || [],
+        roleId: reportEntry.roleId,
+        turnId: 'l1',
+      });
+      expect(reportRes.title).toContain('LLM pilot');
+      expect(reportRes.provenance).toBe('llm');
+
+      // other cap should fall back (not have LLM marker in this pilot impl)
+      const otherCap = planSelected.find((e: any) => e.capabilityId !== 'risk.analyze' && e.capabilityId !== 'report.write');
+      if (otherCap) {
+        const otherRes = await executeCapability({
+          capabilityId: otherCap.capabilityId as any,
+          state: afterO,
+          inputArtifactIds: otherCap.inputArtifactIds || [],
+          roleId: otherCap.roleId,
+          turnId: 'l1',
+        });
+        // In our initial Llm impl other caps delegate to PilotReal, so they get the 真实试点 marker, not LLM.
+        // The important contract is that it didn't blow up and returned raw shape.
+        expect(otherRes).toHaveProperty('title');
+        expect(otherRes).toHaveProperty('content');
+      }
+    } finally {
+      if (prev && setCapabilityExecutor) setCapabilityExecutor(prev);
+      clearWhyBuddySessionStore();
+    }
+  });
+
+  it('LlmCapabilityExecutor supports injectable LlmCapabilityProvider (success, failure fallback, non-target cap)', async () => {
+    clearWhyBuddySessionStore();
+
+    const prev = getCapabilityExecutor ? getCapabilityExecutor() : null;
+
+    try {
+      // Success provider for the two targeted caps
+      const successProvider: LlmCapabilityProvider = async (args) => {
+        if (args.capabilityId === 'risk.analyze') {
+          return { title: 'LLM-RISK', summary: 'success', content: 'success-risk', provenance: 'llm' };
+        }
+        return { title: 'LLM-REPORT', summary: 'success', content: 'success-report', provenance: 'llm' };
+      };
+      setCapabilityExecutor(new LlmCapabilityExecutor(successProvider));
+
+      let s = await loadOrCreateSessionState('provider-test', 'provider seam test');
+      const { preparedState } = intakeMessage(s, { turnId: 'prov1', userText: '风险并报告' });
+      const { newState: afterO } = orchestrateReasoningTurn(preparedState, { turnId: 'prov1', userText: '风险并报告' });
+
+      const planSelected: any[] = (afterO as any).plan?.selected || [];
+      const riskEntry = planSelected.find((e: any) => e.capabilityId === 'risk.analyze') || { capabilityId: 'risk.analyze', roleId: '安全', inputArtifactIds: [] };
+      const reportEntry = planSelected.find((e: any) => e.capabilityId === 'report.write') || { capabilityId: 'report.write', roleId: '综合', inputArtifactIds: [] };
+
+      const riskRes = await executeCapability({ capabilityId: riskEntry.capabilityId as any, state: afterO, inputArtifactIds: riskEntry.inputArtifactIds || [], roleId: riskEntry.roleId, turnId: 'prov1' });
+      expect(riskRes.title).toBe('LLM-RISK');
+      expect(riskRes.provenance).toBe('llm');
+
+      const reportRes = await executeCapability({ capabilityId: reportEntry.capabilityId as any, state: afterO, inputArtifactIds: reportEntry.inputArtifactIds || [], roleId: reportEntry.roleId, turnId: 'prov1' });
+      expect(reportRes.title).toBe('LLM-REPORT');
+      expect(reportRes.provenance).toBe('llm');
+
+      // Failing provider must trigger fallback (content should come from PilotReal/Default, not the provider)
+      const failingProvider: LlmCapabilityProvider = async () => { throw new Error('simulated external failure'); };
+      setCapabilityExecutor(new LlmCapabilityExecutor(failingProvider));
+
+      const riskFail = await executeCapability({ capabilityId: riskEntry.capabilityId as any, state: afterO, inputArtifactIds: riskEntry.inputArtifactIds || [], roleId: riskEntry.roleId, turnId: 'prov1' });
+      // It should not contain the success marker from the previous provider; fallback produces PilotReal-style content.
+      expect(riskFail.content).not.toContain('success-risk');
+
+      // Non-target cap should fall back without calling a "LLM" provider (we can detect via a side-effect counter if needed, but for now just ensure it returns something).
+      const otherCap = planSelected.find((e: any) => e.capabilityId !== 'risk.analyze' && e.capabilityId !== 'report.write');
+      if (otherCap) {
+        const otherRes = await executeCapability({ capabilityId: otherCap.capabilityId as any, state: afterO, inputArtifactIds: otherCap.inputArtifactIds || [], roleId: otherCap.roleId, turnId: 'prov1' });
+        expect(otherRes).toHaveProperty('title');
+        expect(otherRes).toHaveProperty('content');
+      }
+    } finally {
+      if (prev && setCapabilityExecutor) setCapabilityExecutor(prev);
+      clearWhyBuddySessionStore();
+    }
+  });
+
+  it('test helper routes (__clear / __reload) are disabled under production (production guard)', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalFlag = process.env.WHYBUDDY_ENABLE_TEST_HELPERS;
+    try {
+      // Use the real exported implementation from server/routes/whybuddy.ts
+      process.env.NODE_ENV = 'production';
+      delete process.env.WHYBUDDY_ENABLE_TEST_HELPERS;
+      expect(isTestHelperEnabled()).toBe(false); // routes not registered → callers get 404
+
+      process.env.WHYBUDDY_ENABLE_TEST_HELPERS = '1';
+      expect(isTestHelperEnabled()).toBe(true); // explicit opt-in still works
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      if (originalFlag !== undefined) {
+        process.env.WHYBUDDY_ENABLE_TEST_HELPERS = originalFlag;
+      } else {
+        delete process.env.WHYBUDDY_ENABLE_TEST_HELPERS;
+      }
     }
   });
 

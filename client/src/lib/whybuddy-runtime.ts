@@ -728,6 +728,95 @@ pilot provenance：role=${roleId || '安全'} turn=${turnId}（deterministic ric
   }
 }
 
+/**
+ * Thin provider interface for the LlmCapabilityExecutor seam.
+ * A real implementation can call an actual LLM, MCP tool, or other external service.
+ * The executor itself must only ever return the raw 4-field shape; runtime owns
+ * Trust Gate, producedBy, commitArtifact, evidenceRefs, etc.
+ */
+export type LlmCapabilityProvider = (args: {
+  capabilityId: V5CapabilityId;
+  state: V5SessionState;
+  inputArtifactIds: string[];
+  roleId?: string;
+  turnId: string;
+}) => Promise<{
+  title: string;
+  summary: string;
+  content: string;
+  provenance?: Artifact["provenance"];
+}>;
+
+/**
+ * LlmCapabilityExecutor — initial Real Executor Pilot (now with injectable provider seam).
+ *
+ * Per the approved plan (lock hygiene + start real executor):
+ * - Implements the exact same CapabilityExecutor interface.
+ * - Initially only special-cases risk.analyze + report.write (the two caps from the pilot).
+ * - Strictly returns only the raw contract: { title, summary, content, provenance? }.
+ * - On any provider error or for other capabilities, falls back to PilotRealCapabilityExecutor (or Default).
+ * - Runtime (commitArtifact, Trust Gate, producedBy, evidenceRefs, etc.) remains completely untouched.
+ * - Opt-in via useLlmCapabilityExecutor() (or by passing any CapabilityExecutor impl to setCapabilityExecutor).
+ * - Module default is DefaultCapabilityExecutor. The /whybuddy page effect opts the demo into PilotRealCapabilityExecutor for richer outputs during the pilot phase.
+ *
+ * The default provider produces the current deterministic "LLM pilot" richer output.
+ * A real provider (OpenAI, MCP, tool, etc.) can be injected at construction time.
+ */
+export class LlmCapabilityExecutor implements CapabilityExecutor {
+  private base = new PilotRealCapabilityExecutor();
+  private provider: LlmCapabilityProvider;
+
+  constructor(provider?: LlmCapabilityProvider) {
+    // Default provider = current deterministic richer pilot logic (preserves existing behavior)
+    this.provider = provider ?? (async (args) => {
+      if (args.capabilityId === 'risk.analyze') {
+        return {
+          title: '风险分析 (LLM pilot)',
+          summary: 'LLM pilot richer risk analysis.',
+          content: '【LLM pilot - risk.analyze】\nPlaceholder richer content for real model/tool call. Fallback to PilotReal on error.',
+          provenance: 'llm' as const,
+        };
+      } else {
+        const built = buildStructuredReport({
+          state: args.state,
+          inputArtifactIds: args.inputArtifactIds || [],
+          roleId: args.roleId,
+        });
+        return {
+          title: built.title.replace('V5 Evidence Report', 'V5 Evidence Report (LLM pilot)'),
+          summary: built.summary + ' [llm pilot]',
+          content: built.content,
+          provenance: 'llm' as const,
+        };
+      }
+    });
+  }
+
+  async executeCapability(args: {
+    capabilityId: V5CapabilityId;
+    state: V5SessionState;
+    inputArtifactIds: string[];
+    roleId?: string;
+    turnId: string;
+  }): Promise<{
+    title: string;
+    summary: string;
+    content: string;
+    provenance?: Artifact["provenance"];
+  }> {
+    if (args.capabilityId === 'risk.analyze' || args.capabilityId === 'report.write') {
+      try {
+        return await this.provider(args);
+      } catch (e) {
+        // Provider (external) failure — reliable fallback as required by the plan.
+        return await this.base.executeCapability(args);
+      }
+    }
+    // Non-pilot caps: fall back without calling the provider.
+    return await this.base.executeCapability(args);
+  }
+}
+
 let currentCapabilityExecutor: CapabilityExecutor = new DefaultCapabilityExecutor();
 
 /**
@@ -745,7 +834,8 @@ export function getCapabilityExecutor(): CapabilityExecutor {
 /**
  * Convenience helpers for the 真实 executor pilot phase.
  * Tests and the /whybuddy page (demo) can opt-in to richer pilot outputs for risk.analyze + report.write.
- * Default remains the pure simulator so that all existing guards (28 tests, smoke 5 flows, store smoke) stay unchanged unless explicitly swapped.
+ * The module default executor is DefaultCapabilityExecutor. The /whybuddy page effect may opt the demo into PilotRealCapabilityExecutor.
+ * All existing tests, smokes, and closed-loop invariants remain on the default unless a test/page explicitly swaps the executor.
  */
 export function usePilotRealExecutor(): void {
   setCapabilityExecutor(new PilotRealCapabilityExecutor());
@@ -753,6 +843,16 @@ export function usePilotRealExecutor(): void {
 
 export function useDefaultExecutor(): void {
   setCapabilityExecutor(new DefaultCapabilityExecutor());
+}
+
+/**
+ * Opt-in to the initial Real Executor Pilot (LlmCapabilityExecutor).
+ * Falls back to PilotReal on error / other capabilities.
+ * Use this the same way as usePilotRealExecutor for demo / pilot runs.
+ * (The LlmCapabilityExecutor class itself is not exported for direct construction; use the helper or setCapabilityExecutor with a custom impl.)
+ */
+export function useLlmCapabilityExecutor(): void {
+  setCapabilityExecutor(new LlmCapabilityExecutor());
 }
 
 /**

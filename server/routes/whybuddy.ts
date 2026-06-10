@@ -146,9 +146,11 @@ router.delete("/sessions/:sessionId", (req: Request, res: Response) => {
 // - Or when the explicit escape hatch WHYBUDDY_ENABLE_TEST_HELPERS=1 is set.
 // This prevents accidental (or malicious) use of __clear / __reload against a
 // production-like deployment of the session store.
-const enableTestHelpers =
+export const isTestHelperEnabled = () =>
   process.env.NODE_ENV !== "production" ||
   process.env.WHYBUDDY_ENABLE_TEST_HELPERS === "1";
+
+const enableTestHelpers = isTestHelperEnabled();
 
 // (Optional nicety) allow a manual clear for dev / tests against the real server
 // Not part of the official 4-endpoint contract.
