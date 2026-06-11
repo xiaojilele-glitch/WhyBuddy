@@ -54,7 +54,9 @@ const router = Router();
 // - Map is hot cache for speed + simple list/GET shaping.
 // - load/reload from disk; flushToDisk after every mutate (set/delete/clear) — now returns boolean.
 // - Atomic write: write .tmp then renameSync.
-const DATA_FILE = path.resolve(process.cwd(), "data", "whybuddy-sessions.json");
+const DATA_FILE = process.env.WHYBUDDY_SESSIONS_FILE
+  ? path.resolve(process.cwd(), process.env.WHYBUDDY_SESSIONS_FILE)
+  : path.resolve(process.cwd(), "data", "whybuddy-sessions.json");
 
 const sessions = new Map<string, V5SessionState>();
 
@@ -209,6 +211,9 @@ type WhyBuddyRespondBody = {
   selected?: Array<{ capabilityId?: string; roleId?: string }>;
   artifacts?: Array<{ kind?: string; title?: string; summary?: string; realLlm?: boolean }>;
   mainArtifact?: { kind?: string; title?: string; content?: string } | null;
+  goalStatusBefore?: string;
+  planReason?: string | null;
+  skipped?: Array<{ capabilityId?: string; reason: string }>;
 };
 
 function buildRespondUserPrompt(body: WhyBuddyRespondBody): string {
@@ -222,14 +227,21 @@ function buildRespondUserPrompt(body: WhyBuddyRespondBody): string {
         `${i + 1}. [${a.kind || "item"}] ${String(a.title || "").slice(0, 80)} — ${String(a.summary || "").slice(0, 200)}`
     )
     .join("\n");
+  const skippedSummary = (body.skipped || [])
+    .map((s) => `${s.capabilityId || "?"}:${s.reason}`)
+    .join("; ");
 
   return buildNarrationUserPrompt({
     turnId: String(body.turnId || ""),
     userText: body.userText || "",
     goalText: (body.state as any)?.goal?.text || "",
     goalStatus: goalStatus || "needs_refinement",
+    goalStatusBefore: body.goalStatusBefore,
     interventionIntent: body.intervention?.intent,
+    selectedCount: (body.selected || []).length,
     selectedLine: selected || "(none)",
+    planReason: body.planReason,
+    skippedSummary: skippedSummary || undefined,
     artifactSummaries: artifactSummaries || "(none)",
     mainArtifactContent: body.mainArtifact?.content || null,
   });
@@ -279,16 +291,20 @@ router.post("/respond", express.json({ limit: "2mb" }), async (req: Request, res
   }
 
   const goalStatus = (body.state as any)?.goal?.status as GoalStatusForNarration;
-  const analysisCount = (body.selected || []).length || (body.artifacts || []).length;
+  const selectedCount = (body.selected || []).length;
   const hasMain = Boolean(body.mainArtifact?.content);
 
   const fallback = () =>
     buildFallbackNarration({
       userText: body.userText || "",
       goalStatus,
-      analysisCount,
+      goalStatusBefore: body.goalStatusBefore as GoalStatusForNarration,
+      selectedCount,
       interventionIntent: body.intervention?.intent,
       mainArtifactContent: body.mainArtifact?.content || null,
+      planReason: body.planReason,
+      skipped: body.skipped,
+      sanitizeMainArtifact: true,
     });
 
   try {
@@ -304,7 +320,7 @@ router.post("/respond", express.json({ limit: "2mb" }), async (req: Request, res
 
     const { content, usage } = await callLLM(
       [
-        { role: "system", content: buildNarrationSystemPrompt(hasMain) },
+        { role: "system", content: buildNarrationSystemPrompt(hasMain, selectedCount) },
         { role: "user", content: buildRespondUserPrompt(body) },
       ],
       {

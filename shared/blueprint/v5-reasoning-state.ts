@@ -173,6 +173,8 @@ export interface OrchestrateContext {
     selected: Array<{ capabilityId: V5CapabilityId; roleId: string }>;
     rationale: string;
     source: "llm" | "heuristic_fallback";
+    /** Mechanical convergence from router (empty selected + converged true). */
+    converged?: boolean;
   };
 }
 

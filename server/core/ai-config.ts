@@ -6,6 +6,15 @@ export interface AIConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
+  /**
+   * Net-new additive field (whybuddy-llm-autonomous-reasoning, 需求 3.1).
+   *
+   * Optional low-cost / faster model used by the LLM_Router for scheduling
+   * decisions. OPTIONAL so durable old configs (which never carried it) stay
+   * compatible; the router resolves the routing model as
+   * `config.routerModel ?? config.model`.
+   */
+  routerModel?: string;
   modelReasoningEffort: string;
   maxContext: number;
   providerName: string;
@@ -61,10 +70,16 @@ export function getAIConfig(): AIConfig {
       ? 'gpt-4o-mini'
       : 'gpt-4.1-mini');
 
+  const routerModel = pickProviderValue(
+    process.env.LLM_ROUTER_MODEL,
+    process.env.OPENAI_ROUTER_MODEL
+  );
+
   return {
     apiKey,
     baseUrl,
     model,
+    ...(routerModel ? { routerModel } : {}),
     modelReasoningEffort:
       pickProviderValue(process.env.LLM_REASONING_EFFORT, process.env.OPENAI_REASONING_EFFORT) ||
       'medium',

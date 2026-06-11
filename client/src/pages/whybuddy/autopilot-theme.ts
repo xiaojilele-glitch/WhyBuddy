@@ -7,8 +7,17 @@ export const autopilotTheme = {
   header: "flex items-center justify-between border-b border-[#E5E5E5] bg-white px-4 py-3",
   label: "font-mono text-[10px] uppercase tracking-[0.06em] text-[#666]",
   goal: "truncate text-sm font-medium tracking-tight text-black",
-  main: "flex-1 overflow-auto px-4 py-6",
-  footer: "border-t border-[#E5E5E5] bg-white px-4 py-3",
+  split: "flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row",
+  flowPanel:
+    "flex min-h-[280px] min-w-0 flex-1 flex-col border-b border-[#E5E5E5] bg-white lg:min-h-0 lg:border-b-0 lg:border-r",
+  flowPanelHeader:
+    "flex shrink-0 items-center justify-between border-b border-[#E5E5E5] px-4 py-2",
+  flowPanelBody: "relative min-h-0 flex-1",
+  flowEmpty:
+    "flex h-full items-center justify-center px-6 text-center text-sm text-slate-500",
+  imPanel: "flex w-full min-h-0 flex-col bg-[#f4f6f8] lg:w-[420px] xl:w-[480px]",
+  main: "flex-1 overflow-auto px-4 py-4",
+  footer: "shrink-0 border-t border-[#E5E5E5] bg-white px-4 py-3",
 
   emptyState:
     "rounded-lg border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center text-sm font-medium text-slate-500",

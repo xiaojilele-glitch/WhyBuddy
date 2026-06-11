@@ -76,10 +76,15 @@ export function detectNarrationHijack(
   return { hijacked: false };
 }
 
-export function buildNarrationSystemPrompt(hasMain: boolean): string {
+export function buildNarrationSystemPrompt(hasMain: boolean, selectedCount = 1): string {
   const lengthRule = hasMain
     ? "当提供 mainArtifact 时：将素材改写为 300–700 字中文。保留全部事实、证据、风险、分歧与未解缺口；不得新增素材中没有的结论；去掉工程实现细节与内部引用。用短标题与换行；避免堆叠 bullet。开篇一句回应用户输入；结尾一个前瞻性问题或下一步建议。"
     : "无 mainArtifact 时：用 120–260 字中文概括本轮。";
+
+  const idleRule =
+    selectedCount === 0
+      ? "8. 本轮 selectedCount=0（空转回合）：第一句必须直接承认「本轮没有安排新的分析」或同义表述；第二句说明原因（预算/覆盖饱和/契约缺口等人话版）；第三句给出路（换角度问或质疑结论）。严禁输出「已收敛」宣告或引导用户「查看证据链/详见下方」。\n"
+      : "";
 
   return (
     "你是 WhyBuddy 面向用户的叙述助手。\n" +
@@ -89,8 +94,11 @@ export function buildNarrationSystemPrompt(hasMain: boolean): string {
     "2. 禁止在用户可见文本中使用内部工程术语（artifact、stale、upstream、gate、capability、provenance、orchestrator 等）。\n" +
     "3. 禁止宣布「已收敛·可信」等乐观信任标签，除非机械状态已是 clear——且仍应中性描述。\n" +
     "4. 禁止开场自我介绍（不得出现「我是 ChatGPT/AI 助手/语言模型」等任何模型或厂商身份）。\n" +
-    `5. ${lengthRule}\n` +
-    "6. 只输出中文散文——不要 JSON，不要 markdown 代码围栏。"
+    "5. 正文不得往外引：禁止「可通过/详见/请查看/「证据链」查看」等把用户推出正文的句式；素材必须内联改写，不得甩链接式指引。\n" +
+    "6. 禁止机械汇报「本轮完成了 N 项分析」；goal.status 状态行仅在状态发生变化时提及一次。\n" +
+    `7. ${lengthRule}\n` +
+    idleRule +
+    "9. 只输出中文散文——不要 JSON，不要 markdown 代码围栏。"
   );
 }
 
@@ -99,8 +107,12 @@ export type NarrationPromptContext = {
   userText: string;
   goalText?: string;
   goalStatus?: string;
+  goalStatusBefore?: string;
   interventionIntent?: string | null;
+  selectedCount?: number;
   selectedLine?: string;
+  planReason?: string | null;
+  skippedSummary?: string;
   artifactSummaries?: string;
   mainArtifactContent?: string | null;
 };
@@ -118,13 +130,22 @@ export function buildNarrationUserPrompt(ctx: NarrationPromptContext): string {
     "直接输出面向用户的中文叙述。\n" +
     "---\n";
 
+  const selectedCount = ctx.selectedCount ?? 0;
+  const statusChanged =
+    ctx.goalStatusBefore != null && ctx.goalStatusBefore !== (ctx.goalStatus || "needs_refinement");
+
   let body =
     `${goalAnchor}` +
     `Turn: ${ctx.turnId}\n` +
     `User input: ${ctx.userText || ""}\n` +
     `Mechanical goal.status (transcribe faithfully, do not override): ${ctx.goalStatus || "needs_refinement"}\n` +
+    `Goal status before turn: ${ctx.goalStatusBefore ?? "(unknown)"}\n` +
+    `Goal status changed this turn: ${statusChanged ? "yes" : "no"} (only mention status line if yes)\n` +
     `Intervention: ${ctx.interventionIntent || "none"}\n` +
+    `Selected count: ${selectedCount}\n` +
     `Selected analyses: ${ctx.selectedLine || "(none)"}\n` +
+    `Plan reason: ${ctx.planReason || "(none)"}\n` +
+    `Skipped summary: ${ctx.skippedSummary || "(none)"}\n` +
     `Artifact summaries:\n${ctx.artifactSummaries || "(none)"}\n`;
 
   if (ctx.mainArtifactContent) {

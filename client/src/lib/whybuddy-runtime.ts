@@ -46,7 +46,7 @@ import type {
   CoverageGap,
 } from "@shared/blueprint/v5-reasoning-state";
 import type { BrainstormReasoningGraph, BrainstormReasoningNode, BrainstormReasoningEdge } from "@shared/blueprint/brainstorm-reasoning-graph";
-import { V5_CAPABILITY_POOL, ALL_V5_CAPABILITIES } from "@shared/blueprint/contracts";
+import { V5_CAPABILITY_POOL, ALL_V5_CAPABILITIES, CAPABILITY_OUTPUT_KIND } from "@shared/blueprint/contracts";
 import {
   buildStructuredReport,
   extractArtifactFragments,
@@ -57,6 +57,7 @@ import {
 import { findGithubUrlInTexts } from "@shared/blueprint/whybuddy-github-context";
 import { pickNextCapabilities as pickNextCapabilitiesHeuristic } from "@shared/blueprint/whybuddy-pick-heuristic";
 import { validateProposedPlan } from "@shared/blueprint/whybuddy-plan-validation";
+import { fetchOrchestratePlan } from "./whybuddy-orchestrator";
 
 export { pickNextCapabilitiesHeuristic as pickNextCapabilities };
 
@@ -94,6 +95,121 @@ export function getDefaultBudgetPolicy(): BudgetPolicy {
     maxCapabilityRunsPerSession: 120,
     maxRepeatPerCapability: 6,
   };
+}
+
+// ===== Session_Driver re-entry contracts (net-new types; driver impl lands in task 4.1) =====
+// whybuddy-llm-autonomous-reasoning 需求 1 / 2 / 3 / 13.
+//
+// Compatibility-first, additive-only:
+//   - BudgetPolicy is consumed UNCHANGED (no new fields, defaults frozen: maxTurns=30 etc.).
+//   - The per-message loop cap is a Driver-level option (DriveReasoningOptions.maxLoopsPerMessage,
+//     default DEFAULT_MAX_LOOPS_PER_MESSAGE = 3); it is NOT part of the BudgetPolicy schema.
+//   - Cross-round bookkeeping lives on the loop-local ReentryAccumulator; it is NOT persisted
+//     into the V5SessionState schema.
+//   - All new fields are optional where they could appear on durable old state.
+
+/**
+ * Driver-level default for the per-user-message re-entry loop cap (需求 1.5).
+ * This is a Session_Driver guard, distinct from the (unchanged) BudgetPolicy gates.
+ */
+export const DEFAULT_MAX_LOOPS_PER_MESSAGE = 3;
+
+/** Why the Session_Driver stopped re-entering and parked at AWAIT. */
+export type ReentryStopReason =
+  | "coverage_sufficient" // 需求 1.4: all required caps satisfied, blocking gaps resolved/waived
+  | "budget_exhausted" // 需求 1.5 / 1.9: maxLoopsPerMessage / maxCapabilityRunsPerSession / maxTurns
+  | "no_progress" // 需求 1.7: two consecutive loops with no new artifact and no gap progress
+  | "max_repeat_guard" // 需求 1.8: maxRepeatPerCapability excluded the only remaining candidates
+  | "convergence_signal"; // 需求 3.3: router returned selected:[] && converged === true
+
+/**
+ * Request the Session_Driver hands to a ReasoningRouter on each loop.
+ * Mirrors the server orchestrate-plan request shape so the runtime stays decoupled
+ * from server-only modules while remaining structurally compatible.
+ */
+export interface ReasoningRouterRequest {
+  state: V5SessionState;
+  turnId: string;
+  userText: string;
+  intervention?: UserIntervention;
+}
+
+/**
+ * Router response consumed by the Session_Driver.
+ * Mirrors the server OrchestratePlanResponse shape and adds the net-new optional
+ * `converged` boolean (需求 3.3). `converged` is optional to preserve compatibility
+ * with routers/fixtures that never emit it.
+ */
+export interface ReasoningRouterResponse {
+  selected: Array<{ capabilityId: V5CapabilityId; roleId: string; why?: string }>;
+  rationale: string;
+  source: "llm" | "heuristic_fallback";
+  /** 需求 3.3: mechanical convergence signal — only meaningful when selected is empty. */
+  converged?: boolean;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    model?: string;
+  };
+}
+
+/**
+ * Injectable router seam (需求 13.1). A Deterministic_Provider replacement can be
+ * injected for tests; the default implementation routes through the server
+ * orchestrate-plan path (wired in task 2.1 / 4.1).
+ */
+export interface ReasoningRouter {
+  proposePlan(req: ReasoningRouterRequest): Promise<ReasoningRouterResponse>;
+}
+
+/** Options for the runtime-owned multi-step re-entry driver (需求 1 / 2). */
+export interface DriveReasoningOptions {
+  /** Base turn id; each loop derives `${turnSeedId}-loop-${n}`. */
+  turnSeedId: string;
+  userText: string;
+  intervention?: UserIntervention;
+  /** Injected router (Deterministic_Provider replaceable). Defaults to the orchestrate-plan path. */
+  router?: ReasoningRouter;
+  /** Injected capability executor. Defaults to the module-level CapabilityExecutor. */
+  executor?: CapabilityExecutor;
+  /** Termination guard limits. Defaults to getDefaultBudgetPolicy(). */
+  budgetPolicy?: BudgetPolicy;
+  /**
+   * Max re-entry loops per user message (Driver-level guard, NOT in BudgetPolicy schema).
+   * Defaults to DEFAULT_MAX_LOOPS_PER_MESSAGE (3).
+   */
+  maxLoopsPerMessage?: number;
+}
+
+/** Result of a full multi-step drive over a single user message. */
+export interface DriveReasoningResult {
+  finalState: V5SessionState;
+  loops: Array<{
+    loopTurnId: string;
+    plan: TurnPlan;
+    committedArtifactIds: string[];
+    stopSignal?: ReentryStopReason;
+  }>;
+  stopReason: ReentryStopReason;
+}
+
+/**
+ * Loop-local accumulator for the re-entry driver. Intentionally NOT part of the
+ * V5SessionState schema — it lives only for the duration of a single drive and
+ * carries the cross-loop bookkeeping the termination guards need.
+ */
+export interface ReentryAccumulator {
+  /** Artifact count at the start of the previous loop (No_Progress detection, 需求 1.7). */
+  prevArtifactCount: number;
+  /** Coverage gap ids already resolved at the start of the previous loop. */
+  prevResolvedGapIds: Set<string>;
+  /** Per-capability cross-loop run counts (maxRepeatPerCapability guard, 需求 1.8). */
+  perCapabilityRunCount: Map<V5CapabilityId, number>;
+  /** Loops executed for this message so far (maxLoopsPerMessage guard, 需求 1.5). */
+  loopCount: number;
+  /** Consecutive loops with no progress (需求 1.7: stop at >= 2). */
+  noProgressStreak: number;
 }
 
 /**
@@ -855,46 +971,79 @@ function isConvergedConclusion(
   return status === "clear" || status === "not_recommended";
 }
 
-// ===== V5.1 FLOWB boundary guard v1 (Knife 4) =====
-// Pure mechanical sanitizer. Strips brainstorm/critique/rebuttal/debate protocol noise
-// before it enters formal report/synthesis content. Records what was stripped for audit.
-// v1 is deliberately simple regex/line filter; no deep parsing of full debate tree.
+// ===== V5.1 FLOWB boundary guard (Knife 4) — formal guard (修订 C, Requirement 9) =====
+// Formal flow-boundary guard. Processes brainstorm / discussion source CONTENT STRINGS only,
+// stripping all seven debate-protocol marker classes before content enters a formal artifact,
+// then re-scans the stripped output to assert zero residual (idempotent). Records what was
+// stripped, plus the residual assertion, into a FlowBoundaryCheck for the T_LEDGER.
+//
+// CONTENT-ONLY carve-out (Requirement 9.6 / 修订 C): the guard signature is
+// `(content: string, meta) => { cleanedText, check }`. `artifact.payload` (the R2 structured
+// Critique/Rebuttal/Adjudication, S10 discussion-block data source) is NEVER passed in here and
+// is never read, modified, or nulled — it travels the additive commit path untouched.
+
+/** The seven debate-protocol marker classes stripped at the flow boundary (Requirement 9.1). */
+const FLOW_BOUNDARY_PROTOCOL_MARKERS = [
+  "critique:",
+  "rebuttal:",
+  "debate:",
+  "challengeEdges",
+  "role vote",
+  "brainstorm console",
+  "brainstorm:",
+] as const;
+
+/** Single mechanical line-filter pass: removes any line containing a protocol marker. */
+function stripProtocolLinesOnce(text: string): { keptLines: string[]; strippedLines: string[] } {
+  const keptLines: string[] = [];
+  const strippedLines: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const lower = line.toLowerCase();
+    const isProtocol = FLOW_BOUNDARY_PROTOCOL_MARKERS.some((m) => lower.includes(m.toLowerCase()));
+    if (isProtocol) {
+      strippedLines.push(line.trim());
+    } else {
+      keptLines.push(line);
+    }
+  }
+  return { keptLines, strippedLines };
+}
 
 export function sanitizeThroughFlowBoundary(
   input: string,
   context: { turnId: string; source?: "brainstorm" | "discussion" | "artifact" | "executor" }
 ): { cleanedText: string; check: FlowBoundaryCheck } {
   const original = String(input || "");
-  const markers = ["critique:", "rebuttal:", "debate:", "challengeEdges", "role vote", "brainstorm console", "brainstorm:"];
-  const lines = original.split(/\r?\n/);
-  const strippedProtocolNodes: string[] = [];
-  const cleanedLines: string[] = [];
 
-  for (const line of lines) {
-    const lower = line.toLowerCase().trim();
-    let isProtocol = false;
-    for (const m of markers) {
-      if (lower.includes(m.toLowerCase())) {
-        strippedProtocolNodes.push(line.trim());
-        isProtocol = true;
-        break;
-      }
-    }
-    if (!isProtocol) {
-      cleanedLines.push(line);
-    }
+  // First strip pass over the content string (Requirement 9.1).
+  const firstPass = stripProtocolLinesOnce(original);
+  const strippedProtocolNodes: string[] = [...firstPass.strippedLines];
+  let cleanedText = firstPass.keptLines.join("\n").trim();
+
+  // Idempotent re-scan: assert zero residual on the stripped output (Requirement 9.2).
+  // The whole-line filter guarantees residual === 0 after one pass; the defensive re-strip
+  // keeps the guard idempotent even if upstream marker semantics evolve.
+  let rescan = stripProtocolLinesOnce(cleanedText);
+  if (rescan.strippedLines.length > 0) {
+    strippedProtocolNodes.push(...rescan.strippedLines);
+    cleanedText = rescan.keptLines.join("\n").trim();
+    rescan = stripProtocolLinesOnce(cleanedText);
   }
+  const residualAfterStrip = rescan.strippedLines.length;
+  const passed = residualAfterStrip === 0;
 
-  const cleanedText = cleanedLines.join("\n").trim();
   const check: FlowBoundaryCheck = {
     id: `flowb-${context.turnId || Date.now()}`,
     turnId: context.turnId,
     source: (context.source || "artifact") as FlowBoundaryCheck["source"],
     strippedProtocolNodes,
-    assertions: strippedProtocolNodes.length > 0
-      ? [`stripped ${strippedProtocolNodes.length} protocol nodes before formal content`]
-      : ["no protocol noise detected; text passed through boundary"],
-    passed: true,
+    assertions: [
+      strippedProtocolNodes.length > 0
+        ? `stripped ${strippedProtocolNodes.length} protocol nodes before formal content`
+        : "no protocol noise detected; text passed through boundary",
+      `residual protocol nodes after strip: ${residualAfterStrip} (idempotent re-scan)`,
+    ],
+    passed,
     createdAt: new Date().toISOString(),
   };
   return { cleanedText, check };
@@ -1551,6 +1700,221 @@ export function useOpenAILlmCapabilityExecutor(apiKey?: string): void {
   setCapabilityExecutor(new LlmCapabilityExecutor(provider));
 }
 
+// ============================================================================
+// Deterministic_Provider assembly (需求 13 — whybuddy-llm-autonomous-reasoning)
+//
+// Compatibility-first / additive only:
+//   - createDeterministicRouter / createDeterministicCapabilityExecutor are pure
+//     stand-ins (zero network, zero real-LLM) injectable wherever a ReasoningRouter
+//     / CapabilityExecutor is accepted (DriveReasoningOptions, setCapabilityExecutor).
+//   - assembleProvidersForBuildTarget defaults to the deterministic stand-ins when
+//     BUILD_TARGET=test (需求 13.3); real providers are reached ONLY via explicit
+//     injection or an explicit switch (需求 13.5).
+//   - Nothing here changes BudgetPolicy or the existing module-default executor.
+// ============================================================================
+
+/**
+ * A single scripted router step: a fixed response, or a function deriving one from
+ * the request. Used by createDeterministicRouter to drive specific multi-loop test
+ * sequences (including convergence signals via `{ selected: [], converged: true }`).
+ */
+export type DeterministicRouterStep =
+  | ReasoningRouterResponse
+  | ((req: ReasoningRouterRequest) => ReasoningRouterResponse);
+
+/**
+ * Optional script for createDeterministicRouter:
+ *   - an array consumed one entry per loop (exhaustion falls back to heuristic pick), or
+ *   - a function `(req, loopIndex) => response` for full control.
+ */
+export type DeterministicRouterScript =
+  | DeterministicRouterStep[]
+  | ((req: ReasoningRouterRequest, loopIndex: number) => ReasoningRouterResponse);
+
+/**
+ * createDeterministicRouter — Deterministic_Provider stand-in for the LLM_Router (需求 13.1).
+ *
+ * Performs zero network / zero real-LLM calls. With no script it derives a fully
+ * deterministic plan from the shared heuristic picker (`source: "heuristic_fallback"`).
+ * A script (array or function) lets tests drive exact per-loop proposals.
+ */
+export function createDeterministicRouter(script?: DeterministicRouterScript): ReasoningRouter {
+  let loopIndex = 0;
+
+  const heuristicResponse = (req: ReasoningRouterRequest): ReasoningRouterResponse => {
+    const userText = req.userText || req.state.goal?.text || "";
+    const selected = pickNextCapabilitiesHeuristic(req.state, userText).map((p) => ({
+      capabilityId: p.capabilityId,
+      roleId: p.roleId,
+    }));
+    return {
+      selected,
+      rationale: `deterministic_router heuristic pick for: ${userText.slice(0, 80)}`,
+      source: "heuristic_fallback",
+    };
+  };
+
+  return {
+    async proposePlan(req: ReasoningRouterRequest): Promise<ReasoningRouterResponse> {
+      const i = loopIndex++;
+
+      if (typeof script === "function") {
+        return script(req, i);
+      }
+
+      if (Array.isArray(script) && i < script.length) {
+        const step = script[i];
+        return typeof step === "function" ? step(req) : step;
+      }
+
+      // No script (or script exhausted): deterministic heuristic pick.
+      return heuristicResponse(req);
+    },
+  };
+}
+
+/**
+ * createDeterministicCapabilityExecutor — Deterministic_Provider stand-in for the
+ * CapabilityExecutor (需求 13.1).
+ *
+ * The module's DefaultCapabilityExecutor is already fully deterministic (state-aware
+ * simulator + 9-section report builder, zero network / zero real-LLM), so the
+ * deterministic stand-in simply returns a fresh instance of it. Kept as a named
+ * factory so call sites express intent and so a stricter stand-in could be swapped
+ * in later without touching callers.
+ */
+export function createDeterministicCapabilityExecutor(): CapabilityExecutor {
+  return new DefaultCapabilityExecutor();
+}
+
+/**
+ * createServerReasoningRouter — the "real" client-side router seam.
+ *
+ * Routes through the server orchestrate-plan endpoint (R1: validation / clamp /
+ * graceful degradation + DLEDGER source live on the server). On a null / failed
+ * response it degrades to the deterministic heuristic pick so a drive never blocks.
+ * This is the non-deterministic default returned by assembleProvidersForBuildTarget
+ * outside BUILD_TARGET=test.
+ */
+export function createServerReasoningRouter(options?: { timeoutMs?: number }): ReasoningRouter {
+  return {
+    async proposePlan(req: ReasoningRouterRequest): Promise<ReasoningRouterResponse> {
+      const body = await fetchOrchestratePlan(
+        {
+          state: req.state,
+          turnId: req.turnId,
+          userText: req.userText,
+          intervention: req.intervention
+            ? {
+                intent: req.intervention.intent,
+                targetArtifactId: req.intervention.targetArtifactId,
+                targetDecisionId: req.intervention.targetDecisionId,
+              }
+            : null,
+        },
+        options?.timeoutMs ? { timeoutMs: options.timeoutMs } : undefined
+      );
+
+      if (!body) {
+        const userText = req.userText || req.state.goal?.text || "";
+        return {
+          selected: pickNextCapabilitiesHeuristic(req.state, userText).map((p) => ({
+            capabilityId: p.capabilityId,
+            roleId: p.roleId,
+          })),
+          rationale: `heuristic_fallback (router unavailable) for: ${userText.slice(0, 80)}`,
+          source: "heuristic_fallback",
+        };
+      }
+
+      return {
+        selected: body.selected,
+        rationale: body.rationale,
+        source: body.source,
+        // `converged` is the net-new optional convergence boolean (需求 3.3); read
+        // defensively so this seam stays compatible before task 2.3 lands it server-side.
+        converged: (body as { converged?: boolean }).converged,
+        usage: body.usage,
+      };
+    },
+  };
+}
+
+/** Resolved providers returned by assembleProvidersForBuildTarget. */
+export interface AssembledProviders {
+  router: ReasoningRouter;
+  executor: CapabilityExecutor;
+  /** True when deterministic stand-ins were assembled by default (BUILD_TARGET=test). */
+  deterministic: boolean;
+  /** The build target that drove the decision (for diagnostics / tests). */
+  buildTarget?: string;
+}
+
+/** Options for assembleProvidersForBuildTarget (all optional, additive). */
+export interface AssembleProvidersOptions {
+  /** Override build-target detection (defaults to process.env.BUILD_TARGET). */
+  buildTarget?: string;
+  /** Explicit switch to assemble real providers even under BUILD_TARGET=test (需求 13.5). */
+  useReal?: boolean;
+  /** Explicit router injection — overrides default assembly for the router slot (需求 13.5). */
+  router?: ReasoningRouter;
+  /** Explicit executor injection — overrides default assembly for the executor slot (需求 13.5). */
+  executor?: CapabilityExecutor;
+  /** Real router used on the non-deterministic path (defaults to the server-routed router). */
+  realRouter?: ReasoningRouter;
+  /** Real executor used on the non-deterministic path (defaults to the module-level executor). */
+  realExecutor?: CapabilityExecutor;
+}
+
+/** Whether the current (or supplied) build target is the deterministic test target (需求 13.3). */
+export function isTestBuildTarget(buildTarget?: string): boolean {
+  const target =
+    buildTarget ??
+    (typeof process !== "undefined" ? process.env?.BUILD_TARGET : undefined);
+  return target === "test";
+}
+
+/**
+ * assembleProvidersForBuildTarget — central Deterministic_Provider assembly seam (需求 13.3 / 13.5).
+ *
+ * Decision order, per slot (router / executor):
+ *   1. Explicit injection (`options.router` / `options.executor`) always wins (需求 13.5).
+ *   2. Otherwise, under BUILD_TARGET=test (and without `useReal`), assemble the
+ *      deterministic stand-in by default (需求 13.3).
+ *   3. Otherwise assemble the real provider (server-routed router / module-level
+ *      executor, or the supplied real* override) — reached only via explicit switch
+ *      or a non-test target (需求 13.5).
+ */
+export function assembleProvidersForBuildTarget(
+  options: AssembleProvidersOptions = {}
+): AssembledProviders {
+  const testTarget = isTestBuildTarget(options.buildTarget);
+  // Deterministic stand-ins are the default ONLY under BUILD_TARGET=test and only
+  // when real has not been explicitly requested.
+  const deterministic = testTarget && options.useReal !== true;
+
+  const router =
+    options.router ??
+    (deterministic
+      ? createDeterministicRouter()
+      : options.realRouter ?? createServerReasoningRouter());
+
+  const executor =
+    options.executor ??
+    (deterministic
+      ? createDeterministicCapabilityExecutor()
+      : options.realExecutor ?? getCapabilityExecutor());
+
+  return {
+    router,
+    executor,
+    deterministic,
+    buildTarget:
+      options.buildTarget ??
+      (typeof process !== "undefined" ? process.env?.BUILD_TARGET : undefined),
+  };
+}
+
 /**
  * Clean return type for the public executeCapability wrapper.
  * The interface method already returns Promise<...>, so we use Awaited to avoid
@@ -1609,15 +1973,20 @@ export function commitArtifact(
     }
   }
 
-  // ===== V5.1 FLOWB (Knife 4): sanitize input fragments / content for formal report/synthesis
-  // before it becomes the committed artifact. This is the key insertion for "fragments enter formal content".
-  // Strips protocol noise, records the boundary check in state, optionally links to DLEDGER.
+  // ===== V5.1 FLOWB (Knife 4): formal flow-boundary guard (修订 C, Requirement 9.1/9.2/9.5).
+  // R2 deliberation output (synthesis-like) and formal report content MUST pass the guard before
+  // becoming the committed artifact. The guard is CONTENT-ONLY: only `rawArtifact.content` is
+  // passed in. `rawArtifact.payload` (R2 structured Critique/Rebuttal/Adjudication, the S10
+  // discussion-block data source) is NEVER read here — it travels untouched via the `...rawArtifact`
+  // spread below (Requirement 9.6). A single FlowBoundaryCheck is appended to flowBoundaryLedger
+  // (T_LEDGER) per processing run; no duplicate ledger entry is produced.
   let workingContent = rawArtifact.content || "";
   let flowCheck: FlowBoundaryCheck | null = null;
   if (isReport || isSynthesisLike) {
     const { cleanedText, check } = sanitizeThroughFlowBoundary(workingContent, {
       turnId: runId,
-      source: isReport ? "artifact" : "executor",
+      // report aggregation = "artifact"; R2 deliberation merge content = "discussion" source.
+      source: isReport ? "artifact" : "discussion",
     });
     workingContent = cleanedText;
     flowCheck = check;
@@ -2219,6 +2588,44 @@ export function orchestrateReasoningTurn(
   let pickRationale: string;
 
   const proposed = context?.proposedPlan;
+  if (
+    proposed?.source === "llm" &&
+    proposed.converged === true &&
+    (proposed.selected?.length ?? 0) === 0
+  ) {
+    const nowIso = new Date().toISOString();
+    const allCapIds = Array.from(V5_CAPABILITY_POOL.keys()) as string[];
+    const convergenceDecision: SchedulingDecision = {
+      id: `${turnId}-dledger`,
+      turnId,
+      saw: allCapIds,
+      chose: [],
+      skipped: allCapIds.map((cid) => ({
+        capabilityId: cid,
+        reason: "convergence_signal: router confirmed no further steps",
+      })),
+      addresses: [],
+      rationale: proposed.rationale || "CONVERGENCE_SIGNAL",
+      alternativesRejected: allCapIds,
+      createdAt: nowIso,
+      source: "llm",
+    };
+    working = {
+      ...working,
+      decisionLedger: [...(working.decisionLedger || []), convergenceDecision],
+    };
+    const parked = markAwaiting(working, turnId);
+    return {
+      newState: parked,
+      plan: {
+        selected: [],
+        reason: "CONVERGENCE_SIGNAL",
+        expectedArtifacts: [],
+      } as TurnPlan,
+      newGraphNodes: [],
+    };
+  }
+
   if (proposed) {
     const validated = validateProposedPlan(
       { selected: proposed.selected, rationale: proposed.rationale },
@@ -2469,6 +2876,390 @@ export function orchestrateReasoningTurn(
   };
 
   return { newState: working, plan, newGraphNodes };
+}
+
+// ===== Session_Driver: multi-step re-entry loop (whybuddy-llm-autonomous-reasoning, 需求 1 / 2) =====
+// Task 4.1 scope: the runtime-owned re-entry loop CORE + convergence_signal stop.
+//   - Repeatedly: router.proposePlan → orchestrateReasoningTurn(state, {proposedPlan}) → commit
+//     each selected capability via the `${loopTurnId}-run-${i}` single-capability primitive.
+//   - Each round derives a stable `${turnSeedId}-loop-${n}` turn id; orchestrateReasoningTurn keeps
+//     its single-round responsibility unchanged (it owns DLEDGER/GCOV/budget writes; the driver
+//     never double-writes a decision record).
+//   - New artifacts are written into `working` immediately, so the next round sees them as upstream
+//     via findInputsForCapability (需求 1.6, dependency graph updated in-place).
+//   - Empty `selected` && `converged === true` → terminate with `convergence_signal` (需求 3.3),
+//     consuming the ReasoningRouterResponse.converged field from task 2.3.
+//
+// Termination guards (task 4.2): coverage_sufficient / budget_exhausted / no_progress / max_repeat_guard
+// are evaluated via evaluatePostRoundGuards, filterSelectedByMaxRepeat, and per-loop BUDGET re-check.
+
+/** Snapshot of coverage-gap ids currently in the `resolved` state (No_Progress bookkeeping, 需求 1.7). */
+function snapshotResolvedGapIds(state: V5SessionState): Set<string> {
+  return new Set(
+    (state.coverageGaps || [])
+      .filter((g) => g.status === "resolved")
+      .map((g) => g.id)
+  );
+}
+
+/** Count persisted capability runs for a given capability id (session-wide). */
+function countCapabilityRuns(state: V5SessionState, capId: string): number {
+  return (state.capabilityRuns || []).filter((r) => (r as any).capabilityId === capId).length;
+}
+
+/**
+ * maxRepeatPerCapability guard (需求 1.8): exclude capabilities that already hit the session limit
+ * from the current round's execution batch. Counts come from persisted capabilityRuns only.
+ */
+function filterSelectedByMaxRepeat<T extends { capabilityId: string }>(
+  selected: T[],
+  state: V5SessionState,
+  policy: BudgetPolicy
+): T[] {
+  return selected.filter(
+    (sel) => countCapabilityRuns(state, sel.capabilityId) < policy.maxRepeatPerCapability
+  );
+}
+
+/**
+ * Pre-loop BUDGET re-eval for Session_Driver (需求 1.2).
+ * Checks session-level gates only (maxTurns / maxCapabilityRunsPerSession).
+ * Per-capability maxRepeatPerCapability is handled separately via filterSelectedByMaxRepeat → max_repeat_guard.
+ */
+function evaluateReentryBudgetGate(
+  state: V5SessionState,
+  context: OrchestrateContext | undefined,
+  policy: BudgetPolicy
+): { allowed: boolean; reason?: string } {
+  const runs = state.capabilityRuns || [];
+  const turnIds = new Set(runs.map((r: any) => r.turnId).filter(Boolean));
+  const currentTurns = turnIds.size;
+  const currentRuns = runs.length;
+
+  let allowed = true;
+  let reason: string | undefined;
+
+  const thisTurnId = context?.turnId;
+  const enteringNewTurn = thisTurnId && !turnIds.has(thisTurnId) ? 1 : 0;
+  if (currentTurns + enteringNewTurn > policy.maxTurns) {
+    allowed = false;
+    reason = `maxTurns exceeded (current ${currentTurns}+${enteringNewTurn} > ${policy.maxTurns})`;
+  }
+  if (currentRuns >= policy.maxCapabilityRunsPerSession) {
+    allowed = false;
+    reason = reason || `maxCapabilityRunsPerSession exceeded (${currentRuns} >= ${policy.maxCapabilityRunsPerSession})`;
+  }
+
+  return { allowed, reason };
+}
+
+/** Classify why orchestrateReasoningTurn parked with an empty plan (budget / contract / GCOV). */
+function classifyParkStop(plan: TurnPlan): ReentryStopReason {
+  const reason = plan?.reason || "";
+  if (reason.startsWith("CONTRACT_SUFFICIENT")) return "coverage_sufficient";
+  return "budget_exhausted";
+}
+
+/**
+ * Post-round termination guards (需求 1.2 / 1.4 / 1.5 / 1.7).
+ * Returns a stop reason when the driver should park before the next re-entry loop.
+ */
+/** Exported for deterministic PBT (Property 7 / task 4.10). */
+export function evaluatePostRoundGuards(
+  state: V5SessionState,
+  accumulator: ReentryAccumulator,
+  opts: {
+    maxLoops: number;
+    budgetPolicy: BudgetPolicy;
+    turnId: string;
+    userText: string;
+    intervention?: UserIntervention;
+  }
+): ReentryStopReason | null {
+  const sufficiency = evaluateContractSufficiencyForBudget(state, {
+    turnId: opts.turnId,
+    userText: opts.userText,
+    intervention: opts.intervention,
+  });
+  if (sufficiency.sufficient) return "coverage_sufficient";
+
+  if (accumulator.noProgressStreak >= 2) return "no_progress";
+
+  const runs = state.capabilityRuns?.length ?? 0;
+  if (runs >= opts.budgetPolicy.maxCapabilityRunsPerSession) return "budget_exhausted";
+
+  if (accumulator.loopCount >= opts.maxLoops) return "budget_exhausted";
+
+  return null;
+}
+
+/**
+ * driveReasoningSession — the runtime-owned multi-step driver (需求 1 / 2, core net-new增量).
+ *
+ * Drives a single user message through N re-entry loops: route → single-round orchestrate → per-capability
+ * commit, parking at AWAIT when a termination guard fires. Returns the final state, the per-loop trace, and
+ * the stop reason. orchestrateReasoningTurn is reused unchanged as the single-round primitive (需求 2.1/2.2);
+ * the `${loopTurnId}-run-${i}` commit form is preserved (需求 2.3).
+ */
+export async function driveReasoningSession(
+  state: V5SessionState,
+  options: DriveReasoningOptions
+): Promise<DriveReasoningResult> {
+  const { turnSeedId, userText, intervention } = options;
+
+  // Resolve providers: explicit injection wins; otherwise BUILD_TARGET drives deterministic vs real
+  // (需求 13.3 / 13.5). This keeps the driver deterministically testable with zero real-LLM calls.
+  const assembled = assembleProvidersForBuildTarget({
+    router: options.router,
+    executor: options.executor,
+  });
+  const router = assembled.router;
+  const executor = assembled.executor;
+
+  const maxLoops = options.maxLoopsPerMessage ?? DEFAULT_MAX_LOOPS_PER_MESSAGE;
+  const budgetPolicy = options.budgetPolicy ?? getDefaultBudgetPolicy();
+
+  let working: V5SessionState = state;
+  const loops: DriveReasoningResult["loops"] = [];
+
+  // Loop-local cross-round bookkeeping (NOT persisted into V5SessionState schema).
+  const accumulator: ReentryAccumulator = {
+    prevArtifactCount: working.artifacts?.length ?? 0,
+    prevResolvedGapIds: snapshotResolvedGapIds(working),
+    perCapabilityRunCount: new Map<V5CapabilityId, number>(),
+    loopCount: 0,
+    noProgressStreak: 0,
+  };
+
+  let stopReason: ReentryStopReason = "budget_exhausted";
+  let lastLoopTurnId = turnSeedId;
+
+  while (true) {
+    if (accumulator.loopCount >= maxLoops) {
+      stopReason = "budget_exhausted";
+      break;
+    }
+
+    const loopTurnId = `${turnSeedId}-loop-${accumulator.loopCount}`;
+    lastLoopTurnId = loopTurnId;
+    accumulator.loopCount += 1;
+
+    // 4.2 (需求 1.2): re-evaluate session-level BUDGET before each re-entry loop.
+    const budgetCheck = evaluateReentryBudgetGate(
+      working,
+      { turnId: loopTurnId, userText, intervention },
+      budgetPolicy
+    );
+    if (!budgetCheck.allowed) {
+      working = markAwaiting(working, loopTurnId);
+      loops.push({
+        loopTurnId,
+        plan: {
+          selected: [],
+          reason: `BUDGET_EXCEEDED: ${budgetCheck.reason}`,
+          expectedArtifacts: [],
+        },
+        committedArtifactIds: [],
+        stopSignal: "budget_exhausted",
+      });
+      stopReason = "budget_exhausted";
+      return { finalState: working, loops, stopReason };
+    }
+
+    // 1. Router proposes the next batch (R1 validation / graceful degradation live downstream).
+    const proposed = await router.proposePlan({
+      state: working,
+      turnId: loopTurnId,
+      userText,
+      intervention,
+    });
+
+    // 3 (mechanical, 需求 3.3): empty selected && converged === true → convergence_signal. Checked on
+    // the raw router response so the judgment is purely structural (never a rationale text match).
+    if (
+      Array.isArray(proposed.selected) &&
+      proposed.selected.length === 0 &&
+      proposed.converged === true
+    ) {
+      working = markAwaiting(working, loopTurnId);
+      loops.push({
+        loopTurnId,
+        plan: { selected: [], reason: "CONVERGENCE_SIGNAL", expectedArtifacts: [] },
+        committedArtifactIds: [],
+        stopSignal: "convergence_signal",
+      });
+      stopReason = "convergence_signal";
+      return { finalState: working, loops, stopReason };
+    }
+
+    // 4.2 (需求 1.8): exclude at-limit capabilities from the router proposal BEFORE orchestrate.
+    const filteredProposal = filterSelectedByMaxRepeat(
+      proposed.selected || [],
+      working,
+      budgetPolicy
+    );
+    if ((proposed.selected?.length ?? 0) > 0 && filteredProposal.length === 0) {
+      working = markAwaiting(working, loopTurnId);
+      loops.push({
+        loopTurnId,
+        plan: { selected: [], reason: "MAX_REPEAT_GUARD", expectedArtifacts: [] },
+        committedArtifactIds: [],
+        stopSignal: "max_repeat_guard",
+      });
+      stopReason = "max_repeat_guard";
+      return { finalState: working, loops, stopReason };
+    }
+
+    // Attribute the router (orchestrate.plan) cost per round when usage is present, keeping the
+    // routing cost bucket separate from capability-execution buckets (需求 11 parity across loops).
+    if (proposed.usage) {
+      working = recordCapabilityRunCost(
+        working,
+        {
+          id: `${loopTurnId}-orch-plan`,
+          capabilityId: "orchestrate.plan" as any,
+          turnId: loopTurnId,
+          inputs: [],
+          outputs: [],
+          gateResults: [],
+        } as any,
+        { source: "server", usage: proposed.usage }
+      );
+    }
+
+    // 2. Single-round orchestrate (consumes the proposedPlan; owns DLEDGER/GCOV/budget — 需求 1.3).
+    const { newState, plan } = orchestrateReasoningTurn(working, {
+      turnId: loopTurnId,
+      userText,
+      intervention,
+      proposedPlan: {
+        selected: filteredProposal,
+        rationale: proposed.rationale,
+        source: proposed.source,
+      },
+    });
+    working = newState;
+
+    // If orchestrate parked this round (budget / contract / GCOV), it returns an empty plan.
+    if (!plan.selected || plan.selected.length === 0) {
+      loops.push({
+        loopTurnId,
+        plan,
+        committedArtifactIds: [],
+        stopSignal: classifyParkStop(plan),
+      });
+      stopReason = classifyParkStop(plan);
+      working = markAwaiting(working, loopTurnId);
+      return { finalState: working, loops, stopReason };
+    }
+
+    // 4. Commit each selected capability via the `${loopTurnId}-run-${i}` single-capability primitive.
+    const committedArtifactIds: string[] = [];
+    for (let i = 0; i < plan.selected.length; i++) {
+      const sel = plan.selected[i];
+      const cap = sel.capabilityId as V5CapabilityId;
+      const roleId = sel.roleId || "agent";
+      const runId = `${loopTurnId}-run-${i}`;
+
+      // Resolve upstream inputs from the LATEST working state so each round sees prior-round artifacts
+      // immediately (需求 1.6, dependency graph updated in place).
+      const freshInputs = findInputsForCapability(working, cap);
+
+      let exec: CapabilityExecutionResult | null = null;
+      try {
+        exec = await executor.executeCapability({
+          capabilityId: cap,
+          state: working,
+          inputArtifactIds: freshInputs,
+          roleId,
+          turnId: loopTurnId,
+        });
+      } catch {
+        // Execution failures degrade to a content fallback; commit + gates still run (never throw).
+        exec = null;
+      }
+
+      const content =
+        exec?.content || `${roleId} 通过 ${cap} 产出新洞察/证据/方案`;
+      const provenance =
+        (exec?.provenance as Artifact["provenance"]) || "ai_generated";
+      const outputKind = CAPABILITY_OUTPUT_KIND[cap] ?? "decision";
+
+      const { updatedState, committed } = commitArtifact(
+        working,
+        {
+          id: `${loopTurnId}-art-${i}`,
+          kind: outputKind as Artifact["kind"],
+          provenance,
+          producedBy: {
+            capabilityRunId: runId,
+            capabilityId: cap,
+            roleId,
+          },
+          title: content ? content.split("\n")[0]?.slice(0, 80) : undefined,
+          summary: content ? content.slice(0, 200) : undefined,
+          content,
+          ...(exec?.payload !== undefined ? { payload: exec.payload } : {}),
+        } as Omit<Artifact, "trustLevel" | "passedGates">,
+        runId,
+        false,
+        freshInputs
+      );
+
+      working = updatedState;
+      if (committed) committedArtifactIds.push(committed.id);
+
+      // maxRepeatPerCapability bookkeeping (需求 1.8 guard consumed in task 4.2).
+      accumulator.perCapabilityRunCount.set(
+        cap,
+        (accumulator.perCapabilityRunCount.get(cap) || 0) + 1
+      );
+    }
+
+    // Bind committed artifacts back onto this round's graph nodes (precise artifact/run binding).
+    working = enrichGraphNodesAfterCommit(working, loopTurnId);
+
+    loops.push({ loopTurnId, plan, committedArtifactIds });
+
+    // 5 (需求 1.7): maintain the No_Progress accumulator each round.
+    // Progress = trusted commits this round (committedArtifactIds), not failed-gate attempts.
+    const artifactCountNow = working.artifacts?.length ?? 0;
+    const resolvedNow = snapshotResolvedGapIds(working);
+    const producedArtifact = committedArtifactIds.length > 0;
+    let resolvedNewGap = false;
+    for (const id of resolvedNow) {
+      if (!accumulator.prevResolvedGapIds.has(id)) {
+        resolvedNewGap = true;
+        break;
+      }
+    }
+    accumulator.noProgressStreak =
+      producedArtifact || resolvedNewGap ? 0 : accumulator.noProgressStreak + 1;
+    accumulator.prevArtifactCount = artifactCountNow;
+    accumulator.prevResolvedGapIds = resolvedNow;
+
+    // 6 (需求 1.2 / 1.4 / 1.5 / 1.7): re-evaluate termination guards before next re-entry.
+    const postGuard = evaluatePostRoundGuards(working, accumulator, {
+      maxLoops,
+      budgetPolicy,
+      turnId: loopTurnId,
+      userText,
+      intervention,
+    });
+    if (postGuard) {
+      working = markAwaiting(working, loopTurnId);
+      loops[loops.length - 1] = {
+        ...loops[loops.length - 1],
+        stopSignal: postGuard,
+      };
+      stopReason = postGuard;
+      return { finalState: working, loops, stopReason };
+    }
+  }
+
+  // Per-message loop cap reached (需求 1.5).
+  working = markAwaiting(working, lastLoopTurnId);
+  return { finalState: working, loops, stopReason };
 }
 
 /**

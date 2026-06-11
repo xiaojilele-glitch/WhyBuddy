@@ -17,6 +17,18 @@ describe("validateProposedPlan (R1-B1)", () => {
     expect(result.selected[0].capabilityId).toBe("risk.analyze");
   });
 
+  it("accepts LLM alias fields and normalizes underscore capability ids (F0.1)", () => {
+    const result = validateProposedPlan({
+      selected: [
+        { capability: "risk_analyze", role: "安全" },
+        { cap: "evidence.search", agent: "研究" },
+      ],
+      rationale: "alias normalization",
+    });
+    expect(result.valid).toBe(true);
+    expect(result.selected.map((s) => s.capabilityId)).toEqual(["risk.analyze", "evidence.search"]);
+  });
+
   it("drops invalid capabilities and defaults invalid roles", () => {
     const result = validateProposedPlan({
       selected: [

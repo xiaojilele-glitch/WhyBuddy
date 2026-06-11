@@ -18,6 +18,8 @@ export type OrchestratePlanResponse = {
   selected: Array<{ capabilityId: V5CapabilityId; roleId: string; why?: string }>;
   rationale: string;
   source: "llm" | "heuristic_fallback";
+  /** Mechanical convergence (empty selected + converged true) — still a valid llm response. */
+  converged?: boolean;
   dropped?: Array<{ capabilityId: string; reason: string }>;
   usage?: {
     inputTokens?: number;
@@ -52,7 +54,12 @@ export async function fetchOrchestratePlan(
     });
     if (!res.ok) return null;
     const body = (await res.json()) as OrchestratePlanResponse;
-    if (!body?.selected?.length) return null;
+    if (!body || !Array.isArray(body.selected)) return null;
+    // F0.1 / task 2.3: preserve LLM convergence signals (source=llm, empty selected).
+    if (body.source === "llm" && body.converged === true && body.selected.length === 0) {
+      return body;
+    }
+    if (body.selected.length === 0) return null;
     return body;
   } catch {
     return null;

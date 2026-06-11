@@ -8,20 +8,53 @@ import { findGithubUrlInTexts, extractGithubRepoSlug } from "../../shared/bluepr
 import { executeGithubMcpCapability } from "./github-mcp-adapter.js";
 import { executeRepoStaticInspect } from "./repo-static-analyzer.js";
 
+/**
+ * Closed set of evidence.search source labels (Requirement 5.2 / Property 14).
+ * Every evidence.search result is tagged with exactly one of these:
+ *   - in-conversation synthesis,
+ *   - F1 GitHub fetch (the only sanctioned external seam — Requirement 5.5),
+ *   - model-knowledge reasoning.
+ * No other source is permitted (Requirement 5.4: no arbitrary web browsing / RAG).
+ */
+export const EVIDENCE_SOURCE_IN_SESSION = "会话内综合" as const;
+export const EVIDENCE_SOURCE_F1_GITHUB = "F1_Github_Source 取数" as const;
+export const EVIDENCE_SOURCE_MODEL_KNOWLEDGE = "模型知识推理" as const;
+
+export type EvidenceSourceLabel =
+  | typeof EVIDENCE_SOURCE_IN_SESSION
+  | typeof EVIDENCE_SOURCE_F1_GITHUB
+  | typeof EVIDENCE_SOURCE_MODEL_KNOWLEDGE;
+
+/** The exhaustive, closed set of allowed evidence.search source labels. */
+export const EVIDENCE_SOURCE_LABELS: readonly EvidenceSourceLabel[] = [
+  EVIDENCE_SOURCE_IN_SESSION,
+  EVIDENCE_SOURCE_F1_GITHUB,
+  EVIDENCE_SOURCE_MODEL_KNOWLEDGE,
+];
+
 export type RawExecutorResult = {
   title: string;
   summary: string;
   content: string;
   provenance?: string;
+  /**
+   * Evidence provenance label for evidence.search (Requirement 5.2). Always one
+   * of EVIDENCE_SOURCE_LABELS when set. Optional so repo.inspect paths can omit it.
+   */
+  evidenceSource?: EvidenceSourceLabel;
 };
 
 function ruleEvidenceFallback(state: V5SessionState, roleId?: string): RawExecutorResult {
   const goalText = (state as any)?.goal?.text || "";
+  // Negative invariant (Requirement 5.4 / 5.6): no GitHub clue → no external seam is
+  // touched. This branch performs ZERO network / RAG calls and never throws; it degrades
+  // to in-conversation synthesis labelled 会话内综合.
   return {
     title: "外部证据检索（规则推演）",
-    summary: "未找到可检索的公开仓库线索，使用会话内材料。",
+    summary: `【来源: ${EVIDENCE_SOURCE_IN_SESSION}】未找到可检索的公开仓库线索，使用会话内材料。`,
     content: `基于当前目标「${String(goalText).slice(0, 120)}」整理了可引用的会话内要点。未发起外部网络检索。`,
     provenance: "ai_generated",
+    evidenceSource: EVIDENCE_SOURCE_IN_SESSION,
   };
 }
 
@@ -106,6 +139,8 @@ export async function executeEvidenceSearchMapped(
   const convo = ((state as any)?.conversation || [])
     .slice(-8)
     .map((c: any) => String(c?.text || ""));
+  // Pure string scan only — no network / RAG seam (Requirement 5.4). The sole sanctioned
+  // external seam is the F1 GitHub path below, gated behind a recognizable github.com/owner/repo clue.
   const url = findGithubUrlInTexts(
     goalText,
     ...convo,
@@ -113,18 +148,32 @@ export async function executeEvidenceSearchMapped(
     ...collectArtifactTexts(state, inputArtifactIds)
   );
 
+  // Negative invariant (Requirement 5.4): no recognizable GitHub clue → zero external seam
+  // invocation. Return in-conversation synthesis (会话内综合) without ever touching the network.
   if (!url) {
     return ruleEvidenceFallback(state, roleId);
   }
 
+  // Explicit F1 carve-out (Requirement 5.5): a GitHub clue is the ONLY condition under which an
+  // external fetch (raw.githubusercontent.com / api.github.com) is allowed.
   try {
-    return await executeGithubMcpCapability("evidence.github.collect", state, inputArtifactIds);
+    const gh = await executeGithubMcpCapability("evidence.github.collect", state, inputArtifactIds);
+    // Tag the F1 result as F1_Github_Source 取数 (Requirement 5.2) without altering F1's own
+    // content or provenance ("mcp:github") — F1 behavior is preserved.
+    return {
+      ...gh,
+      summary: `【来源: ${EVIDENCE_SOURCE_F1_GITHUB}】${gh.summary}`,
+      evidenceSource: EVIDENCE_SOURCE_F1_GITHUB,
+    };
   } catch {
+    // Graceful degradation (Requirement 5.6): F1 fetch failed → fall back to in-conversation
+    // synthesis (会话内综合). Never throws; no new external evidence is introduced this round.
     return {
       title: "外部证据检索失败",
-      summary: "GitHub 证据收集不可用，已降级。",
-      content: `尝试从 ${url} 收集证据时失败。本轮未引入新的外部证据。`,
+      summary: `【来源: ${EVIDENCE_SOURCE_IN_SESSION}】GitHub 证据收集不可用，已降级为会话内综合。`,
+      content: `尝试从 ${url} 收集证据时失败。本轮未引入新的外部证据，改用会话内材料综合。`,
       provenance: "ai_generated",
+      evidenceSource: EVIDENCE_SOURCE_IN_SESSION,
     };
   }
 }

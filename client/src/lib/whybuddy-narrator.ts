@@ -1,5 +1,8 @@
 import type { V5SessionState } from "@shared/blueprint/v5-reasoning-state";
-import { goalStatusNarrationLine } from "@shared/blueprint/whybuddy-deliverable-sanitize";
+import {
+  buildFallbackNarration,
+  type SkippedCapabilitySummary,
+} from "@shared/blueprint/whybuddy-deliverable-sanitize";
 
 export type NarrationFallbackReason =
   | "no_api_key"
@@ -18,6 +21,9 @@ export type NarrationRequest = {
   selected?: Array<{ capabilityId?: string; roleId?: string }>;
   artifacts?: Array<{ kind?: string; title?: string; summary?: string; realLlm?: boolean }>;
   mainArtifact?: { kind?: string; title?: string; content?: string } | null;
+  goalStatusBefore?: string;
+  planReason?: string | null;
+  skipped?: SkippedCapabilitySummary[];
 };
 
 export type NarrationResponse = {
@@ -51,19 +57,20 @@ function localNarrationFallback(
   req: NarrationRequest,
   reason: NarrationFallbackReason
 ): NarrationResponse {
-  const analysisCount = req.selected?.length || req.artifacts?.length || 0;
-  const challengeHint =
-    req.intervention?.intent === "challenge" ? "你提出了质疑，我会据此重新推演。" : "";
-  const head = [
-    challengeHint,
-    `本轮完成了 ${analysisCount} 项分析。`,
-    goalStatusNarrationLine(req.state.goal?.status as any),
-    "本轮的完整推演材料可通过下方「证据链」查看。",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const text = buildFallbackNarration({
+    userText: req.userText,
+    goalStatus: req.state.goal?.status as any,
+    goalStatusBefore: req.goalStatusBefore as any,
+    selectedCount: req.selected?.length ?? 0,
+    interventionIntent: req.intervention?.intent,
+    mainArtifactContent: req.mainArtifact?.content || null,
+    planReason: req.planReason,
+    skipped: req.skipped,
+    sanitizeMainArtifact: false,
+    mainArtifactMaxLen: 400,
+  });
 
-  return { text: head, source: "fallback", reason };
+  return { text, source: "fallback", reason };
 }
 
 /** Fetch user-facing narration from server; local template if unreachable (no client-side sanitizer). */

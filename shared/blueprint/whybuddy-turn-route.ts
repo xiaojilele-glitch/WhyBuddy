@@ -7,6 +7,36 @@ export type GoalStatusValue = "clear" | "needs_refinement" | "not_recommended" |
 
 export type PlanSourceValue = "llm" | "heuristic_fallback" | "local_heuristic" | null | undefined;
 
+/**
+ * Why the Session_Driver stopped re-entering for a given round (需求 14.6).
+ * Structurally mirrors `ReentryStopReason` in `client/src/lib/whybuddy-runtime.ts`;
+ * defined locally so the shared projection stays decoupled from the client runtime.
+ */
+export type ReentryStopReason =
+  | "coverage_sufficient" // 需求 1.4
+  | "budget_exhausted" // 需求 1.5 / 1.9
+  | "no_progress" // 需求 1.7
+  | "max_repeat_guard" // 需求 1.8
+  | "convergence_signal"; // 需求 3.3
+
+/**
+ * Per-round derived facts for a single planning+reasoning loop within one user turn (需求 14.1).
+ * Runtime-recorded; zero V5SessionState writes. `rounds` is only populated when the
+ * Session_Driver actually re-enters (N ≥ 2); single-round turns leave it undefined and
+ * degrade to the legacy single-round projection.
+ */
+export type TurnRoundFacts = {
+  /** 1-based round index within the turn. */
+  roundIndex: number;
+  planSelectedCount?: number;
+  planSource?: PlanSourceValue;
+  /** Carries `BUDGET_EXCEEDED…` style park reasons (需求 14.6). */
+  planReason?: string;
+  dledgerDecisionId?: string | null;
+  /** Set when this round terminated re-entry (需求 14.6). */
+  parkReason?: ReentryStopReason;
+};
+
 export type TurnRouteFacts = {
   turnId: string;
   timestamp?: string;
@@ -32,6 +62,13 @@ export type TurnRouteFacts = {
   trustTotalCount?: number;
 
   runtimePhase?: "awaiting" | "orchestrating" | "idle" | "failed";
+
+  /**
+   * Multi-round sequence (需求 14.1). When present and non-empty, the projection
+   * derives a planning+reasoning station pair per round. When absent/undefined the
+   * projection degrades to the legacy single-round path (full backward compatibility).
+   */
+  rounds?: TurnRoundFacts[];
 };
 
 export type RouteStationKind =
@@ -106,6 +143,169 @@ function trustCounts(facts: TurnRouteFacts): { passed: number; total: number } |
 }
 
 export function deriveTurnRoute(facts: TurnRouteFacts): RouteStation[] {
+  if (facts.rounds && facts.rounds.length > 0) {
+    return deriveMultiRoundRoute(facts);
+  }
+  return deriveSingleRoundRoute(facts);
+}
+
+/** Intake (+ optional stale-cascade) prefix shared by single- and multi-round projections. */
+function buildIntakeStations(facts: TurnRouteFacts): RouteStation[] {
+  const stations: RouteStation[] = [];
+  const challenged = facts.interventionIntent === "challenge";
+
+  stations.push({
+    id: `${facts.turnId}-intake`,
+    kind: "intake",
+    title: challenged ? "收到质疑" : "收到",
+    detail: challenged && facts.challengeTargetLabel
+      ? `针对「${facts.challengeTargetLabel}」`
+      : undefined,
+    tone: challenged ? "reconverge" : "process",
+    timestamp: facts.timestamp,
+    summaryToken: challenged ? "收到质疑" : "收到",
+  });
+
+  const delta = staleAddedCount(facts);
+  if (challenged && delta > 0) {
+    const before = goalStatusUserLabel(facts.goalStatusBefore);
+    const after = goalStatusUserLabel(
+      facts.goalStatusAfterInvalidate ?? facts.goalStatusAfter ?? "needs_refinement"
+    );
+    stations.push({
+      id: `${facts.turnId}-stale`,
+      kind: "stale_cascade",
+      title: "撤回级联",
+      detail: `${delta} 个产物已过期 · 结论从「${before}」降级为「${after}」`,
+      tone: "reconverge",
+      summaryToken: `撤回 ${delta}`,
+    });
+  }
+
+  return stations;
+}
+
+/** Session-level trailing stations (trust gate + verdict) appended after normal completion. */
+function buildTrailingVerdictStations(facts: TurnRouteFacts): RouteStation[] {
+  const stations: RouteStation[] = [];
+
+  const trust = trustCounts(facts);
+  if (trust) {
+    const allPass = trust.passed === trust.total;
+    stations.push({
+      id: `${facts.turnId}-trust`,
+      kind: "trust_gate",
+      title: "信任校验",
+      detail: `${trust.passed}/${trust.total} 通过信任门`,
+      tone: allPass ? "pass" : "partial",
+      summaryToken: `校验 ${trust.passed}/${trust.total}`,
+    });
+  }
+
+  const before = facts.goalStatusBefore;
+  const after = facts.goalStatusAfter ?? before;
+  const beforeLabel = goalStatusUserLabel(before);
+  const afterLabel = goalStatusUserLabel(after);
+  const changed = before !== after && after != null;
+  const notRec = after === "not_recommended";
+
+  stations.push({
+    id: `${facts.turnId}-verdict`,
+    kind: "verdict",
+    title: "裁决",
+    detail: changed
+      ? `${beforeLabel} → ${afterLabel}(机械裁决)`
+      : `${afterLabel}(机械裁决)`,
+    tone: notRec ? "fail" : after === "clear" ? "pass" : "process",
+    summaryToken: afterLabel,
+  });
+
+  return stations;
+}
+
+function awaitStation(facts: TurnRouteFacts): RouteStation {
+  return {
+    id: `${facts.turnId}-await`,
+    kind: "await",
+    title: "等待你",
+    tone: "pending",
+    summaryToken: "等待你",
+  };
+}
+
+/**
+ * Multi-round projection (需求 14.1/14.5/14.6): one planning+reasoning station pair per
+ * round, ordered planning₁ → reasoning₁ → … → planningN → reasoningN. A round that
+ * terminates re-entry via budget block (`planReason` starts with `BUDGET_EXCEEDED`) or
+ * `convergence_signal` reflects the parking reason at that round's position and no further
+ * round stations are appended. Pure derive: zero LLM, zero V5SessionState writes.
+ */
+function deriveMultiRoundRoute(facts: TurnRouteFacts): RouteStation[] {
+  const stations = buildIntakeStations(facts);
+  const rounds = facts.rounds ?? [];
+  let parked: "budget" | "convergence" | null = null;
+
+  for (const round of rounds) {
+    const roundBudgetBlocked = String(round.planReason || "").startsWith("BUDGET_EXCEEDED");
+    const roundConverged = round.parkReason === "convergence_signal";
+    const n = round.planSelectedCount ?? 0;
+    const src = planSourceUserLabel(round.planSource);
+
+    stations.push({
+      id: `${facts.turnId}-r${round.roundIndex}-plan`,
+      kind: "plan",
+      title: "规划",
+      detail: `选定 ${n} 个动作${roundBudgetBlocked ? "" : "回补缺口"}${src ? ` · ${src}` : ""}`,
+      tone: "process",
+      dledgerDecisionId: round.dledgerDecisionId || undefined,
+      summaryToken: "规划",
+    });
+
+    if (roundBudgetBlocked) {
+      stations.push({
+        id: `${facts.turnId}-r${round.roundIndex}-budget`,
+        kind: "budget_block",
+        title: "预算拦截",
+        detail: "本轮推演已暂停，未调度新动作",
+        tone: "fail",
+        summaryToken: "预算拦截",
+      });
+      parked = "budget";
+      break;
+    }
+
+    if (roundConverged) {
+      stations.push({
+        id: `${facts.turnId}-r${round.roundIndex}-verdict`,
+        kind: "verdict",
+        title: "裁决",
+        detail: "已收敛 · 无需更多推演",
+        tone: "pass",
+        summaryToken: "已收敛",
+      });
+      parked = "convergence";
+      break;
+    }
+
+    stations.push({
+      id: `${facts.turnId}-r${round.roundIndex}-exec`,
+      kind: "execution",
+      title: "推演",
+      tone: "process",
+      summaryToken: `推演 ${n}`,
+    });
+  }
+
+  if (parked === null) {
+    stations.push(...buildTrailingVerdictStations(facts));
+  }
+
+  stations.push(awaitStation(facts));
+
+  return stations;
+}
+
+function deriveSingleRoundRoute(facts: TurnRouteFacts): RouteStation[] {
   const stations: RouteStation[] = [];
   const challenged = facts.interventionIntent === "challenge";
   const budgetBlocked = isBudgetBlocked(facts);

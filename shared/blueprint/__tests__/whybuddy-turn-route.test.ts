@@ -138,6 +138,118 @@ describe("deriveTurnRoute (S9)", () => {
     }
   });
 
+  it("S9 multi-round: two rounds — planning₁ → exec₁ → planning₂ → exec₂ → verdict → await (task 7.1)", () => {
+    const stations = deriveTurnRoute(
+      base({
+        rounds: [
+          {
+            roundIndex: 1,
+            planSelectedCount: 2,
+            planSource: "llm",
+            dledgerDecisionId: "turn-1-r1-dledger",
+          },
+          {
+            roundIndex: 2,
+            planSelectedCount: 1,
+            planSource: "heuristic_fallback",
+            dledgerDecisionId: "turn-1-r2-dledger",
+          },
+        ],
+      })
+    );
+    expect(stations.map((s) => s.id)).toEqual([
+      "turn-1-intake",
+      "turn-1-r1-plan",
+      "turn-1-r1-exec",
+      "turn-1-r2-plan",
+      "turn-1-r2-exec",
+      "turn-1-trust",
+      "turn-1-verdict",
+      "turn-1-await",
+    ]);
+    assertRouteCopySanitized(stations);
+  });
+
+  it("S9 multi-round: budget-blocked round stops without further round stations (task 7.1 / 14.6)", () => {
+    const stations = deriveTurnRoute(
+      base({
+        rounds: [
+          {
+            roundIndex: 1,
+            planSelectedCount: 0,
+            planSource: "llm",
+            planReason: "BUDGET_EXCEEDED: maxTurns",
+            dledgerDecisionId: "turn-1-r1-dledger",
+          },
+        ],
+        trustPassedCount: 0,
+        trustTotalCount: 0,
+      })
+    );
+    expect(stations.map((s) => s.kind)).toEqual(["intake", "plan", "budget_block", "await"]);
+    expect(stations.find((s) => s.kind === "budget_block")?.tone).toBe("fail");
+  });
+
+  it("S9 multi-round: convergence_signal round ends with verdict, no exec₂ (task 7.1 / 14.6)", () => {
+    const stations = deriveTurnRoute(
+      base({
+        rounds: [
+          {
+            roundIndex: 1,
+            planSelectedCount: 2,
+            planSource: "llm",
+            dledgerDecisionId: "turn-1-r1-dledger",
+          },
+          {
+            roundIndex: 2,
+            planSelectedCount: 0,
+            planSource: "llm",
+            parkReason: "convergence_signal",
+            dledgerDecisionId: "turn-1-r2-dledger",
+          },
+        ],
+        trustPassedCount: 0,
+        trustTotalCount: 0,
+      })
+    );
+    expect(stations.map((s) => s.kind)).toEqual([
+      "intake",
+      "plan",
+      "execution",
+      "plan",
+      "verdict",
+      "await",
+    ]);
+    expect(stations.find((s) => s.id === "turn-1-r2-verdict")?.detail).toBe(
+      "已收敛 · 无需更多推演"
+    );
+  });
+
+  it("S9 multi-round: collapsed summary covers all round tokens (task 7.1)", () => {
+    const stations = deriveTurnRoute(
+      base({
+        rounds: [
+          {
+            roundIndex: 1,
+            planSelectedCount: 2,
+            planSource: "llm",
+            dledgerDecisionId: "turn-1-r1-dledger",
+          },
+          {
+            roundIndex: 2,
+            planSelectedCount: 1,
+            planSource: "llm",
+            dledgerDecisionId: "turn-1-r2-dledger",
+          },
+        ],
+      })
+    );
+    const summary = buildRouteSummary(stations);
+    expect(summary).toContain("规划");
+    expect(summary).toContain("推演 2");
+    expect(summary).toContain("推演 1");
+  });
+
   it("S9-A6: route copy has no forbidden engineering terms", () => {
     const stations = deriveTurnRoute(
       base({

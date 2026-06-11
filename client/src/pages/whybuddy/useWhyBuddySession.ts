@@ -1,29 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
-import type { V5CapabilityId } from "@shared/blueprint/contracts";
-import { CAPABILITY_OUTPUT_KIND } from "@shared/blueprint/contracts";
-import {
-  buildActionTrace,
-  buildProcessLabelContext,
-  getLiveAction,
-  inferProcessContextFromExec,
-  isExternalProvenance,
-  type ActionTrace,
-  type LiveAction,
-} from "@shared/blueprint/capability-process-labels";
+import type { ActionTrace, LiveAction } from "@shared/blueprint/capability-process-labels";
 import * as WhyBuddyRuntime from "@/lib/whybuddy-runtime";
 import { fetchNarration } from "@/lib/whybuddy-narrator";
-import { fetchOrchestratePlan } from "@/lib/whybuddy-orchestrator";
-import type { Artifact, UserIntervention, V5SessionState } from "@shared/blueprint/v5-reasoning-state";
+import { pickMainArtifactByKind } from "@shared/blueprint/whybuddy-main-artifact";
+import type { UserIntervention, V5SessionState } from "@shared/blueprint/v5-reasoning-state";
 import { deriveTurnRoute } from "@shared/blueprint/whybuddy-turn-route";
 import type { SchedulingDecision } from "@shared/blueprint/v5-reasoning-state";
 import { challengeTargetLabel } from "./challenge-target-label";
-import { buildStepNarration } from "./step-narration";
+import { buildTurnRoundsFromDrive } from "./turn-round-facts";
+import { createUiCapabilityExecutor, mapArtifactsToWhyArtifacts } from "./ui-capability-executor";
 import type { TurnStep, UiTurn, WhyArtifact, WhyBuddyExecutorMode } from "./types";
 
 const DEFAULT_GOAL = "做一个权限管理系统（支持 RBAC + 数据范围）";
 const DEFAULT_SESSION_ID = "whybuddy-main-proto";
-const MAIN_KIND_PRIORITY = ["report", "synthesis", "risk"] as const;
-
 function initialSessionState(goal: string, sessionId: string): V5SessionState {
   const base = WhyBuddyRuntime.createInitialSessionState(goal, sessionId);
   return WhyBuddyRuntime.deriveNodeStatus ? WhyBuddyRuntime.deriveNodeStatus(base) : base;
@@ -55,11 +44,9 @@ function latestDledgerForTurn(
 }
 
 function pickMainArtifact(committed: WhyArtifact[]): UiTurn["main"] {
-  for (const kind of MAIN_KIND_PRIORITY) {
-    const art = committed.find((a) => a.kind === kind);
-    if (art) {
-      return { artifactId: art.id, kind: art.kind, realLlm: Boolean(art.realLlm) };
-    }
+  const art = pickMainArtifactByKind(committed);
+  if (art) {
+    return { artifactId: art.id, kind: art.kind, realLlm: Boolean(art.realLlm) };
   }
   return null;
 }
@@ -118,128 +105,6 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
     setSessionState(state);
   }, []);
 
-  const commitSelectedArtifacts = async (
-    workingState: V5SessionState,
-    turnId: string,
-    planSelected: Array<{ capabilityId: V5CapabilityId; roleId?: string }>,
-    processCtx: { userText: string; goalText: string },
-    contentPrefix = "",
-    onStep?: (step: TurnStep) => void
-  ): Promise<{ working: V5SessionState; committed: WhyArtifact[]; actions: ActionTrace[] }> => {
-    const actionTraces: ActionTrace[] = [];
-    const rawArtifacts: WhyArtifact[] = planSelected.map((sel, idx) => {
-      const cap = sel.capabilityId;
-      const outputKind = CAPABILITY_OUTPUT_KIND[cap] ?? "decision";
-      let content: string;
-      if (cap === "risk.analyze") {
-        content = `${contentPrefix}${sel.roleId || "agent"} 通过 risk.analyze 贡献了：\n风险：数据范围越权风险（仅 RBAC 不足以表达跨部门/项目/租户边界）。\n风险：审计风险（权限变更需保留操作者、时间、影响对象）。`;
-      } else if (cap === "counter.argue") {
-        content = `${contentPrefix}${sel.roleId || "agent"} 通过 counter.argue 贡献了：\n反驳：过早引入 ABAC 会增加策略调试成本。\n建议：MVP 先采用 RBAC + scoped data filter，保留策略接口。`;
-      } else {
-        content = `${contentPrefix}${sel.roleId || "agent"} 通过 ${cap} 贡献了新洞察/证据/方案`;
-      }
-      return {
-        id: `${turnId}-art-${idx}`,
-        kind: outputKind,
-        capability: cap,
-        role: sel.roleId || "agent",
-        content,
-        trustLevel: "untrusted",
-      };
-    });
-
-    let working = workingState;
-    const committedArtifacts: WhyArtifact[] = [];
-
-    for (let idx = 0; idx < rawArtifacts.length; idx++) {
-      const raw = rawArtifacts[idx];
-      const runId = `${turnId}-run-${idx}`;
-      const isUpstream = raw.capability.includes("risk") || raw.capability.includes("argue");
-      const forceFail = nextGateShouldFail && isUpstream;
-      const freshInputs = WhyBuddyRuntime.findInputsForCapability(working, raw.capability);
-      const labelCtx = buildProcessLabelContext(raw.capability, processCtx.userText, processCtx.goalText);
-      const live = getLiveAction(raw.capability, labelCtx);
-      setLiveAction(live);
-      onStep?.({
-        id: `${turnId}-chip-${idx}`,
-        kind: "chip",
-        capabilityId: raw.capability,
-        roleId: raw.role,
-        label: live.label,
-        realLlm: false,
-      });
-
-      let exec: Awaited<ReturnType<typeof WhyBuddyRuntime.executeCapability>> | null = null;
-      let execThrew = false;
-      try {
-        exec = await WhyBuddyRuntime.executeCapability({
-          capabilityId: raw.capability,
-          state: working,
-          inputArtifactIds: freshInputs,
-          roleId: raw.role,
-          turnId,
-        });
-      } catch {
-        execThrew = true;
-      }
-
-      const enrichedCtx = inferProcessContextFromExec(raw.capability, labelCtx, exec);
-      const trace = buildActionTrace(raw.capability, !execThrew, enrichedCtx, exec);
-      if (trace) actionTraces.push(trace);
-
-      const content = exec ? exec.content : raw.content;
-      const provenance = (exec?.provenance as Artifact["provenance"]) || "ai_generated";
-      const realLlm =
-        isExternalProvenance(exec?.provenance) ||
-        exec?.provenance === "llm" ||
-        exec?.provenance === "llm_fallback" ||
-        String(exec?.summary || "").includes("server-llm");
-
-      const { updatedState, committed } = WhyBuddyRuntime.commitArtifact(
-        working,
-        {
-          id: raw.id,
-          kind: raw.kind as any,
-          provenance,
-          producedBy: {
-            capabilityRunId: runId,
-            capabilityId: raw.capability,
-            roleId: raw.role,
-          },
-          title: content ? content.split("\n")[0]?.slice(0, 80) : undefined,
-          summary: content ? content.slice(0, 200) : undefined,
-          content,
-          ...(exec?.payload !== undefined ? { payload: exec.payload } : {}),
-        } as any,
-        runId,
-        forceFail,
-        freshInputs
-      );
-
-      working = updatedState;
-      committedArtifacts.push({
-        ...raw,
-        content,
-        trustLevel: committed ? (committed.trustLevel as WhyArtifact["trustLevel"]) : "untrusted",
-        realLlm,
-      });
-
-      onStep?.({
-        id: `${turnId}-step-${idx}`,
-        kind: "step_narration",
-        capabilityId: raw.capability,
-        realLlm,
-        text: buildStepNarration({
-          capabilityId: raw.capability,
-          realLlm,
-          summary: exec?.summary,
-        }),
-      });
-    }
-
-    return { working, committed: committedArtifacts, actions: actionTraces };
-  };
-
   const runTurn = async (userText: string, intervention?: UserIntervention) => {
     if (!userText.trim() || isRunning) return;
 
@@ -297,7 +162,7 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
       const goalStatusBefore = loadedState.goal?.status;
       const staleArtifactIdsBefore = [...(loadedState.staleArtifactIds || [])];
 
-      const { preparedState, context } = WhyBuddyRuntime.intakeMessage(loadedState, {
+      const { preparedState } = WhyBuddyRuntime.intakeMessage(loadedState, {
         turnId,
         userText: userText.trim(),
         intervention,
@@ -329,65 +194,67 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
 
       setLiveAction({ label: "正在规划本轮动作…", external: false });
 
-      const planResponse = await fetchOrchestratePlan({
-        state: preparedState,
-        turnId,
+      const actionTraces: ActionTrace[] = [];
+      const firstLoopPlanCountRef = { value: 0 };
+
+      const onExecStep = (step: TurnStep) => {
+        appendStep(step);
+        setUiTurns((prev) =>
+          prev.map((t) => {
+            if (t.id !== turnId) return t;
+            const execLit = deriveTurnRoute({
+              ...t.routeFacts,
+              planSelectedCount: firstLoopPlanCountRef.value,
+            }).findIndex((s) => s.kind === "execution");
+            return {
+              ...t,
+              routeLitCount: Math.max(t.routeLitCount, execLit + 1),
+            };
+          })
+        );
+      };
+
+      const uiExecutor = createUiCapabilityExecutor(WhyBuddyRuntime.getCapabilityExecutor(), {
         userText: userText.trim(),
-        intervention: intervention
-          ? {
-              intent: intervention.intent,
-              targetArtifactId: intervention.targetArtifactId,
-              targetDecisionId: intervention.targetDecisionId,
-            }
-          : null,
+        goalText: goal,
+        onStep: onExecStep,
+        onActionTrace: (trace) => actionTraces.push(trace),
+        setLiveAction,
       });
 
-      let stateForOrch = preparedState;
-      let orchContext = context;
-      if (planResponse) {
-        orchContext = {
-          ...context,
-          proposedPlan: {
-            selected: planResponse.selected,
-            rationale: planResponse.rationale,
-            source: planResponse.source,
-          },
-        };
-        if (planResponse.usage) {
-          stateForOrch = WhyBuddyRuntime.recordCapabilityRunCost(
-            stateForOrch,
-            {
-              id: `${turnId}-orch-plan`,
-              capabilityId: "orchestrate.plan" as any,
-              turnId,
-              inputs: [],
-              outputs: [],
-              gateResults: [],
-            } as any,
-            { source: "server", usage: planResponse.usage }
-          );
-        }
-      }
+      const drive = await WhyBuddyRuntime.driveReasoningSession(preparedState, {
+        turnSeedId: turnId,
+        userText: userText.trim(),
+        intervention,
+        router: WhyBuddyRuntime.createServerReasoningRouter(),
+        executor: uiExecutor,
+      });
 
-      const { newState: afterOrch, plan } = WhyBuddyRuntime.orchestrateReasoningTurn(
-        stateForOrch,
-        orchContext
-      );
+      let final = drive.finalState;
+      final = await persistSession(final);
+      applyPersistedState(final);
 
-      const dledger = latestDledgerForTurn(afterOrch.decisionLedger, turnId);
-      const planSource =
-        dledger?.source ?? (planResponse ? planResponse.source : "local_heuristic");
+      const firstLoop = drive.loops[0];
+      const lastLoop = drive.loops[drive.loops.length - 1];
+      firstLoopPlanCountRef.value = firstLoop?.plan.selected.length ?? 0;
+
+      const rounds = buildTurnRoundsFromDrive(final.decisionLedger, drive);
+      const displayLoopId = firstLoop?.loopTurnId ?? turnId;
+      const dledger = latestDledgerForTurn(final.decisionLedger, displayLoopId);
+      const planSource = dledger?.source ?? "local_heuristic";
       const planOrchestrateReason =
-        planSource !== "llm"
-          ? (planResponse?.reason ?? (planResponse ? null : "orchestrate_unreachable"))
-          : null;
+        planSource === "local_heuristic" ? "orchestrate_unreachable" : null;
+      const planReason = firstLoop?.plan.reason ?? lastLoop?.plan.reason;
+      const planSelectedCount = firstLoop?.plan.selected.length ?? 0;
+
       patchRoute(
         {
-          planReason: plan.reason,
-          planSelectedCount: plan.selected.length,
+          planReason,
+          planSelectedCount,
           planSource,
           planOrchestrateReason,
           dledgerDecisionId: dledger?.id ?? null,
+          rounds,
         },
         deriveTurnRoute({
           turnId,
@@ -398,61 +265,23 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
           goalStatusAfterInvalidate: preparedState.goal?.status,
           staleArtifactIdsBefore,
           staleArtifactIdsAfter: [...(preparedState.staleArtifactIds || [])],
-          planReason: plan.reason,
-          planSelectedCount: plan.selected.length,
+          planReason,
+          planSelectedCount,
           planSource,
           planOrchestrateReason,
           dledgerDecisionId: dledger?.id ?? null,
+          rounds,
         }).filter((s) => s.kind !== "execution" && s.kind !== "trust_gate" && s.kind !== "verdict" && s.kind !== "await").length
       );
 
-      if (plan.selected.length > 0) {
-        const first = plan.selected[0] as { capabilityId: V5CapabilityId; roleId?: string };
-        setLiveAction(
-          getLiveAction(
-            first.capabilityId,
-            buildProcessLabelContext(first.capabilityId, userText.trim(), goal)
-          )
-        );
-      }
-
-      const onExecStep = (step: TurnStep) => {
-        appendStep(step);
-        setUiTurns((prev) =>
-          prev.map((t) => {
-            if (t.id !== turnId) return t;
-            const execLit = deriveTurnRoute({
-              ...t.routeFacts,
-              planSelectedCount: plan.selected.length,
-            }).findIndex((s) => s.kind === "execution");
-            return {
-              ...t,
-              routeLitCount: Math.max(t.routeLitCount, execLit + 1),
-            };
-          })
-        );
-      };
-
-      const { working, committed, actions } = await commitSelectedArtifacts(
-        afterOrch,
-        turnId,
-        plan.selected.map((s: any) => ({
-          capabilityId: s.capabilityId as V5CapabilityId,
-          roleId: s.roleId,
-        })),
-        { userText: userText.trim(), goalText: goal },
-        "",
-        onExecStep
-      );
+      const committedIds = drive.loops.flatMap((l) => l.committedArtifactIds);
+      const committed = mapArtifactsToWhyArtifacts(final, committedIds);
+      const actions = actionTraces;
 
       const trustTotalCount = committed.length;
       const trustPassedCount = committed.filter(
         (a) => a.trustLevel === "gated_pass" || a.trustLevel === "audited"
       ).length;
-
-      let final = WhyBuddyRuntime.enrichGraphNodesAfterCommit(working, turnId);
-      final = await persistSession(WhyBuddyRuntime.markAwaiting(final, turnId));
-      applyPersistedState(final);
 
       patchRoute({
         committedCount: trustTotalCount,
@@ -470,10 +299,12 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
         turnId,
         userText: userText.trim(),
         intervention: intervention ? { intent: intervention.intent } : null,
-        selected: plan.selected.map((s: any) => ({
-          capabilityId: s.capabilityId,
-          roleId: s.roleId,
-        })),
+        selected: drive.loops.flatMap((l) =>
+          l.plan.selected.map((s) => ({
+            capabilityId: s.capabilityId,
+            roleId: s.roleId,
+          }))
+        ),
         artifacts: committed.map((a) => ({
           kind: a.kind,
           title: a.content.split("\n")[0]?.slice(0, 80),
@@ -483,6 +314,9 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
         mainArtifact: mainArt
           ? { kind: mainArt.kind, title: mainArt.content.split("\n")[0], content: mainArt.content }
           : null,
+        goalStatusBefore,
+        planReason: planReason ?? "",
+        skipped: dledger?.skipped,
       });
 
       appendStep({

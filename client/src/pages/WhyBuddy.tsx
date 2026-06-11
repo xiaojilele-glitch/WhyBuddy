@@ -1,12 +1,15 @@
 /**
- * WhyBuddy — 产品视图（/whybuddy）· 纯对话形态
+ * WhyBuddy — 产品视图（/whybuddy）· 左 Flow + 右 IM
  *
- * 每一轮：用户气泡 → 回合路径时间线(S9) → 终叙述(打字机) → 极淡脚注。
+ * 左侧：ReasoningFlowSurface 推演路径（随能力调用实时更新）
+ * 右侧：对话操纵杆 — 用户气泡 → 回合路径时间线(S9) → 终叙述(打字机) → 极淡脚注
  * Runtime 经 useWhyBuddySession + intakeMessage；本文件仅表现层。
  * 工程驾驶舱见 /whybuddy/dev。
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import type { BrainstormReasoningNode } from "@shared/blueprint";
+import { ReasoningFlowSurface } from "@/components/autopilot/ReasoningFlowSurface";
 import { useWhyBuddySession } from "./whybuddy/useWhyBuddySession";
 import { projectConclusionBadge } from "./whybuddy/conclusion-badge";
 import { autopilotTheme } from "./whybuddy/autopilot-theme";
@@ -159,6 +162,18 @@ export default function WhyBuddy() {
       : latestTurn?.steps.find((s) => s.kind === "narration" && "isFinal" in s && s.isFinal)?.id ??
         latestTurn?.steps[latestTurn.steps.length - 1]?.id;
 
+  const graphNodeCount = sessionState.graph?.nodes?.length ?? 0;
+
+  const handleGraphNodeClick = useCallback(
+    (node: BrainstormReasoningNode) => {
+      const producedArtifactId = (node as { producedArtifactId?: string }).producedArtifactId;
+      if (producedArtifactId) {
+        challengeTurn(producedArtifactId);
+      }
+    },
+    [challengeTurn]
+  );
+
   return (
     <div className={autopilotTheme.page}>
       <header className={autopilotTheme.header}>
@@ -179,104 +194,133 @@ export default function WhyBuddy() {
         </div>
       </header>
 
-      <main className={autopilotTheme.main}>
-        <div className="mx-auto max-w-2xl space-y-8">
-          {uiTurns.length === 0 && !isRunning && (
-            <div className={autopilotTheme.emptyState}>
-              描述你的想法，WhyBuddy 会推演结论并告诉你能否信任。
-              <div className={autopilotTheme.emptyHint}>
-                例如：「分析权限方案风险并生成可行性报告」
+      <div className={autopilotTheme.split}>
+        <section className={autopilotTheme.flowPanel} aria-label="推演路径">
+          <div className={autopilotTheme.flowPanelHeader}>
+            <span className={autopilotTheme.label}>推演路径</span>
+            <span className="text-[10px] text-slate-400">点击节点可质疑该结论</span>
+          </div>
+          <div className={autopilotTheme.flowPanelBody}>
+            {graphNodeCount > 0 ? (
+              <ReasoningFlowSurface
+                graph={sessionState.graph}
+                initialScale={0.75}
+                className="absolute inset-0"
+                showChrome={false}
+                onNodeClick={handleGraphNodeClick}
+              />
+            ) : (
+              <div className={autopilotTheme.flowEmpty}>
+                发送第一条消息后，推演路径会在这里展开。
+                <div className="mt-2 text-xs text-slate-400">
+                  左侧看全局结构，右侧继续对话或质疑结论。
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        </section>
 
-          {uiTurns.map((turn) => (
-            <div key={turn.id} className="space-y-2">
-              <div className="flex justify-end">
-                <div className={autopilotTheme.userBubble}>{turn.user}</div>
-              </div>
-              <div className="rounded-lg border border-slate-200/80 bg-white px-4 py-4 shadow-[0_1px_2px_rgb(0,0,0,0.04)]">
-                <TurnRouteTimeline
-                  facts={turn.routeFacts}
-                  steps={turn.steps}
-                  actions={turn.actions}
-                  sessionId={sessionState.sessionId || "whybuddy-main-proto"}
-                  expanded={turn.routeExpanded}
-                  onToggle={() => toggleRouteExpanded(turn.id)}
-                  litCount={turn.routeLitCount}
-                  streaming={turn.status === "streaming"}
-                  liveAction={
-                    turn.id === latestTurnId && turn.status === "streaming" ? liveAction : null
-                  }
-                  activeStepId={turn.id === latestTurnId ? latestActiveStepId : null}
-                />
-                {(() => {
-                  const finalStep = finalNarrationStep(turn.steps);
-                  const narrationText = finalStep?.text ?? turn.assistant;
-                  if (!narrationText) return null;
-                  return (
-                    <TypewriterText
-                      text={narrationText}
-                      active={
-                        turn.id === latestTurnId &&
-                        (turn.status === "streaming" ||
-                          (finalStep != null && turn.status === "complete"))
+        <section className={autopilotTheme.imPanel} aria-label="对话">
+          <main className={autopilotTheme.main}>
+            <div className="space-y-6">
+              {uiTurns.length === 0 && !isRunning && (
+                <div className={autopilotTheme.emptyState}>
+                  描述你的想法，WhyBuddy 会推演结论并告诉你能否信任。
+                  <div className={autopilotTheme.emptyHint}>
+                    例如：「分析权限方案风险并生成可行性报告」
+                  </div>
+                </div>
+              )}
+
+              {uiTurns.map((turn) => (
+                <div key={turn.id} className="space-y-2">
+                  <div className="flex justify-end">
+                    <div className={autopilotTheme.userBubble}>{turn.user}</div>
+                  </div>
+                  <div className="rounded-lg border border-slate-200/80 bg-white px-4 py-4 shadow-[0_1px_2px_rgb(0,0,0,0.04)]">
+                    <TurnRouteTimeline
+                      facts={turn.routeFacts}
+                      steps={turn.steps}
+                      actions={turn.actions}
+                      sessionId={sessionState.sessionId || "whybuddy-main-proto"}
+                      expanded={turn.routeExpanded}
+                      onToggle={() => toggleRouteExpanded(turn.id)}
+                      litCount={turn.routeLitCount}
+                      streaming={turn.status === "streaming"}
+                      liveAction={
+                        turn.id === latestTurnId && turn.status === "streaming" ? liveAction : null
                       }
+                      activeStepId={turn.id === latestTurnId ? latestActiveStepId : null}
                     />
-                  );
-                })()}
-                {turn.status === "complete" && (
-                  <TurnFootnote
-                    turn={turn}
-                    sessionId={sessionState.sessionId || "whybuddy-main-proto"}
-                    onChallenge={challengeTurn}
-                  />
-                )}
-              </div>
-            </div>
-          ))}
+                    {(() => {
+                      const finalStep = finalNarrationStep(turn.steps);
+                      const narrationText = finalStep?.text ?? turn.assistant;
+                      if (!narrationText) return null;
+                      return (
+                        <TypewriterText
+                          text={narrationText}
+                          active={
+                            turn.id === latestTurnId &&
+                            (turn.status === "streaming" ||
+                              (finalStep != null && turn.status === "complete"))
+                          }
+                        />
+                      );
+                    })()}
+                    {turn.status === "complete" && (
+                      <TurnFootnote
+                        turn={turn}
+                        sessionId={sessionState.sessionId || "whybuddy-main-proto"}
+                        onChallenge={challengeTurn}
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
 
-          {isRunning && liveAction && (
-            <div className="pl-1">
-              <LiveActionIndicator liveAction={liveAction} />
+              {isRunning && liveAction && (
+                <div className="pl-1">
+                  <LiveActionIndicator liveAction={liveAction} />
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </main>
+          </main>
 
-      <footer className={autopilotTheme.footer}>
-        <div className="mx-auto flex max-w-2xl gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !isRunning && sendMessage()}
-            placeholder="继续补充想法，或质疑上一轮结论…"
-            disabled={isRunning}
-            className={autopilotTheme.input}
-          />
-          <button
-            type="button"
-            onClick={sendMessage}
-            disabled={isRunning || !input.trim()}
-            className={autopilotTheme.sendBtn}
-          >
-            发送
-          </button>
-        </div>
-        <div className="mx-auto mt-2 flex max-w-2xl flex-wrap gap-1.5">
-          {HINT_CHIPS.map((hint) => (
-            <button
-              key={hint}
-              type="button"
-              disabled={isRunning}
-              onClick={() => setInput(hint)}
-              className={autopilotTheme.hintChip}
-            >
-              {hint}
-            </button>
-          ))}
-        </div>
-      </footer>
+          <footer className={autopilotTheme.footer}>
+            <div className="flex gap-2">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !isRunning && sendMessage()}
+                placeholder="继续补充想法，或质疑上一轮结论…"
+                disabled={isRunning}
+                className={autopilotTheme.input}
+              />
+              <button
+                type="button"
+                onClick={sendMessage}
+                disabled={isRunning || !input.trim()}
+                className={autopilotTheme.sendBtn}
+              >
+                发送
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {HINT_CHIPS.map((hint) => (
+                <button
+                  key={hint}
+                  type="button"
+                  disabled={isRunning}
+                  onClick={() => setInput(hint)}
+                  className={autopilotTheme.hintChip}
+                >
+                  {hint}
+                </button>
+              ))}
+            </div>
+          </footer>
+        </section>
+      </div>
     </div>
   );
 }

@@ -99,6 +99,26 @@ describe("POST /api/whybuddy/orchestrate-plan (R1-B2)", () => {
     expect(body.reason).toBeUndefined();
   });
 
+  it("accepts LLM alias capability fields and normalizes ids (F0.1)", async () => {
+    vi.spyOn(llmClient, "callLLMJsonWithUsage").mockResolvedValueOnce({
+      json: {
+        selected: [{ capability: "tradeoff_evaluate", role: "工程" }],
+        rationale: "评估运维权衡",
+      },
+      usage: { prompt_tokens: 10, completion_tokens: 8, total_tokens: 18 },
+    } as any);
+
+    const res = await fetch(`${base}/orchestrate-plan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(baseBody),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.source).toBe("llm");
+    expect(body.selected[0].capabilityId).toBe("tradeoff.evaluate");
+  });
+
   it("returns heuristic_fallback with reason llm_error when LLM throws", async () => {
     vi.spyOn(llmClient, "callLLMJsonWithUsage").mockRejectedValueOnce(new Error("timeout"));
 

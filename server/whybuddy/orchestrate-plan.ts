@@ -11,6 +11,19 @@ import { capabilityDomainAnchoringBlock } from "../../shared/blueprint/whybuddy-
 import { getAIConfig } from "../core/ai-config.js";
 import { callLLMJsonWithUsage } from "../core/llm-client.js";
 
+/** Resolved routing model (需求 3.1): `routerModel` when set, else primary `model`. */
+export function resolveRouterModel(config: { routerModel?: string; model: string }): string {
+  return config.routerModel ?? config.model;
+}
+
+/**
+ * Mechanical convergence predicate (需求 3.3 / 3.4 — 修订 B).
+ * Purely structural: `selected` empty AND `converged === true`. Never inspects rationale text.
+ */
+export function isMechanicalConvergenceSignal(selected: unknown, converged: unknown): boolean {
+  return Array.isArray(selected) && selected.length === 0 && converged === true;
+}
+
 export type OrchestratePlanFallbackReason =
   | "no_api_key"
   | "llm_error"
@@ -32,6 +45,15 @@ export type OrchestratePlanResponse = {
   selected: Array<{ capabilityId: V5CapabilityId; roleId: string; why?: string }>;
   rationale: string;
   source: "llm" | "heuristic_fallback";
+  /**
+   * Net-new (需求 3.3 / 3.4 — 修订 B): mechanical convergence signal. Set to
+   * `true` only when the router returns an empty `selected` set together with
+   * `converged === true`. The Session_Driver reads this purely structural flag
+   * to terminate the re-entry loop as `convergence_signal` (distinct from an
+   * `invalid_proposal` degradation). Optional / additive: callers and fixtures
+   * that never emit `converged` keep working unchanged.
+   */
+  converged?: boolean;
   dropped?: Array<{ capabilityId: string; reason: DropReason }>;
   usage?: {
     inputTokens?: number;
@@ -91,6 +113,28 @@ function buildCapabilityCatalogBlock(): string {
   ).join("\n");
 }
 
+/**
+ * Net-new (需求 3.2): inject the Coverage_Contract's required & conditional
+ * capability summary into the router prompt so the LLM_Router can prioritize
+ * required gaps. Only capability ids / contract metadata are emitted here — no
+ * full artifact content — preserving the existing compression constraint
+ * (prompt passes only id/kind/summary, never full content).
+ */
+function buildCoverageContractBlock(state: V5SessionState): string {
+  const contract = state.coverageContract;
+  if (!contract) {
+    return "COVERAGE_CONTRACT: (none authored)";
+  }
+  const required = contract.requiredCapabilities || [];
+  const conditional = contract.conditionalCapabilities || [];
+  return (
+    `COVERAGE_CONTRACT (prioritize required gaps; mode=${contract.mode}):\n` +
+    `  required (${required.length}): ${required.join(", ") || "(none)"}\n` +
+    `  conditional (${conditional.length}): ${conditional.join(", ") || "(none)"}\n` +
+    `  min_evidence_per_requirement: ${contract.minEvidencePerRequirement}`
+  );
+}
+
 function buildOrchestrateSystemPrompt(): string {
   return (
     "You are WhyBuddy V5's orchestration planner (ORCH). " +
@@ -99,11 +143,13 @@ function buildOrchestrateSystemPrompt(): string {
     "Return ONLY a JSON object (no markdown fences) with exactly:\n" +
     '{"selected":[{"capabilityId":"...","roleId":"...","why":"..."}],"rationale":"..."}\n' +
     "Rules: use only capability ids from the provided catalog; 1-4 items; roleId must be a V5 role; " +
-    "why is optional but encouraged when repeating or prioritizing a capability."
+    "why is optional but encouraged when repeating or prioritizing a capability. " +
+    'When you confirm no further reasoning steps are needed, return {"selected": [], "converged": true, "rationale": ...}.'
   );
 }
 
-function buildOrchestrateUserPrompt(req: OrchestratePlanRequest): string {
+/** Exported for deterministic prompt-compression regression tests (需求 11.3). */
+export function buildOrchestrateUserPrompt(req: OrchestratePlanRequest): string {
   const { state, userText, intervention } = req;
   const goal = state.goal?.text || "";
   const goalStatus = state.goal?.status || "unknown";
@@ -131,6 +177,7 @@ function buildOrchestrateUserPrompt(req: OrchestratePlanRequest): string {
     `RECENT_DLEDGER_CHOSE (soft avoid): ${recentChose.join(", ") || "(none)"}\n` +
     `BUDGET: turns_used=${budget.turns} runs=${budget.runs} est_tokens=${budget.estimatedTokens} ` +
     `remaining_turns≈${budget.remainingTurns} remaining_runs≈${budget.remainingRuns}\n\n` +
+    `${buildCoverageContractBlock(state)}\n\n` +
     `CAPABILITY_CATALOG:\n${buildCapabilityCatalogBlock()}`
   );
 }
@@ -158,17 +205,23 @@ export async function executeOrchestratePlan(
     return heuristicFallback(req, "no_api_key");
   }
 
+  // Net-new (需求 3.1): route with the low-cost router model when configured,
+  // else fall back to the primary model. R1 validation / clamp / fallback below
+  // is consumed as preserved baseline and not redesigned.
+  const routerModel = resolveRouterModel(config);
+
   try {
     const { json, usage } = await callLLMJsonWithUsage<{
       selected?: Array<{ capabilityId?: string; roleId?: string; why?: string }>;
       rationale?: string;
+      converged?: boolean;
     }>(
       [
         { role: "system", content: buildOrchestrateSystemPrompt() },
         { role: "user", content: buildOrchestrateUserPrompt(req) },
       ],
       {
-        model: config.model,
+        model: routerModel,
         temperature: 0.2,
         timeoutMs: Math.min(config.timeoutMs, 30_000),
         retryAttempts: 1,
@@ -176,6 +229,31 @@ export async function executeOrchestratePlan(
     );
 
     const rationale = String(json?.rationale || "").trim();
+
+    // Net-new (需求 3.3 / 3.4 — 修订 B): Convergence_Signal mechanical contract.
+    // The decision is PURELY STRUCTURAL — no semantic matching on rationale text.
+    // When the router returns an empty `selected` set AND `converged === true`,
+    // pass it through as a convergence signal (source=llm) rather than degrading
+    // to `invalid_proposal`. The empty-selected case WITHOUT `converged === true`
+    // falls through to the preserved heuristic-fallback path below.
+    const rawSelected = json?.selected;
+    if (isMechanicalConvergenceSignal(rawSelected, json?.converged)) {
+      return {
+        selected: [],
+        rationale,
+        source: "llm",
+        converged: true,
+        usage: usage
+          ? {
+              inputTokens: usage.prompt_tokens,
+              outputTokens: usage.completion_tokens,
+              totalTokens: usage.total_tokens,
+              model: routerModel,
+            }
+          : undefined,
+      };
+    }
+
     const validated = validateProposedPlan(
       { selected: json?.selected, rationale },
       req.state
@@ -203,7 +281,7 @@ export async function executeOrchestratePlan(
             inputTokens: usage.prompt_tokens,
             outputTokens: usage.completion_tokens,
             totalTokens: usage.total_tokens,
-            model: config.model,
+            model: routerModel,
           }
         : undefined,
     };
@@ -215,3 +293,26 @@ export async function executeOrchestratePlan(
     return heuristicFallback(req, "llm_error");
   }
 }
+
+/**
+ * Router abstraction for Session_Driver injection (需求 2.1 / 3.1).
+ *
+ * The Session_Driver drives the multi-step re-entry loop and needs an
+ * injectable router seam (so a Deterministic_Provider can be swapped in under
+ * `BUILD_TARGET=test`). R1's validation / clamp / fallback
+ * (`validateProposedPlan`, `maxCapabilityRunsPerTurn`, `heuristicFallback`) is
+ * consumed as preserved baseline through `executeOrchestratePlan` and is NOT
+ * redesigned here.
+ */
+export interface ReasoningRouter {
+  proposePlan(req: OrchestratePlanRequest): Promise<OrchestratePlanResponse>;
+}
+
+/**
+ * Default router adapter: a thin pass-through to the existing
+ * `executeOrchestratePlan` path. Session_Driver uses this when no explicit
+ * router is injected.
+ */
+export const defaultReasoningRouter: ReasoningRouter = {
+  proposePlan: (req) => executeOrchestratePlan(req),
+};

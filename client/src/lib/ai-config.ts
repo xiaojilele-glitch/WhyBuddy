@@ -1,7 +1,18 @@
 export type AIConfigMode = "server_proxy" | "browser_direct";
 export type AIWireApi = "responses" | "chat_completions";
 
-export interface AIConfig {
+/**
+ * Net-new additive config extension (whybuddy-llm-autonomous-reasoning, 需求 3.1).
+ *
+ * `routerModel` lets the LLM_Router use a low-cost / faster model for scheduling
+ * decisions. It is OPTIONAL so durable old configs (which never carried it) stay
+ * compatible; the router resolves the model as `config.routerModel ?? config.model`.
+ */
+export interface AIConfigExtension {
+  routerModel?: string;
+}
+
+export interface AIConfig extends AIConfigExtension {
   mode: AIConfigMode;
   source: "server_env" | "browser_local";
   apiKey: string;
@@ -157,6 +168,7 @@ export function savePersistedAISettings(
       apiKey: browserConfig.apiKey,
       baseUrl: browserConfig.baseUrl,
       model: browserConfig.model,
+      routerModel: browserConfig.routerModel,
       modelReasoningEffort: browserConfig.modelReasoningEffort,
       maxContext: browserConfig.maxContext,
       providerName: browserConfig.providerName,

@@ -94,7 +94,7 @@ process.once('SIGTERM', () => {
 
 async function runSmoke() {
   log("starting V5 /whybuddy browser smoke (Playwright)");
-  log(`target: ${baseUrl}/whybuddy`);
+  log(`target: ${baseUrl}/whybuddy/dev`);
 
   let serverUp = await waitForServer(baseUrl, 10000);
   if (!serverUp) {
@@ -190,9 +190,10 @@ async function runSmoke() {
   });
 
   // Navigate
-  await page.goto(`${baseUrl}/whybuddy`, { waitUntil: "domcontentloaded", timeout: 20000 });
-  await page.waitForSelector("text=WhyBuddy", { timeout: 8000 });
-  await page.waitForSelector("text=V5 Capability Pool", { timeout: 4000 });
+  // Engineering cockpit (/whybuddy/dev) owns Verify Chain, challenge buttons, and artifact cards.
+  await page.goto(`${baseUrl}/whybuddy/dev`, { waitUntil: "domcontentloaded", timeout: 20000 });
+  await page.waitForSelector("text=WhyBuddy Dev", { timeout: 8000 });
+  await page.waitForSelector("text=Engineering Cockpit", { timeout: 4000 });
   log("UI shell loaded");
 
   // --- 1. combo 输入 → report 出现 ---

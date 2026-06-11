@@ -10,6 +10,28 @@ describe("fetchOrchestratePlan (R1-B6)", () => {
     vi.restoreAllMocks();
   });
 
+  it("preserves LLM convergence signal with empty selected (F0.1 / task 2.3)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        selected: [],
+        rationale: "coverage sufficient",
+        source: "llm",
+        converged: true,
+      }),
+    } as Response);
+
+    const result = await fetchOrchestratePlan({
+      state: { sessionId: "s", goal: { text: "x" } } as any,
+      turnId: "t-conv",
+      userText: "可以收尾了",
+    });
+    expect(result).not.toBeNull();
+    expect(result?.source).toBe("llm");
+    expect(result?.converged).toBe(true);
+    expect(result?.selected).toEqual([]);
+  });
+
   it("returns null on timeout (local_heuristic path in caller)", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
       return new Promise((_resolve, reject) => {
