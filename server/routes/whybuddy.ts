@@ -29,6 +29,10 @@ import {
   executeEvidenceSearchMapped,
   executeRepoInspectMapped,
 } from "../whybuddy/capability-exec-map.js";
+import {
+  executeDeliberationCapabilityMapped,
+  isDeliberationCapability,
+} from "../whybuddy/deliberation-exec-map.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -318,12 +322,22 @@ router.post("/respond", express.json({ limit: "2mb" }), async (req: Request, res
 // On any config/LLM error we return 5xx (or throw) so the client LlmCapabilityExecutor reliably falls back
 // to PilotRealCapabilityExecutor. This route never touches commitArtifact, Trust Gate, producedBy, or session state.
 router.post("/execute-capability", express.json({ limit: "2mb" }), async (req: Request, res: Response) => {
-  const { capabilityId, state, inputArtifactIds = [], roleId, turnId } = (req.body || {}) as {
+  const {
+    capabilityId,
+    state,
+    inputArtifactIds = [],
+    roleId,
+    turnId,
+    deliberationMaxRounds,
+    targetRoleId,
+  } = (req.body || {}) as {
     capabilityId?: string;
     state?: V5SessionState;
     inputArtifactIds?: string[];
     roleId?: string;
     turnId?: string;
+    deliberationMaxRounds?: number;
+    targetRoleId?: string;
   };
 
   if (!capabilityId || !state || !turnId) {
@@ -352,6 +366,23 @@ router.post("/execute-capability", express.json({ limit: "2mb" }), async (req: R
 
     if (capabilityId === "evidence.search") {
       const result = await executeEvidenceSearchMapped(state, inputArtifactIds, roleId);
+      return res.json(result);
+    }
+
+    if (isDeliberationCapability(capabilityId)) {
+      const config = getAIConfig();
+      if (!config.apiKey) {
+        throw new Error("LLM not configured (no apiKey from getAIConfig)");
+      }
+      const result = await executeDeliberationCapabilityMapped({
+        capabilityId: capabilityId as any,
+        state,
+        inputArtifactIds,
+        roleId,
+        turnId,
+        deliberationMaxRounds,
+        targetRoleId,
+      });
       return res.json(result);
     }
 

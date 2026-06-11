@@ -1410,6 +1410,10 @@ export class LlmCapabilityExecutor implements CapabilityExecutor {
       'mcp.call',
       'skill.invoke',
       'memory.recall',
+      'counter.argue',
+      'critique.generate',
+      'rebuttal.resolve',
+      'synthesis.merge',
     ];
     if (serverRouted.includes(args.capabilityId)) {
       try {

@@ -25,6 +25,7 @@ export default defineConfig({
       "server/permission/**/*.test.ts",
       "server/routes/blueprint/**/*.test.ts",
       "server/routes/__tests__/**/*.test.ts",
+      "server/whybuddy/__tests__/**/*.test.ts",
       "shared/**/*.test.ts",
       "client/src/lib/replay/__tests__/**/*.test.ts",
       "client/src/lib/blueprint-api/**/*.test.ts",

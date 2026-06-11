@@ -57,7 +57,7 @@ describe('POST /api/whybuddy/execute-capability (server route)', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        capabilityId: 'synthesis.merge',
+        capabilityId: 'intent.parse',
         state: { sessionId: 't1', goal: { text: 'x' } },
         inputArtifactIds: [],
         turnId: 't1',
