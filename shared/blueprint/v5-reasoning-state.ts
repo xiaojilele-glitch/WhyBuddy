@@ -49,6 +49,8 @@ export interface Artifact {
   title?: string;
   summary?: string;
   content?: string;
+  /** R2: optional structured executor output (e.g. Critique[]); Trust Gate must not read this field. */
+  payload?: unknown;
 }
 
 export interface GateState {

@@ -22,7 +22,7 @@ import type { V5CapabilityId } from "@shared/blueprint/contracts";
 import { STAGE_TO_V5_CAPABILITIES, ALL_V5_CAPABILITIES, CAPABILITY_OUTPUT_KIND } from "@shared/blueprint/contracts";
 import type { BrainstormReasoningGraph, BrainstormReasoningNode } from "@shared/blueprint";
 import * as WhyBuddyRuntime from "@/lib/whybuddy-runtime";
-import type { UserIntervention } from "@shared/blueprint/v5-reasoning-state";
+import type { Artifact, UserIntervention } from "@shared/blueprint/v5-reasoning-state";
 import { V5_ROLE_IDS } from "@shared/blueprint/whybuddy-role-map";
 
 /** 与 shared/blueprint/whybuddy-role-map 同源（含「接地」） */
@@ -238,12 +238,14 @@ export default function WhyBuddyDev() {
       // the 9-section evidence report the real V5 deliverable.
       let content = exec ? exec.content : raw.content;
 
+      const provenance = (exec?.provenance as Artifact["provenance"]) || "ai_generated";
+
       const { updatedState, committed } = WhyBuddyRuntime.commitArtifact(
         workingState,
         {
           id: raw.id,
           kind: raw.kind as any,
-          provenance: "ai_generated",
+          provenance,
           producedBy: {
             capabilityRunId: runId,
             capabilityId: raw.capability,
@@ -254,6 +256,7 @@ export default function WhyBuddyDev() {
           title: content ? content.split('\n')[0]?.slice(0, 80) : undefined,
           summary: content ? content.slice(0, 200) : undefined,
           content,
+          ...(exec?.payload !== undefined ? { payload: exec.payload } : {}),
         } as any,
         runId,
         forceFail,

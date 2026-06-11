@@ -12,7 +12,7 @@ import {
 } from "@shared/blueprint/capability-process-labels";
 import * as WhyBuddyRuntime from "@/lib/whybuddy-runtime";
 import { fetchNarration } from "@/lib/whybuddy-narrator";
-import type { UserIntervention, V5SessionState } from "@shared/blueprint/v5-reasoning-state";
+import type { Artifact, UserIntervention, V5SessionState } from "@shared/blueprint/v5-reasoning-state";
 import type { UiTurn, WhyArtifact, WhyBuddyExecutorMode } from "./types";
 
 const DEFAULT_GOAL = "做一个权限管理系统（支持 RBAC + 数据范围）";
@@ -162,9 +162,11 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
       if (trace) actionTraces.push(trace);
 
       const content = exec ? exec.content : raw.content;
+      const provenance = (exec?.provenance as Artifact["provenance"]) || "ai_generated";
       const realLlm =
         isExternalProvenance(exec?.provenance) ||
         exec?.provenance === "llm" ||
+        exec?.provenance === "llm_fallback" ||
         String(exec?.summary || "").includes("server-llm");
 
       const { updatedState, committed } = WhyBuddyRuntime.commitArtifact(
@@ -172,7 +174,7 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
         {
           id: raw.id,
           kind: raw.kind as any,
-          provenance: "ai_generated",
+          provenance,
           producedBy: {
             capabilityRunId: runId,
             capabilityId: raw.capability,
@@ -181,6 +183,7 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
           title: content ? content.split("\n")[0]?.slice(0, 80) : undefined,
           summary: content ? content.slice(0, 200) : undefined,
           content,
+          ...(exec?.payload !== undefined ? { payload: exec.payload } : {}),
         } as any,
         runId,
         forceFail,

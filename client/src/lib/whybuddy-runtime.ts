@@ -1098,6 +1098,7 @@ export interface CapabilityExecutor {
     summary: string;
     content: string;
     provenance?: Artifact["provenance"];
+    payload?: unknown;
     /** Knife 11: real provider usage if available from server LLM (input/output/total tokens, model). */
     usage?: {
       inputTokens?: number;
@@ -1395,6 +1396,7 @@ export class LlmCapabilityExecutor implements CapabilityExecutor {
     summary: string;
     content: string;
     provenance?: Artifact["provenance"];
+    payload?: unknown;
     usage?: {
       inputTokens?: number;
       outputTokens?: number;
