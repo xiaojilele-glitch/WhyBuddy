@@ -652,10 +652,25 @@ export default function WhyBuddyDev() {
                 const decs: any[] = WhyBuddyRuntime.getDecisionLedger ? WhyBuddyRuntime.getDecisionLedger(sessionState) : [];
                 const recent = [...decs].slice(-3).reverse();
                 if (!recent.length) return <div className="text-[10px] text-zinc-500">no decisions yet</div>;
+                const sourceBadge = (src?: string) => {
+                  const s = src ?? "local_heuristic";
+                  const cls =
+                    s === "llm"
+                      ? "bg-emerald-900/50 text-emerald-300"
+                      : s === "heuristic_fallback"
+                        ? "bg-amber-900/50 text-amber-300"
+                        : "bg-zinc-800 text-zinc-400";
+                  return (
+                    <span className={`rounded px-1 py-px font-mono text-[9px] ${cls}`}>{s}</span>
+                  );
+                };
                 return recent.map((d: any, i: number) => (
                   <div key={i} className="group mb-1.5 flex items-start gap-2 border-l border-zinc-700 pl-2 text-[10px] leading-snug rounded hover:bg-zinc-900/40 transition">
                     <div className="min-w-0 flex-1">
-                      <div className="font-mono text-zinc-400">{d.id}</div>
+                      <div className="flex items-center gap-1.5 font-mono text-zinc-400">
+                        <span>{d.id}</span>
+                        {sourceBadge(d.source)}
+                      </div>
                       <div className="truncate text-zinc-300">
                         chose: <span className="text-zinc-100">{(d.chose || []).join(', ')}</span>
                       </div>

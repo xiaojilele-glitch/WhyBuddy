@@ -12,6 +12,7 @@ import {
 } from "@shared/blueprint/capability-process-labels";
 import * as WhyBuddyRuntime from "@/lib/whybuddy-runtime";
 import { fetchNarration } from "@/lib/whybuddy-narrator";
+import { fetchOrchestratePlan } from "@/lib/whybuddy-orchestrator";
 import type { Artifact, UserIntervention, V5SessionState } from "@shared/blueprint/v5-reasoning-state";
 import type { UiTurn, WhyArtifact, WhyBuddyExecutorMode } from "./types";
 
@@ -219,9 +220,51 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
         intervention,
       });
 
+      setLiveAction({ label: "正在规划本轮动作…", external: false });
+
+      const planResponse = await fetchOrchestratePlan({
+        state: preparedState,
+        turnId,
+        userText: userText.trim(),
+        intervention: intervention
+          ? {
+              intent: intervention.intent,
+              targetArtifactId: intervention.targetArtifactId,
+              targetDecisionId: intervention.targetDecisionId,
+            }
+          : null,
+      });
+
+      let stateForOrch = preparedState;
+      let orchContext = context;
+      if (planResponse) {
+        orchContext = {
+          ...context,
+          proposedPlan: {
+            selected: planResponse.selected,
+            rationale: planResponse.rationale,
+            source: planResponse.source,
+          },
+        };
+        if (planResponse.usage) {
+          stateForOrch = WhyBuddyRuntime.recordCapabilityRunCost(
+            stateForOrch,
+            {
+              id: `${turnId}-orch-plan`,
+              capabilityId: "orchestrate.plan" as any,
+              turnId,
+              inputs: [],
+              outputs: [],
+              gateResults: [],
+            } as any,
+            { source: "server", usage: planResponse.usage }
+          );
+        }
+      }
+
       const { newState: afterOrch, plan } = WhyBuddyRuntime.orchestrateReasoningTurn(
-        preparedState,
-        context
+        stateForOrch,
+        orchContext
       );
 
       if (plan.selected.length > 0) {

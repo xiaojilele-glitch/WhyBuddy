@@ -33,6 +33,7 @@ import {
   executeDeliberationCapabilityMapped,
   isDeliberationCapability,
 } from "../whybuddy/deliberation-exec-map.js";
+import { executeOrchestratePlan } from "../whybuddy/orchestrate-plan.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -250,6 +251,32 @@ function buildNarrationUserPrompt(body: WhyBuddyRespondBody): string {
 }
 
 export type NarrationFallbackReason = "no_api_key" | "llm_error" | "empty_response";
+
+// POST /api/whybuddy/orchestrate-plan — scheduling proposal (LLM or heuristic fallback, always 200).
+router.post("/orchestrate-plan", express.json({ limit: "2mb" }), async (req: Request, res: Response) => {
+  const body = (req.body || {}) as {
+    state?: V5SessionState;
+    turnId?: string;
+    userText?: string;
+    intervention?: { intent?: string; targetArtifactId?: string; targetDecisionId?: string } | null;
+  };
+
+  if (!body.turnId || !String(body.turnId).trim()) {
+    return res.status(400).json({ error: "bad_request", message: "turnId is required" });
+  }
+  if (!body.state) {
+    return res.status(400).json({ error: "bad_request", message: "state is required" });
+  }
+
+  const result = await executeOrchestratePlan({
+    state: body.state,
+    turnId: String(body.turnId),
+    userText: String(body.userText || ""),
+    intervention: body.intervention ?? null,
+  });
+
+  return res.json(result);
+});
 
 // POST /api/whybuddy/respond — user-facing narration (LLM or deterministic fallback, always 200).
 router.post("/respond", express.json({ limit: "2mb" }), async (req: Request, res: Response) => {

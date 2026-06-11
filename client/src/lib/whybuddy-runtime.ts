@@ -55,127 +55,10 @@ import {
   type FragmentKind,
 } from "@shared/blueprint/whybuddy-report-builder.js";
 import { findGithubUrlInTexts } from "@shared/blueprint/whybuddy-github-context";
+import { pickNextCapabilities as pickNextCapabilitiesHeuristic } from "@shared/blueprint/whybuddy-pick-heuristic";
+import { validateProposedPlan } from "@shared/blueprint/whybuddy-plan-validation";
 
-// Simple deterministic picker (can be replaced by real ML / agent later)
-// Now significantly state-aware for target-driven scheduling (per V5 doc).
-// Uses: userText, stale, existing artifact kinds, recent runs, to pick (capability, role) pairs
-// and proactively fill gaps for report/synthesis.
-export function pickNextCapabilities(
-  state: V5SessionState,
-  userText: string
-): Array<{ capabilityId: V5CapabilityId; roleId: string }> {
-  const lower = userText.toLowerCase();
-  const picks: Array<{ capabilityId: V5CapabilityId; roleId: string }> = [];
-
-  const available = V5_CAPABILITY_POOL;
-
-  // Collect what we already have for gap analysis (health-aware: only trusted, non-stale
-  // artifacts count as present — same rule as hasTrustedCommittedForCap / isHealthyArtifact)
-  const stales = new Set(state.staleArtifactIds || []);
-  const existingKinds = new Set(
-    (state.artifacts || [])
-      .filter((a) => isHealthyArtifact(a, stales))
-      .map((a) => a.kind)
-  );
-  const hasRisk = existingKinds.has('risk');
-  const hasSynthesis = existingKinds.has('synthesis');
-  const hasReport = existingKinds.has('report');
-  const staleCount = (state.staleArtifactIds || []).length;
-  const recentRuns = (state.capabilityRuns || []).slice(-6).map(r => r.capabilityId);
-  const openQCount = (state.openQuestions || []).length;
-  const ledger = getSessionLedger(state);
-  const recentLedgerCaps = ledger.slice(-4).map(l => l.capabilityId);
-
-  // GitHub repo context → prefer external inspection capabilities (F1)
-  const ghUrl = findGithubUrlInTexts(lower, (state.goal?.text || ""));
-  if (ghUrl) {
-    if (available.has("repo.inspect") && !picks.some((p) => p.capabilityId === "repo.inspect")) {
-      picks.push({ capabilityId: "repo.inspect", roleId: "工程" });
-    }
-    if (available.has("evidence.search") && !picks.some((p) => p.capabilityId === "evidence.search")) {
-      picks.push({ capabilityId: "evidence.search", roleId: "接地" });
-    }
-  }
-
-  // Keyword driven (still useful as user "manipulator")
-  if (lower.includes("路线") || lower.includes("route") || lower.includes("对比")) {
-    if (available.has("route.generate")) picks.push({ capabilityId: "route.generate", roleId: "架构" });
-    if (available.has("route.compare")) picks.push({ capabilityId: "route.compare", roleId: "工程" });
-  }
-  if (lower.includes("澄清") || lower.includes("clarif") || lower.includes("模糊")) {
-    if (available.has("intent.clarify")) picks.push({ capabilityId: "intent.clarify", roleId: "产品" });
-  }
-  if (lower.includes("风险") || lower.includes("安全") || lower.includes("反驳")) {
-    if (available.has("risk.analyze")) picks.push({ capabilityId: "risk.analyze", roleId: "安全" });
-    if (available.has("counter.argue")) picks.push({ capabilityId: "counter.argue", roleId: "挑刺" });
-  }
-  if (lower.includes("树") || lower.includes("拆解") || lower.includes("spec tree")) {
-    if (available.has("structure.decompose")) picks.push({ capabilityId: "structure.decompose", roleId: "架构" });
-  }
-  if (lower.includes("报告") || lower.includes("report") || lower.includes("可行性") || lower.includes("总结")) {
-    if (!hasRisk && available.has("risk.analyze")) picks.push({ capabilityId: "risk.analyze", roleId: "安全" });
-    if (!hasRisk && available.has("counter.argue")) picks.push({ capabilityId: "counter.argue", roleId: "挑刺" });
-    if (!hasSynthesis && available.has("synthesis.merge")) picks.push({ capabilityId: "synthesis.merge", roleId: "综合" });
-    if (!hasReport && available.has("report.write")) picks.push({ capabilityId: "report.write", roleId: "综合" });
-  }
-  if (lower.includes("预览") || lower.includes("效果") || lower.includes("preview")) {
-    if (available.has("scenario.simulate")) picks.push({ capabilityId: "scenario.simulate", roleId: "工程" });
-  }
-
-  // State-driven gap filling (core V5 "target-driven" behavior)
-  if (staleCount > 0) {
-    // Stale present → prefer re-analysis / counter to address them
-    if (!picks.some(p => p.capabilityId.includes("risk") || p.capabilityId.includes("argue"))) {
-      if (available.has("risk.analyze")) picks.push({ capabilityId: "risk.analyze", roleId: "安全" });
-      if (available.has("counter.argue")) picks.push({ capabilityId: "counter.argue", roleId: "挑刺" });
-    }
-  }
-
-  if (hasRisk && !hasSynthesis && !hasReport) {
-    // We have evidence/risk but no convergence yet
-    if (available.has("synthesis.merge")) picks.push({ capabilityId: "synthesis.merge", roleId: "综合" });
-  }
-
-  if (hasSynthesis && !hasReport) {
-    if (available.has("report.write")) picks.push({ capabilityId: "report.write", roleId: "综合" });
-  }
-
-  // Open questions drive clarification or decompose
-  if (openQCount > 0) {
-    if (available.has("intent.clarify")) picks.push({ capabilityId: "intent.clarify", roleId: "产品" });
-    if (available.has("structure.decompose")) picks.push({ capabilityId: "structure.decompose", roleId: "架构" });
-  }
-
-  // Recent ledger can inform next (avoid recent if not stale)
-  if (staleCount === 0) {
-    const avoidLedger = new Set(recentLedgerCaps);
-    if (picks.length < 3 && !avoidLedger.has("evidence.search") && available.has("evidence.search")) picks.push({ capabilityId: "evidence.search", roleId: "接地" });
-  }
-
-  // Avoid repeating the exact same capability in the very recent runs unless stale forces it
-  if (picks.length === 0) {
-    const avoidRecent = new Set([...recentRuns, ...recentLedgerCaps]);
-    if (!avoidRecent.has("intent.parse") && available.has("intent.parse")) picks.push({ capabilityId: "intent.parse", roleId: "产品" });
-    if (!avoidRecent.has("evidence.search") && available.has("evidence.search")) picks.push({ capabilityId: "evidence.search", roleId: "接地" });
-    if (available.has("synthesis.merge")) picks.push({ capabilityId: "synthesis.merge", roleId: "综合" });
-  }
-
-  // Default sensible set if still nothing
-  if (picks.length === 0) {
-    if (available.has("intent.parse")) picks.push({ capabilityId: "intent.parse", roleId: "产品" });
-    if (available.has("evidence.search")) picks.push({ capabilityId: "evidence.search", roleId: "接地" });
-    if (available.has("synthesis.merge")) picks.push({ capabilityId: "synthesis.merge", roleId: "综合" });
-  }
-
-  // De-dupe while preserving order, cap at 5
-  const seen = new Set<string>();
-  return picks.filter(p => {
-    const key = `${p.capabilityId}:${p.roleId}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).slice(0, 5);
-}
+export { pickNextCapabilitiesHeuristic as pickNextCapabilities };
 
 // ===== V5.1 P4/B Budget Gate v1 (counts-based, minimal, per whybuddy_v5.1.md) =====
 // All paths into orchestrateReasoningTurn must pass here first.
@@ -2325,31 +2208,59 @@ export function orchestrateReasoningTurn(
   // 2. Use the provided userText for picking (the "chat manipulator" contract)
   const userTextForPick = userText || working.goal.text;
 
-  // 3. Pick (this is where the real intelligence will live)
-  const selected = pickNextCapabilities(working, userTextForPick);
+  // 3. Pick — R1: consume server proposedPlan when present; else local heuristic (shared).
+  let selected: Array<{ capabilityId: V5CapabilityId; roleId: string }>;
+  let planSource: SchedulingDecision["source"] = "local_heuristic";
+  let droppedFromProposal: SchedulingDecision["droppedFromProposal"];
+  let pickRationale: string;
+
+  const proposed = context?.proposedPlan;
+  if (proposed) {
+    const validated = validateProposedPlan(
+      { selected: proposed.selected, rationale: proposed.rationale },
+      working
+    );
+    if (validated.valid && validated.selected.length > 0) {
+      selected = validated.selected;
+      planSource = proposed.source;
+      droppedFromProposal = validated.dropped.length > 0 ? validated.dropped : undefined;
+      pickRationale = proposed.rationale;
+    } else {
+      selected = pickNextCapabilitiesHeuristic(working, userTextForPick);
+      planSource = "local_heuristic";
+      droppedFromProposal = validated.dropped;
+      pickRationale = `proposed plan failed defense validation; local heuristic for: ${(userTextForPick || "").slice(0, 80)}`;
+    }
+  } else {
+    selected = pickNextCapabilitiesHeuristic(working, userTextForPick);
+    planSource = "local_heuristic";
+    pickRationale = `Goal/stale/keyword-driven pick for: ${(userTextForPick || "").slice(0, 80)}... (stale=${(working.staleArtifactIds || []).length}, hasRisk=${(working.artifacts || []).some((a: any) => a.kind === "risk")})`;
+  }
 
   // ===== V5.1 DLEDGER (P1/A) =====
-  // Record immediately after every pickNextCapabilities (per user spec).
-  // This makes scheduling decisions auditable / challengeable (future decision challenge target).
   const nowIso = new Date().toISOString();
   const choseIds = selected.map((s: any) => s.capabilityId as string);
-  // For v1 "saw" we use the full pool (the candidates the heuristic considered).
-  // In a more advanced picker this could be the actually considered subset.
   const allCapIds = Array.from(V5_CAPABILITY_POOL.keys()) as string[];
   const saw = allCapIds;
+  const notChosenReason =
+    planSource === "local_heuristic"
+      ? "not chosen by current pickNext heuristic for this turn"
+      : "not chosen by orchestration proposal for this turn";
   const skipped = saw
     .filter((cid) => !choseIds.includes(cid))
-    .map((cid) => ({ capabilityId: cid, reason: "not chosen by current pickNext heuristic for this turn" }));
+    .map((cid) => ({ capabilityId: cid, reason: notChosenReason }));
   const decision: SchedulingDecision = {
     id: `${turnId}-dledger`,
     turnId,
     saw,
     chose: choseIds,
     skipped,
-    addresses: [], // v1 stub; future: map from open gaps / openQuestions
-    rationale: `Goal/stale/keyword-driven pick for: ${(userTextForPick || "").slice(0, 80)}... (stale=${(working.staleArtifactIds || []).length}, hasRisk=${(working.artifacts || []).some((a: any) => a.kind === "risk")})`,
+    addresses: [],
+    rationale: pickRationale,
     alternativesRejected: skipped.map((s) => s.capabilityId),
     createdAt: nowIso,
+    source: planSource,
+    ...(droppedFromProposal?.length ? { droppedFromProposal } : {}),
   };
 
   // Knife 5: if this turn came from a decision challenge, mark influence on the new decision record

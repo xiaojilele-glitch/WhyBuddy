@@ -2168,4 +2168,120 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
     expect(rec.source).toBe('estimated');
     expect(rec.estimatedTokens).toBe(tokens);
   });
+
+  describe('R1 orchestrate proposedPlan (B3/B4/B9)', () => {
+    it('DLEDGER records source=llm when proposedPlan consumed', () => {
+      let s = createInitialSessionState('R1 llm plan', 'r1-llm');
+      const { preparedState, context } = intakeMessage(s, {
+        turnId: 'r1t1',
+        userText: '对比一下方案的运维成本',
+      });
+      const { newState } = orchestrateReasoningTurn(preparedState, {
+        ...context,
+        proposedPlan: {
+          selected: [
+            { capabilityId: 'route.compare', roleId: '工程' },
+            { capabilityId: 'tradeoff.evaluate', roleId: '工程' },
+          ],
+          rationale: '用户要对比运维成本',
+          source: 'llm',
+        },
+      });
+      const dec = getDecisionLedger(newState).pop();
+      expect(dec?.source).toBe('llm');
+      expect(dec?.chose).toContain('route.compare');
+      expect(dec?.rationale).toContain('运维成本');
+    });
+
+    it('DLEDGER records source=heuristic_fallback when server degraded proposal consumed', () => {
+      let s = createInitialSessionState('R1 fb', 'r1-fb');
+      const { preparedState, context } = intakeMessage(s, {
+        turnId: 'r1t-fb',
+        userText: '出报告',
+      });
+      const { newState } = orchestrateReasoningTurn(preparedState, {
+        ...context,
+        proposedPlan: {
+          selected: [{ capabilityId: 'report.write', roleId: '综合' }],
+          rationale: 'heuristic_fallback (llm_error)',
+          source: 'heuristic_fallback',
+        },
+      });
+      const dec = getDecisionLedger(newState).pop();
+      expect(dec?.source).toBe('heuristic_fallback');
+    });
+
+    it('DLEDGER records source=local_heuristic without proposedPlan', () => {
+      let s = createInitialSessionState('R1 local', 'r1-local');
+      const { preparedState, context } = intakeMessage(s, {
+        turnId: 'r1t2',
+        userText: '对比一下方案的运维成本',
+      });
+      const { newState } = orchestrateReasoningTurn(preparedState, context);
+      const dec = getDecisionLedger(newState).pop();
+      expect(dec?.source).toBe('local_heuristic');
+    });
+
+    it('orchestrate.plan cost lands in costLedger with source server (B9)', () => {
+      let s = createInitialSessionState('R1 cost', 'r1-cost');
+      const costed = recordCapabilityRunCost(
+        s,
+        {
+          id: 'r1-orch-plan',
+          capabilityId: 'orchestrate.plan' as any,
+          turnId: 'r1t3',
+          inputs: [],
+          outputs: [],
+          gateResults: [],
+        } as any,
+        {
+          source: 'server',
+          usage: { totalTokens: 88, inputTokens: 50, outputTokens: 38, model: 'gpt-test' },
+        }
+      );
+      const rec = (costed.costLedger || []).find((c) => c.capabilityId === 'orchestrate.plan');
+      expect(rec?.source).toBe('server');
+      expect(rec?.estimatedTokens).toBe(88);
+    });
+
+    it('challenge + stale + LLM proposal with report.write schedules reconvergence (B4)', () => {
+      let s = createInitialSessionState('权限系统', 'r1-b4');
+      s = {
+        ...s,
+        artifacts: [
+          {
+            id: 'rep1',
+            kind: 'report',
+            trustLevel: 'gated_pass',
+            content: '结论：可推进',
+            producedBy: { capabilityId: 'report.write', turnId: 't0' },
+          } as any,
+        ],
+      };
+      const { preparedState, context } = intakeMessage(s, {
+        turnId: 'r1-ch',
+        userText: '质疑报告依据',
+        intervention: {
+          targetArtifactId: 'rep1',
+          intent: 'challenge',
+          text: '依据不足',
+        },
+      });
+      expect((preparedState.staleArtifactIds || []).includes('rep1')).toBe(true);
+      const { plan, newState } = orchestrateReasoningTurn(preparedState, {
+        ...context,
+        proposedPlan: {
+          selected: [
+            { capabilityId: 'risk.analyze', roleId: '安全' },
+            { capabilityId: 'report.write', roleId: '综合' },
+          ],
+          rationale: '回炉重推报告',
+          source: 'llm',
+        },
+      });
+      expect(plan.selected.some((p) => p.capabilityId === 'report.write')).toBe(true);
+      const dec = getDecisionLedger(newState).pop();
+      expect(dec?.source).toBe('llm');
+    });
+  });
 });

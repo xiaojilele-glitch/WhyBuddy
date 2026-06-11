@@ -168,6 +168,12 @@ export interface OrchestrateContext {
   turnId: string;
   userText: string;
   intervention?: UserIntervention;
+  /** R1: server-prefetched scheduling proposal. Absent → runtime uses local heuristic. */
+  proposedPlan?: {
+    selected: Array<{ capabilityId: V5CapabilityId; roleId: string }>;
+    rationale: string;
+    source: "llm" | "heuristic_fallback";
+  };
 }
 
 /** V5.1 DLEDGER (P1/A): auditable record of each pickNextCapabilities decision. */
@@ -186,6 +192,10 @@ export interface SchedulingDecision {
   status?: "active" | "challenged" | "superseded";
   challengedAt?: string;
   challengeText?: string;
+
+  /** R1: scheduling proposal source (optional for durable compat). */
+  source?: "llm" | "heuristic_fallback" | "local_heuristic";
+  droppedFromProposal?: Array<{ capabilityId: string; reason: string }>;
 }
 
 /** V5.1 CONTRACT / GCOV (P1/A): Coverage contract authored for the session/goal to declare what is required before convergence (report/AWAIT) is allowed. Now supports authored/versioned/frozen baseline + blockingGapIds for gap lifecycle (Knife 7). */
