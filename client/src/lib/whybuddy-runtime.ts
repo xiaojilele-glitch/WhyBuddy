@@ -48,6 +48,22 @@ import type {
 import type { BrainstormReasoningGraph, BrainstormReasoningNode, BrainstormReasoningEdge } from "@shared/blueprint/brainstorm-reasoning-graph";
 import { V5_CAPABILITY_POOL, ALL_V5_CAPABILITIES, CAPABILITY_OUTPUT_KIND } from "@shared/blueprint/contracts";
 import {
+  ensureRouteBranchScaffold,
+  scaffoldPropositionBranches,
+  enrichGraphNodeFromArtifact,
+  capabilityIdToReasoningNodeType,
+  roleIdToDisplayLabel,
+  findOpenScaffoldSlotId,
+  scaffoldSlotForCapability,
+  isScaffoldPlaceholderNodeId,
+} from "@shared/blueprint/whybuddy-graph-projection";
+import { stripProjectionForPersist } from "@shared/blueprint/whybuddy-projection-persist";
+import {
+  applyReplayOnSave,
+  replaySessionEvents,
+  type WhyBuddyReplayEvent,
+} from "@shared/blueprint/whybuddy-session-replay";
+import {
   buildStructuredReport,
   extractArtifactFragments,
   type StructuredReportInput,
@@ -58,6 +74,54 @@ import { findGithubUrlInTexts } from "@shared/blueprint/whybuddy-github-context"
 import { pickNextCapabilities as pickNextCapabilitiesHeuristic } from "@shared/blueprint/whybuddy-pick-heuristic";
 import { validateProposedPlan } from "@shared/blueprint/whybuddy-plan-validation";
 import { fetchOrchestratePlan } from "./whybuddy-orchestrator";
+import {
+  evaluateGroundingForCommit,
+  hasGroundedExternalEvidence,
+  countGroundedTrustedArtifacts,
+  isGroundedEvidenceArtifact,
+} from "@shared/blueprint/whybuddy-grounding";
+import {
+  evaluateInteractiveGateAfterCommit,
+  userClearsReadiness,
+  userPicksRoute,
+  userRejectsRouteSelection,
+} from "@shared/blueprint/whybuddy-interactive-gates";
+import {
+  authorCoverageContract,
+  evaluateCoverageGate,
+  hasTrustedCommittedForCap,
+} from "@shared/blueprint/whybuddy-coverage-gate";
+export { authorCoverageContract, evaluateCoverageGate, hasTrustedCommittedForCap };
+import {
+  gapsFromGapAskContent,
+  mergeGapAskIntoState,
+  resolveReadinessGapsFromUserText,
+} from "@shared/blueprint/whybuddy-readiness-chain";
+import {
+  isDeliveryIntent,
+  isPreviewDissatisfiedIntent,
+  isReviewPassIntent,
+  isReviewRejectIntent,
+  latestTrustedReport,
+  evaluateReviewPassGate,
+  buildHandoffPackageContent,
+} from "@shared/blueprint/whybuddy-delivery-chain";
+import { evaluateCommitGates, evaluateShipGates } from "@shared/blueprint/whybuddy-ship-gates";
+import { shouldEscalateOnBudgetBlock } from "@shared/blueprint/whybuddy-budget-esc";
+import {
+  applyRoleModeToState,
+  isDeliberationCapability,
+  markBrainstormDegraded,
+} from "@shared/blueprint/whybuddy-role-mode";
+import { auditPreviewReal, isVisualIntent } from "@shared/blueprint/whybuddy-visual-chain";
+import {
+  buildStructurePrompt,
+  redactStructurePrompt,
+  buildTemplateTree,
+  formatTreeContent,
+  parseStructureGateLedger,
+  structureGateLedgerConversationLines,
+} from "@shared/blueprint/whybuddy-structure-chain";
 
 export { pickNextCapabilitiesHeuristic as pickNextCapabilities };
 
@@ -72,6 +136,8 @@ export interface BudgetPolicy {
   maxCapabilityRunsPerTurn: number;
   maxCapabilityRunsPerSession: number;
   maxRepeatPerCapability: number;
+  /** P4/B: session token ceiling (estimated from costLedger). */
+  maxTokensPerSession: number;
 }
 
 export interface BudgetSnapshot {
@@ -94,6 +160,7 @@ export function getDefaultBudgetPolicy(): BudgetPolicy {
     maxCapabilityRunsPerTurn: 5,
     maxCapabilityRunsPerSession: 120,
     maxRepeatPerCapability: 6,
+    maxTokensPerSession: 500_000,
   };
 }
 
@@ -114,13 +181,25 @@ export function getDefaultBudgetPolicy(): BudgetPolicy {
  */
 export const DEFAULT_MAX_LOOPS_PER_MESSAGE = 3;
 
+/** Product preview (/whybuddy): Session_Driver keeps re-entering ORCH until AWAIT or loop cap. */
+export const PRODUCT_PREVIEW_MAX_LOOPS_PER_MESSAGE = 12;
+
+/** Fresh sessions start with no proposition until the user's first message (INTAKE new_goal). */
+export const EMPTY_SESSION_GOAL_TEXT = "";
+
+/** Legacy product default — cleared on load when the session has no real progress. */
+export const LEGACY_HARDCODED_PRODUCT_GOAL =
+  "做一个权限管理系统（支持 RBAC + 数据范围）";
+
 /** Why the Session_Driver stopped re-entering and parked at AWAIT. */
 export type ReentryStopReason =
   | "coverage_sufficient" // 需求 1.4: all required caps satisfied, blocking gaps resolved/waived
   | "budget_exhausted" // 需求 1.5 / 1.9: maxLoopsPerMessage / maxCapabilityRunsPerSession / maxTurns
   | "no_progress" // 需求 1.7: two consecutive loops with no new artifact and no gap progress
   | "max_repeat_guard" // 需求 1.8: maxRepeatPerCapability excluded the only remaining candidates
-  | "convergence_signal"; // 需求 3.3: router returned selected:[] && converged === true
+  | "convergence_signal" // 需求 3.3: router returned selected:[] && converged === true
+  | "await_ready" // P0: G_READY — human must supplement readiness
+  | "await_confirm"; // P0: G_CONFIRM — human must pick route / adjust
 
 /**
  * Request the Session_Driver hands to a ReasoningRouter on each loop.
@@ -180,6 +259,32 @@ export interface DriveReasoningOptions {
    * Defaults to DEFAULT_MAX_LOOPS_PER_MESSAGE (3).
    */
   maxLoopsPerMessage?: number;
+  /**
+   * When true (default), capabilities in the same ORCH round execute concurrently
+   * (5-key pool + server routes); commits remain sequential for STATE safety.
+   */
+  parallelCapabilityExecution?: boolean;
+  /** Called after each loop (including GCOV recoverable parks) so the UI can refresh mid-drive. */
+  onLoopComplete?: (payload: {
+    loopIndex: number;
+    loopTurnId: string;
+    state: V5SessionState;
+    plan: TurnPlan;
+    committedArtifactIds: string[];
+    stopSignal?: ReentryStopReason;
+  }) => void | Promise<void>;
+  /** Per-capability round outcome — gate/exec failure for IM retry (Autopilot autoAdvance.retry). */
+  onCapabilityRound?: (payload: {
+    loopTurnId: string;
+    capabilityId: V5CapabilityId;
+    roleId: string;
+    runIndex: number;
+    runId: string;
+    committed: boolean;
+    gateFailed: boolean;
+    execFailed: boolean;
+    gateMessage?: string;
+  }) => void;
 }
 
 /** Result of a full multi-step drive over a single user message. */
@@ -269,6 +374,12 @@ export function evaluateBudgetBeforeOrchestrate(
     allowed = false;
     reason = reason || `maxRepeatPerCapability for ${repeatHit[0]} (${repeatHit[1]} >= ${policy.maxRepeatPerCapability})`;
   }
+  if (totalEstimatedTokens >= policy.maxTokensPerSession) {
+    allowed = false;
+    reason =
+      reason ||
+      `maxTokensPerSession exceeded (${totalEstimatedTokens} >= ${policy.maxTokensPerSession})`;
+  }
 
   (snapshot as any).allowed = allowed;
   (snapshot as any).reason = reason;
@@ -324,10 +435,205 @@ export function recordCapabilityRunCost(
   };
 }
 
+// ===== Argument graph: proposition root + structural depends_on skeleton (G-ROOT P0) =====
+// Maps design-doc "Root Proposition Node" to existing `question` type; structural parent edge uses
+// `depends_on` with parent→child direction so dagre LR places the root on the left.
+
+export function propositionRootId(sessionId: string): string {
+  return `${sessionId}-proposition`;
+}
+
+export function getPropositionRootNode(
+  state: V5SessionState
+): BrainstormReasoningNode | undefined {
+  const sessionId = state.sessionId || "whybuddy-local-proto";
+  const expectedId = propositionRootId(sessionId);
+  const nodes = state.graph?.nodes || [];
+  return (
+    nodes.find((n) => n.id === expectedId) ??
+    nodes.find((n) => n.type === "question" && n.id.endsWith("-proposition"))
+  );
+}
+
+function buildPropositionRootNode(goalText: string, sessionId: string): BrainstormReasoningNode {
+  const id = propositionRootId(sessionId);
+  return {
+    id,
+    type: "question",
+    title: goalText,
+    body: goalText,
+    status: "open",
+    order: 0,
+    round: 0,
+  } as BrainstormReasoningNode;
+}
+
+/** Idempotent: ensure exactly one proposition root exists and centralQuestion mirrors it. */
+export function ensurePropositionRoot(
+  state: V5SessionState,
+  text?: string
+): V5SessionState {
+  const sessionId = state.sessionId || "whybuddy-local-proto";
+  const goalText = (text?.trim() || state.goal?.text || "").trim();
+  if (!goalText) return state;
+
+  const existing = getPropositionRootNode(state);
+  if (existing) {
+    if (text?.trim() && existing.title !== text.trim()) {
+      const updated: BrainstormReasoningNode = {
+        ...existing,
+        title: text.trim(),
+        body: text.trim(),
+      };
+      const nodes = (state.graph.nodes || []).map((n) =>
+        n.id === existing.id ? updated : n
+      );
+      return {
+        ...state,
+        graph: {
+          ...state.graph,
+          nodes,
+          centralQuestion: {
+            id: existing.id,
+            title: text.trim(),
+            body: text.trim(),
+          },
+        },
+      };
+    }
+    if (!state.graph.centralQuestion) {
+      return {
+        ...state,
+        graph: {
+          ...state.graph,
+          centralQuestion: {
+            id: existing.id,
+            title: existing.title,
+            body: existing.body,
+          },
+        },
+      };
+    }
+    return state;
+  }
+
+  const root = buildPropositionRootNode(goalText, sessionId);
+  return {
+    ...state,
+    graph: {
+      ...state.graph,
+      centralQuestion: { id: root.id, title: root.title, body: root.body },
+      nodes: [root, ...(state.graph.nodes || [])],
+      edges: state.graph.edges || [],
+    },
+  };
+}
+
+/** Resolve the structural parent for new capability nodes (challenge → target; else scaffold slot; else root). */
+export function resolveStructuralParentId(
+  state: V5SessionState,
+  context?: OrchestrateContext,
+  capabilityId?: string
+): string | undefined {
+  const root = getPropositionRootNode(state);
+  if (!root) return undefined;
+
+  const intervention = context?.intervention;
+  if (intervention?.targetNodeId) {
+    const match = (state.graph.nodes || []).find((n) => n.id === intervention.targetNodeId);
+    if (match) return match.id;
+  }
+  if (intervention?.targetArtifactId) {
+    const art = (state.artifacts || []).find((a) => a.id === intervention.targetArtifactId);
+    if (art) {
+      const match = (state.graph.nodes || []).find(
+        (n: BrainstormReasoningNode & { producedArtifactId?: string; capabilityRunId?: string }) =>
+          n.producedArtifactId === art.id ||
+          n.capabilityRunId === art.producedBy?.capabilityRunId
+      );
+      if (match) return match.id;
+    }
+  }
+
+  if (capabilityId === "route.compare") {
+    const alt = findOpenScaffoldSlotId(state, "hypo-alt");
+    if (alt) return alt;
+  }
+  if (capabilityId === "route.generate") {
+    const hypo = findOpenScaffoldSlotId(state, "hypo");
+    if (hypo) return hypo;
+  }
+
+  const slot = scaffoldSlotForCapability(capabilityId);
+  if (slot) {
+    const scaffoldId = findOpenScaffoldSlotId(state, slot);
+    if (scaffoldId) return scaffoldId;
+  }
+
+  return root.id;
+}
+
+/** Mechanical G-ROOT-1..4 checks (binary gates for T_GATE wiring). */
+export function evaluateGraphRootGates(state: V5SessionState): {
+  ok: boolean;
+  violations: string[];
+} {
+  const violations: string[] = [];
+  const nodes = state.graph?.nodes || [];
+  const edges = state.graph?.edges || [];
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const root = getPropositionRootNode(state);
+
+  if (!root) {
+    violations.push("G-ROOT-1");
+  } else {
+    const propositionNodes = nodes.filter(
+      (n) => n.type === "question" && n.id.endsWith("-proposition")
+    );
+    if (propositionNodes.length !== 1) violations.push("G-ROOT-1");
+  }
+
+  const structuralEdges = edges.filter((e) => e.type === "depends_on");
+  for (const node of nodes) {
+    if (root && node.id === root.id) continue;
+    const incoming = structuralEdges.filter((e) => e.target === node.id);
+    if (incoming.length !== 1) violations.push(`G-ROOT-2:${node.id}`);
+  }
+
+  for (const node of nodes) {
+    const refs = (node as BrainstormReasoningNode & { derivedFrom?: string[] }).derivedFrom;
+    if (!refs) continue;
+    for (const ref of refs) {
+      if (!nodeIds.has(ref)) violations.push(`G-ROOT-3:${node.id}->${ref}`);
+    }
+  }
+
+  for (const edge of edges) {
+    if (!nodeIds.has(edge.source)) violations.push(`G-ROOT-4:source:${edge.id}`);
+    if (!nodeIds.has(edge.target)) violations.push(`G-ROOT-4:target:${edge.id}`);
+  }
+
+  return { ok: violations.length === 0, violations };
+}
+
+export function formatProvenanceForLabel(
+  node: BrainstormReasoningNode & { derivedFrom?: string[] },
+  graph: BrainstormReasoningGraph
+): string {
+  const refs = node.derivedFrom || [];
+  if (refs.length === 0) return node.body || "";
+  const refNode = graph.nodes?.find((n) => n.id === refs[0]);
+  const label =
+    refNode?.type === "question"
+      ? refNode.title || refNode.body || refs[0]
+      : refNode?.title || refs[0];
+  return `Produced by orchestrateReasoningTurn for: ${label}`;
+}
+
 export function createInitialSessionState(goalText: string, sessionId = "whybuddy-local-proto"): V5SessionState {
   // Start with a minimal but valid state. Graph will be mutated by capabilities.
   // Per 修复闭环.md: sessionId isolation starts here; load path will key off it later.
-  return {
+  const base: V5SessionState = {
     goal: {
       text: goalText,
       status: "needs_refinement",
@@ -356,9 +662,11 @@ export function createInitialSessionState(goalText: string, sessionId = "whybudd
   coverageContract: undefined,
   coverageGate: undefined,
   flowBoundaryLedger: [],
+  structureGateLedger: [],
   costLedger: [],
   coverageGaps: [],
   };
+  return ensurePropositionRoot({ ...base, sessionId });
 }
 
 /**
@@ -477,25 +785,44 @@ export function getWhyBuddySessionStore(): WhyBuddySessionStore {
  * Later this can be replaced by a real backend adapter implementing WhyBuddySessionStore
  * (e.g. fetch /api/whybuddy/sessions/:id ) without changing any caller.
  */
+export function isLegacyEmptySessionSeed(state: V5SessionState): boolean {
+  const text = (state.goal?.text || "").trim();
+  const isLegacyGoal =
+    text === LEGACY_HARDCODED_PRODUCT_GOAL || text === "WhyBuddy V5 session";
+  if (!isLegacyGoal) return false;
+  return (state.artifacts || []).length === 0 && (state.conversation || []).length === 0;
+}
+
 export async function loadOrCreateSessionState(
   sessionId: string,
-  goalText = "WhyBuddy V5 session"
+  goalText = EMPTY_SESSION_GOAL_TEXT
 ): Promise<V5SessionState> {
   const existing = await currentWhyBuddySessionStore.load(sessionId);
   if (existing) {
-    // load + derive = 单一真相（符合文档 RUNTIME DERIVE）
     return deriveNodeStatus(existing);
   }
 
   const created = createInitialSessionState(goalText, sessionId);
-  const saved = await currentWhyBuddySessionStore.save(created);
-  return deriveNodeStatus(saved);
+  const withReplay = applyReplayOnSave(undefined, created);
+  await currentWhyBuddySessionStore.save(stripProjectionForPersist(withReplay));
+  return deriveNodeStatus(withReplay);
 }
 
 export async function saveSessionState(state: V5SessionState): Promise<V5SessionState> {
-  // 存之前也 derive 一次，保证持久化的 graph 是当前单一真相
-  const derived = deriveNodeStatus(state);
-  return currentWhyBuddySessionStore.save(derived);
+  const sessionId = state.sessionId || "whybuddy-local-proto";
+  const previous = await currentWhyBuddySessionStore.load(sessionId);
+  const withReplay = applyReplayOnSave(previous, state);
+  await currentWhyBuddySessionStore.save(stripProjectionForPersist(withReplay));
+  return deriveNodeStatus(withReplay);
+}
+
+/** S21 edge 117: replay events for a session from durable STORE (session-isolated). */
+export { replaySessionEvents, type WhyBuddyReplayEvent };
+
+export async function loadSessionReplayEvents(sessionId: string): Promise<WhyBuddyReplayEvent[]> {
+  const state = await currentWhyBuddySessionStore.load(sessionId);
+  if (!state) return [];
+  return replaySessionEvents(state);
 }
 
 export function clearWhyBuddySessionStore(): void {
@@ -520,7 +847,10 @@ export async function deleteWhyBuddySession(sessionId: string): Promise<void> {
  * 在 load/save 之后调用，根据权威数据 (artifacts + stale + capabilityRuns + gates) 重新计算 graph.nodes 的 status。
  * 支持完整状态集：pending / active / running / completed / challenged / failed。
  */
-export function deriveNodeStatus(state: V5SessionState): V5SessionState {
+export function deriveNodeStatus(
+  state: V5SessionState,
+  opts?: { onlyNodeIds?: ReadonlySet<string>; incremental?: boolean }
+): V5SessionState {
   const staleSet = new Set(state.staleArtifactIds || []);
   const artifactByRun = new Map<string, Artifact>();
   const runById = new Map<string, any>((state.capabilityRuns || []).map(r => [r.id, r]));
@@ -530,8 +860,20 @@ export function deriveNodeStatus(state: V5SessionState): V5SessionState {
     if (runId) artifactByRun.set(runId, art);
   }
 
+  const dirtyOnly = opts?.onlyNodeIds;
+  const dirtyFromState =
+    opts?.incremental && state.projectionDirtyNodeIds?.length
+      ? new Set(state.projectionDirtyNodeIds)
+      : undefined;
+  const restrict = dirtyOnly || dirtyFromState;
+
+  let recomputed = 0;
   const newNodes = (state.graph?.nodes || []).map((node: any) => {
     if (!node) return node;
+    if (restrict && node.id && !restrict.has(node.id)) {
+      return node;
+    }
+    recomputed += 1;
 
     const runId = node.capabilityRunId || node.producedRunId;
     const artId = node.producedArtifactId;
@@ -574,7 +916,7 @@ export function deriveNodeStatus(state: V5SessionState): V5SessionState {
     return node;
   });
 
-  if (newNodes === state.graph?.nodes) {
+  if (newNodes === state.graph?.nodes && !state.projectionDirtyNodeIds?.length) {
     return state;
   }
 
@@ -584,37 +926,25 @@ export function deriveNodeStatus(state: V5SessionState): V5SessionState {
       ...state.graph,
       nodes: newNodes,
     },
+    projectionDirtyNodeIds: restrict && recomputed < (state.graph?.nodes || []).length
+      ? (state.projectionDirtyNodeIds || []).filter((id) => !restrict.has(id))
+      : [],
   };
 }
 
 // Expanded Trust Layer gate simulation (closer to the full mechanical gates in the diagram).
 // Records schema/invariant/confirm/previews_real etc. for fidelity while keeping prototype runnable.
 // forceFail still primarily affects the critical "commit" gate and report-specific upstream checks.
-function evaluateGates(artifact: Artifact, forceFail: boolean): { status: "passed" | "failed"; gateId: string }[] {
-  const results: { status: "passed" | "failed"; gateId: string }[] = [];
-  const capId = (artifact as any).producedBy?.capabilityId || "";
-
-  // Always record the structural gates (they pass in this deterministic prototype)
-  results.push({ gateId: "schema", status: "passed" });
-  results.push({ gateId: "invariant", status: "passed" });
-  results.push({ gateId: "confirm", status: "passed" });
-
-  if (capId.includes("visual") || capId.includes("preview")) {
-    results.push({ gateId: "previews_real", status: forceFail ? "failed" : "passed" });
-  }
-
-  // Additional doc gates (prototype passes unless forced for key ones)
-  results.push({ gateId: "merge", status: forceFail ? "failed" : "passed" });
-  results.push({ gateId: "decision", status: "passed" });
-
-  // Precondition (demo control)
-  results.push({ gateId: "precondition", status: forceFail ? "failed" : "passed" });
-
-  // The real commit gate that drives trustLevel
-  const commitStatus = forceFail ? "failed" : "passed";
-  results.push({ gateId: "commit", status: commitStatus });
-
-  return results;
+function evaluateGates(
+  artifact: Artifact,
+  forceFail: boolean,
+  groundingOk = true
+): { status: "passed" | "failed"; gateId: string }[] {
+  const capId = String((artifact as any).producedBy?.capabilityId || "");
+  return evaluateCommitGates(capId, { forceFail, groundingOk }).map((g) => ({
+    gateId: g.gateId,
+    status: g.status,
+  }));
 }
 
 /**
@@ -666,58 +996,6 @@ export function getDecisionLedger(state: V5SessionState): SchedulingDecision[] {
 // Mechanical rules only (no deep semantics). Contract + gate prevent premature "想清楚了" (report/AWAIT).
 // Inserted after DLEDGER in ORCH per spec. Budget remains the prior gate.
 
-export function authorCoverageContract(goalText: string, turnId?: string): { contract: CoverageContract; gaps: CoverageGap[] } {
-  const t = (goalText || "").toLowerCase();
-  const isComplex = /风险|risk|安全|审计|反驳|复杂|complex|rebuttal/.test(t);
-  const mode: "simple" | "complex" = isComplex ? "complex" : "simple";
-  const requiredCapabilities = isComplex ? ["risk.analyze", "report.write"] : ["report.write"];
-  const conditionalCapabilities = isComplex ? ["synthesis.merge"] : [];
-
-  const now = new Date().toISOString();
-  const contract: CoverageContract = {
-    id: `cov-${turnId || Date.now()}`,
-    version: 1,
-    mode,
-    authoredBy: "system",
-    authoredAt: now,
-    frozenAtTurnId: turnId,
-    requiredCapabilities,
-    conditionalCapabilities,
-    minEvidencePerRequirement: 1,
-    blockingGapIds: [],
-  };
-
-  const gaps: CoverageGap[] = [];
-  const nowGap = now;
-  for (const cap of requiredCapabilities) {
-    if (cap === "report.write") continue; // report is the convergence action, not a pre-req gap
-    const gap: CoverageGap = {
-      id: `gap-${cap}-${turnId || Date.now()}`,
-      kind: "missing_capability",
-      label: `Missing required capability: ${cap}`,
-      requiredCapabilityId: cap,
-      status: "open",
-      createdAt: nowGap,
-    };
-    gaps.push(gap);
-    contract.blockingGapIds.push(gap.id);
-  }
-  // For complex, also seed a generic evidence gap if no upstreams (will be checked at gate time)
-  if (isComplex) {
-    const evGap: CoverageGap = {
-      id: `gap-evidence-${turnId || Date.now()}`,
-      kind: "missing_evidence",
-      label: "Missing trusted upstream evidence for report",
-      status: "open",
-      createdAt: nowGap,
-    };
-    gaps.push(evGap);
-    contract.blockingGapIds.push(evGap.id);
-  }
-
-  return { contract, gaps };
-}
-
 /** Knife 7: resolve open coverage gaps that are now satisfied by current trusted state (e.g. after commit). */
 export function resolveCoverageGapsFromState(state: V5SessionState): V5SessionState {
   const contract = state.coverageContract;
@@ -737,7 +1015,7 @@ export function resolveCoverageGapsFromState(state: V5SessionState): V5SessionSt
         changed = true;
       }
     } else if (g.kind === "missing_evidence") {
-      if (countTrustedUpstreams(state) >= (contract.minEvidencePerRequirement || 1)) {
+      if (countGroundedTrustedArtifacts(state) >= (contract.minEvidencePerRequirement || 1)) {
         g.status = "resolved";
         g.updatedAt = now;
         changed = true;
@@ -776,6 +1054,13 @@ export function evaluateContractSufficiencyForBudget(
   const intervention = context?.intervention;
 
   const isMeaningfulIntervention = !!intervention && ['challenge', 'revise', 'clarify', 'expand'].includes(intervention.intent);
+  const userText = context?.userText || "";
+  const hasExplicitPostClearWork =
+    isDeliveryIntent(userText) ||
+    isVisualIntent(userText) ||
+    isReviewPassIntent(userText) ||
+    isPreviewDissatisfiedIntent(userText) ||
+    state.deliveryPhase === "shipping";
 
   const blockingGaps = contract ? gaps.filter((g: any) => (contract as any).blockingGapIds?.includes(g.id)) : [];
   const openBlocking = blockingGaps.filter((g: any) => g.status === 'open');
@@ -794,9 +1079,19 @@ export function evaluateContractSufficiencyForBudget(
 
   // v1: sufficiency based on gaps status + state signals + not a meaningful intervention.
   // We do not require pre-computed coverageGate here (check happens early in ORCH before GCOV sets it).
-  if (contract && openGapCount === 0 && !hasStale && hasRecentReport && !isMeaningfulIntervention && unresolvedRequired.length === 0) {
+  if (
+    contract &&
+    openGapCount === 0 &&
+    !hasStale &&
+    hasRecentReport &&
+    !isMeaningfulIntervention &&
+    !hasExplicitPostClearWork &&
+    unresolvedRequired.length === 0
+  ) {
     sufficient = true;
     reason = 'contract_sufficient_no_new_work';
+  } else if (hasExplicitPostClearWork) {
+    reason = 'explicit post-clear work requested (delivery/visual/RV/ITER)';
   } else if (openGapCount > 0) {
     reason = `open blocking gaps: ${openGapCount}`;
   } else if (hasStale) {
@@ -824,76 +1119,6 @@ function isHealthyArtifact(
     (artifact.trustLevel === 'gated_pass' || artifact.trustLevel === 'audited') &&
     !staleSet.has(artifact.id)
   );
-}
-
-function hasTrustedCommittedForCap(state: V5SessionState, capId: string): boolean {
-  const runs = state.capabilityRuns || [];
-  const arts = state.artifacts || [];
-  const stales = new Set(state.staleArtifactIds || []);
-  for (const run of runs) {
-    if ((run as any).capabilityId !== capId) continue;
-    const art = arts.find((a: any) => a.producedBy?.capabilityRunId === run.id);
-    if (art && isHealthyArtifact(art, stales)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function countTrustedUpstreams(state: V5SessionState): number {
-  const stales = new Set(state.staleArtifactIds || []);
-  return (state.artifacts || []).filter((a: any) =>
-    (a.trustLevel === 'gated_pass' || a.trustLevel === 'audited') && !stales.has(a.id)
-  ).length;
-}
-
-export function evaluateCoverageGate(
-  state: V5SessionState,
-  selected: Array<{ capabilityId: string; roleId?: string }> = [],
-  existingContract?: CoverageContract
-): CoverageGateResult {
-  const contract = existingContract || authorCoverageContract(state.goal?.text || "", (state as any).lastTurnId).contract;
-  const gaps = (state.coverageGaps || []) as CoverageGap[];
-
-  // Use gap lifecycle for decision: blocking gaps must be resolved or waived.
-  const blockingGaps = gaps.filter((g: CoverageGap) => contract.blockingGapIds.includes(g.id));
-  const openBlocking = blockingGaps.filter((g: CoverageGap) => g.status === "open");
-  const unresolvedGaps = openBlocking.map((g: CoverageGap) => g.id);
-  const waivedGaps = blockingGaps.filter((g: CoverageGap) => g.status === "waived").map((g: CoverageGap) => g.id);
-
-  // Still compute missing caps for backward compat / DLEDGER addresses.
-  const missing: string[] = [];
-  const preReqs = contract.requiredCapabilities.filter((c) => c !== 'report.write');
-  for (const req of preReqs) {
-    if (!hasTrustedCommittedForCap(state, req)) {
-      missing.push(req);
-    }
-  }
-
-  const hasReportIntent = selected.some((s: any) => s.capabilityId === 'report.write');
-  let upstreamOk = true;
-  if (hasReportIntent) {
-    const trustedCount = countTrustedUpstreams(state);
-    if (trustedCount < (contract.minEvidencePerRequirement || 1)) {
-      upstreamOk = false;
-    }
-  }
-
-  // Core gate: all blocking gaps handled + no missing pre-reqs + upstreams ok.
-  const allBlockingHandled = openBlocking.length === 0;
-  const passed = allBlockingHandled && missing.length === 0 && upstreamOk;
-
-  const reason = passed
-    ? `Coverage sufficient (mode=${contract.mode}, baseline frozen, all blocking gaps resolved/waived)`
-    : `Blocking gaps open: ${unresolvedGaps.length}; missing caps: ${missing.join(', ') || 'none'}; upstreams ok: ${upstreamOk}`;
-
-  return {
-    passed,
-    missingCapabilities: missing,
-    unresolvedGaps,
-    waivedGaps,
-    reason,
-  };
 }
 
 // ===== V5.1 GOAL conclusion gate (GCOV-owned single writer) =====
@@ -1092,13 +1317,70 @@ export function simulateCapabilityExecution(
     title = built.title;
     summary = built.summary;
     content = built.content;
+  } else if (capabilityId === "gap.ask") {
+    const goal = state.goal?.text || "目标";
+    content =
+      `【阻塞缺口】\n` +
+      `- 面向谁使用「${goal}」？缺少用户群界定将无法选技术路线。\n` +
+      `- 核心成功标准是什么？缺少可验收指标无法写 P0 需求。\n` +
+      `- 范围边界：本期明确不做什么？\n` +
+      `- 合规/权限约束有哪些？\n`;
+    title = "阻塞缺口清单";
+    summary = "定位阻塞规划的关键未决问题";
+  } else if (capabilityId === "question.expand") {
+    content =
+      `【扩展问题】\n` +
+      `1. 用户群与场景？\n   默认假设：企业内部工具\n   风险：假设错误会导致路线全偏\n` +
+      `2. 数据范围与权限模型？\n   默认假设：RBAC + 部门隔离\n   风险：后期改造成本高\n`;
+    title = "扩展追问";
+    summary = "展开阻塞缺口的可操作追问";
   } else if (lowerCap.includes('decompose') || lowerCap.includes('structure')) {
-    content = `【结构拆解 模拟】\n从 ${upstreams.length} upstream + ${priorRisks} 风险拆 SPEC Tree。\n${hasStale ? 'stale 影响下，部分需求需重审。\n' : ''}Requirements → Design → Tasks（带证据）。`;
-    title = '结构拆解 (state sim)';
+    const upstream = (state.artifacts || [])
+      .slice(-4)
+      .map((a) => `- [${a.kind}] ${a.title || a.id}`)
+      .join('\n');
+    const prompt = buildStructurePrompt({
+      goalText: state.goal?.text || "产品",
+      upstreamSummary: upstream,
+      turnId: state.lastTurnId,
+    });
+    const { redacted } = redactStructurePrompt(prompt);
+    const tree = buildTemplateTree(state.goal?.text || '产品');
+    const gateNote = 'C_PROMPT:built · C_REDACT:applied:0 · G_SCHEMA:attempt1:passed · G_INV:attempt1:passed';
+    content =
+      formatTreeContent(tree, { source: "template", gateNote }) +
+      (hasStale ? "\n（含 stale 上游，部分节点待重审）" : "");
+    title = "结构拆解 (SPEC Tree)";
+    if (!redacted.includes("C_PROMPT")) {
+      content = prompt.slice(0, 80) + "\n" + content;
+    }
+  } else if (capabilityId === "document.draft") {
+    content = `【文档草案】\n基于 ${upstreams.length} 上游产物生成设计说明与接口草稿。`;
+    title = "文档草案";
+  } else if (capabilityId === "traceability.matrix") {
+    content =
+      `【可追溯矩阵】\n| 需求 | 设计 | 任务 | 证据 | 用例 |\n|---|---|---|---|---|\n` +
+      `| REQ-1 | DES-1 | TASK-1 | ${upstreams[0]?.id || "upstream"} | EARS-1 |`;
+    title = "可追溯矩阵";
+  } else if (capabilityId === "task.write") {
+    content = `【工程任务】\n1. MVP 实现\n2. 验收对齐 report\n3. 交接 checklist`;
+    title = "工程任务清单";
+  } else if (capabilityId === "handoff.package") {
+    content = buildHandoffPackageContent(state);
+    title = "工程交接包";
   } else if (lowerCap.includes('scenario') || lowerCap.includes('simulate')) {
     const priorPreviews = (state.artifacts || []).filter(a => a.kind === 'preview').length;
     content = `【效果预演 模拟】\n基于 ${upstreams.length} upstream 模拟场景。\n已产出 ${priorPreviews} 预览。${hasStale ? '含风险上下文。\n' : ''}输出：MVP 流程验证通过（带标注）。`;
     title = '效果预演 (context sim)';
+  } else if (capabilityId === "ux.preview") {
+    content =
+      `【预览·未验证】UX 模块预览\n` +
+      `基于 ${upstreams.length} 上游 · ${state.goal?.text || "目标"}\n` +
+      `- 列表页 · 未验证\n- 配置页 · 未验证`;
+    title = "UX 预览 (sim)";
+  } else if (capabilityId === "outcome.visualize") {
+    content = `【预览·未验证】\n\`\`\`mermaid\ngraph TD\n  root["SPEC"] --> req["需求"]\n\`\`\``;
+    title = "Mermaid 结构图 (sim)";
   }
 
   return { title, summary, content };
@@ -1125,6 +1407,8 @@ export interface CapabilityExecutor {
     inputArtifactIds: string[];
     roleId?: string;
     turnId: string;
+    /** Pre-allocated run id from Session_Driver (`${loopTurnId}-run-${i}`). */
+    capabilityRunId?: string;
   }): Promise<{
     title: string;
     summary: string;
@@ -1940,6 +2224,103 @@ export async function executeCapability(
   return currentCapabilityExecutor.executeCapability(args);
 }
 
+/** Re-run one capability after IM retry (Autopilot autoAdvance.retry parity). */
+export async function retrySingleCapability(
+  state: V5SessionState,
+  params: {
+    loopTurnId: string;
+    capabilityId: V5CapabilityId;
+    roleId: string;
+    runIndex: number;
+    executor: CapabilityExecutor;
+  }
+): Promise<{
+  state: V5SessionState;
+  committed: boolean;
+  gateFailed: boolean;
+  error?: string;
+}> {
+  const runId = `${params.loopTurnId}-run-${params.runIndex}`;
+  const freshInputs = findInputsForCapability(state, params.capabilityId);
+  let exec: CapabilityExecutionResult | null = null;
+  try {
+    exec = await params.executor.executeCapability({
+      capabilityId: params.capabilityId,
+      state,
+      inputArtifactIds: freshInputs,
+      roleId: params.roleId,
+      turnId: params.loopTurnId,
+      capabilityRunId: runId,
+    });
+  } catch (e) {
+    return {
+      state,
+      committed: false,
+      gateFailed: false,
+      error: e instanceof Error ? e.message : "execute failed",
+    };
+  }
+
+  const content =
+    exec?.content || `${params.roleId} 通过 ${params.capabilityId} 产出新洞察/证据/方案`;
+  const outputKind = CAPABILITY_OUTPUT_KIND[params.capabilityId] ?? "decision";
+  const { updatedState, committed, run } = commitArtifact(
+    state,
+    {
+      id: `${params.loopTurnId}-art-retry-${params.runIndex}-${Date.now()}`,
+      kind: outputKind as Artifact["kind"],
+      provenance: (exec?.provenance as Artifact["provenance"]) || "ai_generated",
+      producedBy: {
+        capabilityRunId: runId,
+        capabilityId: params.capabilityId,
+        roleId: params.roleId,
+      },
+      title: content.split("\n")[0]?.slice(0, 80),
+      summary: content.slice(0, 200),
+      content,
+    } as Omit<Artifact, "trustLevel" | "passedGates">,
+    runId,
+    false,
+    freshInputs
+  );
+
+  const gateFailed = (run.gateResults || []).some((g) => g.status === "failed");
+  let next = enrichGraphNodesAfterCommit(updatedState, params.loopTurnId);
+  if (params.capabilityId === "route.generate" || params.capabilityId === "route.compare") {
+    next = tagRouteBranchNodes(next, params.loopTurnId, params.capabilityId, content);
+  }
+  return { state: next, committed: Boolean(committed), gateFailed };
+}
+
+function tagRouteBranchNodes(
+  state: V5SessionState,
+  loopTurnId: string,
+  capabilityId: V5CapabilityId,
+  content: string
+): V5SessionState {
+  const branchLabel =
+    capabilityId === "route.generate"
+      ? "路线 A"
+      : capabilityId === "route.compare"
+      ? "路线 B · 对比"
+      : null;
+  if (!branchLabel) return state;
+  const suffix = capabilityId === "route.compare" ? "hypo-alt" : "hypo";
+  const slotId = `${loopTurnId}-scaffold-${suffix}`;
+  const nodes = (state.graph.nodes || []).map((n) => {
+    if (n.id !== slotId && !String(n.id).includes(`-scaffold-${suffix}`)) return n;
+    if (n.turnId && n.turnId !== loopTurnId && !String(n.id).startsWith(loopTurnId)) return n;
+    const snippet = content.split("\n")[0]?.slice(0, 72) || branchLabel;
+    return {
+      ...n,
+      type: "hypothesis" as const,
+      title: `${branchLabel}：${snippet}`,
+      status: "active" as const,
+    };
+  });
+  return { ...state, graph: { ...state.graph, nodes } };
+}
+
 // commitArtifact is the Trust Layer entry point (diagram: BUS ==> T_GATE ==> T_PROV ==> T_LEDGER ==> STATE)
 // Now with real dependency edges and report gate check.
 export function commitArtifact(
@@ -1992,7 +2373,36 @@ export function commitArtifact(
     flowCheck = check;
   }
 
-  const gateResults = evaluateGates(rawArtifact as any, effectiveForceFail);
+  const groundingOk = evaluateGroundingForCommit({
+    capabilityId: capId,
+    artifact: rawArtifact as any,
+    state,
+  });
+
+  if (capId === "handoff.package") {
+    workingContent = buildHandoffPackageContent(state);
+  } else if (capId === "traceability.matrix") {
+    const report = latestTrustedReport(state);
+    const evidenceId = declaredInputs[0] || report?.id || "upstream";
+    workingContent =
+      `【可追溯矩阵】\n| 需求 | 设计 | 任务 | 证据 | 用例 |\n|---|---|---|---|---|\n` +
+      `| REQ-1 | DES-1 | TASK-1 | ${evidenceId} | EARS-1 |`;
+  }
+
+  let previewAudit: ReturnType<typeof auditPreviewReal> | undefined;
+  if (capId === "ux.preview" || capId === "outcome.visualize") {
+    const payloadAudit = (rawArtifact as { payload?: { audit?: { passed?: boolean } } }).payload
+      ?.audit;
+    previewAudit =
+      payloadAudit && typeof payloadAudit.passed === "boolean"
+        ? (payloadAudit as ReturnType<typeof auditPreviewReal>)
+        : auditPreviewReal(rawArtifact.content || "");
+    if (!previewAudit.passed) {
+      effectiveForceFail = true;
+    }
+  }
+
+  const gateResults = evaluateGates(rawArtifact as any, effectiveForceFail, groundingOk);
 
   const passedGates = gateResults.filter((g) => g.status === "passed").map((g) => g.gateId);
   const allPassed = gateResults.every((g) => g.status === "passed");
@@ -2011,6 +2421,14 @@ export function commitArtifact(
     // Persist content fields so that report/synthesis can aggregate real fragments from upstreams
     title: (rawArtifact as any).title,
     summary: (rawArtifact as any).summary,
+    ...(previewAudit
+      ? {
+          payload: {
+            ...((rawArtifact as { payload?: Record<string, unknown> }).payload || {}),
+            audit: previewAudit,
+          },
+        }
+      : {}),
   };
 
   // Build real dependency edges: for each declared input, input -> this output
@@ -2053,6 +2471,7 @@ export function commitArtifact(
       gateId: gr.gateId as any,
       kind: (gr.gateId === "commit" ? "commit" : "precondition") as any,
       status: gr.status,
+      phase: "commit" as const,
       evaluatedAt: new Date().toISOString(),
     })),
   ];
@@ -2075,22 +2494,134 @@ export function commitArtifact(
   // Merge any cost ledger updates from record during this commit.
   const finalCostLedger = (costedStateForRun as any).costLedger || (state.costLedger || []);
 
+  let conversation = state.conversation || [];
+  if (previewAudit && !previewAudit.passed) {
+    conversation = [
+      ...conversation,
+      {
+        id: `t-audit-${runId}`,
+        role: "system",
+        text: `[T_AUDIT] ${previewAudit.reason} · signals=${previewAudit.fakeSignals.join(",")}`,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+  }
+
+  let structureGateLedger = state.structureGateLedger || [];
+  if (capId === "structure.decompose") {
+    const payloadLedger = (rawArtifact as { payload?: { gateLedger?: string[] } }).payload?.gateLedger;
+    const parsedFromContent =
+      payloadLedger ||
+      (workingContent.includes("G_SCHEMA:") || workingContent.includes("G_INV:")
+        ? String(workingContent.split("\n")[0] || "")
+            .split(" · ")
+            .filter((s) => s.startsWith("G_SCHEMA") || s.startsWith("G_INV") || s.startsWith("C_"))
+        : [
+            "C_PROMPT:built",
+            "C_REDACT:applied:0",
+            "G_SCHEMA:attempt1:passed",
+            "G_INV:attempt1:passed",
+          ]);
+    const turnSeed = runId.includes("-run-") ? runId.split("-run-")[0] : runId;
+    const sgChecks = parseStructureGateLedger(parsedFromContent, { turnId: turnSeed, runId });
+    structureGateLedger = [...structureGateLedger, ...sgChecks];
+    const ledgerLines = structureGateLedgerConversationLines(sgChecks);
+    conversation = [
+      ...conversation,
+      ...ledgerLines.map((text, i) => ({
+        id: `${runId}-sg-ledger-${i}`,
+        role: "system" as const,
+        text,
+        timestamp: new Date().toISOString(),
+      })),
+    ];
+  }
+
   // Build the candidate updated state first (with new artifacts/runs so resolve can see the just-committed trusted run/art).
   let updated: V5SessionState = {
     ...state,
     artifacts: newArtifacts,
     capabilityRuns: newRuns,
     gates: newGates,
+    conversation,
     dependencyGraph: [...state.dependencyGraph, ...newDeps],
     costLedger: finalCostLedger,
     flowBoundaryLedger,
+    structureGateLedger,
     decisionLedger: finalDecisionLedger,
     coverageGaps: state.coverageGaps || [],
   };
 
   // Knife 7: after successful formal commit, auto-resolve any gaps now satisfied (e.g. required cap delivered).
-  if (allPassed && (isReport || isSynthesisLike || capId === "risk.analyze")) {
+  if (allPassed && capId === "gap.ask") {
+    const newGaps = gapsFromGapAskContent(
+      committed.content || "",
+      runId.split("-run-")[0] || runId,
+      committed.id
+    );
+    updated = mergeGapAskIntoState(updated, newGaps);
+  }
+
+  if (allPassed && capId === "handoff.package") {
+    const ship = evaluateShipGates(updated);
+    const shipGateStates = ship.gates.map((g) => ({
+      gateId: g.gateId as GateState["gateId"],
+      kind: "commit" as const,
+      status: g.status,
+      phase: "ship" as const,
+      evaluatedAt: new Date().toISOString(),
+    }));
+    updated = {
+      ...updated,
+      deliveryPhase: ship.passed ? "shipped" : "shipping",
+      runtimePhase: ship.passed ? "done" : updated.runtimePhase,
+      gates: [...(updated.gates || []), ...shipGateStates],
+      conversation: [
+        ...(updated.conversation || []),
+        {
+          id: `${runId}-ship-gates`,
+          role: "system",
+          text: `[SHIP] ${ship.reason}`,
+          timestamp: new Date().toISOString(),
+        },
+        ...ship.gates.map((g) => ({
+          id: `${runId}-ship-${g.gateId}`,
+          role: "system",
+          text: `[T_LEDGER] ${g.gateId} phase=ship status=${g.status}`,
+          timestamp: new Date().toISOString(),
+        })),
+      ],
+    };
+  }
+
+  if (
+    allPassed &&
+    (isReport ||
+      isSynthesisLike ||
+      capId === "risk.analyze" ||
+      (capId === "evidence.search" && groundingOk))
+  ) {
     updated = resolveCoverageGapsFromState(updated);
+  }
+
+  // Auditable BUS note for planner failure-event回流 (G-GROUND).
+  if (!groundingOk && (capId === "evidence.search" || capId === "report.write")) {
+    const noteText =
+      capId === "evidence.search"
+        ? "[G-GROUND] 外部证据检索未通过接地门：本轮未引入可信任的外部证据。"
+        : "[G-GROUND] 报告提交未通过接地门：会话尚无 grounded 外部证据，不得收敛为已验证可行性。";
+    updated = {
+      ...updated,
+      conversation: [
+        ...(updated.conversation || []),
+        {
+          id: `${runId}-gground`,
+          role: "system",
+          text: noteText,
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    };
   }
 
   return {
@@ -2284,7 +2815,14 @@ export function invalidateForIntervention(
     }
   }
 
-  return nextState;
+  const dirtyNodeIds = newGraphNodes
+    .filter((n: any) => n.status === "challenged" && n.id)
+    .map((n: any) => n.id as string);
+
+  return {
+    ...nextState,
+    projectionDirtyNodeIds: [...new Set([...(state.projectionDirtyNodeIds || []), ...dirtyNodeIds])],
+  };
 }
 
 // ===== INTAKE (single door) + AWAIT support per 修复闭环.md =====
@@ -2378,10 +2916,105 @@ export function intakeMessage(
     };
   }
 
-  // 标记阶段：支持外圈 ORCH → AWAIT → INTAKE 证明
+  // new_goal: the user's first message owns goal.text + proposition root (not a product default).
+  if (controlSignal === "new_goal" && userText.trim()) {
+    working = {
+      ...working,
+      goal: {
+        text: userText.trim(),
+        status: working.goal?.status ?? "needs_refinement",
+      },
+    };
+  }
+
+  working = resolveReadinessGapsFromUserText(working, userText);
+
+  if (working.awaitReason === "ready" && userClearsReadiness(userText, working)) {
+    working = { ...working, awaitReason: undefined, awaitDetail: undefined };
+  }
+  if (working.awaitReason === "confirm" && userRejectsRouteSelection(userText)) {
+    const staleIds = new Set(working.staleArtifactIds || []);
+    for (const art of working.artifacts || []) {
+      if (art.kind === "route_options") staleIds.add(art.id);
+    }
+    working = {
+      ...working,
+      staleArtifactIds: [...staleIds],
+      awaitReason: undefined,
+      awaitDetail: undefined,
+    };
+  } else if (working.awaitReason === "confirm" && userPicksRoute(userText)) {
+    working = { ...working, awaitReason: undefined, awaitDetail: undefined };
+  }
+
+  // S20 ITER: preview dissatisfaction → same recycle as INTERV revise.
+  if (isPreviewDissatisfiedIntent(userText) && !intervention) {
+    const previewArt = (working.artifacts || []).find(
+      (a) => a.kind === "preview" && !(working.staleArtifactIds || []).includes(a.id)
+    );
+    if (previewArt) {
+      working = invalidateForIntervention(working, {
+        targetArtifactId: previewArt.id,
+        intent: "revise",
+        text: userText,
+      });
+      controlSignal = mapInterventionToControlSignal("revise");
+    }
+  }
+
+  working = applyRoleModeToState(working, userText);
+
+  if (isDeliveryIntent(userText) && working.goal?.status === "clear") {
+    working = { ...working, deliveryPhase: "shipping" };
+  }
+
+  // S20 · RV pass → DONE (trusted report + clear; full ship is S19 handoff path).
+  if (isReviewPassIntent(userText) && working.goal?.status === "clear") {
+    const rv = evaluateReviewPassGate(working);
+    working = {
+      ...working,
+      deliveryPhase: rv.passed ? "shipped" : working.deliveryPhase,
+      runtimePhase: rv.passed ? "done" : "awaiting",
+      conversation: [
+        ...(working.conversation || []),
+        {
+          id: `${turnId}-rv-pass`,
+          role: "system",
+          text: `[RV] ${rv.passed ? "评审通过 · DONE" : rv.reason}`,
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    };
+  }
+
+  // S20 · RV reject → INTERV invalidate (same path as challenge).
+  if (isReviewRejectIntent(userText) && !intervention && working.goal?.status === "clear") {
+    const report = latestTrustedReport(working);
+    if (report) {
+      working = invalidateForIntervention(working, {
+        targetArtifactId: report.id,
+        intent: "challenge",
+        text: userText,
+      });
+      controlSignal = mapInterventionToControlSignal("challenge");
+    }
+  }
+
+  // P0 argument graph: intake must anchor the proposition root before any capability nodes land.
+  if (!getPropositionRootNode(working) && userText.trim()) {
+    working = ensurePropositionRoot(working, userText.trim());
+  } else {
+    working = ensurePropositionRoot(working);
+  }
+
+  // 图节点由 ORCH/DLEDGER 自主选定能力后再生长（不在 INTAKE 预置 8 个占位节点）。
+
+  // 标记阶段：支持外圈 ORCH → AWAIT → INTAKE 证明（RV→DONE 保持 done，不覆写）
+  const phaseAfterIntake =
+    working.runtimePhase === "done" ? "done" : ("orchestrating" as const);
   working = {
     ...working,
-    runtimePhase: "orchestrating",
+    runtimePhase: phaseAfterIntake,
     lastTurnId: turnId,
     sessionId: working.sessionId, // 透传
   };
@@ -2396,12 +3029,49 @@ export function intakeMessage(
 }
 
 /** 收敛后让位，进入 AWAIT 歇脚点（状态常驻，下一条消息从此续） */
-export function markAwaiting(state: V5SessionState, turnId?: string): V5SessionState {
+export function markAwaiting(
+  state: V5SessionState,
+  turnId?: string,
+  awaitMeta?: { reason?: import("@shared/blueprint/v5-reasoning-state").AwaitReason; detail?: string }
+): V5SessionState {
   return {
     ...state,
     runtimePhase: "awaiting",
     lastTurnId: turnId || state.lastTurnId,
+    awaitReason: awaitMeta?.reason,
+    awaitDetail: awaitMeta?.detail,
   };
+}
+
+/** Map Session_Driver / ORCH park signals to STATUS awaitReason (P0/P4). */
+function awaitMetaForStop(
+  stopReason: ReentryStopReason,
+  detail?: string
+): { reason?: import("@shared/blueprint/v5-reasoning-state").AwaitReason; detail?: string } | undefined {
+  switch (stopReason) {
+    case "budget_exhausted":
+      return { reason: "budget", detail };
+    case "coverage_sufficient":
+    case "convergence_signal":
+      return { reason: "convergence", detail };
+    case "await_ready":
+      return { reason: "ready", detail };
+    case "await_confirm":
+      return { reason: "confirm", detail };
+    case "no_progress":
+      return { reason: "user_input", detail: detail ?? "连续无进展" };
+    default:
+      return detail ? { detail } : undefined;
+  }
+}
+
+function parkForStop(
+  state: V5SessionState,
+  turnId: string,
+  stopReason: ReentryStopReason,
+  detail?: string
+): V5SessionState {
+  return markAwaiting(state, turnId, awaitMetaForStop(stopReason, detail));
 }
 
 /**
@@ -2426,12 +3096,14 @@ export function enrichGraphNodesAfterCommit(
     );
 
     if (match) {
-      return {
-        ...node,
-        producedArtifactId: match.id,
-        // 也把最终的 run id 明确挂上（虽然和 capabilityRunId 一致，但对可视化/调试有帮助）
-        producedRunId: node.capabilityRunId,
-      };
+      return enrichGraphNodeFromArtifact(
+        {
+          ...node,
+          producedArtifactId: match.id,
+          producedRunId: node.capabilityRunId,
+        },
+        match
+      );
     }
     return node;
   });
@@ -2491,8 +3163,20 @@ export function orchestrateReasoningTurn(
   // Page flow unchanged: 0 selected + already-awaiting state + later markAwaiting is safe.
   const budgetCheck = evaluateBudgetBeforeOrchestrate(working, { turnId, userText, intervention: context?.intervention });
   if (!budgetCheck.allowed) {
-    let parked = markAwaiting(working, turnId);
-    const noteText = `[BUDGET] exceeded: ${budgetCheck.reason || 'policy limit'}. Partial AWAIT (no new capabilities scheduled this turn).`;
+    const escalate = shouldEscalateOnBudgetBlock(working, true, working.coverageGate);
+    let parked = escalate
+      ? {
+          ...markAwaiting(working, turnId, { reason: "budget", detail: budgetCheck.reason }),
+          runtimePhase: "failed" as const,
+          escalated: true,
+        }
+      : markAwaiting(working, turnId, {
+          reason: "budget",
+          detail: budgetCheck.reason,
+        });
+    const noteText = escalate
+      ? `[ESC] budget exceeded + GCOV unsatisfiable: ${budgetCheck.reason || "policy limit"} → 转人工`
+      : `[BUDGET] exceeded: ${budgetCheck.reason || "policy limit"}. Partial AWAIT (no new capabilities scheduled this turn).`;
     const note = {
       id: `${turnId}-budget`,
       role: 'system',
@@ -2538,7 +3222,10 @@ export function orchestrateReasoningTurn(
   // wasting runs when "够了就停".
   const sufficiency = evaluateContractSufficiencyForBudget(working, { turnId, userText, intervention: context?.intervention });
   if (sufficiency.sufficient) {
-    let parked = markAwaiting(working, turnId);
+    let parked = markAwaiting(working, turnId, {
+      reason: "convergence",
+      detail: sufficiency.reason,
+    });
     const noteText = `[BUDGET] stopped: contract already sufficient. ${sufficiency.reason}. Partial AWAIT (no new capabilities scheduled this turn).`;
     const note = {
       id: `${turnId}-budget-contract`,
@@ -2588,11 +3275,9 @@ export function orchestrateReasoningTurn(
   let pickRationale: string;
 
   const proposed = context?.proposedPlan;
-  if (
-    proposed?.source === "llm" &&
-    proposed.converged === true &&
-    (proposed.selected?.length ?? 0) === 0
-  ) {
+  let convergenceRejectedByGcov = false;
+
+  if (proposed?.converged === true && (proposed.selected?.length ?? 0) === 0) {
     const nowIso = new Date().toISOString();
     const allCapIds = Array.from(V5_CAPABILITY_POOL.keys()) as string[];
     const convergenceDecision: SchedulingDecision = {
@@ -2608,25 +3293,103 @@ export function orchestrateReasoningTurn(
       rationale: proposed.rationale || "CONVERGENCE_SIGNAL",
       alternativesRejected: allCapIds,
       createdAt: nowIso,
-      source: "llm",
+      source: proposed.source === "llm" ? "llm" : "local_heuristic",
     };
     working = {
       ...working,
       decisionLedger: [...(working.decisionLedger || []), convergenceDecision],
     };
-    const parked = markAwaiting(working, turnId);
-    return {
-      newState: parked,
-      plan: {
-        selected: [],
-        reason: "CONVERGENCE_SIGNAL",
-        expectedArtifacts: [],
-      } as TurnPlan,
-      newGraphNodes: [],
-    };
-  }
 
-  if (proposed) {
+    if (!working.coverageContract) {
+      const goalForContract = working.goal?.text || userTextForPick || "";
+      const { contract, gaps } = authorCoverageContract(goalForContract, turnId);
+      working = {
+        ...working,
+        coverageContract: contract,
+        coverageGaps: gaps,
+      };
+      working = resolveCoverageGapsFromState(working);
+    }
+    const gateResult = evaluateCoverageGate(working, [], working.coverageContract);
+    working = {
+      ...working,
+      coverageGate: gateResult,
+    };
+    working = applyGoalConclusion(
+      working,
+      deriveGoalConclusion(working, gateResult, working.coverageContract)
+    );
+
+    if (gateResult.passed) {
+      const parked = markAwaiting(working, turnId, {
+        reason: "convergence",
+        detail: "收敛信号 · 覆盖率已满足",
+      });
+      return {
+        newState: parked,
+        plan: {
+          selected: [],
+          reason: "CONVERGENCE_SIGNAL",
+          expectedArtifacts: [],
+        } as TurnPlan,
+        newGraphNodes: [],
+      };
+    }
+
+    const policy = getDefaultBudgetPolicy();
+    const missing = gateResult.missingCapabilities || [];
+    const forced = missing
+      .filter((m) => m !== "report.write")
+      .slice(0, policy.maxCapabilityRunsPerTurn)
+      .map((m) => ({
+        capabilityId: m as V5CapabilityId,
+        roleId: m.includes("risk") ? "安全" : m.includes("evidence") ? "综合" : "综合",
+      }));
+
+    if (forced.length === 0) {
+      let parked = markAwaiting(working, turnId, {
+        reason: "coverage",
+        detail: `G_COVERAGE 拒绝收敛: ${gateResult.reason}`,
+      });
+      const note = {
+        id: `${turnId}-gcov-convergence`,
+        role: "system",
+        text: `[GCOV] blocked convergence: ${gateResult.reason}`,
+        timestamp: new Date().toISOString(),
+      };
+      parked = {
+        ...parked,
+        conversation: [...(parked.conversation || []), note],
+      };
+      return {
+        newState: parked,
+        plan: {
+          selected: [],
+          reason: `GCOV_BLOCKED: ${gateResult.reason}`,
+          expectedArtifacts: [],
+        } as TurnPlan,
+        newGraphNodes: [],
+      };
+    }
+
+    convergenceRejectedByGcov = true;
+    selected = forced;
+    planSource = proposed.source === "llm" ? "llm" : "local_heuristic";
+    pickRationale = `GCOV rejected convergence: ${gateResult.reason}`;
+    const ledgerArr = working.decisionLedger || [];
+    if (ledgerArr.length > 0) {
+      const lastDec: any = ledgerArr[ledgerArr.length - 1];
+      const forcedIds = forced.map((f) => f.capabilityId);
+      lastDec.chose = forcedIds;
+      lastDec.skipped = (lastDec.skipped || []).filter(
+        (sk: any) => !forcedIds.includes(sk.capabilityId)
+      );
+      lastDec.alternativesRejected = (lastDec.alternativesRejected || []).filter(
+        (cid: string) => !(forcedIds as string[]).includes(cid)
+      );
+      lastDec.rationale = `${lastDec.rationale || ""} | GCOV-forced-after-convergence-reject: ${forcedIds.join(",")}`;
+    }
+  } else if (proposed) {
     const validated = validateProposedPlan(
       { selected: proposed.selected, rationale: proposed.rationale },
       working
@@ -2694,10 +3457,12 @@ export function orchestrateReasoningTurn(
     }
   }
 
-  working = {
-    ...working,
-    decisionLedger: [...(working.decisionLedger || []), decision],
-  };
+  if (!convergenceRejectedByGcov) {
+    working = {
+      ...working,
+      decisionLedger: [...(working.decisionLedger || []), decision],
+    };
+  }
 
   // Knife 5: if the just-recorded decision was biased by a challenge (chose now contains reconsidered items),
   // propagate to effectiveSelected so the returned TurnPlan reflects the reconsideration for this turn.
@@ -2782,7 +3547,7 @@ export function orchestrateReasoningTurn(
         const gapAdds = ((working.coverageGaps || []) as any[]).filter((g: any) => (working.coverageContract as any)?.blockingGapIds?.includes(g.id)).map((g: any) => `coverage:gap:${g.id}`);
         lastDec.addresses = [...(lastDec.addresses || []), ...covAdds, ...gapAdds];
         if (forced.length > 0) {
-          lastDec.chose = [...(lastDec.chose || []), ...forcedIds];
+          lastDec.chose = [...forcedIds, ...(lastDec.chose || [])];
           lastDec.skipped = (lastDec.skipped || []).filter((sk: any) => !forcedIds.includes(sk.capabilityId));
           lastDec.alternativesRejected = (lastDec.alternativesRejected || []).filter((cid: string) => !forcedIds.includes(cid));
           lastDec.rationale = `${lastDec.rationale || ''} | GCOV-forced: ${forcedIds.join(',')}`;
@@ -2800,7 +3565,10 @@ export function orchestrateReasoningTurn(
     const stillMissingPreReqs = preReqs.filter((m) => !effectiveSelected.some((s: any) => s.capabilityId === m));
     const reportStillPresent = effectiveSelected.some((s: any) => s.capabilityId === 'report.write');
     if (stillMissingPreReqs.length > 0 && reportStillPresent) {
-      let parked = markAwaiting(working, turnId);
+      let parked = markAwaiting(working, turnId, {
+        reason: "coverage",
+        detail: gateResult.reason,
+      });
       const noteText = `[GCOV] blocked: ${gateResult.reason}. Required capabilities not fully scheduled due to budget afford. Partial AWAIT (no convergence this turn).`;
       const note = {
         id: `${turnId}-gcov`,
@@ -2842,25 +3610,142 @@ export function orchestrateReasoningTurn(
   // 5. For the prototype, we also produce some graph nodes here (so the surface updates)
   // 携带 turnId + 预分配的 capabilityRunId（与页面 commit 循环使用的 `${turnId}-run-${i}` 一致），
   // 让 invalidate 能做到真正的 artifact/run 级精确匹配，而不是只靠 turn+capability。
-  const newGraphNodes: BrainstormReasoningNode[] = effectiveSelected.map((sel, i) => ({
-    id: `${turnId}-node-${i}`,
-    type: "hypothesis",
-    title: `${sel.roleId} · ${sel.capabilityId}`,
-    body: `Produced by orchestrateReasoningTurn for: ${userTextForPick.slice(0, 80)}`,
-    roleId: sel.roleId,
-    roleLabel: sel.roleId,
-    capabilityId: sel.capabilityId,
-    // INTAKE/AWAIT + 精确绑定所需
-    turnId,
-    // 预分配 run id（页面 commit 时会用同样的 `${turnId}-run-${idx}` 生成真实 run）
-    capabilityRunId: `${turnId}-run-${i}`,
-    status: "active",
-  } as any));
+  working = ensurePropositionRoot(working);
+  const root = getPropositionRootNode(working);
 
-  // Merge into graph (the page will also keep its own copy for the surface component)
+  // G-ROOT-1: refuse orphan capability nodes when root is missing.
+  if (!root) {
+    const reason = "G-ROOT-1: missing proposition root";
+    const note = {
+      id: `${turnId}-groot`,
+      role: "system",
+      text: `[G-ROOT] blocked graph write: ${reason}`,
+      timestamp: new Date().toISOString(),
+    };
+    working = {
+      ...working,
+      conversation: [...(working.conversation || []), note],
+    };
+    return {
+      newState: markAwaiting(working, turnId),
+      plan: { selected: [], reason, expectedArtifacts: [] } as TurnPlan,
+      newGraphNodes: [],
+    };
+  }
+
+  const touchedNodes: BrainstormReasoningNode[] = [];
+  let graphNodes = [...(working.graph.nodes || [])];
+  let graphEdges = [...(working.graph.edges || [])];
+
+  for (const sel of effectiveSelected) {
+    working = ensureRouteBranchScaffold(
+      working,
+      turnId,
+      root.id,
+      String(sel.capabilityId)
+    );
+    graphNodes = [...(working.graph.nodes || [])];
+    graphEdges = [...(working.graph.edges || [])];
+  }
+
+  for (let i = 0; i < effectiveSelected.length; i++) {
+    const sel = effectiveSelected[i];
+    const structuralParentId = resolveStructuralParentId(
+      working,
+      context,
+      sel.capabilityId as string
+    );
+    if (!structuralParentId) continue;
+
+    const parentRound =
+      (graphNodes.find((n) => n.id === structuralParentId) as { round?: number })?.round ?? 0;
+    const round = parentRound + 1;
+    const parentNode = graphNodes.find((n) => n.id === structuralParentId) as
+      | (BrainstormReasoningNode & { capabilityRunId?: string; producedArtifactId?: string })
+      | undefined;
+    const reuseScaffold =
+      isScaffoldPlaceholderNodeId(structuralParentId) &&
+      !parentNode?.capabilityRunId &&
+      !parentNode?.producedArtifactId;
+    const childType = capabilityIdToReasoningNodeType(sel.capabilityId as V5CapabilityId);
+    const label =
+      intervention?.intent === "challenge"
+        ? "质疑"
+        : parentNode?.type === "question"
+        ? childType === "evidence"
+          ? "来源"
+          : childType === "clarification"
+          ? "提出"
+          : childType === "risk"
+          ? "验证"
+          : "拆解"
+        : reuseScaffold
+        ? childType === "evidence"
+          ? "来源"
+          : childType === "risk"
+          ? "验证"
+          : childType === "synthesis" || childType === "decision"
+          ? "收敛"
+          : childType === "clarification" || childType === "gap"
+          ? "提出"
+          : "拆解"
+        : childType === "risk"
+        ? "反证"
+        : childType === "synthesis" || childType === "decision"
+        ? "收敛"
+        : "支撑";
+
+    const nodeId = reuseScaffold ? structuralParentId : `${turnId}-node-${i}`;
+    const scaffoldParentEdge = reuseScaffold
+      ? graphEdges.find((e) => e.type === "depends_on" && e.target === nodeId)
+      : undefined;
+    const derivedFrom = reuseScaffold
+      ? [scaffoldParentEdge?.source ?? structuralParentId]
+      : [structuralParentId];
+    const nodePayload = {
+      id: nodeId,
+      type: childType,
+      title: `${sel.capabilityId.split(".").pop()}：待 ${roleIdToDisplayLabel(sel.roleId)} 推演`,
+      body: formatProvenanceForLabel(
+        { derivedFrom } as BrainstormReasoningNode & {
+          derivedFrom?: string[];
+        },
+        working.graph
+      ),
+      roleId: sel.roleId,
+      roleLabel: roleIdToDisplayLabel(sel.roleId),
+      capabilityId: sel.capabilityId,
+      derivedFrom,
+      round,
+      turnId,
+      capabilityRunId: `${turnId}-run-${i}`,
+      status: "active",
+    } as BrainstormReasoningNode;
+
+    if (reuseScaffold) {
+      const idx = graphNodes.findIndex((n) => n.id === nodeId);
+      if (idx >= 0) {
+        graphNodes[idx] = { ...graphNodes[idx], ...nodePayload };
+        touchedNodes.push(graphNodes[idx]);
+      }
+    } else {
+      graphNodes.push(nodePayload);
+      graphEdges.push({
+        id: `${turnId}-struct-${i}`,
+        source: structuralParentId,
+        target: nodeId,
+        type: "depends_on",
+        label,
+        capabilityId: sel.capabilityId,
+      });
+      touchedNodes.push(nodePayload);
+    }
+  }
+
   working.graph = {
     ...working.graph,
-    nodes: [...(working.graph.nodes || []), ...newGraphNodes],
+    nodes: graphNodes,
+    edges: graphEdges,
   };
 
   const plan: TurnPlan = {
@@ -2875,7 +3760,7 @@ export function orchestrateReasoningTurn(
     expectedArtifacts: effectiveSelected.map((s) => `${s.capabilityId}-artifact`),
   };
 
-  return { newState: working, plan, newGraphNodes };
+  return { newState: working, plan, newGraphNodes: touchedNodes };
 }
 
 // ===== Session_Driver: multi-step re-entry loop (whybuddy-llm-autonomous-reasoning, 需求 1 / 2) =====
@@ -2949,6 +3834,16 @@ function evaluateReentryBudgetGate(
     allowed = false;
     reason = reason || `maxCapabilityRunsPerSession exceeded (${currentRuns} >= ${policy.maxCapabilityRunsPerSession})`;
   }
+  const totalEstimatedTokens = (state.costLedger || []).reduce(
+    (sum, c) => sum + (c.estimatedTokens || 0),
+    0
+  );
+  if (totalEstimatedTokens >= policy.maxTokensPerSession) {
+    allowed = false;
+    reason =
+      reason ||
+      `maxTokensPerSession exceeded (${totalEstimatedTokens} >= ${policy.maxTokensPerSession})`;
+  }
 
   return { allowed, reason };
 }
@@ -2956,8 +3851,17 @@ function evaluateReentryBudgetGate(
 /** Classify why orchestrateReasoningTurn parked with an empty plan (budget / contract / GCOV). */
 function classifyParkStop(plan: TurnPlan): ReentryStopReason {
   const reason = plan?.reason || "";
+  if (reason.startsWith("CONVERGENCE_SIGNAL")) return "convergence_signal";
   if (reason.startsWith("CONTRACT_SUFFICIENT")) return "coverage_sufficient";
   return "budget_exhausted";
+}
+
+/**
+ * V5.1 Session_Driver: GCOV hard-block is recoverable on the next ORCH loop when pre-reqs
+ * were not fully scheduled this round (orchestrateReasoningTurn still parks + empty plan).
+ */
+export function isRecoverableGcovReentry(plan: TurnPlan): boolean {
+  return (plan?.reason || "").startsWith("GCOV_BLOCKED:");
 }
 
 /**
@@ -3051,7 +3955,7 @@ export async function driveReasoningSession(
       budgetPolicy
     );
     if (!budgetCheck.allowed) {
-      working = markAwaiting(working, loopTurnId);
+      working = parkForStop(working, loopTurnId, "budget_exhausted", budgetCheck.reason);
       loops.push({
         loopTurnId,
         plan: {
@@ -3073,24 +3977,6 @@ export async function driveReasoningSession(
       userText,
       intervention,
     });
-
-    // 3 (mechanical, 需求 3.3): empty selected && converged === true → convergence_signal. Checked on
-    // the raw router response so the judgment is purely structural (never a rationale text match).
-    if (
-      Array.isArray(proposed.selected) &&
-      proposed.selected.length === 0 &&
-      proposed.converged === true
-    ) {
-      working = markAwaiting(working, loopTurnId);
-      loops.push({
-        loopTurnId,
-        plan: { selected: [], reason: "CONVERGENCE_SIGNAL", expectedArtifacts: [] },
-        committedArtifactIds: [],
-        stopSignal: "convergence_signal",
-      });
-      stopReason = "convergence_signal";
-      return { finalState: working, loops, stopReason };
-    }
 
     // 4.2 (需求 1.8): exclude at-limit capabilities from the router proposal BEFORE orchestrate.
     const filteredProposal = filterSelectedByMaxRepeat(
@@ -3136,56 +4022,123 @@ export async function driveReasoningSession(
         selected: filteredProposal,
         rationale: proposed.rationale,
         source: proposed.source,
+        converged: proposed.converged,
       },
     });
     working = newState;
 
     // If orchestrate parked this round (budget / contract / GCOV), it returns an empty plan.
     if (!plan.selected || plan.selected.length === 0) {
+      const parkStop = classifyParkStop(plan);
+      const gcovRecoverable = isRecoverableGcovReentry(plan);
+
       loops.push({
         loopTurnId,
         plan,
         committedArtifactIds: [],
-        stopSignal: classifyParkStop(plan),
+        stopSignal: gcovRecoverable ? undefined : parkStop,
       });
-      stopReason = classifyParkStop(plan);
-      working = markAwaiting(working, loopTurnId);
+
+      if (options.onLoopComplete) {
+        await options.onLoopComplete({
+          loopIndex: loops.length - 1,
+          loopTurnId,
+          state: working,
+          plan,
+          committedArtifactIds: [],
+          stopSignal: gcovRecoverable ? undefined : parkStop,
+        });
+      }
+
+      if (gcovRecoverable) {
+        // No artifacts this round — count toward no_progress, then re-enter ORCH if guards allow.
+        accumulator.noProgressStreak += 1;
+        const postGuard = evaluatePostRoundGuards(working, accumulator, {
+          maxLoops,
+          budgetPolicy,
+          turnId: loopTurnId,
+          userText,
+          intervention,
+        });
+        if (postGuard) {
+          working = parkForStop(working, loopTurnId, postGuard, plan.reason);
+          loops[loops.length - 1] = { ...loops[loops.length - 1], stopSignal: postGuard };
+          stopReason = postGuard;
+          return { finalState: working, loops, stopReason };
+        }
+        continue;
+      }
+
+      stopReason = parkStop;
+      working = parkForStop(working, loopTurnId, parkStop, plan.reason);
       return { finalState: working, loops, stopReason };
     }
 
-    // 4. Commit each selected capability via the `${loopTurnId}-run-${i}` single-capability primitive.
+    // 4. Execute + commit each selected capability (`${loopTurnId}-run-${i}`).
     const committedArtifactIds: string[] = [];
-    for (let i = 0; i < plan.selected.length; i++) {
-      const sel = plan.selected[i];
+    const parallelExec = options.parallelCapabilityExecution !== false;
+    const execSnapshot = working;
+
+    type RoundExec = {
+      i: number;
+      cap: V5CapabilityId;
+      roleId: string;
+      runId: string;
+      freshInputs: string[];
+      exec: CapabilityExecutionResult | null;
+    };
+
+    const runOne = async (sel: (typeof plan.selected)[number], i: number): Promise<RoundExec> => {
       const cap = sel.capabilityId as V5CapabilityId;
       const roleId = sel.roleId || "agent";
       const runId = `${loopTurnId}-run-${i}`;
-
-      // Resolve upstream inputs from the LATEST working state so each round sees prior-round artifacts
-      // immediately (需求 1.6, dependency graph updated in place).
-      const freshInputs = findInputsForCapability(working, cap);
-
+      const freshInputs = findInputsForCapability(execSnapshot, cap);
       let exec: CapabilityExecutionResult | null = null;
       try {
         exec = await executor.executeCapability({
           capabilityId: cap,
-          state: working,
+          state: execSnapshot,
           inputArtifactIds: freshInputs,
           roleId,
           turnId: loopTurnId,
+          capabilityRunId: runId,
         });
       } catch {
-        // Execution failures degrade to a content fallback; commit + gates still run (never throw).
         exec = null;
       }
+      return { i, cap, roleId, runId, freshInputs, exec };
+    };
 
+    const roundResults: RoundExec[] = parallelExec
+      ? await Promise.all(plan.selected.map((sel, i) => runOne(sel, i)))
+      : [];
+    if (!parallelExec) {
+      for (let i = 0; i < plan.selected.length; i++) {
+        roundResults.push(await runOne(plan.selected[i], i));
+      }
+    }
+    roundResults.sort((a, b) => a.i - b.i);
+
+    for (const round of roundResults) {
+      const { i, cap, roleId, runId, freshInputs, exec } = round;
       const content =
         exec?.content || `${roleId} 通过 ${cap} 产出新洞察/证据/方案`;
       const provenance =
         (exec?.provenance as Artifact["provenance"]) || "ai_generated";
       const outputKind = CAPABILITY_OUTPUT_KIND[cap] ?? "decision";
+      const execEvidenceSource = (exec as { evidenceSource?: string } | null)?.evidenceSource;
+      const mergedPayload =
+        exec?.payload !== undefined || execEvidenceSource
+          ? {
+              ...(typeof exec?.payload === "object" && exec?.payload
+                ? exec.payload
+                : {}),
+              ...(execEvidenceSource ? { evidenceSource: execEvidenceSource } : {}),
+            }
+          : undefined;
 
-      const { updatedState, committed } = commitArtifact(
+      const execFailed = exec == null;
+      const { updatedState, committed, run } = commitArtifact(
         working,
         {
           id: `${loopTurnId}-art-${i}`,
@@ -3199,7 +4152,7 @@ export async function driveReasoningSession(
           title: content ? content.split("\n")[0]?.slice(0, 80) : undefined,
           summary: content ? content.slice(0, 200) : undefined,
           content,
-          ...(exec?.payload !== undefined ? { payload: exec.payload } : {}),
+          ...(mergedPayload !== undefined ? { payload: mergedPayload } : {}),
         } as Omit<Artifact, "trustLevel" | "passedGates">,
         runId,
         false,
@@ -3209,7 +4162,77 @@ export async function driveReasoningSession(
       working = updatedState;
       if (committed) committedArtifactIds.push(committed.id);
 
-      // maxRepeatPerCapability bookkeeping (需求 1.8 guard consumed in task 4.2).
+      const execDegraded = Boolean((exec as { degraded?: boolean } | null)?.degraded);
+      const execDegradedReason = (exec as { degradedReason?: string } | null)?.degradedReason;
+      if (execDegraded && isDeliberationCapability(cap)) {
+        working = markBrainstormDegraded(
+          working,
+          execDegradedReason || `${cap}_degraded`
+        );
+      }
+
+      if (cap === "route.generate" || cap === "route.compare") {
+        working = tagRouteBranchNodes(working, loopTurnId, cap, content);
+      }
+
+      const interactiveGate = evaluateInteractiveGateAfterCommit(working, {
+        capabilityId: cap,
+        turnUserText: userText,
+        committed: Boolean(committed),
+      });
+      if (interactiveGate.park && interactiveGate.gate) {
+        const stopSignal: ReentryStopReason =
+          interactiveGate.gate === "confirm" ? "await_confirm" : "await_ready";
+        working = markAwaiting(working, loopTurnId, {
+          reason: interactiveGate.gate,
+          detail: interactiveGate.detail,
+        });
+        const note = {
+          id: `${loopTurnId}-${interactiveGate.gate}`,
+          role: "system",
+          text: `[G_${interactiveGate.gate === "ready" ? "READY" : "CONFIRM"}] ${interactiveGate.detail}`,
+          timestamp: new Date().toISOString(),
+        };
+        working = {
+          ...working,
+          conversation: [...(working.conversation || []), note],
+        };
+        loops.push({
+          loopTurnId,
+          plan,
+          committedArtifactIds,
+          stopSignal,
+        });
+        if (options.onLoopComplete) {
+          await options.onLoopComplete({
+            loopIndex: loops.length - 1,
+            loopTurnId,
+            state: working,
+            plan,
+            committedArtifactIds,
+            stopSignal,
+          });
+        }
+        stopReason = stopSignal;
+        return { finalState: working, loops, stopReason };
+      }
+
+      const failedGate = (run.gateResults || []).find((g) => g.status === "failed");
+      const gateFailed = Boolean(failedGate);
+      if (options.onCapabilityRound && (execFailed || gateFailed || !committed)) {
+        options.onCapabilityRound({
+          loopTurnId,
+          capabilityId: cap,
+          roleId,
+          runIndex: i,
+          runId,
+          committed: Boolean(committed),
+          gateFailed,
+          execFailed,
+          gateMessage: failedGate?.gateId,
+        });
+      }
+
       accumulator.perCapabilityRunCount.set(
         cap,
         (accumulator.perCapabilityRunCount.get(cap) || 0) + 1
@@ -3220,6 +4243,16 @@ export async function driveReasoningSession(
     working = enrichGraphNodesAfterCommit(working, loopTurnId);
 
     loops.push({ loopTurnId, plan, committedArtifactIds });
+
+    if (options.onLoopComplete) {
+      await options.onLoopComplete({
+        loopIndex: loops.length - 1,
+        loopTurnId,
+        state: working,
+        plan,
+        committedArtifactIds,
+      });
+    }
 
     // 5 (需求 1.7): maintain the No_Progress accumulator each round.
     // Progress = trusted commits this round (committedArtifactIds), not failed-gate attempts.
@@ -3247,7 +4280,7 @@ export async function driveReasoningSession(
       intervention,
     });
     if (postGuard) {
-      working = markAwaiting(working, loopTurnId);
+      working = parkForStop(working, loopTurnId, postGuard);
       loops[loops.length - 1] = {
         ...loops[loops.length - 1],
         stopSignal: postGuard,
@@ -3258,7 +4291,7 @@ export async function driveReasoningSession(
   }
 
   // Per-message loop cap reached (需求 1.5).
-  working = markAwaiting(working, lastLoopTurnId);
+  working = parkForStop(working, lastLoopTurnId, "budget_exhausted", "maxLoopsPerMessage");
   return { finalState: working, loops, stopReason };
 }
 

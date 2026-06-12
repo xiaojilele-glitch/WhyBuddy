@@ -10,8 +10,8 @@
  * so later batches can import from here instead of re-deriving them.
  *
  * REALITY-CHECK NOTES (matched against the ACTUAL runtime, not the doc's idealized fixture table):
- *  - `authorCoverageContract` produces, for a COMPLEX goal, required = [risk.analyze, report.write],
- *    conditional = [synthesis.merge], plus a missing_evidence blocking gap. (The doc's
+ *  - `authorCoverageContract` produces, for a COMPLEX goal, required = [risk.analyze, evidence.search, report.write],
+ *    conditional = [synthesis.merge], plus a G-GROUND missing_evidence blocking gap. (The doc's
  *    "[risk.analyze, counter.argue, synthesis.merge, report.write, evidence.search]" list is
  *    idealized.) For a SIMPLE goal, required = [report.write].
  *  - `BudgetPolicy` has ONLY { maxTurns, maxCapabilityRunsPerTurn, maxCapabilityRunsPerSession,
@@ -51,6 +51,7 @@ export const LOW_BUDGET_POLICY: BudgetPolicy = {
   maxCapabilityRunsPerTurn: 5,
   maxCapabilityRunsPerSession: 120,
   maxRepeatPerCapability: 2,
+  maxTokensPerSession: 500_000,
 };
 
 // ===== Semantic payloads (so aggregation / report content is meaningful) =====
@@ -121,6 +122,40 @@ export function commitTrusted(
   return updatedState;
 }
 
+/** Raw artifact shape that passes G-GROUND (external repo / F1 source). */
+export function createGroundedEvidenceRaw(
+  id: string
+): Omit<Artifact, 'trustLevel'> {
+  return {
+    ...createRawArtifact(
+      id,
+      'evidence.search',
+      '接地',
+      'evidence',
+      '【来源: F1_Github_Source 取数】外部证据片段'
+    ),
+    provenance: 'mcp:github' as Artifact['provenance'],
+    summary: '【来源: F1_Github_Source 取数】',
+    payload: { evidenceSource: 'F1_Github_Source 取数' },
+  };
+}
+
+/** Commit grounded external evidence (passes G-GROUND). */
+export function commitGroundedEvidence(
+  state: V5SessionState,
+  id: string,
+  runId: string
+): V5SessionState {
+  const { updatedState } = commitArtifact(
+    state,
+    createGroundedEvidenceRaw(id),
+    runId,
+    false,
+    []
+  );
+  return updatedState;
+}
+
 /** Map a capability id to the artifact kind it produces (commit-loop helper). */
 export function kindForCap(capabilityId: string): Artifact['kind'] {
   if (capabilityId === 'report.write') return 'report';
@@ -175,8 +210,10 @@ export function buildClearStateWithTrustedReport(sessionId: string): {
   let s = createInitialSessionState(COMPLEX_GOAL_TEXT, sessionId);
 
   const riskId = 'risk-1';
+  const evId = 'ev-ground-1';
   const synthId = 'synth-1';
   s = commitTrusted(s, riskId, 'risk.analyze', '安全', 'risk', `${sessionId}-r0`);
+  s = commitGroundedEvidence(s, evId, `${sessionId}-r0b`);
   s = commitTrusted(s, synthId, 'synthesis.merge', '综合', 'synthesis', `${sessionId}-r1`);
 
   // Converge turn: GCOV passes -> single-writer applyGoalConclusion writes "clear".
@@ -190,15 +227,49 @@ export function buildClearStateWithTrustedReport(sessionId: string): {
   const reportRunId = (reportNode as any)?.capabilityRunId ?? `${sessionId}-cv-run-0`;
   const reportInputs = findInputsForCapability(newState, 'report.write');
   const reportId = 'report-1';
-  const { updatedState } = commitArtifact(
+  const { updatedState, committed } = commitArtifact(
     newState,
     createRawArtifact(reportId, 'report.write', '综合', 'report'),
     reportRunId,
     false,
     reportInputs
   );
-  markTrusted(updatedState, reportId);
+  if (committed) markTrusted(updatedState, reportId);
   return { state: updatedState, reportId, riskId, synthId };
+}
+
+/** S20 ITER: converged session plus a fresh (non-stale) preview artifact. */
+export function buildClearStateWithPreview(sessionId: string): {
+  state: V5SessionState;
+  reportId: string;
+  riskId: string;
+  synthId: string;
+  previewId: string;
+} {
+  const built = buildClearStateWithTrustedReport(sessionId);
+  const previewId = `${sessionId}-preview-1`;
+  const state = commitTrusted(
+    built.state,
+    previewId,
+    'ux.preview',
+    '工程',
+    'preview',
+    `${sessionId}-pv0`
+  );
+  return { ...built, state, previewId };
+}
+
+/** Mechanical recycle signature for P2 / N4 / S20 parity (invalidation + reschedule fields only). */
+export function recycleSignature(state: V5SessionState): string {
+  return JSON.stringify({
+    staleArtifactIds: [...(state.staleArtifactIds || [])].sort(),
+    goal: state.goal,
+    graphNodes: (state.graph?.nodes || []).map((n: { id?: string; status?: string }) => ({
+      id: n.id,
+      status: n.status,
+    })),
+    projectionDirtyNodeIds: [...(state.projectionDirtyNodeIds || [])].sort(),
+  });
 }
 
 // ===== Coverage replay (S2 P1 acceptance helper) =====

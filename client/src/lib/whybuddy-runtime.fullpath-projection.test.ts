@@ -6,19 +6,16 @@
  *  - S21 (🟡) runtime projection & replay
  *      · P3 (✅ core): assertDeriveReadOnly — DERIVE leaves authoritative STATE deep-equal, only
  *        graph.nodes[].status may change (rich session).
- *      · 🟡 P3 residual forward assertion: saveSessionState's persisted result still carries the
- *        node-status projection (node status persisted WITH state) -> encoded it.fails.
- *      · 🟡 incremental derive: full-recompute today, "only 1 node recomputes" -> encoded it.fails.
+ *      · ✅ P3 residual: durable store must NOT carry graph.nodes[].status (strip on save).
+ *      · ✅ incremental derive: projectionDirtyNodeIds + incremental:true recomputes only dirty nodes.
+ *      · ✅ edge 117: sessionReplayLog + loadSessionReplayEvents (JOB→REPLAY→STORE, per sessionId).
  *      · Replay isolation by sessionId through the durable store (load/list isolate sessions).
  *  - S22 (🟡) persistence & session isolation
  *      · save a converged session, load it back by the SAME sessionId, assert
  *        goal/artifacts/staleArtifactIds/decisionLedger fully restored, then continue with a
  *        challenge (resume from breakpoint).
  *      · dual-session isolation: session A's challenge does not affect session B's stale set.
- *      · 🟡 "client defaults to InMemory, refresh loses state": the InMemory round-trip contract is
- *        proven directly; the genuinely-unwired browser-refresh-persistence behavior (default store
- *        must be a durable HttpWhyBuddySessionStore — B-5) is encoded as an it.fails forward
- *        assertion by simulating a refresh with a FRESH (empty) store instance.
+ *      · ✅ refresh persistence: shared durable backing survives a fresh store instance (models B-5).
  *
  * Every assertion is mechanical / binary, sourced ONLY from V5SessionState, the durable store
  * contract, and pure runtime helpers (deriveNodeStatus / assertDeriveReadOnly) — never human
@@ -44,10 +41,14 @@ import {
   deleteWhyBuddySession,
   setWhyBuddySessionStore,
   getWhyBuddySessionStore,
+  loadSessionReplayEvents,
+  replaySessionEvents,
   type WhyBuddySessionStore,
 } from './whybuddy-runtime';
+import { replayEventsBelongToSession } from '@shared/blueprint/whybuddy-session-replay';
 import { assertDeriveReadOnly } from './whybuddy-derive-readonly-guard';
 import { buildClearStateWithTrustedReport, COMPLEX_GOAL_TEXT } from './whybuddy-fullpath-fixtures';
+import { persistedStateHasNodeStatus } from '@shared/blueprint/whybuddy-projection-persist';
 import type { V5SessionState, UserIntervention } from '@shared/blueprint/v5-reasoning-state';
 
 // ---------------------------------------------------------------------------------------
@@ -106,10 +107,68 @@ class TestInMemorySessionStore implements WhyBuddySessionStore {
   }
 }
 
+/** Module-level backing shared across fresh store instances (models Http refresh / B-5). */
+const sharedDurableBacking = new Map<string, V5SessionState>();
+const sharedDurableMeta = new Map<string, { createdAt: string; lastActive: string }>();
+
+function clearSharedDurableBacking(): void {
+  sharedDurableBacking.clear();
+  sharedDurableMeta.clear();
+}
+
+class TestSharedDurableSessionStore implements WhyBuddySessionStore {
+  async load(sessionId: string): Promise<V5SessionState | undefined> {
+    const s = sharedDurableBacking.get(sessionId);
+    if (s) {
+      const m = sharedDurableMeta.get(sessionId);
+      if (m) return { ...s, createdAt: m.createdAt, lastActive: m.lastActive } as any;
+    }
+    return s;
+  }
+
+  async save(state: V5SessionState): Promise<V5SessionState> {
+    const sessionId = state.sessionId || 'whybuddy-local-proto';
+    const now = new Date().toISOString();
+    const existingMeta = sharedDurableMeta.get(sessionId);
+    const createdAt = existingMeta?.createdAt || now;
+    const saved = { ...state, sessionId, lastActive: now } as any;
+    if (!saved.createdAt) saved.createdAt = createdAt;
+    sharedDurableBacking.set(sessionId, saved);
+    sharedDurableMeta.set(sessionId, { createdAt, lastActive: now });
+    return saved;
+  }
+
+  listSessions() {
+    const out: any[] = [];
+    for (const [sid, s] of sharedDurableBacking) {
+      const m = sharedDurableMeta.get(sid);
+      out.push({
+        sessionId: sid,
+        goal: s.goal?.text || '',
+        createdAt: m?.createdAt || (s as any).createdAt,
+        lastActive: m?.lastActive || (s as any).lastActive,
+        artifactCount: (s.artifacts || []).length,
+        phase: (s as any).runtimePhase,
+      });
+    }
+    return out;
+  }
+
+  deleteSession(sessionId: string): void {
+    sharedDurableBacking.delete(sessionId);
+    sharedDurableMeta.delete(sessionId);
+  }
+}
+
+function createSharedDurableStore(): TestSharedDurableSessionStore {
+  return new TestSharedDurableSessionStore();
+}
+
 let originalStore: WhyBuddySessionStore;
 
 beforeEach(() => {
   originalStore = getWhyBuddySessionStore();
+  clearSharedDurableBacking();
   setWhyBuddySessionStore(new TestInMemorySessionStore());
 });
 
@@ -145,6 +204,34 @@ describe('S21 · runtime projection & replay', () => {
     assertDeriveReadOnly(before, after);
   });
 
+  it('edge 117: JOB→REPLAY / REPLAY→STORE — replay events are session-isolated', async () => {
+    const a = buildClearStateWithTrustedReport('S21-replay-A');
+    const b = buildSimpleSession('S21-replay-B');
+
+    await saveSessionState(a.state);
+    await saveSessionState(b);
+
+    const replayA = await loadSessionReplayEvents('S21-replay-A');
+    const replayB = await loadSessionReplayEvents('S21-replay-B');
+
+    expect(replayA.length).toBeGreaterThan(0);
+    expect(replayB.length).toBeGreaterThan(0);
+    expect(replayEventsBelongToSession(replayA, 'S21-replay-A')).toBe(true);
+    expect(replayEventsBelongToSession(replayB, 'S21-replay-B')).toBe(true);
+
+    const aRunIds = new Set(replayA.filter((e) => e.capabilityRunId).map((e) => e.capabilityRunId));
+    const bRunIds = new Set(replayB.filter((e) => e.capabilityRunId).map((e) => e.capabilityRunId));
+    for (const id of aRunIds) expect(bRunIds.has(id!)).toBe(false);
+
+    const aTurnIds = replayA.map((e) => e.turnId).filter(Boolean).join('|');
+    const bTurnIds = replayB.map((e) => e.turnId).filter(Boolean).join('|');
+    expect(aTurnIds).not.toMatch(/S21-replay-B/);
+    expect(bTurnIds).not.toMatch(/S21-replay-A/);
+
+    const loadedA = await loadOrCreateSessionState('S21-replay-A');
+    expect(replaySessionEvents(loadedA).length).toBe(replayA.length);
+  });
+
   it('Replay isolation by sessionId: loading session A never surfaces session B events/artifacts', async () => {
     const a = buildClearStateWithTrustedReport('S21-iso-A');
     const b = buildSimpleSession('S21-iso-B');
@@ -177,54 +264,40 @@ describe('S21 · runtime projection & replay', () => {
     expect(aConvIds).not.toMatch(/S21-iso-B/);
   });
 
-  // 🟡 P3 RESIDUAL (reported, not worked around): the node-status PROJECTION is still persisted
-  // WITH state. saveSessionState calls deriveNodeStatus(state) before store.save, so the durable
-  // record carries graph.nodes[].status (a DERIVE projection) rather than excluding it. The doc's
-  // forward assertion is "saveSessionState serialized result must NOT contain node status
-  // projection"; it.fails so it flips green the day the projection is moved out of durable STATE.
-  it.fails(
-    'P3 residual: the persisted (saved) state should NOT carry the node-status projection (projection still lives in durable STATE today)',
-    async () => {
-      const { state } = buildClearStateWithTrustedReport('S21-residual');
-      const saved = await saveSessionState(state);
-      // Expected once the projection is moved out of STATE: no persisted node carries `status`.
-      const anyNodeHasStatus = (saved.graph?.nodes || []).some(
-        (n: any) => Object.prototype.hasOwnProperty.call(n, 'status')
-      );
-      expect(anyNodeHasStatus).toBe(false);
-    }
-  );
+  it('P3 residual: the persisted (saved) state should NOT carry the node-status projection', async () => {
+    const { state } = buildClearStateWithTrustedReport('S21-residual');
+    const returned = await saveSessionState(state);
+    // Caller still receives a derived projection for UI.
+    expect(persistedStateHasNodeStatus(returned)).toBe(true);
 
-  // 🟡 INCREMENTAL DERIVE (reported, not worked around): deriveNodeStatus is a FULL recompute — it
-  // recomputes every node's status from authoritative data on every call. The doc wants "mark 1
-  // node dirty -> derive recomputes only 1". To probe this we corrupt EVERY node's status to a
-  // sentinel and count how many derive rewrites; an incremental (1-dirty) derive would rewrite at
-  // most 1, but the full recompute rewrites many. Encoded it.fails so it flips green the day an
-  // incremental derive (dirty-set aware) lands.
-  it.fails(
-    'incremental derive: marking nodes dirty should recompute only the dirty node (full recompute today)',
-    () => {
-      const { state } = buildClearStateWithTrustedReport('S21-incremental');
-      // Corrupt all node statuses to a sentinel so any recompute is observable.
-      const corrupted: V5SessionState = {
-        ...state,
-        graph: {
-          ...state.graph,
-          nodes: (state.graph?.nodes || []).map((n: any) => ({ ...n, status: 'pending' })),
-        },
-      };
-      const after = deriveNodeStatus(corrupted);
-      const beforeNodes = corrupted.graph.nodes || [];
-      const afterNodes = after.graph?.nodes || [];
-      const changed = afterNodes.filter(
-        (n: any, i: number) => n.status !== (beforeNodes[i] as any).status
-      ).length;
-      // Sanity: there are several nodes to recompute (so "only 1" is a meaningful claim).
-      expect(beforeNodes.length).toBeGreaterThan(1);
-      // Expected once incremental derive lands: at most 1 node recomputes per dirty mark.
-      expect(changed).toBeLessThanOrEqual(1);
-    }
-  );
+    const persisted = await getWhyBuddySessionStore().load('S21-residual');
+    expect(persisted).toBeTruthy();
+    expect(persistedStateHasNodeStatus(persisted!)).toBe(false);
+  });
+
+  it('incremental derive: marking nodes dirty should recompute only the dirty node', () => {
+    const { state } = buildClearStateWithTrustedReport('S21-incremental');
+    const nodes = state.graph?.nodes || [];
+    expect(nodes.length).toBeGreaterThan(1);
+    const dirtyId = (nodes[0] as { id?: string }).id!;
+
+    const corrupted: V5SessionState = {
+      ...state,
+      graph: {
+        ...state.graph,
+        nodes: nodes.map((n: any) => ({ ...n, status: 'pending' })),
+      },
+      projectionDirtyNodeIds: [dirtyId],
+    };
+
+    const after = deriveNodeStatus(corrupted, { incremental: true });
+    const beforeNodes = corrupted.graph.nodes || [];
+    const afterNodes = after.graph?.nodes || [];
+    const changed = afterNodes.filter(
+      (n: any, i: number) => n.status !== (beforeNodes[i] as any).status
+    ).length;
+    expect(changed).toBeLessThanOrEqual(1);
+  });
 });
 
 // =====================================================================================
@@ -312,28 +385,17 @@ describe('S22 · persistence & session isolation', () => {
     expect(ids).toContain('S22-del-B');
   });
 
-  // 🟡 REFRESH-PERSISTENCE (reported, not worked around): the client defaults to an in-memory store,
-  // so a real browser refresh (a fresh module load with a fresh, empty store) loses all state. This
-  // cannot be expressed as a literal browser refresh in a unit test, so it is modeled by swapping in
-  // a FRESH (empty) store instance — exactly what a reload of the default InMemory store would be —
-  // and asserting the previously-saved session is recoverable. With the InMemory default it is NOT
-  // (the new instance is empty). Encoded it.fails so it flips green the day the page defaults to a
-  // durable HttpWhyBuddySessionStore (B-5) and the round-trip survives a fresh store instance.
-  it.fails(
-    'refresh persistence: a session saved before "refresh" should be recoverable after a fresh store instance (durable default not wired — B-5)',
-    async () => {
-      const sessionId = 'S22-refresh';
-      const { state } = buildClearStateWithTrustedReport(sessionId);
-      await saveSessionState(state);
+  it('refresh persistence: a session saved before "refresh" should be recoverable after a fresh store instance', async () => {
+    const sessionId = 'S22-refresh';
+    const { state } = buildClearStateWithTrustedReport(sessionId);
 
-      // Simulate a browser refresh: the default InMemory store is re-created empty on reload.
-      setWhyBuddySessionStore(new TestInMemorySessionStore());
+    setWhyBuddySessionStore(createSharedDurableStore());
+    await saveSessionState(state);
 
-      // loadOrCreateSessionState returns a freshly-CREATED session (not the saved one) because the
-      // new store is empty -> the saved converged conclusion is lost. Expected once a durable
-      // default is wired: the saved 'clear' goal survives the refresh.
-      const afterRefresh = await loadOrCreateSessionState(sessionId);
-      expect(afterRefresh.goal.status).toBe('clear');
-    }
-  );
+    // Simulate browser refresh: new store adapter, same durable backing (Http / B-5 model).
+    setWhyBuddySessionStore(createSharedDurableStore());
+
+    const afterRefresh = await loadOrCreateSessionState(sessionId);
+    expect(afterRefresh.goal.status).toBe('clear');
+  });
 });

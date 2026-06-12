@@ -59,6 +59,8 @@ import {
   commitTrusted,
   kindForCap,
   buildClearStateWithTrustedReport,
+  buildClearStateWithPreview,
+  recycleSignature,
 } from './whybuddy-fullpath-fixtures';
 import type {
   V5SessionState,
@@ -71,6 +73,11 @@ import type { V5CapabilityId } from '@shared/blueprint/contracts';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUNTIME_SRC = readFileSync(resolve(HERE, './whybuddy-runtime.ts'), 'utf8');
 const PAGE_SRC = readFileSync(resolve(HERE, '../pages/WhyBuddy.tsx'), 'utf8');
+const SESSION_HOOK_SRC = readFileSync(
+  resolve(HERE, '../pages/whybuddy/useWhyBuddySession.ts'),
+  'utf8'
+);
+const PAGE_LAYER_SRC = `${PAGE_SRC}\n${SESSION_HOOK_SRC}`;
 const DEFAULT_MAX_TURNS = 30; // getDefaultBudgetPolicy().maxTurns — the policy orchestrate uses internally.
 
 /** For each match index in `src`, return the name of the nearest preceding function declaration. */
@@ -173,10 +180,12 @@ describe('N1 · no bypass writing GOAL=clear', () => {
     // be inside the two whitelisted functions.
     const writeSitePattern = /goal\s*:\s*\{/g;
     const sites = RUNTIME_SRC.match(writeSitePattern) || [];
-    expect(sites.length).toBe(2); // createInitialSessionState + applyGoalConclusion only
+    expect(sites.length).toBe(3); // createInitialSessionState + applyGoalConclusion + intakeMessage (goal.text only)
 
     const enclosing = enclosingFunctionNames(RUNTIME_SRC, writeSitePattern);
-    expect(new Set(enclosing)).toEqual(new Set(['createInitialSessionState', 'applyGoalConclusion']));
+    expect(new Set(enclosing)).toEqual(
+      new Set(['createInitialSessionState', 'applyGoalConclusion', 'intakeMessage'])
+    );
 
     // GUARD: /goal\.status\s*=[^=]/g — no direct goal.status mutation anywhere (count 0).
     const directMutations = RUNTIME_SRC.match(/goal\.status\s*=[^=]/g) || [];
@@ -427,8 +436,8 @@ describe('N4 · single recycle path', () => {
     const rp = /\bRP\b/g;
     expect(RUNTIME_SRC.match(fb)).toBeNull();
     expect(RUNTIME_SRC.match(rp)).toBeNull();
-    expect(PAGE_SRC.match(fb)).toBeNull();
-    expect(PAGE_SRC.match(rp)).toBeNull();
+    expect(PAGE_LAYER_SRC.match(fb)).toBeNull();
+    expect(PAGE_LAYER_SRC.match(rp)).toBeNull();
   });
 
   it('STATIC: the page reaches invalidation ONLY via intakeMessage (never calls invalidateForIntervention directly)', () => {
@@ -436,8 +445,8 @@ describe('N4 · single recycle path', () => {
     // recycle goes through intakeMessage (which internally invalidates). The page DOES call
     // orchestrateReasoningTurn, but only AFTER intakeMessage has prepared the state/context
     // (intake -> orchestrate is the legitimate flow; orchestrate's guard skips double-invalidate).
-    expect(PAGE_SRC.includes('invalidateForIntervention')).toBe(false);
-    expect(PAGE_SRC.includes('intakeMessage')).toBe(true);
+    expect(PAGE_LAYER_SRC.includes('invalidateForIntervention')).toBe(false);
+    expect(PAGE_LAYER_SRC.includes('intakeMessage')).toBe(true);
   });
 
   it('DYNAMIC: card-challenge (targetArtifactId) and node-click (targetNodeId) invalidation are byte-identical', () => {
@@ -463,6 +472,48 @@ describe('N4 · single recycle path', () => {
     // The source state was not mutated by either pure call.
     expect(state.goal.status).toBe('clear');
     expect(JSON.stringify(viaNode)).toBe(JSON.stringify(viaCard));
+  });
+
+  it('DYNAMIC (S20): RV reject recycle signature matches chat challenge on report', () => {
+    const { state, reportId } = buildClearStateWithTrustedReport('N4-rv');
+
+    const { preparedState: viaChallenge } = intakeMessage(structuredClone(state), {
+      turnId: 'N4-rv-ch',
+      userText: '质疑报告',
+      intervention: {
+        targetArtifactId: reportId,
+        intent: 'challenge',
+        text: '质疑报告',
+      },
+    });
+
+    const { preparedState: viaRv } = intakeMessage(structuredClone(state), {
+      turnId: 'N4-rv-rj',
+      userText: '评审打回，退回修改',
+    });
+
+    expect(recycleSignature(viaRv)).toBe(recycleSignature(viaChallenge));
+  });
+
+  it('DYNAMIC (S20): ITER preview dissatisfaction matches revise intervention recycle', () => {
+    const { state, previewId } = buildClearStateWithPreview('N4-iter');
+
+    const { preparedState: viaRevise } = intakeMessage(structuredClone(state), {
+      turnId: 'N4-it-rev',
+      userText: '预演不行',
+      intervention: {
+        targetArtifactId: previewId,
+        intent: 'revise',
+        text: '预演不行',
+      },
+    });
+
+    const { preparedState: viaIter } = intakeMessage(structuredClone(state), {
+      turnId: 'N4-it-iter',
+      userText: '效果不满意，重新预演',
+    });
+
+    expect(recycleSignature(viaIter)).toBe(recycleSignature(viaRevise));
   });
 });
 

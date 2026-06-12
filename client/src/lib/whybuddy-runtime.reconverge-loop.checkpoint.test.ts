@@ -41,6 +41,7 @@ import type {
   UserIntervention,
 } from '@shared/blueprint/v5-reasoning-state';
 import type { V5CapabilityId } from '@shared/blueprint/contracts';
+import { commitGroundedEvidence } from './whybuddy-fullpath-fixtures';
 
 // ---- helpers (mirror conventions from whybuddy-runtime.reconverge-loop.bug.test.ts) ----
 
@@ -105,6 +106,7 @@ function buildClearStateWithTrustedReport(
   const goalText = '分析权限系统的风险并给出最终报告';
   let s = createInitialSessionState(goalText, sessionId);
   s = commitTrusted(s, 'risk-1', 'risk.analyze', '安全', 'risk', `${sessionId}-r0`);
+  s = commitGroundedEvidence(s, 'ev-ground-1', `${sessionId}-r0b`);
   s = commitTrusted(s, 'synth-1', 'synthesis.merge', '综合', 'synthesis', `${sessionId}-r1`);
 
   const { newState } = orchestrateReasoningTurn(s, {

@@ -38,6 +38,7 @@ import {
 import { assertDeriveReadOnly } from './whybuddy-derive-readonly-guard';
 import type { V5SessionState, Artifact, CapabilityRun } from '@shared/blueprint/v5-reasoning-state';
 import type { V5CapabilityId } from '@shared/blueprint/contracts';
+import { commitGroundedEvidence } from './whybuddy-fullpath-fixtures';
 
 // ---- helpers (mirror conventions from whybuddy-runtime.test.ts / .bug.test.ts) ----
 
@@ -205,6 +206,7 @@ describe('PRESERVATION (Property 2): non-GCOV-pass flows leave goal.status uncha
     const { contract, gaps } = authorCoverageContract(s.goal.text, 't-stop');
     const satisfiedGaps = gaps.map((g: any) => ({ ...g, status: 'resolved' as const }));
     s = { ...s, coverageContract: contract, coverageGaps: satisfiedGaps };
+    s = commitGroundedEvidence(s, 'ev-ground-stop', 't-stop-run-ev');
 
     const { updatedState: sWithReport } = commitArtifact(
       s,

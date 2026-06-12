@@ -88,6 +88,26 @@ function commitTrusted(
   return updatedState;
 }
 
+function commitGroundedEvidence(
+  state: V5SessionState,
+  id: string,
+  runId: string
+): V5SessionState {
+  const { updatedState } = commitArtifact(
+    state,
+    {
+      ...createRawArtifact(id, 'evidence.search', '接地', 'evidence', '【来源: F1_Github_Source 取数】外部'),
+      provenance: 'mcp:github' as Artifact['provenance'],
+      summary: '【来源: F1_Github_Source 取数】',
+      payload: { evidenceSource: 'F1_Github_Source 取数' },
+    },
+    runId,
+    false,
+    []
+  );
+  return updatedState;
+}
+
 /**
  * Drive a session to `goal.status === "clear"` with a TRUSTED, committed `report` artifact.
  * Mirrors the page's first-convergence flow: trusted risk + synthesis upstreams, a converge turn
@@ -99,6 +119,7 @@ function buildClearStateWithTrustedReport(sessionId: string): { state: V5Session
 
   // Trusted required pre-reqs (risk.analyze) + synthesis upstream.
   s = commitTrusted(s, 'risk-1', 'risk.analyze', '安全', 'risk', `${sessionId}-r0`);
+  s = commitGroundedEvidence(s, 'ev-ground-1', `${sessionId}-r0b`);
   s = commitTrusted(s, 'synth-1', 'synthesis.merge', '综合', 'synthesis', `${sessionId}-r1`);
 
   // Converge turn: GCOV passes -> single-writer applyGoalConclusion writes "clear".

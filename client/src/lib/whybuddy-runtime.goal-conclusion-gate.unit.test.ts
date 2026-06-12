@@ -132,8 +132,15 @@ describe('deriveGoalConclusion (pure GCOV conclusion mapping, Task 3.1)', () => 
     const goalText = '权限系统风险分析后的最终可行性报告';
     let s = createInitialSessionState(goalText, 'unit-needs-refine-trusted');
 
-    // Trusted required pre-req present.
+    // Trusted required pre-reqs present (incl. grounded evidence for G-GROUND contract).
     s = commitTrusted(s, 'risk-ok', 'risk.analyze', '安全', 'risk', 'u-rr0');
+    s = commitTrusted(s, 'ev-ok', 'evidence.search', '接地', 'evidence', 'u-rr1');
+    const ev = (s.artifacts || []).find((a) => a.id === 'ev-ok');
+    if (ev) {
+      (ev as any).provenance = 'mcp:github';
+      (ev as any).payload = { evidenceSource: 'F1_Github_Source 取数' };
+      (ev as any).summary = '【来源: F1_Github_Source 取数】';
+    }
 
     const { contract, gaps } = authorCoverageContract(goalText, 'u-rr');
     s = { ...s, coverageContract: contract, coverageGaps: gaps };

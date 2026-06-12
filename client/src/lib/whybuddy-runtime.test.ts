@@ -59,6 +59,10 @@ import { isTestHelperEnabled } from '../../../server/routes/whybuddy.ts';
 import type { V5SessionState, Artifact, UserIntervention } from '@shared/blueprint/v5-reasoning-state';
 import type { V5CapabilityId } from '@shared/blueprint/contracts';
 import type { ControlSignal } from './whybuddy-runtime';
+import {
+  createGroundedEvidenceRaw,
+  commitGroundedEvidence,
+} from './whybuddy-fullpath-fixtures';
 
 // Semantic payloads for upstream capabilities (to make aggregation tests meaningful)
 const SEMANTIC_CONTENTS: Partial<Record<V5CapabilityId, string>> = {
@@ -138,10 +142,12 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
         : SEMANTIC_CONTENTS[cap] ?? `${role} 通过 ${cap} 贡献了内容。`;
 
       const rawWithContent = {
-        ...raw,
-        kind: isReport ? 'report' : raw.kind,
+        ...(cap === 'evidence.search'
+          ? createGroundedEvidenceRaw(`${turnId}-art-${idx}`)
+          : raw),
+        kind: isReport ? 'report' : cap === 'evidence.search' ? 'evidence' : raw.kind,
         title: contentForThis.split('\n')[0]?.slice(0, 80),
-        summary: contentForThis.slice(0, 200),
+        summary: cap === 'evidence.search' ? '【来源: F1_Github_Source 取数】' : contentForThis.slice(0, 200),
         content: contentForThis,
       } as any;
 
@@ -363,6 +369,21 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
   });
 
   // ===== 新增：INTAKE 单门 + AWAIT 外圈闭环 + sessionId 隔离（对齐 修复闭环.md） =====
+
+  it('intake new_goal sets goal.text and proposition root from the first user message', () => {
+    const empty = createInitialSessionState('', 'sess-dynamic-goal');
+    expect(empty.goal.text).toBe('');
+
+    const { preparedState, controlSignal } = intakeMessage(empty, {
+      turnId: 't0',
+      userText: '如何设计一个支持数据范围的 RBAC 系统？',
+    });
+    expect(controlSignal).toBe('new_goal');
+    expect(preparedState.goal.text).toBe('如何设计一个支持数据范围的 RBAC 系统？');
+    expect(preparedState.graph.centralQuestion?.title).toBe(
+      '如何设计一个支持数据范围的 RBAC 系统？'
+    );
+  });
 
   it('intake classifies new_goal only on empty state, refine otherwise', () => {
     const empty = createInitialSessionState('goal', 'sess-1');
@@ -730,16 +751,15 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
 
     await saveSessionState(challenged);
 
-    // 重新 load —— 必须经过 derive
     const reloaded = await loadOrCreateSessionState('derive-sess', '不应该覆盖');
-
-    const n0 = (reloaded.graph.nodes || []).find((n: any) => n.capabilityRunId === 'derive-turn-run-0');
-    const n1 = (reloaded.graph.nodes || []).find((n: any) => n.capabilityRunId === 'derive-turn-run-1');
-
     expect(reloaded.staleArtifactIds).toContain('derive-risk-0');
+    expect(reloaded.goal.text).toBe('derive 单一真相');
+
+    const projected = deriveNodeStatus(reloaded);
+    const n0 = (projected.graph.nodes || []).find((n: any) => n.capabilityRunId === 'derive-turn-run-0');
+    const n1 = (projected.graph.nodes || []).find((n: any) => n.capabilityRunId === 'derive-turn-run-1');
     expect(n0?.status).toBe('challenged');
-    expect(n1?.status).toBe('completed'); // 有 artifact 且不 stale
-    expect(reloaded.goal.text).toBe('derive 单一真相'); // 原始 goal 保留
+    expect(n1?.status).toBe('completed');
   });
 
   it('getSessionLedger produces auditable entries from runs + gates (simulates T_LEDGER)', async () => {
@@ -1312,11 +1332,12 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
         content: riskRes.content,
       };
       const { updatedState: withRisk } = commitArtifact(afterO, riskPayload as any, riskRunId, false, riskEntry.inputArtifactIds || []);
+      const withGrounded = commitGroundedEvidence(withRisk, 'pilot-ev-ground', 'p1-run-ev');
 
       // Now execute report via pilot (should still emit exact 9 labels + pilot enrichment)
       const reportRes = await executeCapability({
         capabilityId: reportEntry.capabilityId as any,
-        state: withRisk,
+        state: withGrounded,
         inputArtifactIds: reportEntry.inputArtifactIds || [],
         roleId: reportEntry.roleId,
         turnId: 'p1',
@@ -1346,7 +1367,7 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
         summary: reportRes.summary,
         content: reportRes.content,
       };
-      const { updatedState: withReport } = commitArtifact(withRisk, reportPayload as any, reportRunId, false, reportEntry.inputArtifactIds || []);
+      const { updatedState: withReport } = commitArtifact(withGrounded, reportPayload as any, reportRunId, false, reportEntry.inputArtifactIds || []);
 
       // Verify a non-pilot capability still falls back to simulator style
       const synthEntry = planSelected.find((e: any) => String(e.capabilityId).includes('synth')) || { capabilityId: 'synthesis.merge', roleId: '综合', inputArtifactIds: [] };
@@ -1604,7 +1625,8 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
       (synArt as any).trustLevel = 'gated_pass';
       (synArt as any).passedGates = ['commit'];
     }
-    const { newState: afterO, plan } = orchestrateReasoningTurn(sBoth, {
+    const sGrounded = commitGroundedEvidence(sBoth, 'ev-gc3', 'gc3-r0b');
+    const { newState: afterO, plan } = orchestrateReasoningTurn(sGrounded, {
       turnId: 'gc3',
       userText: '现在可以出报告了',
     });
@@ -1730,8 +1752,9 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
     let s = createInitialSessionState('权限系统报告', 'flowb-1');
     const polluted = createRawArtifact('polluted-up', 'risk.analyze', '安全', 'risk', '结论：用RBAC。\ncritique: 太早引入ABAC\nrebuttal: 成本高\n普通证据：RBAC足够');
     const { updatedState: sUp } = commitArtifact(s, polluted, 'f1-run-up', false, []);
+    const sGrounded = commitGroundedEvidence(sUp, 'flowb-ev', 'f1-run-ev');
     // Force a report turn that will consume the upstream fragment
-    const { preparedState } = intakeMessage(sUp, { turnId: 'f1', userText: '生成报告' });
+    const { preparedState } = intakeMessage(sGrounded, { turnId: 'f1', userText: '生成报告' });
     const { newState: afterO } = orchestrateReasoningTurn(preparedState, { turnId: 'f1', userText: '生成报告' });
     // Find the report node/run and commit a raw that would normally carry the polluted fragments (builder pulls from upstream)
     const reportNode = (afterO.graph.nodes || []).find((n: any) => n.capabilityId === 'report.write');
@@ -1763,7 +1786,8 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
 
   it('FLOWB leaves ordinary evidence text unchanged', () => {
     let s = createInitialSessionState('干净证据', 'flowb-3');
-    const clean = createRawArtifact('clean-ev', 'evidence.search', '接地', 'evidence', '普通证据文本：RBAC MVP 可落地，无任何辩论协议。');
+    const clean = createGroundedEvidenceRaw('clean-ev');
+    clean.content = '普通证据文本：RBAC MVP 可落地，无任何辩论协议。';
     const { updatedState: afterC, committed } = commitArtifact(s, clean, 'f3-run', false, []);
     expect(committed).toBeTruthy();
     expect(committed!.content).toContain('普通证据文本');
@@ -1891,6 +1915,27 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
     expect(typeof snap.costRecordCount).toBe('number');
   });
 
+  it('maxTokensPerSession blocks orchestrate when costLedger exceeds ceiling', () => {
+    let s = createInitialSessionState('token 预算', 'cost-tokens');
+    s = {
+      ...s,
+      costLedger: [
+        {
+          id: 'heavy',
+          turnId: 't0',
+          capabilityRunId: 'r0',
+          capabilityId: 'risk.analyze',
+          estimatedTokens: 999_999_999,
+          source: 'estimated',
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
+    const res = evaluateBudgetBeforeOrchestrate(s, { turnId: 't1', userText: '继续' });
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/maxTokensPerSession/);
+  });
+
   // ===== Knife 7: authored CoverageContract baseline + gap lifecycle (4 new tests, 52 -> 56) =====
 
   it('authored CoverageContract creates frozen baseline + blocking gaps', () => {
@@ -1946,6 +1991,7 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
     const evGap = (s2.coverageGaps || []).find((g: CoverageGap) => g.kind === 'missing_evidence');
     let s3 = s2;
     if (evGap) s3 = waiveCoverageGap(s2, evGap.id, 'demo waive for test');
+    s3 = commitGroundedEvidence(s3, 'ev-cov7', 't4-run-ev');
     const { newState: afterO } = orchestrateReasoningTurn(s3, { turnId: 't4', userText: '现在报告' });
     const gate = afterO.coverageGate as any;
     expect(gate.passed).toBe(true);
@@ -1961,6 +2007,7 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
     // Mark all gaps resolved for this test
     const satisfiedGaps = gaps.map((g: any) => ({ ...g, status: 'resolved' as const }));
     s = { ...s, coverageContract: contract, coverageGaps: satisfiedGaps };
+    s = commitGroundedEvidence(s, 'ev-stop', 't-stop-run-ev');
 
     // Add a recent trusted report artifact (so hasRecentReport true)
     const { updatedState: sWithReport } = commitArtifact(
@@ -2093,6 +2140,7 @@ describe('whybuddy-runtime V5 closed loop (behavioral regression)', () => {
       (riskArt as any).trustLevel = 'gated_pass';
       (riskArt as any).passedGates = ['commit'];
     }
+    sAfterWaive = commitGroundedEvidence(sAfterWaive, 'ev-waive', 't-waive-run-ev');
 
     // Add a trusted report so sufficiency can be true once gaps handled
     const { updatedState: sWithReport } = commitArtifact(

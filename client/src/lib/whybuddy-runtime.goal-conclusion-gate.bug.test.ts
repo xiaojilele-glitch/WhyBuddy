@@ -85,16 +85,44 @@ function commitTrusted(
   return updatedState;
 }
 
-describe('BUG: WhyBuddy GCOV-pass never writes goal.status (Property 1, exploration — EXPECTED TO FAIL on unfixed code)', () => {
+/** Grounded external evidence (passes G-GROUND). */
+function commitGroundedEvidence(
+  state: V5SessionState,
+  id: string,
+  runId: string
+): V5SessionState {
+  const { updatedState } = commitArtifact(
+    state,
+    {
+      ...createRawArtifact(
+        id,
+        'evidence.search',
+        '接地',
+        'evidence',
+        '【来源: F1_Github_Source 取数】外部证据片段'
+      ),
+      provenance: 'mcp:github' as Artifact['provenance'],
+      summary: '【来源: F1_Github_Source 取数】',
+      payload: { evidenceSource: 'F1_Github_Source 取数' },
+    },
+    runId,
+    false,
+    []
+  );
+  return updatedState;
+}
+
+describe('WhyBuddy GCOV-pass writes goal.status when G-GROUND satisfied (Property 1)', () => {
   // ---- Concrete failing seeds (deterministic, reproducible counterexamples) ----
 
   it('GCOV-pass after a trusted risk.analyze combo => goal.status should be "clear"', () => {
     const goalText = '分析权限系统的风险并给出最终报告';
     let s = createInitialSessionState(goalText, 'bug-gcov-pass-combo');
 
-    // Seed a trusted risk.analyze commit + a trusted synthesis (report path upstream).
+    // Seed trusted required pre-reqs + grounded evidence (G-GROUND) + synthesis upstream.
     s = commitTrusted(s, 'risk-1', 'risk.analyze', '安全', 'risk', 'combo-r0');
-    s = commitTrusted(s, 'synth-1', 'synthesis.merge', '综合', 'synthesis', 'combo-r1');
+    s = commitGroundedEvidence(s, 'ev-1', 'combo-r1');
+    s = commitTrusted(s, 'synth-1', 'synthesis.merge', '综合', 'synthesis', 'combo-r2');
 
     const { newState } = orchestrateReasoningTurn(s, {
       turnId: 'combo-converge',
@@ -113,8 +141,9 @@ describe('BUG: WhyBuddy GCOV-pass never writes goal.status (Property 1, explorat
     const goalText = '权限系统风险分析后的最终可行性报告';
     let s = createInitialSessionState(goalText, 'bug-gcov-pass-waived');
 
-    // Trusted required pre-req present.
+    // Trusted required pre-reqs + grounded evidence present.
     s = commitTrusted(s, 'risk-2', 'risk.analyze', '安全', 'risk', 'wv-r0');
+    s = commitGroundedEvidence(s, 'ev-2', 'wv-r1');
 
     // Pre-author + freeze the contract so orchestrate does not re-author/auto-resolve,
     // then waive every blocking gap (the "waived" GCOV-pass mechanism).
@@ -183,10 +212,11 @@ describe('BUG: WhyBuddy GCOV-pass never writes goal.status (Property 1, explorat
       fc.property(complexGoalArb, convergeTextArb, withSynthesisArb, seedArb, (goalText, convergeText, withSynthesis, seed) => {
         let s = createInitialSessionState(goalText, `bug-gcov-prop-${seed}`);
 
-        // Build a GCOV-pass candidate: trusted required pre-req (+ optional synthesis upstream).
+        // Build a GCOV-pass candidate: trusted required pre-reqs + grounded evidence.
         s = commitTrusted(s, `risk-${seed}`, 'risk.analyze', '安全', 'risk', `prop-${seed}-r0`);
+        s = commitGroundedEvidence(s, `ev-${seed}`, `prop-${seed}-r1`);
         if (withSynthesis) {
-          s = commitTrusted(s, `synth-${seed}`, 'synthesis.merge', '综合', 'synthesis', `prop-${seed}-r1`);
+          s = commitTrusted(s, `synth-${seed}`, 'synthesis.merge', '综合', 'synthesis', `prop-${seed}-r2`);
         }
 
         const { newState } = orchestrateReasoningTurn(s, {

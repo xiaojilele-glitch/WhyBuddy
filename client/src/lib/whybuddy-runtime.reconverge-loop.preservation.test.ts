@@ -52,6 +52,7 @@ import type {
   UserIntervention,
 } from '@shared/blueprint/v5-reasoning-state';
 import type { V5CapabilityId } from '@shared/blueprint/contracts';
+import { commitGroundedEvidence } from './whybuddy-fullpath-fixtures';
 
 // ---- helpers (mirror conventions from whybuddy-runtime.reconverge-loop.bug.test.ts) ----
 
@@ -145,6 +146,7 @@ function buildClearStateWithTrustedReport(
   let s = createInitialSessionState(goalText, sessionId);
 
   s = commitTrusted(s, 'risk-1', 'risk.analyze', '安全', 'risk', `${sessionId}-r0`);
+  s = commitGroundedEvidence(s, 'ev-ground-1', `${sessionId}-r0b`);
   s = commitTrusted(s, 'synth-1', 'synthesis.merge', '综合', 'synthesis', `${sessionId}-r1`);
 
   const { newState } = orchestrateReasoningTurn(s, {
@@ -442,6 +444,7 @@ describe('PRESERVATION (shared): GCOV-pass write, single-writer, DERIVE P3 invar
   it('GCOV-pass write path is unchanged: a converge turn over trusted upstreams writes "clear" (Req 3.5)', () => {
     let s = createInitialSessionState('分析权限系统的风险并给出最终报告', 'pres-gcov-pass');
     s = commitTrusted(s, 'risk-1', 'risk.analyze', '安全', 'risk', 'gp-r0');
+    s = commitGroundedEvidence(s, 'ev-ground-1', 'gp-r0b');
     s = commitTrusted(s, 'synth-1', 'synthesis.merge', '综合', 'synthesis', 'gp-r1');
 
     const { newState } = orchestrateReasoningTurn(s, {
