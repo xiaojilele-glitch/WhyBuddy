@@ -471,7 +471,21 @@ export function ReasoningFlowSurface({
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const isDraggingRef = useRef(false);
+  const activePointerIdRef = useRef<number | null>(null);
   const lastPointer = useRef({ x: 0, y: 0 });
+  const didPanRef = useRef(false);
+  const activePointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{
+    initialDistance: number;
+    initialScale: number;
+    initialTx: number;
+    initialTy: number;
+    centerX: number;
+    centerY: number;
+  } | null>(null);
+
+  const PAN_CLICK_THRESHOLD_PX = 6;
 
   // 容器尺寸（用于 fit + 视口同步 minimap）
   const [containerSize, setContainerSize] = useState({ w: 800, h: 600 });
@@ -514,25 +528,132 @@ export function ReasoningFlowSurface({
     setTy(newTy);
   }, [scale, tx, ty]);
 
+  const pointerDistance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.hypot(a.x - b.x, a.y - b.y);
+
+  const endPanGesture = useCallback((e: React.PointerEvent) => {
+    isDraggingRef.current = false;
+    setIsDragging(false);
+    activePointerIdRef.current = null;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+  }, []);
+
   const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, input, textarea, [data-pan-exclude]")) return;
+
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointersRef.current.size === 2 && e.pointerType === "touch") {
+      const el = viewportRef.current;
+      if (el && activePointerIdRef.current !== null) {
+        try {
+          el.releasePointerCapture(activePointerIdRef.current);
+        } catch {
+          // ignore if capture was already released
+        }
+      }
+      const pts = [...activePointersRef.current.values()];
+      const rect = el?.getBoundingClientRect();
+      if (rect) {
+        const midX = (pts[0].x + pts[1].x) / 2 - rect.left;
+        const midY = (pts[0].y + pts[1].y) / 2 - rect.top;
+        pinchRef.current = {
+          initialDistance: pointerDistance(pts[0], pts[1]),
+          initialScale: scale,
+          initialTx: tx,
+          initialTy: ty,
+          centerX: midX,
+          centerY: midY,
+        };
+        isDraggingRef.current = false;
+        setIsDragging(false);
+        activePointerIdRef.current = null;
+      }
+      return;
+    }
+
+    if (activePointersRef.current.size > 1) return;
+
+    didPanRef.current = false;
+    isDraggingRef.current = true;
     setIsDragging(true);
+    activePointerIdRef.current = e.pointerId;
     lastPointer.current = { x: e.clientX, y: e.clientY };
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging) return;
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    const pinch = pinchRef.current;
+    if (pinch && activePointersRef.current.size >= 2) {
+      const pts = [...activePointersRef.current.values()].slice(0, 2);
+      const dist = pointerDistance(pts[0], pts[1]);
+      if (pinch.initialDistance > 0) {
+        const nextScale = Math.max(
+          0.25,
+          Math.min(3.5, pinch.initialScale * (dist / pinch.initialDistance))
+        );
+        const worldX = (pinch.centerX - pinch.initialTx) / pinch.initialScale;
+        const worldY = (pinch.centerY - pinch.initialTy) / pinch.initialScale;
+        setScale(nextScale);
+        setTx(pinch.centerX - worldX * nextScale);
+        setTy(pinch.centerY - worldY * nextScale);
+        didPanRef.current = true;
+      }
+      if (e.pointerType === "touch") e.preventDefault();
+      return;
+    }
+
+    if (!isDraggingRef.current || activePointerIdRef.current !== e.pointerId) return;
+
     const dx = e.clientX - lastPointer.current.x;
     const dy = e.clientY - lastPointer.current.y;
+    if (Math.abs(dx) + Math.abs(dy) >= PAN_CLICK_THRESHOLD_PX) {
+      didPanRef.current = true;
+    }
     setTx((prev) => prev + dx);
     setTy((prev) => prev + dy);
     lastPointer.current = { x: e.clientX, y: e.clientY };
+    if (e.pointerType === "touch") e.preventDefault();
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    setIsDragging(false);
-    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) {
+      pinchRef.current = null;
+    }
+
+    if (activePointerIdRef.current === e.pointerId) {
+      endPanGesture(e);
+    }
   };
+
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    activePointersRef.current.delete(e.pointerId);
+    pinchRef.current = null;
+    if (activePointerIdRef.current === e.pointerId) {
+      endPanGesture(e);
+    }
+  };
+
+  // Mobile: block page scroll while panning/pinching (touch-action alone is not always enough on iOS).
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+
+    const blockTouchScroll = (e: TouchEvent) => {
+      if (isDraggingRef.current || pinchRef.current) {
+        e.preventDefault();
+      }
+    };
+
+    el.addEventListener("touchmove", blockTouchScroll, { passive: false });
+    return () => el.removeEventListener("touchmove", blockTouchScroll);
+  }, []);
 
   // 控制按钮
   const zoomIn = () => setScale((s) => Math.min(3.5, s * 1.2));
@@ -630,7 +751,12 @@ export function ReasoningFlowSurface({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
-        style={{ cursor: isDragging ? "grabbing" : "grab" }}
+        onPointerCancel={handlePointerCancel}
+        style={{
+          cursor: isDragging ? "grabbing" : "grab",
+          touchAction: "none",
+          overscrollBehavior: "none",
+        }}
       >
         {/* 轻量网格背景（产品感） - 放在内容层之后以确保在节点/边下方 */}
         <div
@@ -760,7 +886,14 @@ export function ReasoningFlowSurface({
                 key={node.id}
                 onMouseEnter={() => setHoveredNodeId(node.id)}
                 onMouseLeave={() => setHoveredNodeId(null)}
-                onClick={clickable ? () => onNodeClick!(node) : undefined}
+                onClick={
+                  clickable
+                    ? () => {
+                        if (didPanRef.current) return;
+                        onNodeClick!(node);
+                      }
+                    : undefined
+                }
                 className={`absolute rounded-xl border overflow-hidden transition-all ${
                   dark
                     ? (isDimmed
@@ -996,7 +1129,7 @@ export function ReasoningFlowSurface({
       {/* 调试提示：console 激活时隐藏，避免与左下浮层重叠；产品化时可并入 telemetry 或移除 */}
       {(showChrome || bottomChrome) && consoleLines.length === 0 && (
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-slate-400">
-          drag to pan • wheel to zoom • {nodes.length} nodes • {edges.length} edges
+          drag to pan • pinch or wheel to zoom • {nodes.length} nodes • {edges.length} edges
         </div>
       )}
     </div>

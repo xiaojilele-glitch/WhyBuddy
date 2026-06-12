@@ -55,6 +55,10 @@ describe("wall-fixture surface switch (?surface=2d)", () => {
     expect(surf).toMatch(/markerEnd=\{`url\(\#\$/);
     // F shortcut has editable target guard (to prevent polluting inputs when embedded)
     expect(surf).toMatch(/isEditable|tagName === "INPUT"|isContentEditable/);
+    // Mobile pan: ref-based drag + touch-action to avoid stale isDragging and page scroll
+    expect(surf).toContain("isDraggingRef");
+    expect(surf).toContain('touchAction: "none"');
+    expect(surf).toContain("passive: false");
   });
 
   it("surface module uses product推演 semantics (no legal-domain fallback words)", () => {
