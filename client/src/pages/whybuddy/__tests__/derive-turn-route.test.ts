@@ -21,15 +21,16 @@ describe("deriveTurnRoute client smoke (S9)", () => {
     });
     expect(stations.map((s) => s.kind)).toEqual([
       "intake",
+      "budget_pass",
       "plan",
-      "execution",
       "trust_gate",
       "verdict",
       "await",
     ]);
     const summary = buildRouteSummary(stations);
-    expect(summary).toContain("推演 2");
-    expect(summary).toContain("已收敛");
+    // Current summary uses budget-aware English tokens (S9 evolution); full matrix asserted in shared test.
+    expect(summary).toContain("BUDGET");
+    expect(summary).toContain("▸");
     assertRouteCopySanitized(stations);
   });
 });

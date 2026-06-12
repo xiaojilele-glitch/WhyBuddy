@@ -66,19 +66,20 @@ export function WhyBuddyTopHud({
     }
     const endpoint = PRESET_ENDPOINTS[byokDraft.preset] || "";
     const model = PRESET_MODELS[byokDraft.preset] || "gpt-4o-mini";
+    const existing = loadByokPool() || { version: 1 as const, entries: [], dispatch: "least-busy" as const, raceMode: false };
+    const newEntry = {
+      id: `user-key-${Date.now()}`,
+      label: `${byokDraft.preset} (BYOK)`,
+      presetId: byokDraft.preset,
+      endpoint,
+      model,
+      apiKey: byokDraft.key,
+      enabled: true,
+    };
+    // Support true multi-key: append instead of replace (advance B4)
     const pool = {
-      version: 1 as const,
-      entries: [{
-        id: "user-key-1",
-        label: `${byokDraft.preset} (BYOK)`,
-        presetId: byokDraft.preset,
-        endpoint,
-        model,
-        apiKey: byokDraft.key,
-        enabled: true,
-      }],
-      dispatch: "least-busy" as const,
-      raceMode: false,
+      ...existing,
+      entries: [...(existing.entries || []), newEntry],
     };
     if (!validateByokPool(pool).ok) {
       alert("配置无效，请检查 preset/key");
@@ -90,7 +91,7 @@ export function WhyBuddyTopHud({
     }
     setByokDraft({ ...byokDraft, key: "********" });
     window.dispatchEvent(new CustomEvent("byok-config-changed"));
-    alert("Key 已保存到本机 localStorage（零服务器）。下一轮推演将使用 browser-llm (production baseline)。配置变更立即生效（下一 turn）。");
+    alert("Key 已添加到本机 localStorage pool（零服务器，支持多 key）。下一轮推演将使用 browser-llm (production baseline)。配置变更立即生效（下一 turn）。");
   };
 
   const clearByok = () => {
