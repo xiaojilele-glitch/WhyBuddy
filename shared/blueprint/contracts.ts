@@ -232,7 +232,12 @@ export const CAPABILITY_OUTPUT_KIND: Partial<Record<V5CapabilityId, Artifact["ki
   "route.compare": "route_options",
   "structure.decompose": "spec_tree",
   "document.draft": "doc",
+  "task.write": "doc",
+  "traceability.matrix": "plan",
+  "handoff.package": "plan",
   "scenario.simulate": "preview",
+  "ux.preview": "preview",
+  "outcome.visualize": "preview",
   // 其他可按需扩展，默认 fallback 到 "decision" 或 "plan"
 };
 

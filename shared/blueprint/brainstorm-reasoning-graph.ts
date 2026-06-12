@@ -84,6 +84,14 @@ export interface BrainstormReasoningNode {
   confidence?: number;
   sourceRefs?: BrainstormSourceRef[];
   order?: number;
+  /** V5 session graph: loop turn owning scaffold slots (STATE authority, not DERIVE projection). */
+  turnId?: string;
+  round?: number;
+  capabilityRunId?: string;
+  producedRunId?: string;
+  /** ROW/BOARD: bound artifact for challenge / trust display (projection layer). */
+  producedArtifactId?: string;
+  derivedFrom?: string[];
 }
 
 export interface BrainstormReasoningEdge {

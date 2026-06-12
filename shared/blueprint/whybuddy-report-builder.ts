@@ -7,6 +7,7 @@
  */
 
 import type { V5SessionState } from './v5-reasoning-state.js';
+import { hasGroundedExternalEvidence } from './whybuddy-grounding.js';
 
 export type FragmentKind = "conclusion" | "risk" | "rebuttal" | "recommendation" | "evidence" | "snippet";
 
@@ -105,8 +106,17 @@ export function buildStructuredReport(input: StructuredReportInput): { title: st
     ? `【可行性 / 产品推演报告 (${turnLabel})】`
     : '【可行性 / 产品推演报告】';
 
+  const grounded = hasGroundedExternalEvidence(state);
+  const groundingDisclaimer = grounded
+    ? ''
+    : `⚠️ 免责（G-GROUND）：本轮未引入成功的外部接地证据，以下为基于内部假设/会话内材料的推演收敛，结论状态应为「待补证」，不得视为已验证可行性。\n\n`;
+
+  const conclusionLine = grounded
+    ? '结论：建议推进权限系统建设（基于本轮多角色讨论 + 真实上游证据聚合）。RBAC MVP 路径清晰，具备落地条件。'
+    : '结论（待补证）：当前仅完成内部假设推演，缺少外部接地证据；建议补证后再做推进/否决裁决。';
+
   const content = `${prefix}
-结论：建议推进权限系统建设（基于本轮多角色讨论 + 真实上游证据聚合）。RBAC MVP 路径清晰，具备落地条件。
+${groundingDisclaimer}${conclusionLine}
 
 支撑证据：
 ${fragments || '（无具体片段；本轮未产出带语义标签的上游 artifact）'}

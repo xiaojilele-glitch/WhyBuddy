@@ -4,12 +4,16 @@ import { extractGithubRepoSlug, findGithubUrlInTexts } from "./whybuddy-github-c
 
 export type ProcessCapabilityKind = "think" | "action" | "deliver";
 
+export type EvidenceFallbackReason = "no_github_clue" | "evidence_fetch_failed";
+
 export type ProcessLabelContext = {
   repoSlug?: string;
   toolName?: string;
   skillName?: string;
   evidenceCount?: number;
   fileCount?: number;
+  /** S15 evidence.search / repo.inspect: why external seam did not ground (for tool trace copy). */
+  evidenceFallbackReason?: EvidenceFallbackReason;
 };
 
 export type CapabilityProcessEntry = {
@@ -47,10 +51,15 @@ export const CAPABILITY_PROCESS_LABELS: Record<V5CapabilityId, CapabilityProcess
   "evidence.search": {
     kind: "action",
     liveLabel: "⚡ 正在检索外部证据",
-    traceTemplate: (ctx, ok) =>
-      ok
-        ? `检索了外部证据${ctx.evidenceCount != null ? `（${ctx.evidenceCount} 条）` : ""}`
-        : "外部证据检索失败，本轮未引入外部证据",
+    traceTemplate: (ctx, ok) => {
+      if (ok) {
+        return `检索了外部证据${ctx.evidenceCount != null ? `（${ctx.evidenceCount} 条）` : ""}`;
+      }
+      if (ctx.evidenceFallbackReason === "no_github_clue") {
+        return "未找到 GitHub 仓库线索，使用会话内综合（未发起外部检索）";
+      }
+      return "外部证据检索失败，本轮未引入外部证据";
+    },
   },
   "repo.inspect": {
     kind: "action",
@@ -97,7 +106,7 @@ export const CAPABILITY_PROCESS_LABELS: Record<V5CapabilityId, CapabilityProcess
 };
 
 export type LiveAction = { label: string; external: boolean };
-export type ActionTrace = { label: string; ok: boolean; target?: string };
+export type ActionTrace = { label: string; ok: boolean; target?: string; turnId?: string };
 
 function resolveLabel(
   value: string | ((ctx: ProcessLabelContext) => string),
@@ -134,7 +143,12 @@ export function getLiveAction(
 }
 
 export function isExternalProvenance(provenance?: string): boolean {
-  return provenance === "mcp:github" || provenance === "repo:static" || provenance === "llm";
+  return (
+    provenance === "mcp:github" ||
+    provenance === "web:search" ||
+    provenance === "repo:static" ||
+    provenance === "llm"
+  );
 }
 
 export function inferProcessContextFromExec(
@@ -166,6 +180,28 @@ export function inferProcessContextFromExec(
   if (capabilityId === "skill.invoke" && exec.title) {
     const m = exec.title.match(/:\s*(.+)$/);
     if (m) ctx.skillName = m[1].trim();
+  }
+
+  if (
+    (capabilityId === "evidence.search" || capabilityId === "repo.inspect") &&
+    exec.provenance !== "mcp:github" &&
+    exec.provenance !== "web:search" &&
+    exec.provenance !== "repo:static"
+  ) {
+    const blob = `${exec.summary || ""} ${exec.content || ""} ${exec.title || ""}`;
+    if (/全网检索.*不可用|Web Search.*failed|web_search_failed/i.test(blob)) {
+      ctx.evidenceFallbackReason = "evidence_fetch_failed";
+    } else if (/GitHub 证据收集不可用|收集证据时失败|仓库检索失败|repo_fetch_failed|evidence_fetch_failed/i.test(blob)) {
+      ctx.evidenceFallbackReason = "evidence_fetch_failed";
+    } else if (
+      /未找到可检索的公开仓库|未找到 GitHub|未发起外部网络检索|未引入外部仓库|no_github_clue/i.test(blob)
+    ) {
+      ctx.evidenceFallbackReason = "no_github_clue";
+    } else if (!ctx.repoSlug) {
+      ctx.evidenceFallbackReason = "no_github_clue";
+    } else {
+      ctx.evidenceFallbackReason = "evidence_fetch_failed";
+    }
   }
 
   return ctx;

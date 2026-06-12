@@ -29,6 +29,14 @@ describe("validateProposedPlan (R1-B1)", () => {
     expect(result.selected.map((s) => s.capabilityId)).toEqual(["risk.analyze", "evidence.search"]);
   });
 
+  it("resolves scenario.preview alias to scenario.simulate", () => {
+    const result = validateProposedPlan({
+      selected: [{ capabilityId: "scenario.preview", roleId: "规划" }],
+    });
+    expect(result.valid).toBe(true);
+    expect(result.selected[0]?.capabilityId).toBe("scenario.simulate");
+  });
+
   it("drops invalid capabilities and defaults invalid roles", () => {
     const result = validateProposedPlan({
       selected: [

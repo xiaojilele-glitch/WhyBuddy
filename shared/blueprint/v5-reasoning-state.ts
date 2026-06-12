@@ -11,8 +11,18 @@
 
 import type { V5CapabilityId } from "./contracts.js";
 import type { BrainstormReasoningGraph } from "./brainstorm-reasoning-graph.js";
+import type { WhyBuddyReplayEvent } from "./whybuddy-session-replay.js";
 
 export type { V5CapabilityId };
+
+/** P0: first-class human-wait signals surfaced on STATUS (not LLM self-confirm). */
+export type AwaitReason =
+  | "ready"
+  | "confirm"
+  | "coverage"
+  | "budget"
+  | "convergence"
+  | "user_input";
 
 export interface Artifact {
   id: string;
@@ -63,10 +73,17 @@ export interface GateState {
     | "previews_real"
     // Actual values written by commitArtifact / evaluateGates (Trust Layer)
     | "precondition"
-    | "commit";
+    | "ground"
+    | "commit"
+    // S19 ship-time only (phase: "ship")
+    | "T_CONTENT"
+    | "T_TEST"
+    | "T_MERGE";
   kind: "precondition" | "commit"; // 运行前置闸 or 产物提交闸
   status: "open" | "passed" | "failed";
   evaluatedAt?: string;
+  /** P5 dual-speed: commit-time vs ship-time gate evaluation. */
+  phase?: "commit" | "ship";
 }
 
 export interface CapabilityRun {
@@ -110,8 +127,23 @@ export interface V5SessionState {
 
   /** V5 闭环修复（单门 INTAKE + AWAIT 歇脚点 + 按 sessionId 隔离） */
   sessionId?: string;
-  runtimePhase?: "idle" | "orchestrating" | "awaiting" | "failed";
+  runtimePhase?: "idle" | "orchestrating" | "awaiting" | "failed" | "done";
+  /** S19 ship-time: none → shipping → shipped (after T_MERGE). */
+  deliveryPhase?: "none" | "shipping" | "shipped";
+  /** P6 ROLES: simple | complex | degraded (D_GATE). */
+  roleMode?: "simple" | "complex" | "degraded";
+  /** P6 S17: brainstorm timeout/failure → single-agent fallback. */
+  brainstormDegraded?: boolean;
+  /** P4 ESC: budget block + unsatisfiable GCOV → human handoff. */
+  escalated?: boolean;
+  /** P3 incremental derive: node ids needing status recompute. */
+  projectionDirtyNodeIds?: string[];
+  /** S21 edge 117: append-only replay log (JOB→REPLAY→STORE, per sessionId). */
+  sessionReplayLog?: WhyBuddyReplayEvent[];
   lastTurnId?: string;
+  /** P0: why the session is parked awaiting human input (distinct from trust-layer confirm gate). */
+  awaitReason?: AwaitReason;
+  awaitDetail?: string;
 
   /** V5.1 DLEDGER (P1/A): scheduling decision ledger, appended on every pickNextCapabilities (or special budget block entry). */
   decisionLedger?: SchedulingDecision[];
@@ -122,6 +154,9 @@ export interface V5SessionState {
 
   /** V5.1 FLOWB (Knife 4): optional ledger of boundary purifications for formal paths (report/synthesis). */
   flowBoundaryLedger?: FlowBoundaryCheck[];
+
+  /** S13/S14: structure.decompose G_SCHEMA / G_INV gate checks (T_LEDGER). */
+  structureGateLedger?: StructureGateCheck[];
 
   /** V5.1 Knife 6: optional cost telemetry ledger (v1: estimated tokens/duration per run). */
   costLedger?: CapabilityCostRecord[];
@@ -236,6 +271,18 @@ export interface CoverageGap {
   waivedReason?: string;
   createdAt: string;
   updatedAt?: string;
+}
+
+/** S13/S14 · G_SCHEMA / G_INV results persisted for structure.decompose (edges 88–89). */
+export interface StructureGateCheck {
+  id: string;
+  turnId: string;
+  runId: string;
+  gateId: string;
+  attempt?: number;
+  status: "passed" | "failed";
+  reason?: string;
+  createdAt: string;
 }
 
 /** V5.1 FLOWB (Knife 4): Flow Boundary check record. Records purification of brainstorm/critique/rebuttal/debate protocol before formal artifact/report/synthesis content. v1 mechanical strip only. */

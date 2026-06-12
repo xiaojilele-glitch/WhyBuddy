@@ -36,6 +36,11 @@ export type ValidateProposedPlanResult = {
 const MIN_ITEMS = 1;
 const MAX_ITEMS = 4;
 
+/** Legacy / doc aliases → canonical pool ids. */
+const CAPABILITY_ALIASES: Record<string, V5CapabilityId> = {
+  "scenario.preview": "scenario.simulate",
+};
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -69,10 +74,14 @@ function extractRoleRaw(item: ProposedPlanItem): string {
 export function resolveCapabilityId(raw: string): V5CapabilityId | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
+  const alias = CAPABILITY_ALIASES[trimmed] ?? CAPABILITY_ALIASES[trimmed.toLowerCase()];
+  if (alias) return alias;
   if (V5_CAPABILITY_POOL.has(trimmed as V5CapabilityId)) {
     return trimmed as V5CapabilityId;
   }
   const dotted = trimmed.replace(/_/g, ".").replace(/\s+/g, ".");
+  const dottedAlias = CAPABILITY_ALIASES[dotted] ?? CAPABILITY_ALIASES[dotted.toLowerCase()];
+  if (dottedAlias) return dottedAlias;
   if (V5_CAPABILITY_POOL.has(dotted as V5CapabilityId)) {
     return dotted as V5CapabilityId;
   }
