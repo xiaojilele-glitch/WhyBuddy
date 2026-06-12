@@ -235,6 +235,8 @@ function WhyBuddyImmersion({
   latestTurn: UiTurn | null;
   latestTurnId: string | null;
   executorMode: ReturnType<typeof useWhyBuddySession>["executorMode"];
+  driveMode?: "single" | "marathon";
+  setDriveMode?: (m: "single" | "marathon") => void;
 }) {
   const sessionId = sessionState.sessionId || "whybuddy-v51-product";
   const composerHints = useMemo(
@@ -358,6 +360,8 @@ function WhyBuddyImmersion({
           goal={goal}
           latestUserText={latestTurn?.user}
           hintChips={composerHints}
+          driveMode={"single"}
+          setDriveMode={() => {}}
         />
       </div>
 
@@ -437,6 +441,8 @@ function WhyBuddySplitEngineering({
   latestTurn: UiTurn | null;
   latestTurnId: string | null;
   executorMode: ReturnType<typeof useWhyBuddySession>["executorMode"];
+  driveMode?: "single" | "marathon";
+  setDriveMode?: (m: "single" | "marathon") => void;
 }) {
   const imScrollRef = useRef<HTMLElement>(null);
   const imBottomRef = useRef<HTMLDivElement>(null);

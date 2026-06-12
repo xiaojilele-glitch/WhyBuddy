@@ -15,6 +15,7 @@ import { IS_GITHUB_PAGES } from "@/lib/deploy-target";
 import { loadByokPool, validateByokPool } from "@/lib/whybuddy-byok-config";
 import type { V5CapabilityId } from "@shared/blueprint/contracts";
 import type { TurnStep, UiTurn, WhyArtifact, WhyBuddyExecutorMode } from "./types";
+import * as Marathon from "@/lib/whybuddy-marathon-driver";
 import {
   createGithubPagesWhyBuddySeedSession,
   createGithubPagesWhyBuddySessionStore,
@@ -103,6 +104,20 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
     createEmptySessionState(sessionId)
   );
   const [sessionHydrated, setSessionHydrated] = useState(false);
+
+  // M2: drive mode (persisted for session; default "single" per spec)
+  const [driveMode, setDriveMode] = useState<WhyBuddyRuntime.WhyBuddyDriveMode>(() => {
+    try {
+      return (localStorage.getItem("whybuddy:driveMode") as any) || "single";
+    } catch {
+      return "single";
+    }
+  });
+
+  // persist on change
+  useEffect(() => {
+    try { localStorage.setItem("whybuddy:driveMode", driveMode); } catch {}
+  }, [driveMode]);
 
   // M1: per-turn abort controller for graceful stop.
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -337,6 +352,8 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
         setLiveAction,
       });
 
+      // M2: for this wave, always direct drive (skeleton marathon-driver.ts ready for full loop in future waves; mode is UI + persist only)
+      // driveMode available for future: if (driveMode === "marathon") { use Marathon... }
       const drive = await WhyBuddyRuntime.driveReasoningSession(preparedState, {
         turnSeedId: turnId,
         userText: userText.trim(),
@@ -346,7 +363,7 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
           : WhyBuddyRuntime.createServerReasoningRouter(),
         executor: uiExecutor,
         maxLoopsPerMessage: resolveMaxLoopsPerMessage(),
-        abortSignal: controller.signal, // M1 graceful stop support
+        abortSignal: controller.signal, // M1
         onCapabilityRound: (payload) => {
           if (!payload.gateFailed && !payload.execFailed) return;
           const message = payload.gateFailed
@@ -765,6 +782,8 @@ export function useWhyBuddySession(options: UseWhyBuddySessionOptions = {}) {
     liveAction,
     sessionState,
     executorMode,
+    driveMode,
+    setDriveMode,
     sendMessage,
     runTurn,
     challengeTurn,

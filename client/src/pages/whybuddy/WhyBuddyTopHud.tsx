@@ -242,6 +242,24 @@ export function WhyBuddyTopHud({
               </span>
             </span>
           )}
+          {/* M7: basic audit drawer entry - shows raw mechanism info for the curious (hides from default user language) */}
+          {IS_GITHUB_PAGES && (
+            <button
+              onClick={() => {
+                const raw = {
+                  lastStop: state.goal?.status,
+                  gates: (state.gates || []).slice(-3),
+                  ledgerSample: (state.decisionLedger || []).slice(-2),
+                  note: "Full raw in real audit; mechanisms hidden by default per M7"
+                };
+                alert("审计抽屉 (M7):\n" + JSON.stringify(raw, null, 2) + "\n(实际应为可折叠面板，信息等量不删)");
+              }}
+              className="ml-2 rounded bg-slate-700 px-1 text-[8px] text-white"
+              title="审计抽屉：查看机制原文（T_LEDGER, gates, stop reasons 等）。默认 UI 已翻译为用户语言。"
+            >
+              审计
+            </button>
+          )}
           <span className="font-mono text-[10px] text-slate-400">话题</span>
           <span
             className={`min-w-0 max-w-[min(36vw,280px)] truncate font-medium text-slate-800 sm:max-w-[min(42vw,360px)] ${

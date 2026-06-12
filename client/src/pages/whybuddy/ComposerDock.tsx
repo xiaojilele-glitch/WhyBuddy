@@ -16,6 +16,8 @@ export function ComposerDock({
   goal,
   latestUserText,
   hintChips,
+  driveMode,
+  setDriveMode,
 }: {
   input: string;
   setInput: (v: string) => void;
@@ -24,6 +26,8 @@ export function ComposerDock({
   goal: string;
   latestUserText?: string;
   hintChips?: string[];
+  driveMode?: "single" | "marathon";
+  setDriveMode?: (m: "single" | "marathon") => void;
 }) {
   const chips = hintChips?.length ? hintChips : DEFAULT_HINT_CHIPS;
   return (
@@ -38,6 +42,27 @@ export function ComposerDock({
         className={`pointer-events-auto w-full ${autopilotTheme.composerDock}`}
         data-testid="whybuddy-composer-dock"
       >
+        {/* M2 mode selector (claude-like): deep-thought single vs continuous marathon/autopilot */}
+        {setDriveMode && (
+          <div className="mb-1 flex gap-1 text-[10px]">
+            <button
+              onClick={() => setDriveMode("single")}
+              className={`rounded px-2 py-0.5 ${driveMode !== "marathon" ? "bg-emerald-600 text-white" : "bg-slate-700 text-slate-300"}`}
+              disabled={isRunning}
+              title="深思一轮（默认）：想清楚一个问题就停，等你"
+            >
+              深思一轮
+            </button>
+            <button
+              onClick={() => setDriveMode("marathon")}
+              className={`rounded px-2 py-0.5 ${driveMode === "marathon" ? "bg-indigo-600 text-white" : "bg-slate-700 text-slate-300"}`}
+              disabled={isRunning}
+              title="持续推演（自动驾驶）：收敛后自动开新前沿，直到你停 / 预算顶 / 前沿尽"
+            >
+              持续推演
+            </button>
+          </div>
+        )}
         <div className="flex gap-2">
           <input
             value={input}

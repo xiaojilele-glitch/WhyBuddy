@@ -105,13 +105,13 @@ export function deriveStatusBarFacts(
       parkHint = null;
     }
   } else if (opts.isRunning) {
-    parkHint = "Session_Driver 自主推进中";
+    parkHint = "推演中 · 自主推进";
   } else if (opts.closureReason === "await_ready") {
     parkHint = state.awaitDetail || "等待用户补充就绪信息";
   } else if (opts.closureReason === "await_confirm") {
     parkHint = state.awaitDetail || "等待用户确认路线选择";
   } else if (opts.closureReason) {
-    parkHint = `停泊 · ${opts.closureReason}`;
+    parkHint = `已停 · ${opts.closureReason}`; // M7: hide raw in default, but keep for now; audit will show raw
   } else if (phase === "awaiting") {
     if (awaitDetail) {
       parkHint = awaitDetail;
@@ -120,7 +120,7 @@ export function deriveStatusBarFacts(
     } else if (awaitReason === "ready") {
       parkHint = "有待回答问题";
     } else if (awaitReason === "coverage") {
-      parkHint = "覆盖率未满足 · G_COVERAGE 拒绝收敛";
+      parkHint = "覆盖率未满足";
     } else if (awaitReason === "budget") {
       parkHint = "预算超限 · 部分停泊";
     } else if (state.goal?.status === "clear") {

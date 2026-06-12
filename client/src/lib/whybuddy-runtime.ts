@@ -205,6 +205,9 @@ export type ReentryStopReason =
   | "await_confirm" // P0: G_CONFIRM — human must pick route / adjust
   | "user_interrupted"; // M1: graceful stop via AbortSignal at loop boundary
 
+/** M2: drive mode selector (user language: 深思一轮 / 持续推演) */
+export type WhyBuddyDriveMode = "single" | "marathon";
+
 /**
  * Request the Session_Driver hands to a ReasoningRouter on each loop.
  * Mirrors the server orchestrate-plan request shape so the runtime stays decoupled
