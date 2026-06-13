@@ -132,7 +132,7 @@ export function SlideRuleTopHud({
       data-testid="sliderule-status-bar"
     >
       <div
-        className={`${autopilotTheme.overlayTransparent} flex w-full items-center gap-3 border-b border-slate-900/[0.06] pb-1.5`}
+        className="flex w-full items-center gap-3 rounded-xl border border-slate-900/[0.05] bg-white/55 px-3 py-1 shadow-[0_2px_12px_rgb(15_23_42/0.04)] backdrop-blur-md"
       >
         <div
           className={`${autopilotTheme.overlayBar} min-w-0 flex-1 border-b-0 pb-0`}
@@ -177,7 +177,7 @@ export function SlideRuleTopHud({
           )}
           <span className="hidden h-3 w-px bg-slate-300 sm:inline-block" aria-hidden />
           {/* K6.5: 详略开关可发现性提示 - 首次或切换时建议切详模式看溯源链 (ev/phase/tree 子节点) */}
-          {projectionDensity === "compact" && onProjectionDensityChange && (
+          {turnCount > 0 && projectionDensity === "compact" && onProjectionDensityChange && (
             <span
               className="ml-1 hidden text-[9px] text-amber-600 lg:inline cursor-pointer hover:underline"
               title="切详模式看证据/阶段/树溯源链"
@@ -289,18 +289,23 @@ export function SlideRuleTopHud({
             data-testid="sliderule-goal-display"
             title={goal}
           >
-            {goal || "输入想法，架构图从 INTAKE 展开…"}
+            {goal || "尚未设定话题"}
           </span>
           <span className="hidden h-3 w-px bg-slate-300 md:inline-block" aria-hidden />
-          <InlineMetric label="可信" value={facts.trustedArtifactCount} />
-          <InlineMetric label="缺口" value={facts.openGapCount} />
-          <InlineMetric label="环" value={facts.driveLoopCount} />
-          <InlineMetric label="调用" value={facts.capabilityRunCount} />
-          {telemetry?.sourceCount != null && (
-            <InlineMetric label="来源" value={telemetry.sourceCount} />
-          )}
-          {telemetry?.activeRoleCount != null && (
-            <InlineMetric label="角色" value={telemetry.activeRoleCount} />
+          {/* 空会话时这些计数全为 0，纯噪音 —— 有推演活动后再出现。 */}
+          {turnCount > 0 && (
+            <>
+              <InlineMetric label="可信" value={facts.trustedArtifactCount} />
+              <InlineMetric label="缺口" value={facts.openGapCount} />
+              <InlineMetric label="环" value={facts.driveLoopCount} />
+              <InlineMetric label="调用" value={facts.capabilityRunCount} />
+              {telemetry?.sourceCount != null && (
+                <InlineMetric label="来源" value={telemetry.sourceCount} />
+              )}
+              {telemetry?.activeRoleCount != null && (
+                <InlineMetric label="角色" value={telemetry.activeRoleCount} />
+              )}
+            </>
           )}
           <span className="text-slate-400">
             阶段{" "}
@@ -311,7 +316,7 @@ export function SlideRuleTopHud({
               dataReady
             </span>
           )}
-          {onProjectionDensityChange && (
+          {turnCount > 0 && onProjectionDensityChange && (
             <div
               className="flex items-center gap-0.5 rounded-full bg-slate-100 p-0.5 ring-1 ring-slate-200/80"
               data-testid="sliderule-density-toggle"

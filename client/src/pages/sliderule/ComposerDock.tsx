@@ -1,6 +1,13 @@
 import React from "react";
 import { autopilotTheme } from "./autopilot-theme";
 
+/** Compact token budget label: 89000 → "89k", 12500 → "12.5k", 800 → "800". */
+function formatBudgetTokens(n: number): string {
+  if (n < 1000) return String(n);
+  const k = n / 1000;
+  return Number.isInteger(k) ? `${k}k` : `${k.toFixed(1)}k`;
+}
+
 export function ComposerDock({
   input,
   setInput,
@@ -140,9 +147,9 @@ export function ComposerDock({
               )}
               <span>{driveMode === "marathon" ? "持续推演" : "深思一轮"}</span>
               {driveMode === "marathon" && (
-                <span className="text-indigo-400/80 text-[8px] font-mono tabular-nums">·{(marathonBudget?.maxTokens) || 12000}</span>
+                <span className="text-indigo-400/80 text-[8px] font-mono tabular-nums">·{formatBudgetTokens((marathonBudget?.maxTokens) || 12000)}</span>
               )}
-              <span className="text-[6px] text-current/50 -ml-0.5">▼</span>
+              <span className="ml-0.5 text-[9px] leading-none text-current/50">▾</span>
             </button>
 
             {/* Improved dropdown: narrower (w-48), with separator, more descriptive text, left-aligned, smooth animation */}

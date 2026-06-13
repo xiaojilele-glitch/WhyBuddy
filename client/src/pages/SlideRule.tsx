@@ -264,12 +264,31 @@ function SlideRuleImmersion({
             terminalCanExport={reasoningViewModel.terminalMeta?.canExport}
           />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-            <p className="m-0 text-sm font-medium text-slate-500">
-              全屏推演画布
+          <div className="flex h-full flex-col items-center justify-center px-8 pb-[18vh] text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/70 shadow-sm ring-1 ring-slate-200/70 backdrop-blur">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-slate-400"
+                aria-hidden
+              >
+                <circle cx="6" cy="6" r="2.4" />
+                <circle cx="18" cy="6" r="2.4" />
+                <circle cx="12" cy="18" r="2.4" />
+                <path d="M7.6 7.7 11 15.8M16.4 7.7 13 15.8" />
+              </svg>
+            </div>
+            <p className="mt-4 text-base font-semibold text-slate-600">
+              从一个想法开始推演
             </p>
-            <p className="mt-2 max-w-md text-xs text-slate-400">
-              在底部输入想法，架构图从 INTAKE 展开；顶部显示角色并行流与调用过程。
+            <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-slate-500">
+              在下方输入框写下想法或问题，架构图会从 INTAKE 节点逐步展开，顶部实时显示角色协作与调用过程。
             </p>
           </div>
         )}
