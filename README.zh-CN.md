@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <sub>TRAE Skill 挑战赛作品 / 社区展示项目</sub>
+  <sub>TRAE Skill 挑战赛作品 / 社区展示项目 · 原名 <strong>WhyBuddy</strong>（2026-06 改名 SlideRule）</sub>
 </p>
 
 <blockquote>

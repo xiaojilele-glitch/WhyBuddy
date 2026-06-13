@@ -4,6 +4,16 @@
 
 更细的任务拆分、阶段规划和未完成项请看 [ROADMAP.md](./ROADMAP.md)。
 
+## 2026-06-13
+
+- **产品改名：WhyBuddy → SlideRule（全量迁移）。** 173+ 个文件名、全部内部标识符（类型 / 函数 / 常量 / data-testid / env 名 / localStorage key / API 路由）一次性切换为 SlideRule 系命名。
+- 三条持久化边界带兼容垫片过渡（保留一个版本周期，约 4-6 周后移除）：
+  - localStorage：启动时把 `whybuddy:*` 自动迁移到 `sliderule:*`（幂等，不覆盖新值；BYOK key 池逐字段保全）。
+  - 环境变量：`SLIDERULE_*` 为主，旧 `WHYBUDDY_*` 仍生效（双设时新名优先）。
+  - API：`/api/sliderule` 为主挂载，`/api/whybuddy` 别名同 router；默认会话文件 `data/whybuddy-sessions.json` 启动时复制为 `data/sliderule-sessions.json`（原件保留可回滚）。
+- 旧脚本名 `verify:whybuddy-v5` / `smoke:whybuddy` / `smoke:whybuddy-store` 保留为别名一个版本周期。
+- GitHub 仓库改名后旧链接由 GitHub 301 自动重定向。
+
 ## 2026-04-15
 
 - 更新 `README.md`，同步当前产品口径：办公室主壳、统一智能发起入口、底部共享操作区与最近完成的发起/任务操作收敛进展。

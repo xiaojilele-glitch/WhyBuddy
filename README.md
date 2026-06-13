@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <sub>TRAE Skill Challenge / Community Showcase Project</sub>
+  <sub>TRAE Skill Challenge / Community Showcase Project · formerly known as <strong>WhyBuddy</strong> (renamed 2026-06)</sub>
 </p>
 
 <blockquote>
