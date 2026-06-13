@@ -223,7 +223,7 @@ export function ComposerDock({
             }
             rows={1}
             className={autopilotTheme.grokInput}
-            style={{ minHeight: "46px" }}
+            style={{ minHeight: "40px" }}
             data-testid="sliderule-composer-input"
           />
           <button

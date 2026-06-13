@@ -132,7 +132,7 @@ export function SlideRuleTopHud({
       data-testid="sliderule-status-bar"
     >
       <div
-        className="flex w-full items-center gap-3 rounded-xl border border-slate-900/[0.05] bg-white/55 px-3 py-1 shadow-[0_2px_12px_rgb(15_23_42/0.04)] backdrop-blur-md"
+        className="flex w-full items-center gap-3 rounded-xl border border-slate-900/[0.05] bg-white/55 px-3 py-1.5 shadow-[0_2px_12px_rgb(15_23_42/0.04)] backdrop-blur-md"
       >
         <div
           className={`${autopilotTheme.overlayBar} min-w-0 flex-1 border-b-0 pb-0`}
