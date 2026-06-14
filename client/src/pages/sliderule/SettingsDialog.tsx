@@ -53,12 +53,12 @@ export function SettingsDialog(props: SettingsDialogProps) {
     }
   }, [open]);
 
-  if (!open) return null;
-
   const isLlmDirty = React.useMemo(() => {
     if (!draft || !initialLlmDraftRef.current) return false;
     return JSON.stringify(draft) !== JSON.stringify(initialLlmDraftRef.current);
   }, [draft]);
+
+  if (!open) return null;
 
   const guardedClose = () => {
     if (isLlmDirty) {

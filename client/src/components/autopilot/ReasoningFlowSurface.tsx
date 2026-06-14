@@ -76,6 +76,12 @@ export interface ReasoningFlowSurfaceProps {
    * 当提供时，节点卡片会显示为可点击（cursor-pointer）。
    */
   onNodeClick?: (node: BrainstormReasoningNode) => void;
+  /**
+   * For resolving interactive gates like G_CONFIRM (route confirmation) with user selection.
+   * gateNodeId: the id of the gate node in the graph.
+   * choice: the chosen value (e.g. route id or 'primary' for confirm, null for cancel/reject).
+   */
+  onResolveInteractiveGate?: (gateNodeId: string, choice: string | null) => void;
   /** 启用深色（Grok 风格）主题。默认 false 保持原有浅色产品图感。SlideRule V5 等暗色宿主传入 true。 */
   dark?: boolean;
   /** Bump to re-run fit() when the graph grows (e.g. mid-drive session updates). */
@@ -410,6 +416,7 @@ export function ReasoningFlowSurface({
   showChrome = true,
   showBottomChrome,
   onNodeClick,
+  onResolveInteractiveGate,
   dark = false,
   graphRevision,
   externalHighlightedIds,
@@ -650,28 +657,51 @@ export function ReasoningFlowSurface({
   }, []);
 
   // 简单 pan / zoom（产品级可后续增强 pointer capture、惯性等）
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const rect = viewportRef.current?.getBoundingClientRect();
-    if (!rect) return;
+  // 使用原生事件监听器 + { passive: false } 避免 "Unable to preventDefault inside passive event listener" 错误
+  const scaleRef = useRef(scale);
+  const txRef = useRef(tx);
+  const tyRef = useRef(ty);
 
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+  useEffect(() => { scaleRef.current = scale; }, [scale]);
+  useEffect(() => { txRef.current = tx; }, [tx]);
+  useEffect(() => { tyRef.current = ty; }, [ty]);
 
-    const factor = e.deltaY < 0 ? 1.12 : 0.89;
-    const newScale = Math.max(0.25, Math.min(3.5, scale * factor));
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
 
-    // 以鼠标位置为中心缩放
-    const worldX = (mouseX - tx) / scale;
-    const worldY = (mouseY - ty) / scale;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
 
-    const newTx = mouseX - worldX * newScale;
-    const newTy = mouseY - worldY * newScale;
+      const rect = el.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
 
-    setScale(newScale);
-    setTx(newTx);
-    setTy(newTy);
-  }, [scale, tx, ty]);
+      const currentScale = scaleRef.current;
+      const currentTx = txRef.current;
+      const currentTy = tyRef.current;
+
+      const factor = e.deltaY < 0 ? 1.12 : 0.89;
+      const newScale = Math.max(0.25, Math.min(3.5, currentScale * factor));
+
+      // 以鼠标位置为中心缩放
+      const worldX = (mouseX - currentTx) / currentScale;
+      const worldY = (mouseY - currentTy) / currentScale;
+
+      const newTx = mouseX - worldX * newScale;
+      const newTy = mouseY - worldY * newScale;
+
+      setScale(newScale);
+      setTx(newTx);
+      setTy(newTy);
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+    };
+  }, []); // 监听器只挂一次，内部用 ref 拿最新 scale/tx/ty
 
   const pointerDistance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
     Math.hypot(a.x - b.x, a.y - b.y);
@@ -913,7 +943,6 @@ export function ReasoningFlowSurface({
       <div
         ref={viewportRef}
         className="relative flex-1 overflow-hidden"
-        onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -1256,6 +1285,30 @@ export function ReasoningFlowSurface({
                       ) : bodyText ? (
                         <span className={dark ? "text-zinc-300" : "text-slate-700"}>{bodyText}</span>
                       ) : null}
+                      {onResolveInteractiveGate && (node.id.includes('G_CONFIRM') || ((node as { type?: string }).type === 'interactive_gate' && ((node.body || '').includes('确认') || (node.title || '').includes('确认路线') || (node.body || '').includes('路线选择')))) && (
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            type="button"
+                            className="rounded bg-emerald-600 px-2 py-0.5 text-[9px] font-medium text-white hover:bg-emerald-700"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onResolveInteractiveGate(node.id, 'primary');
+                            }}
+                          >
+                            确认
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded bg-white px-2 py-0.5 text-[9px] font-medium text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onResolveInteractiveGate(node.id, null);
+                            }}
+                          >
+                            取消
+                          </button>
+                        </div>
+                      )}
                       {!titleText && !bodyText && !liveText ? (
                         <span className={`font-medium ${dark ? "text-zinc-500" : "text-slate-500"}`}>
                           {node.id}
