@@ -76,6 +76,7 @@ export const SEED_PRESETS: ProviderPreset[] = [
   { presetId: "gemini", name: "Gemini", protocol: "openai", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-2.0-flash", glyph: "G" },
   { presetId: "deepseek", name: "DeepSeek", protocol: "openai", baseUrl: "https://api.deepseek.com/v1", defaultModel: "deepseek-chat", glyph: "D" },
   { presetId: "openrouter", name: "OpenRouter", protocol: "openai", baseUrl: "https://openrouter.ai/api/v1", defaultModel: "openai/gpt-4o-mini", glyph: "R" },
+  { presetId: "atlascloud", name: "Atlas Cloud", protocol: "openai", baseUrl: "https://api.atlascloud.ai/v1", defaultModel: "openai/gpt-5.6-luna", glyph: "A" },
   { presetId: "zhipu", name: "智谱 GLM", protocol: "openai", baseUrl: "https://open.bigmodel.cn/api/paas/v4", defaultModel: "glm-4-flash", glyph: "智" },
   { presetId: "siliconflow", name: "硅基流动", protocol: "openai", baseUrl: "https://api.siliconflow.cn/v1", defaultModel: "Qwen/Qwen2.5-7B-Instruct", glyph: "硅" },
 ];
@@ -130,6 +131,7 @@ export const PROVIDER_MODEL_SUGGESTIONS: Record<string, string[]> = {
   gemini: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
   deepseek: ["deepseek-chat", "deepseek-reasoner"],
   openrouter: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "google/gemini-2.0-flash-exp"],
+  atlascloud: ["openai/gpt-5.6-luna", "google/gemini-3.1-flash-lite", "anthropic/claude-sonnet-4.6"],
   zhipu: ["glm-4-flash", "glm-4-plus", "glm-4-air"],
   siliconflow: ["Qwen/Qwen2.5-7B-Instruct", "deepseek-ai/DeepSeek-V3"],
 };

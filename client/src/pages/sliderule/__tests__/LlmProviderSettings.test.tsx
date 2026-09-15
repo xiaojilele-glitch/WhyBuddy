@@ -13,11 +13,47 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LlmProviderSettings, TestConnectionResult } from "../LlmProviderSettings";
 import {
+  compileToByokPool,
+  defaultProvidersConfig,
   isEnabledProviderReady,
+  modelSuggestionsFor,
   providerStatus,
   validateProviderConfig,
   type LlmProvidersConfig,
 } from "@/lib/sliderule-llm-providers";
+
+describe("Atlas Cloud preset", () => {
+  it("seeds a disabled OpenAI-compatible provider with current model suggestions", () => {
+    const atlas = defaultProvidersConfig().providers.find((p) => p.presetId === "atlascloud");
+
+    expect(atlas).toMatchObject({
+      name: "Atlas Cloud",
+      protocol: "openai",
+      baseUrl: "https://api.atlascloud.ai/v1",
+      enabled: false,
+    });
+    expect(atlas?.models[0].id).toBe("openai/gpt-5.6-luna");
+    expect(modelSuggestionsFor("atlascloud")).toContain("anthropic/claude-sonnet-4.6");
+  });
+
+  it("compiles the enabled preset to the Atlas chat-completions endpoint", () => {
+    const config = defaultProvidersConfig();
+    const atlas = config.providers.find((p) => p.presetId === "atlascloud");
+    expect(atlas).toBeDefined();
+    if (!atlas) return;
+
+    atlas.enabled = true;
+    atlas.apiKey = "atlas-test-key";
+
+    expect(compileToByokPool(config).entries).toContainEqual(
+      expect.objectContaining({
+        presetId: "atlascloud",
+        endpoint: "https://api.atlascloud.ai/v1/chat/completions",
+        model: "openai/gpt-5.6-luna",
+      })
+    );
+  });
+});
 
 function makeDraft(over?: Partial<LlmProvidersConfig>): LlmProvidersConfig {
   return {
