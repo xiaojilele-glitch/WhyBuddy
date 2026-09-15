@@ -13,6 +13,7 @@ export type ByokPresetId =
   | "anthropic"
   | "deepseek"
   | "openrouter"
+  | "atlascloud"
   | "openai"
   | "gemini"
   | "zhipu"
@@ -90,6 +91,7 @@ export const PRESET_ENDPOINTS: Record<ByokPresetId, string> = {
   anthropic: "https://api.anthropic.com/v1/messages",
   deepseek: "https://api.deepseek.com/chat/completions",
   openrouter: "https://openrouter.ai/api/v1/chat/completions",
+  atlascloud: "https://api.atlascloud.ai/v1/chat/completions",
   openai: "https://api.openai.com/v1/chat/completions",
   gemini: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
   zhipu: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
@@ -101,6 +103,7 @@ export const PRESET_MODELS: Record<ByokPresetId, string> = {
   anthropic: "claude-3-5-sonnet-20241022",
   deepseek: "deepseek-chat",
   openrouter: "anthropic/claude-3.5-sonnet",
+  atlascloud: "openai/gpt-5.6-luna",
   openai: "gpt-4o-mini",
   gemini: "gemini-2.0-flash",
   zhipu: "glm-4-flash",
