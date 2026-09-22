@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="zh-CN" class="h-full">
+<head><style id="sliderule-phone-fill">html,body{margin:0!important;width:100%!important;height:100%!important;min-height:100%!important;max-width:none!important;overflow:hidden!important;background:#fff!important}body{display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important}body>*{width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important;box-sizing:border-box!important}body>div[class*="min-h-screen"],body>div[class*="justify-center"]{display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important;min-height:0!important;flex:1 1 auto!important;height:100%!important;width:100%!important;overflow:hidden!important}header{position:static!important;flex:0 0 auto!important;width:100%!important;padding-top:12px!important}main{flex:1 1 auto!important;min-height:0!important;width:100%!important;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch}main.pt-10,main.pt-12,main.pt-14,main.pt-16,main.pt-20,main.pt-24,main.pt-28,main.pt-32{padding-top:0!important}main.pb-20,main.pb-24,main.pb-28,main.pb-32,main.pb-36{padding-bottom:0!important}body>nav,body>div[class*="min-h-screen"]>nav,body>div[class*="justify-center"]>nav,nav.fixed,nav[class*="bottom-0"]{position:static!important;display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;justify-content:space-around!important;align-items:stretch!important;flex:0 0 auto!important;width:100%!important;min-height:56px!important;padding-top:6px!important;padding-bottom:16px!important}body>nav>a,body>div[class*="min-h-screen"]>nav>a,body>div[class*="justify-center"]>nav>a,nav.fixed>a,nav[class*="bottom-0"]>a{flex:1 1 0!important;min-width:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;white-space:nowrap!important;font-size:10px!important;line-height:1.2!important;text-align:center!important;padding:4px 8px!important}body>nav>a span,body>div[class*="min-h-screen"]>nav>a span,body>div[class*="justify-center"]>nav>a span,nav.fixed>a span,nav[class*="bottom-0"]>a span{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;max-width:100%!important;font-size:10px!important;line-height:15px!important}</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>铁人打卡 - 招募报名</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 自定义滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #121212;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 2px;
+        }
+    </style>
+<style id="sliderule-theme">:root{--background:#fff2ee;--foreground:#0f172a;--chrome:#fffbf9;--chrome-fg:#0f172a;--card:#ffffff;--card-fg:#0f172a;--primary:#ff4500;--primary-fg:#0f172a;--muted:#ffe9e3;--border:#f1d8d1;--radius:8px;}html,body{background-color:var(--background)!important;color:var(--foreground)!important}header,aside,nav.fixed{background-color:var(--chrome)!important;color:var(--chrome-fg)!important}html[data-theme="light"] main .bg-black,html[data-theme="light"] main .bg-slate-800,html[data-theme="light"] main .bg-slate-900,html[data-theme="light"] main .bg-slate-950,html[data-theme="light"] main .bg-gray-800,html[data-theme="light"] main .bg-gray-900,html[data-theme="light"] main .bg-gray-950,html[data-theme="light"] main .bg-zinc-800,html[data-theme="light"] main .bg-zinc-900,html[data-theme="light"] main .bg-zinc-950,html[data-theme="light"] main .bg-neutral-800,html[data-theme="light"] main .bg-neutral-900,html[data-theme="light"] main .bg-neutral-950,html[data-theme="light"] main .bg-stone-800,html[data-theme="light"] main .bg-stone-900,html[data-theme="light"] main .bg-stone-950{background-color:var(--card)!important;color:var(--card-fg)!important;border-color:var(--border)!important}html[data-theme="light"] header .text-white,html[data-theme="light"] header .text-slate-100,html[data-theme="light"] header .text-slate-200,html[data-theme="light"] header .text-gray-100,html[data-theme="light"] aside .text-white,html[data-theme="light"] aside .text-slate-100,html[data-theme="light"] aside .text-slate-200,html[data-theme="light"] aside .text-gray-100{color:var(--chrome-fg,#0f172a)!important}html[data-theme="light"] header .bg-black,html[data-theme="light"] header .bg-slate-800,html[data-theme="light"] header .bg-slate-900,html[data-theme="light"] header .bg-slate-950,html[data-theme="light"] header .bg-gray-800,html[data-theme="light"] header .bg-gray-900,html[data-theme="light"] header .bg-gray-950,html[data-theme="light"] header .bg-zinc-800,html[data-theme="light"] header .bg-zinc-900,html[data-theme="light"] header .bg-zinc-950,html[data-theme="light"] header .bg-neutral-800,html[data-theme="light"] header .bg-neutral-900,html[data-theme="light"] header .bg-neutral-950,html[data-theme="light"] header .bg-stone-800,html[data-theme="light"] header .bg-stone-900,html[data-theme="light"] header .bg-stone-950{background-color:var(--muted)!important;color:var(--chrome-fg,#0f172a)!important}aside nav a{box-sizing:border-box;width:100%;display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside>:first-child:not(nav):not(:has(nav)){display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside :is(img,svg){flex-shrink:0}aside:has(nav a){min-width:16rem!important;box-sizing:border-box}aside[class*="fixed"]:has(nav a),aside[class*="absolute"]:has(nav a){width:16rem!important}aside[class*="fixed"]:has(nav a)~*,aside[class*="absolute"]:has(nav a)~*{margin-left:16rem!important}aside [aria-current="page"]{background-color:color-mix(in srgb,var(--primary,currentColor) 16%,var(--chrome,transparent))!important;color:var(--chrome-fg,inherit)!important;font-weight:600}header nav[aria-label="Breadcrumb"] [aria-current="page"],header nav[aria-label="breadcrumb"] [aria-current="page"]{background-color:transparent!important;color:var(--chrome-fg,inherit)!important;font-weight:600}</style><script>
+/* sliderule-theme-tokens */
+tailwind.config = { theme: { extend: { colors: {
+  background: '#fff2ee',
+  foreground: '#0f172a',
+  chrome: '#fffbf9',
+  card: '#ffffff',
+  primary: '#ff4500',
+  muted: '#ffe9e3',
+  border: '#f1d8d1'
+} } } };
+</script></head>
+<body class="w-full h-full overflow-hidden flex flex-col bg-[#121212] text-gray-100 font-sans antialiased">
+
+    <!-- 顶部 Header (flex-shrink: 0, 在文档流中) -->
+    <header class="flex-shrink-0 bg-darkBg border-b border-borderCol px-4 py-3 flex items-center justify-between z-10">
+    <div class="flex items-center space-x-2">
+      <div class="w-8 h-8 rounded-lg bg-brand flex items-center justify-center font-bold text-white text-lg tracking-wider">铁</div>
+      <span class="font-bold text-lg tracking-wide text-white">铁人打卡</span>
+    </div>
+    <div class="flex items-center space-x-2 bg-cardBg px-3 py-1.5 rounded-full border border-borderCol">
+      <div class="w-2 h-2 rounded-full bg-success animate-pulse"></div>
+      <span class="text-xs text-gray-300">健身学员</span>
+    </div>
+  </header>
+
+    <!-- 中间主内容区 (flex: 1, min-height: 0, overflow-y: auto) -->
+    <main class="flex-1 min-h-0 overflow-y-auto pb-6" data-record="recruitment_application">
+        
+        <!-- 1. 顶部招募说明区：Banner与战队介绍 -->
+        <div class="relative w-full bg-[#1a1a1a]">
+            <div class="w-full h-48 relative overflow-hidden">
+                <img src="https://placehold.co/600x300/e2e8f0/cbd5e1" alt="ironman triathlon training team banner" class="w-full h-full object-cover opacity-75">
+                <div class="absolute inset-0 bg-gradient-to-t from-[#121212] via-transparent to-black/40"></div>
+                <div class="absolute bottom-3 left-4 right-4">
+                    <span class="bg-[#FF4500] text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">火热招募中</span>
+                    <h1 class="text-xl font-extrabold text-white mt-1 tracking-wide">2024铁人三项精英战队选拔</h1>
+                </div>
+            </div>
+            
+            <div class="px-4 py-3 bg-[#1a1a1a] border-b border-gray-800 text-xs text-gray-300 space-y-2 leading-relaxed">
+                <p>突破自我极限，铸造钢铁意志！铁人打卡战队面向全体健身学员开启新一季成员招募。我们将提供专业的游泳、骑行、跑步全方位训练指导与科学打卡监督体系。</p>
+                <div class="flex items-center space-x-4 pt-1 text-[#00E676] font-medium">
+                    <span class="flex items-center">✓ 进阶训练计划</span>
+                    <span class="flex items-center">✓ 专业教练带训</span>
+                    <span class="flex items-center">✓ 赛事名额直通</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. 报名信息填写主表单区 -->
+        <div class="px-4 pt-4">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-sm font-bold text-gray-200 uppercase tracking-wider flex items-center">
+                    <span class="w-1 h-3.5 bg-[#FF4500] rounded-full mr-2"></span>
+                    填写报名表单
+                </h2>
+                <span class="text-[10px] text-gray-400">* 所有字段均为必填项</span>
+            </div>
+
+            <form class="space-y-4">
+                <!-- 姓名 -->
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-semibold text-gray-300">真实姓名</label>
+                    <input type="text" data-field="real_name" placeholder="请输入您的姓名" class="w-full bg-[#1e1e1e] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#FF4500] transition-colors" value="张铁柱">
+                </div>
+
+                <!-- 联系方式 -->
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-semibold text-gray-300">联系电话 (手机号)</label>
+                    <input type="tel" data-field="phone" placeholder="请输入11位手机号码" class="w-full bg-[#1e1e1e] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#FF4500] transition-colors" value="13812345678">
+                </div>
+
+                <!-- 铁三经验年限 -->
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-semibold text-gray-300">铁三/耐力运动经验</label>
+                    <select data-field="experience" class="w-full bg-[#1e1e1e] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#FF4500] transition-colors">
+                        <option value="0">零基础 / 纯新手</option>
+                        <option value="1" selected>1-2年 进阶学员</option>
+                        <option value="3">3-5年 资深铁人</option>
+                        <option value="5">5年以上 赛级老将</option>
+                    </select>
+                </div>
+
+                <!-- 擅长项目 (单选/多选展示) -->
+                <div class="space-y-1.5" data-field="specialty">
+                    <label class="block text-xs font-semibold text-gray-300">最擅长/主攻项目</label>
+                    <div class="grid grid-cols-3 gap-2 pt-1">
+                        <label class="flex items-center justify-center p-2.5 bg-[#1e1e1e] border border-gray-800 rounded-xl text-xs text-gray-300 cursor-pointer hover:border-gray-600">
+                            <input type="radio" name="specialty" class="mr-1.5 accent-[#FF4500]"> 游泳
+                        </label>
+                        <label class="flex items-center justify-center p-2.5 bg-[#FF4500]/10 border border-[#FF4500] rounded-xl text-xs text-[#FF4500] font-medium cursor-pointer">
+                            <input type="radio" name="specialty" checked class="mr-1.5 accent-[#FF4500]"> 骑行
+                        </label>
+                        <label class="flex items-center justify-center p-2.5 bg-[#1e1e1e] border border-gray-800 rounded-xl text-xs text-gray-300 cursor-pointer hover:border-gray-600">
+                            <input type="radio" name="specialty" class="mr-1.5 accent-[#FF4500]"> 跑步
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 目标赛事 -->
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-semibold text-gray-300">2024目标赛事</label>
+                    <input type="text" data-field="target_event" placeholder="例如：崇礼168超级越野赛 / 铁人三项分站赛" class="w-full bg-[#1e1e1e] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#FF4500] transition-colors" value="上海崇明铁人三项标距赛">
+                </div>
+
+                <!-- 个人宣言 -->
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-semibold text-gray-300">铁人宣言 / 个人寄语</label>
+                    <textarea rows="3" data-field="declaration" placeholder="写下你的训练决心，与战队成员共勉..." class="w-full bg-[#1e1e1e] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#FF4500] transition-colors resize-none">坚持每日打卡，今年必须完赛奥林匹克标准距离！</textarea>
+                </div>
+            </form>
+        </div>
+
+        <!-- 近期报名学员列表 -->
+        <div class="px-4 pt-6">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-sm font-bold text-gray-200 uppercase tracking-wider flex items-center">
+                    <span class="w-1 h-3.5 bg-[#FF4500] rounded-full mr-2"></span>
+                    近期报名学员
+                </h2>
+                <span class="text-[10px] text-gray-400">已通过审核 (128人)</span>
+            </div>
+            
+            <div class="space-y-2" data-rows="recruitment_application">
+                <div class="bg-[#1e1e1e] border border-gray-800 rounded-xl p-3 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-9 h-9 rounded-full bg-[#FF4500]/20 border border-[#FF4500]/40 flex items-center justify-center font-bold text-[#FF4500] text-xs">王</div>
+                        <div>
+                            <div class="text-xs font-bold text-white"><span data-field="real_name">王大锤</span> <span class="text-[10px] font-normal text-gray-400 ml-1">2分钟前</span></div>
+                            <div class="text-[10px] text-gray-400 mt-0.5">主攻项目：<span data-field="specialty">骑行</span> | 经验：<span data-field="experience">3-5年</span></div>
+                        </div>
+                    </div>
+                    <span class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">已录取</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 底部固定的全宽提交按钮区 (作为滚动区域底部的操作留白和按钮承载) -->
+        <div class="px-4 pt-6 pb-4">
+            <button type="button" data-action="createRecord" data-entity="recruitment_application" class="w-full py-3.5 bg-[#FF4500] hover:bg-[#e03d00] active:scale-[0.98] transition-all text-white font-bold rounded-xl shadow-lg shadow-[#FF4500]/30 text-sm tracking-wide flex items-center justify-center space-x-2">
+                <span>提交招募报名</span>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </button>
+            <p class="text-center text-[10px] text-gray-500 mt-2">提交后教练组将在 24 小时内完成审核并联系您</p>
+        </div>
+
+    </main>
+
+    <nav class="flex justify-around items-center py-2 bg-darkBg border-t border-borderCol/50">
+<a data-page-id="p1" href="#" class="flex flex-col items-center"><svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 4.86 4.86 6.29 6.29 4.86 7.71 3.43 6.31 2 7.74 5.57 11.3 2 14.86 3.43 16.29 4.86 14.86 6.29 16.29 7.71 14.86 9.14 16.29 10.57 14.86 12 18.43 15.57 14.86 19.14 16.29 20.57 14.86z"/></svg><span>训练</span></a>
+<a data-page-id="p2" href="#" class="flex flex-col items-center"><svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg><span>记录</span></a>
+<a aria-current="page" data-page-id="p3" href="#" class="flex flex-col items-center text-brand"><svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span>招募报名</span></a>
+</nav>
+
+</body>
+</html>

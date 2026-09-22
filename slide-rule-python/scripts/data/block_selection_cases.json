@@ -1,0 +1,117 @@
+{
+  "_note": [
+    "区块选材度量的用例集（scripts/block_selection_metrics.py 读它）。",
+    "",
+    "每个用例给一道题 + 一份『对题区块』人工名单。名单是人工标的，就该当人工",
+    "标的看——它只用来算『对题命中』这一个指标，不参与其它任何判定。加新用例",
+    "时把名单写全（宁多勿少），漏标会让命中率虚低。",
+    "",
+    "另一维『特定场景件命中』不靠这份名单，走目录自带的 generality 字段",
+    "（generic 33 / specific 325，见 scripts/label_block_generality.py），",
+    "跨用例可比，不受人工标注影响。",
+    "",
+    "## 用例是怎么挑的（2026-08-10 加的三条）",
+    "",
+    "先按名字首词把 292 个深处 specific 区块聚类，看清目录**实际覆盖哪些域**：",
+    "Alert 11 / Booking 11 / Release 10 / Workflow 9 / Connection 7 / Deployment 7 /",
+    "Conversation 7 / User 7 / Document 6 / Query 6 …（明显照 Grafana、Cal.com、",
+    "Sentry、Linear、Airbyte 这类产品建的）。",
+    "",
+    "然后挑**两个目录真覆盖的域** + **一个完全不覆盖的域做阴性对照**：",
+    "  · booking_scheduling   预约排期族 15 个，跨原名次 67~283",
+    "  · release_deployment   发布部署族 17 个，跨原名次 177~268",
+    "  · pharmacy_inventory   药房库存——目录里**一个对应件都没有**（onTopicBlocks 空）",
+    "",
+    "阴性对照不是凑数：窄化在没有对题件可捞的域上**不该把事情变坏**。只测覆盖域",
+    "会系统性高估窄化的价值——真实用户的题目常常落在目录没覆盖的地方。",
+    "",
+    "三条 goal 都验过 _recognize_domain() 返回 None（不触发演示域快路径），",
+    "否则会跟夹具那条路混在一起，测不出生成侧的东西。"
+  ],
+  "cases": [
+    {
+      "id": "alert_oncall",
+      "goal": "做一个告警值班与静默管理系统：告警接入后按标签路由到对应的值班组；支持配置静默时段，维护窗口内不打扰；值班表按周排班，可以换班；未确认的告警按升级策略逐级升级通知。",
+      "why": "2026-08-10 位置效应实验用的那道题。_recognize_domain 返回 None（不触发演示域快路径），目录里对应区块齐全但原名次 61~328，全在可达区外。",
+      "onTopicBlocks": [
+        "AlertTriagePanel",
+        "AlertSilenceForm",
+        "AlertRoutingPolicy",
+        "AlertRuleEditor",
+        "MuteTimingSchedule",
+        "ContactPointManager",
+        "AlertRuleCommandHeader",
+        "AlertStateMetrics",
+        "AlertInstanceSummary",
+        "AlertMatcherFilter",
+        "AlertGroupCommandHeader",
+        "AlertRuleFilterBar",
+        "OnCallScheduleCalendar",
+        "EscalationPolicyPanel"
+      ],
+      "pointNamed": [
+        "AlertSilenceForm",
+        "AlertRoutingPolicy",
+        "MuteTimingSchedule",
+        "OnCallScheduleCalendar",
+        "EscalationPolicyPanel"
+      ]
+    },
+    {
+      "id": "booking_scheduling",
+      "goal": "做一个连锁健身房的私教预约与排期系统：会员在线选可约时段下单，教练维护每周可用时间，排期冲突要能看出来并就地改约，前台按门店看当日预约容量和到店核销。",
+      "why": "目录覆盖的域之一。预约/排期族 15 个区块跨原名次 67~283，全在可达区外。",
+      "onTopicBlocks": [
+        "GanttSchedule",
+        "AvailabilityPlanner",
+        "BookingSlotPicker",
+        "ScheduleConflictResolver",
+        "BookingCommandHeader",
+        "BookingCapacityMetrics",
+        "BookingContextSummary",
+        "BookingStatusTabs",
+        "BookingDirectoryFilter",
+        "BookingDecisionBar",
+        "BookingDemandChart",
+        "BookingConflictDrawer",
+        "BookingConflictPanel",
+        "AvailabilityOverridePanel"
+      ],
+      "pointNamed": [
+        "BookingSlotPicker",
+        "AvailabilityPlanner",
+        "ScheduleConflictResolver",
+        "BookingCapacityMetrics"
+      ]
+    },
+    {
+      "id": "release_deployment",
+      "goal": "搭一个应用发布与灰度部署管理平台：按环境查看各版本发布健康度与采用率，灰度按批次推进并能随时回滚，部署详情要能看到滚动进度与扩缩容，发布窗口按日历排期。",
+      "why": "目录覆盖的域之一。发布/部署族 17 个区块跨原名次 177~268——比预约族更深，用来看窄化在更深处还灵不灵。",
+      "onTopicBlocks": [
+        "ReleaseHealthStrip",
+        "DeploymentLatencyChart",
+        "ReleaseAdoptionTrendChart",
+        "DeploymentRolloutMetrics",
+        "ReleaseAdoptionMetrics",
+        "ReleaseEnvironmentStrip",
+        "DeploymentCommandHeader",
+        "DeploymentScaleBar",
+        "ReleaseRolloutBar",
+        "DeploymentWizard"
+      ],
+      "pointNamed": [
+        "ReleaseHealthStrip",
+        "ReleaseRolloutBar",
+        "DeploymentRolloutMetrics"
+      ]
+    },
+    {
+      "id": "pharmacy_inventory",
+      "goal": "开发医院药房库存管理系统，支持药品入库出库、批号效期预警和处方调剂发药，药师按处方拣药复核，库管按批号做盘点与补货。",
+      "why": "**阴性对照**：按域词扫过目录，药房/库存/批号/效期一个对应区块都没有（唯一命中是 MigrationReadinessWizard，DevOps 件误命中）。窄化在这里没有对题件可捞，所以要验的是它**不把事情变坏**——过闸率、页面/区块数别掉。",
+      "onTopicBlocks": [],
+      "pointNamed": []
+    }
+  ]
+}

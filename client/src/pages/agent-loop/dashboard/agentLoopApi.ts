@@ -65,6 +65,22 @@ function formatClock(ts: string | null | undefined): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
+/**
+ * 写接口的 401 说人话（2026-08-04）。
+ *
+ * 后端给 5 个写接口加了登录要求（`/queue/run` `/task/run` `/rerun` `/cancel`
+ * `/settings`）——此前这几个**谁都能调**：真起 LLM 任务、取消别人正在跑的
+ * 东西、改全局设置。这个文件里用到其中 4 个（`/rerun` 前端没有调用点）。
+ *
+ * 加守卫之后匿名用户会撞上 401，裸抛 `HTTP 401` 没人看得懂它要你干嘛。
+ *
+ * 读接口（运行列表/事件流/面板）不受影响，仍然匿名可读。
+ */
+function writeFailure(path: string, status: number): Error {
+  if (status === 401) return new Error("请先登录后再执行（运行、取消、改设置需要账号）");
+  return new Error(`POST ${path} → HTTP ${status}`);
+}
+
 async function getJson<T>(url: string): Promise<T> {
   // Use normalized fetchJsonSafe so Python error/timeout/degraded/legacy envelopes surface (105 req1)
   const result = await fetchJsonSafe<T>(url);
@@ -435,7 +451,7 @@ export async function saveSettings(values: Record<string, unknown>): Promise<any
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(clean),
   });
-  if (!res.ok) throw new Error(`POST /settings → HTTP ${res.status}`);
+  if (!res.ok) throw writeFailure("/settings", res.status);
   const json = await res.json();
   if (hadSecret) {
     return { ...(json && typeof json === 'object' ? json : {}), secretsIgnored: true };
@@ -567,7 +583,7 @@ export async function runQueue(payload: Record<string, unknown> = {}): Promise<a
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`POST /queue/run → HTTP ${res.status}`);
+  if (!res.ok) throw writeFailure("/queue/run", res.status);
   return res.json();
 }
 
@@ -587,7 +603,7 @@ export async function runSingleTask(payload: Record<string, unknown> = {}): Prom
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`POST /task/run → HTTP ${res.status}`);
+  if (!res.ok) throw writeFailure("/task/run", res.status);
   return res.json();
 }
 
@@ -598,7 +614,7 @@ export async function cancelCurrent(payload: Record<string, unknown> = {}): Prom
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`POST /cancel → HTTP ${res.status}`);
+  if (!res.ok) throw writeFailure("/cancel", res.status);
   return res.json();
 }
 

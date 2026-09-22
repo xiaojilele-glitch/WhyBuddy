@@ -1,0 +1,302 @@
+{
+  "note": "真机 sr-20260906111901（校区自习室座位预约）。第一版 submit_intent_nodes 把四条 requirement 全判成「需要用户录入」，其中 n2「信用分奖惩与自动封禁」是系统自动行为 + 只读展示页，被误报成 hard_blocker，一份三条真需求都被正确服务的交付物因此 blocked=True。",
+  "sessionId": "sr-20260906111901-CGQZNAPS7Z",
+  "firstVersionVerdict": {
+    "submitIntentNodes": [
+      "n1",
+      "n2",
+      "n3",
+      "n4"
+    ],
+    "reasons": [
+      "submit_intent_unserved"
+    ],
+    "unservedSubmitIntents": [
+      {
+        "why": "covering_pages_have_no_entry",
+        "nodeId": "n2",
+        "coveredBy": [
+          "my_reservations_and_credit"
+        ]
+      }
+    ],
+    "pagesWithoutEntry": [
+      "my_reservations_and_credit"
+    ]
+  },
+  "expected": {
+    "submitIntentNodes": [
+      "n1",
+      "n3",
+      "n4"
+    ],
+    "why": {
+      "n1": "触发从句：学生选择空闲座位预约并扫描座位码 —— 真的要录入",
+      "n2": "触发从句里 签到 前面是「未」、举报 前面是「被」，都是条件；系统应自动封禁并提示 —— 只读展示页，不该要输入框",
+      "n3": "触发从句：学生拍照上传举报 —— 真的要录入",
+      "n4": "触发从句：管理员调整分区与可预约时段 —— 真的要录入"
+    }
+  },
+  "spec": {
+    "rootNodeId": "n0",
+    "nodes": [
+      {
+        "id": "n0",
+        "type": "requirement",
+        "title": "校区自习室预约与履约闭环管理",
+        "acceptance": "当学生或管理员进入系统时，系统应根据身份分别提供小程序端座位预约履约与Web端区域规则及违规治理服务。"
+      },
+      {
+        "id": "nE1",
+        "type": "evidence",
+        "title": "学生端核心诉求",
+        "acceptance": null
+      },
+      {
+        "id": "nE2",
+        "type": "evidence",
+        "title": "信用惩罚机制确定",
+        "acceptance": null
+      },
+      {
+        "id": "nE3",
+        "type": "evidence",
+        "title": "占座举报闭环流程",
+        "acceptance": null
+      },
+      {
+        "id": "nE4",
+        "type": "evidence",
+        "title": "管理端运维诉求",
+        "acceptance": null
+      },
+      {
+        "id": "n1",
+        "type": "requirement",
+        "title": "座位实时看板、分时段预约与扫码签到流",
+        "acceptance": "当学生选择空闲座位预约并到达现场在规定时间内扫描座位码时，系统应标记为已签到并保持占用；若超过15分钟未签到，系统应自动释放座位并记录迟到违约。"
+      },
+      {
+        "id": "n1_d1",
+        "type": "design",
+        "title": "小程序预约状态机与延时违约释放设计",
+        "acceptance": null
+      },
+      {
+        "id": "n1_t1",
+        "type": "task",
+        "title": "实现超时未签到自动释放定时任务",
+        "acceptance": null
+      },
+      {
+        "id": "n2",
+        "type": "requirement",
+        "title": "信用分奖惩与自动封禁策略",
+        "acceptance": "当学生发生违约事件（迟到未签到、被举报占座核实）导致信用分低于设定阈值时，系统应自动将学生预约权限变更为封禁状态并在小程序端提示剩余封禁天数。"
+      },
+      {
+        "id": "n2_d1",
+        "type": "design",
+        "title": "信用分扣减流水与预约权限拦截器设计",
+        "acceptance": null
+      },
+      {
+        "id": "n2_t1",
+        "type": "task",
+        "title": "实现预约提交前置信用分阈值校验中间件",
+        "acceptance": null
+      },
+      {
+        "id": "n3",
+        "type": "requirement",
+        "title": "占座拍照举报与核验强制释放",
+        "acceptance": "当学生在现场对无人但放物的座位拍照上传举报时，系统应推送至管理员后台待办；管理员核实并确认后，系统应立即强制释放该座位、退还或重置占用状态并对违规者扣除信用分。"
+      },
+      {
+        "id": "n3_d1",
+        "type": "design",
+        "title": "占座举报工单流与后台强制释放处理设计",
+        "acceptance": null
+      },
+      {
+        "id": "n3_t1",
+        "type": "task",
+        "title": "开发举报工单审核与座位强制解绑接口",
+        "acceptance": null
+      },
+      {
+        "id": "n4",
+        "type": "requirement",
+        "title": "自习区域时段划分与运营报表分析",
+        "acceptance": "当管理员在Web端调整自习室分区、座位排布及可预约时段时，系统应即时同步至学生端可选范围；当管理员筛选时间区间时，系统应呈现座位使用率趋势与违规类型占比报表。"
+      },
+      {
+        "id": "n4_d1",
+        "type": "design",
+        "title": "区域座位网格化配置与统计聚合引擎设计",
+        "acceptance": null
+      },
+      {
+        "id": "n4_t1",
+        "type": "task",
+        "title": "构建使用率与违约率多维度聚合统计API",
+        "acceptance": null
+      }
+    ],
+    "pages": [
+      {
+        "id": "seat_selection",
+        "name": "小程序自习室选座页",
+        "purpose": "查看校区各楼层自习室列表、当前时段空闲座位分布图与座位实时状态",
+        "audience": "在校学生",
+        "coversNodes": [
+          "n1",
+          "n1_d1"
+        ]
+      },
+      {
+        "id": "my_reservations_and_credit",
+        "name": "小程序我的预约与信用中心",
+        "purpose": "查看当前有效预约签到倒计时、扫码签到入口、历史行程与当前信用分及违约记录",
+        "audience": "在校学生",
+        "coversNodes": [
+          "n1",
+          "n2",
+          "n2_d1"
+        ]
+      },
+      {
+        "id": "seat_hogging_report",
+        "name": "小程序违规占座举报页",
+        "purpose": "选择目标自习室座位并拍照上传现场占座凭证以提交核验",
+        "audience": "在校学生",
+        "coversNodes": [
+          "n3",
+          "n3_d1"
+        ]
+      },
+      {
+        "id": "area_and_timeslot_mgmt",
+        "name": "Web端自习区域与时段管理页",
+        "purpose": "查看各校区自习室网格布局列表、座位状态开关及每日开放时段配置矩阵",
+        "audience": "自习室管理员",
+        "coversNodes": [
+          "n4",
+          "n4_d1"
+        ]
+      },
+      {
+        "id": "violation_ticket_audit",
+        "name": "Web端占座违规工单审核页",
+        "purpose": "查看待处理的占座举报列表、现场照片佐证、原预约人信息与处置状态",
+        "audience": "自习室管理员",
+        "coversNodes": [
+          "n3",
+          "n3_d1"
+        ]
+      },
+      {
+        "id": "operations_and_reports",
+        "name": "Web端运营分析与报表中心",
+        "purpose": "查看座位利用率趋势图、高频违约时段分布、违规类型统计与数据导出面板",
+        "audience": "自习室管理员",
+        "coversNodes": [
+          "n4",
+          "n4_d1"
+        ]
+      }
+    ]
+  },
+  "perPage": [
+    {
+      "form": 0,
+      "chars": 63690,
+      "entry": 1,
+      "input": 1,
+      "table": 0,
+      "button": 11,
+      "pageId": "area_and_timeslot_mgmt",
+      "select": 0,
+      "textarea": 0,
+      "dataHoles": 36,
+      "roleClick": 0,
+      "roleEntry": 0,
+      "interactive": 12
+    },
+    {
+      "form": 0,
+      "chars": 35193,
+      "entry": 0,
+      "input": 0,
+      "table": 1,
+      "button": 13,
+      "pageId": "my_reservations_and_credit",
+      "select": 0,
+      "textarea": 0,
+      "dataHoles": 40,
+      "roleClick": 0,
+      "roleEntry": 0,
+      "interactive": 13
+    },
+    {
+      "form": 0,
+      "chars": 43833,
+      "entry": 4,
+      "input": 1,
+      "table": 1,
+      "button": 11,
+      "pageId": "operations_and_reports",
+      "select": 3,
+      "textarea": 0,
+      "dataHoles": 28,
+      "roleClick": 0,
+      "roleEntry": 0,
+      "interactive": 15
+    },
+    {
+      "form": 0,
+      "chars": 34024,
+      "entry": 9,
+      "input": 5,
+      "table": 0,
+      "button": 8,
+      "pageId": "seat_hogging_report",
+      "select": 3,
+      "textarea": 1,
+      "dataHoles": 43,
+      "roleClick": 0,
+      "roleEntry": 0,
+      "interactive": 17
+    },
+    {
+      "form": 0,
+      "chars": 28558,
+      "entry": 1,
+      "input": 0,
+      "table": 0,
+      "button": 19,
+      "pageId": "seat_selection",
+      "select": 1,
+      "textarea": 0,
+      "dataHoles": 29,
+      "roleClick": 0,
+      "roleEntry": 0,
+      "interactive": 20
+    },
+    {
+      "form": 0,
+      "chars": 31981,
+      "entry": 2,
+      "input": 0,
+      "table": 1,
+      "button": 9,
+      "pageId": "violation_ticket_audit",
+      "select": 2,
+      "textarea": 0,
+      "dataHoles": 37,
+      "roleClick": 0,
+      "roleEntry": 0,
+      "interactive": 11
+    }
+  ]
+}

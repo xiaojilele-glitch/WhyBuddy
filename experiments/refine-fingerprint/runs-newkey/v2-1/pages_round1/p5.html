@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="zh-CN" class="w-full h-full">
+<head><style id="sliderule-desktop-fill">html,body{margin:0!important;width:100%!important;height:100%!important;min-height:100%!important;max-width:none!important;overflow:hidden!important}body{align-items:stretch!important;justify-content:flex-start!important;padding:0!important}body>[class*="mx-auto"]{max-width:none!important;width:100%!important;height:100%!important;margin:0!important;box-sizing:border-box!important;border-radius:0!important;box-shadow:none!important}body>div[class*="min-h-screen"],body>div[class*="justify-center"]{display:flex!important;align-items:stretch!important;justify-content:flex-start!important;width:100%!important;height:100%!important;max-width:none!important;padding:0!important;margin:0!important;box-sizing:border-box!important}body>div[class*="min-h-screen"]>[class*="mx-auto"],body>div[class*="min-h-screen"]>[class*="max-w-"],body>div[class*="justify-center"]>[class*="mx-auto"],body>div[class*="justify-center"]>[class*="max-w-"]{max-width:none!important;width:100%!important;height:100%!important;margin:0!important;box-sizing:border-box!important;border-radius:0!important;box-shadow:none!important}</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安养通 - 我的任务</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Design System Custom Variables & Overrides */
+        :root {
+            --primary: #2B7A78;
+            --primary-dark: #1F5F5D;
+            --accent: #E07A5F;
+            --bg-base: #F4F6F8;
+            --card-bg: #FFFFFF;
+            --text-main: #2D3748;
+            --text-muted: #718096;
+        }
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+    </style>
+<style>aside [aria-current="page"]{background-color:color-mix(in srgb, var(--primary, currentColor) 16%, transparent);color:var(--chrome-fg, inherit);font-weight:600}header nav[aria-label="Breadcrumb"] [aria-current="page"]{background-color:transparent;color:var(--chrome-fg, inherit);font-weight:600}</style><style id="sliderule-theme">:root{--background:#e7f9f8;--foreground:#0f172a;--chrome:#f2fffe;--chrome-fg:#0f172a;--card:#ffffff;--card-fg:#0f172a;--primary:#2b7a78;--primary-fg:#f8fafc;--muted:#e1f3f2;--border:#d1e2e1;--radius:8px;}html,body{background-color:var(--background)!important;color:var(--foreground)!important}header,aside,nav.fixed{background-color:var(--chrome)!important;color:var(--chrome-fg)!important}html[data-theme="light"] main .bg-black,html[data-theme="light"] main .bg-slate-800,html[data-theme="light"] main .bg-slate-900,html[data-theme="light"] main .bg-slate-950,html[data-theme="light"] main .bg-gray-800,html[data-theme="light"] main .bg-gray-900,html[data-theme="light"] main .bg-gray-950,html[data-theme="light"] main .bg-zinc-800,html[data-theme="light"] main .bg-zinc-900,html[data-theme="light"] main .bg-zinc-950,html[data-theme="light"] main .bg-neutral-800,html[data-theme="light"] main .bg-neutral-900,html[data-theme="light"] main .bg-neutral-950,html[data-theme="light"] main .bg-stone-800,html[data-theme="light"] main .bg-stone-900,html[data-theme="light"] main .bg-stone-950{background-color:var(--card)!important;color:var(--card-fg)!important;border-color:var(--border)!important}html[data-theme="light"] header .text-white,html[data-theme="light"] header .text-slate-100,html[data-theme="light"] header .text-slate-200,html[data-theme="light"] header .text-gray-100,html[data-theme="light"] aside .text-white,html[data-theme="light"] aside .text-slate-100,html[data-theme="light"] aside .text-slate-200,html[data-theme="light"] aside .text-gray-100{color:var(--chrome-fg,#0f172a)!important}html[data-theme="light"] header .bg-black,html[data-theme="light"] header .bg-slate-800,html[data-theme="light"] header .bg-slate-900,html[data-theme="light"] header .bg-slate-950,html[data-theme="light"] header .bg-gray-800,html[data-theme="light"] header .bg-gray-900,html[data-theme="light"] header .bg-gray-950,html[data-theme="light"] header .bg-zinc-800,html[data-theme="light"] header .bg-zinc-900,html[data-theme="light"] header .bg-zinc-950,html[data-theme="light"] header .bg-neutral-800,html[data-theme="light"] header .bg-neutral-900,html[data-theme="light"] header .bg-neutral-950,html[data-theme="light"] header .bg-stone-800,html[data-theme="light"] header .bg-stone-900,html[data-theme="light"] header .bg-stone-950{background-color:var(--muted)!important;color:var(--chrome-fg,#0f172a)!important}aside nav a{box-sizing:border-box;width:100%;display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside>:first-child:not(nav):not(:has(nav)){display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside :is(img,svg){flex-shrink:0}aside:has(nav a){min-width:16rem!important;box-sizing:border-box}aside[class*="fixed"]:has(nav a),aside[class*="absolute"]:has(nav a){width:16rem!important}aside[class*="fixed"]:has(nav a)~*,aside[class*="absolute"]:has(nav a)~*{margin-left:16rem!important}aside [aria-current="page"]{background-color:color-mix(in srgb,var(--primary,currentColor) 16%,var(--chrome,transparent))!important;color:var(--chrome-fg,inherit)!important;font-weight:600}header nav[aria-label="Breadcrumb"] [aria-current="page"],header nav[aria-label="breadcrumb"] [aria-current="page"]{background-color:transparent!important;color:var(--chrome-fg,inherit)!important;font-weight:600}</style><script>
+/* sliderule-theme-tokens */
+tailwind.config = { theme: { extend: { colors: {
+  background: '#e7f9f8',
+  foreground: '#0f172a',
+  chrome: '#f2fffe',
+  card: '#ffffff',
+  primary: '#2b7a78',
+  muted: '#e1f3f2',
+  border: '#d1e2e1'
+} } } };
+</script></head>
+<body class="w-full h-full flex overflow-hidden m-0 p-0">
+
+    <!-- 侧边栏 Aside -->
+    <aside class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 h-full">
+        <!-- 品牌区 -->
+        <div class="h-16 flex items-center px-6 border-b border-slate-100 gap-3">
+            <div class="w-8 h-8 rounded-lg bg-[#2B7A78] flex items-center justify-center text-white font-bold text-base">安</div>
+            <div class="flex flex-col">
+                <span class="font-bold text-slate-800 text-base tracking-wide">安养通</span>
+                <span class="text-xs text-slate-400">社区养老服务平台</span>
+            </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+<a data-page-id="p1" href="#" class="flex gap-3 items-center px-3 py-2.5 rounded-lg transition-colors"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg><span>老人档案列表</span></a>
+<a data-page-id="p2" href="#" class="flex gap-3 items-center px-3 py-2.5 rounded-lg transition-colors"><svg class="w-5 h-5 text-[#2B7A78]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg><span>服务工单调度</span></a>
+<a data-page-id="p3" href="#" class="flex gap-3 items-center px-3 py-2.5 rounded-lg transition-colors"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg><span>运营数据总览看板</span></a>
+<a data-page-id="p4" href="#" class="flex gap-3 items-center px-3 py-2.5 rounded-lg transition-colors"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg><span>财务结算报表</span></a>
+<a aria-current="page" data-page-id="p5" href="#" class="bg-[#2B7A78]/10 flex font-medium gap-3 items-center px-3 py-2.5 rounded-lg text-[#2B7A78] transition-colors"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg><span>我的任务</span></a>
+</nav>
+
+        <!-- 底部用户信息 -->
+        <div class="p-4 border-t border-slate-100 flex items-center gap-3">
+            <img src="https://placehold.co/40x40" alt="consultant avatar portrait" class="w-10 h-10 rounded-full object-cover">
+            <div class="flex flex-col min-w-0">
+                <span class="font-medium text-slate-800 truncate">张顾问</span>
+                <span class="text-xs text-slate-400 truncate">社区养老顾问</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 右侧主体布局区 -->
+    <div class="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
+        
+        <!-- 顶栏 Header -->
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
+            <!-- 面包屑 -->
+            <nav aria-label="Breadcrumb">
+                <ol class="flex items-center gap-2 text-sm">
+                    <li><a href="#" class="text-slate-500 hover:text-slate-800">安养通</a></li>
+                    <li class="text-slate-300">/</li>
+                    <li><a href="#" aria-current="page" class="text-slate-800 font-medium">我的任务页</a></li>
+                </ol>
+            </nav>
+
+            <!-- 顶栏右侧工具栏 -->
+            <div class="flex items-center gap-4">
+                <div class="flex bg-slate-100 p-1 rounded-lg">
+                    <button class="px-3 py-1.5 text-xs font-medium bg-white text-slate-800 rounded shadow-sm">实时调度</button>
+                    <button class="px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800">历史工单</button>
+                </div>
+                <div class="h-4 w-[1px] bg-slate-200"></div>
+                <div class="flex items-center gap-2 text-slate-600">
+                    <span class="relative flex h-3 w-3">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                    <span class="text-xs font-medium text-slate-600">系统运行正常</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 正文内容 Main -->
+        <main class="flex-1 overflow-y-auto p-8 space-y-6">
+            
+            <!-- 顶部筛选与统计横幅 -->
+            <div class="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex items-center space-x-6 text-sm">
+                    <div>
+                        <span class="text-slate-500">日期：</span>
+                        <span class="font-semibold text-slate-800">2023-10-25 今日</span>
+                    </div>
+                    <div class="h-4 w-px bg-slate-200"></div>
+                    <div>
+                        <span class="text-slate-500">待执行：</span>
+                        <span class="font-semibold text-[#2B7A78]"><span data-value="task" data-aggregate="count">3</span> 单</span>
+                    </div>
+                    <div class="h-4 w-px bg-slate-200"></div>
+                    <div>
+                        <span class="text-slate-500">已完成：</span>
+                        <span class="font-semibold text-slate-800">1 单</span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <span class="text-xs text-slate-500">系统自动同步顾问派单中</span>
+                    <button class="px-3.5 py-1.5 bg-[#2B7A78] text-white text-xs font-medium rounded-lg hover:bg-[#1F5F5D] transition-colors">
+                        刷新任务列表
+                    </button>
+                </div>
+            </div>
+
+            <!-- 任务卡片单列流布局 -->
+            <div class="space-y-4 max-w-5xl" data-rows="task" data-sort="service_time" data-order="desc" data-limit="8">
+
+                <!-- 任务卡片 1：紧急新派单 -->
+                <div class="bg-white rounded-xl border-l-4 border-l-[#E07A5F] border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow relative">
+                    <div class="absolute top-6 right-6 flex items-center space-x-2">
+                        <span class="px-2.5 py-1 bg-[#FEF3F2] text-[#E07A5F] text-xs font-semibold rounded-full">新派单·紧急</span>
+                    </div>
+                    
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 rounded-full bg-[#F4F6F8] flex items-center justify-center text-slate-700 font-bold text-lg">
+                                李
+                            </div>
+                            <div>
+                                <div class="flex items-center space-x-2">
+                                    <h3 class="text-lg font-bold text-slate-900">李奶奶 (78岁)</h3>
+                                    <span class="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">VIP会员</span>
+                                </div>
+                                <div class="text-sm text-slate-500 mt-0.5">联系电话：138-XXXX-5678</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 py-3 border-t border-b border-slate-100 my-4 text-sm">
+                        <div class="flex items-center text-slate-700">
+                            <svg class="w-4 h-4 mr-2 text-[#2B7A78]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span>服务时间：<strong class="text-slate-900" data-field="service_time">今天 14:00 - 15:30</strong></span>
+                        </div>
+                        <div class="flex items-center text-slate-700">
+                            <svg class="w-4 h-4 mr-2 text-[#2B7A78]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            <span>服务地址：<strong class="text-slate-900" data-field="service_address">幸福里社区 3号楼 402室</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- 服务项目清单标签 -->
+                    <div class="mb-5">
+                        <div class="text-xs text-slate-400 mb-2">服务项目清单：</div>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="px-3 py-1 bg-[#F4F6F8] text-[#2B7A78] text-xs font-medium rounded-lg" data-field="service_items">上门基础体检 (血压/血糖)</span>
+                        </div>
+                    </div>
+
+                    <!-- 卡片底部操作按钮 -->
+                    <div class="flex items-center justify-between pt-2">
+                        <div class="text-xs text-slate-500">
+                            派单顾问：王顾问 · 备注：老人近期血压偏高，需重点关注
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <button class="px-4 py-2 border border-[#2B7A78] text-[#2B7A78] hover:bg-[#F4F6F8] text-sm font-medium rounded-lg transition-colors flex items-center">
+                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+                                一键导航
+                            </button>
+                            <button class="px-5 py-2 bg-[#2B7A78] hover:bg-[#1F5F5D] text-white text-sm font-medium rounded-lg shadow-sm transition-colors flex items-center" data-action="openRecord" data-entity="task">
+                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                                开始服务 (扫码打卡)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+</body>
+</html>

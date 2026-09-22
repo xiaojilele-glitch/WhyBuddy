@@ -20,12 +20,18 @@ const memStore = new Map<string, string>();
 import {
   loadEnterBehavior,
   loadNotifyCompletePref,
+  loadPreferredDevice,
+  loadProductArchetype,
   loadReduceMotionPref,
   notifyDriveComplete,
   setEnterBehavior,
   setNotifyCompletePref,
+  setPreferredDevice,
+  setProductArchetype,
   setReduceMotionPref,
   shouldSendOnKey,
+  composerEnterHintLabel,
+  ENTER_SHIFT_NEWLINE_HINT,
 } from "../user-prefs";
 
 const key = (
@@ -66,6 +72,16 @@ describe("Enter 键行为", () => {
     expect(loadEnterBehavior()).toBe("enter");
     expect(shouldSendOnKey(key("Enter"))).toBe(true);
   });
+
+  it("空态/设置页共用恒换行提示，发送键跟当前模式走", () => {
+    expect(ENTER_SHIFT_NEWLINE_HINT).toBe("Shift+Enter 始终换行");
+    expect(composerEnterHintLabel("enter")).toBe(
+      "Enter 发送 · Shift+Enter 始终换行"
+    );
+    expect(composerEnterHintLabel("ctrl-enter")).toBe(
+      "Ctrl+Enter 发送 · Shift+Enter 始终换行"
+    );
+  });
 });
 
 describe("减少动态效果偏好", () => {
@@ -92,5 +108,35 @@ describe("推演完成通知", () => {
     expect(loadNotifyCompletePref()).toBe(true);
     expect(() => notifyDriveComplete("测试话题")).not.toThrow();
     expect(() => notifyDriveComplete("")).not.toThrow();
+  });
+});
+
+describe("目标形态（默认 Web）", () => {
+  beforeEach(() => memStore.clear());
+
+  it("默认 desktop；非法值回落；round-trip 认 phone", () => {
+    expect(loadPreferredDevice()).toBe("desktop");
+    setPreferredDevice("phone");
+    expect(loadPreferredDevice()).toBe("phone");
+    setPreferredDevice("tablet");
+    expect(loadPreferredDevice()).toBe("tablet");
+    setPreferredDevice("desktop");
+    expect(loadPreferredDevice()).toBe("desktop");
+  });
+});
+
+describe("产品原型（默认业务）", () => {
+  beforeEach(() => memStore.clear());
+
+  it("默认 business_app；非法值回落；round-trip 认 free_app", () => {
+    expect(loadProductArchetype()).toBe("business_app");
+    setProductArchetype("content_app");
+    expect(loadProductArchetype()).toBe("content_app");
+    setProductArchetype("free_app");
+    expect(loadProductArchetype()).toBe("free_app");
+    setProductArchetype("casual_game");
+    expect(loadProductArchetype()).toBe("business_app");
+    setProductArchetype("business_app");
+    expect(loadProductArchetype()).toBe("business_app");
   });
 });

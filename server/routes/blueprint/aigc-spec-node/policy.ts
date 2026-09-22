@@ -82,7 +82,9 @@ export function createDefaultAigcSpecNodeCapabilityPolicy(): AigcSpecNodeCapabil
       "x-github-token",
       "openai-api-key",
     ],
-    redactedEmailPattern: /[\w.+-]+@[\w.-]+/g,
+    // 前置负向后顾 + RFC 5321 长度上界，见 spec-tree/policy.ts 同名字段注释：
+    // 无界写法在「长串合法本地部字符但没有 @」的输入上是二次复杂度（5MB 约 4 小时）。
+    redactedEmailPattern: /(?<![\w.+-])[\w.+-]{1,64}@[\w.-]{1,255}/g,
     redactedApiKeyPattern: /\b(sk-[A-Za-z0-9]{20,}|clp_[A-Za-z0-9]{20,})\b/g,
     redactedGithubPatPattern:
       /\b(gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})\b/g,

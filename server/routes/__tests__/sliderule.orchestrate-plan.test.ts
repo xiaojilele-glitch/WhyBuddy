@@ -32,6 +32,9 @@ describe("POST /api/sliderule/orchestrate-plan (R1-B2)", () => {
 
   beforeEach(async () => {
     vi.restoreAllMocks();
+    // 同 respond：这些断言（heuristic_fallback / llm 两种 source）只存在于 Node legacy
+    // 编排里。默认 python 后端会把请求委托出去，source 恒为 python-rag。
+    vi.stubEnv("SLIDERULE_V5_BACKEND", "legacy");
     ({ restore: restoreLlmKey } = withStubbedLlmKey());
     originalPoolEnabled = process.env.SLIDERULE_CAPABILITY_POOL_ENABLED;
     process.env.SLIDERULE_CAPABILITY_POOL_ENABLED = "0";

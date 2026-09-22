@@ -1,0 +1,401 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "gender_age",
+      "name": "性别/年龄",
+      "type": "string"
+     },
+     {
+      "id": "id_card",
+      "name": "身份证号",
+      "type": "string"
+     },
+     {
+      "id": "grid",
+      "name": "所属社区网格",
+      "type": "string"
+     },
+     {
+      "id": "health_status",
+      "name": "健康状态标签",
+      "type": "string"
+     },
+     {
+      "id": "care_level",
+      "name": "照护等级",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "求助老人",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "urgency",
+      "name": "紧急程度",
+      "type": "string"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约时间",
+      "type": "date"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "string"
+     },
+     {
+      "id": "assignee",
+      "name": "指派人员",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "financial_settlement",
+    "name": "财务结算",
+    "fields": [
+     {
+      "id": "batch_no",
+      "name": "账单批次号",
+      "type": "string"
+     },
+     {
+      "id": "institution",
+      "name": "服务机构或人员",
+      "type": "string"
+     },
+     {
+      "id": "order_count",
+      "name": "关联工单总数",
+      "type": "number"
+     },
+     {
+      "id": "total_amount",
+      "name": "服务总金额",
+      "type": "number"
+     },
+     {
+      "id": "subsidy_amount",
+      "name": "核算补贴额",
+      "type": "number"
+     },
+     {
+      "id": "audit_status",
+      "name": "审核状态",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_consultant",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "role_provider",
+    "name": "服务人员"
+   },
+   {
+    "id": "role_manager",
+    "name": "运营主管"
+   }
+  ],
+  "permissions": [
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "financial_settlement:create",
+   "financial_settlement:read",
+   "financial_settlement:approve",
+   "financial_settlement:manage"
+  ],
+  "menus": [
+   {
+    "id": "menu_workbench",
+    "label": "工作台",
+    "roleRefs": [
+     "role_consultant",
+     "role_provider",
+     "role_manager"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "menu_elder",
+    "label": "老人档案",
+    "roleRefs": [
+     "role_consultant",
+     "role_manager"
+    ],
+    "permissionRefs": [
+     "elder:read"
+    ]
+   },
+   {
+    "id": "menu_kanban",
+    "label": "服务调度",
+    "roleRefs": [
+     "role_provider",
+     "role_manager"
+    ],
+    "permissionRefs": [
+     "work_order:read",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "menu_financial",
+    "label": "财务结算",
+    "roleRefs": [
+     "role_manager"
+    ],
+    "permissionRefs": [
+     "financial_settlement:read",
+     "financial_settlement:approve"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "待派发工单",
+    "assigneeRole": "role_consultant",
+    "phase": "created"
+   },
+   {
+    "id": "node_assigned",
+    "name": "待上门服务",
+    "assigneeRole": "role_provider",
+    "phase": "assigned"
+   },
+   {
+    "id": "node_completed",
+    "name": "服务已完成",
+    "assigneeRole": "role_provider",
+    "phase": "completed"
+   },
+   {
+    "id": "node_audited",
+    "name": "财务已结算",
+    "assigneeRole": "role_manager",
+    "phase": "settled"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_assigned",
+    "condition": "顾问成功派发工单并指定服务人员"
+   },
+   {
+    "from": "node_assigned",
+    "to": "node_completed",
+    "condition": "服务人员反馈上门服务完成"
+   },
+   {
+    "from": "node_completed",
+    "to": "node_audited",
+    "condition": "运营主管完成月度结算与审核"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1_page",
+    "name": "工作台首页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "p3_page",
+    "name": "服务工单调度页",
+    "kind": "kanban",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_ref",
+     "work_order.service_type",
+     "work_order.urgency",
+     "work_order.appointment_time",
+     "work_order.status",
+     "work_order.assignee"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:create",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p2_page",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.gender_age",
+     "elder.id_card",
+     "elder.grid",
+     "elder.health_status",
+     "elder.care_level"
+    ],
+    "actionPermissions": [
+     "elder:read",
+     "elder:create",
+     "elder:update"
+    ]
+   },
+   {
+    "id": "p4_page",
+    "name": "财务结算与对账页",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "financial_settlement.batch_no",
+     "financial_settlement.institution",
+     "financial_settlement.order_count",
+     "financial_settlement.total_amount",
+     "financial_settlement.subsidy_amount",
+     "financial_settlement.audit_status"
+    ],
+    "actionPermissions": [
+     "financial_settlement:read",
+     "financial_settlement:create",
+     "financial_settlement:approve",
+     "financial_settlement:manage"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_health_assess",
+    "name": "健康状况智能评估",
+    "inputFields": [
+     "elder.health_status"
+    ],
+    "outputField": "elder.care_level",
+    "roleRefs": [
+     "role_consultant",
+     "role_manager"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p3_page",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p3_page",
+    "workflowRef": "node_created"
+   },
+   {
+    "pageRef": "p3_page",
+    "workflowRef": "node_assigned"
+   },
+   {
+    "pageRef": "p3_page",
+    "workflowRef": "node_completed"
+   },
+   {
+    "pageRef": "p4_page",
+    "workflowRef": "node_audited"
+   }
+  ],
+  "landingPageRef": "p1_page",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_consultant",
+   "role_provider",
+   "role_manager"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "work_order",
+   "financial_settlement"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_elder_ref",
+    "statement": "服务工单必须关联系统内存在的有效老人档案",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.elder_ref",
+     "elder"
+    ]
+   },
+   {
+    "id": "inv_settlement_flow",
+    "statement": "工单必须流转至完成节点后方可纳入财务结算",
+    "systems": [
+     "workflow",
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.status",
+     "financial_settlement",
+     "node_completed"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

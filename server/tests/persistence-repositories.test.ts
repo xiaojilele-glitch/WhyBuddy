@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  createEmailLoginTokensRepository,
   createProjectResourcesRepository,
-  createUsersRepository,
   createProjectsRepository,
-  createSessionsRepository,
-  normalizeEmail,
 } from "../persistence/repositories.js";
 
 class RecordingDb {
@@ -23,117 +19,6 @@ class RecordingDb {
 }
 
 describe("persistence repositories", () => {
-  it("normalizes email addresses before user token and lookup flows use them", () => {
-    expect(normalizeEmail("  USER@Example.COM ")).toBe("user@example.com");
-  });
-
-  it("creates users with normalized globally unique email semantics", async () => {
-    const db = new RecordingDb();
-    const users = createUsersRepository(db, {
-      now: () => new Date("2026-04-30T00:00:00.000Z"),
-      id: () => "user-1",
-    });
-
-    const user = await users.create({
-      email: "  USER@Example.COM ",
-      passwordHash: "password-hash",
-      displayName: "Cube User",
-    });
-    await users.updateLastLogin("user-1", "127.0.0.1");
-    await users.markEmailVerified("user-1", new Date("2026-04-30T00:03:00.000Z"));
-    await users.updateStatusAndRole("user-1", "disabled", "admin");
-
-    expect(user.emailNormalized).toBe("user@example.com");
-    expect(user.role).toBe("user");
-    expect(user.status).toBe("active");
-    expect(db.queries[0].sql).toMatch(/insert\s+into\s+users/i);
-    expect(db.queries[0].params).toContain("user@example.com");
-    expect(db.queries[1].sql).toMatch(/last_login_at/i);
-    expect(db.queries[2].sql).toMatch(/email_verified_at/i);
-    expect(db.queries[3].sql).toMatch(/status\s+=\s+\?/i);
-    expect(db.queries[3].params).toEqual([
-      "disabled",
-      "admin",
-      new Date("2026-04-30T00:00:00.000Z"),
-      "user-1",
-    ]);
-  });
-
-  it("stores email login token hashes and consumes only valid unexpired tokens", async () => {
-    const db = new RecordingDb();
-    db.nextRows.push([
-      {
-        id: "token-1",
-        email_normalized: "user@example.com",
-        user_id: "user-1",
-      },
-    ]);
-    db.nextRows.push([{ count: "3" }]);
-    const tokens = createEmailLoginTokensRepository(db, {
-      now: () => new Date("2026-04-30T00:00:00.000Z"),
-      id: () => "token-1",
-    });
-
-    await tokens.create({
-      email: "USER@Example.COM",
-      userId: "user-1",
-      tokenHash: "token-hash",
-      requestIp: "127.0.0.1",
-      userAgent: "vitest",
-      expiresAt: new Date("2026-04-30T00:10:00.000Z"),
-    });
-    const valid = await tokens.findValidByTokenHash(
-      "token-hash",
-      "login",
-      new Date("2026-04-30T00:05:00.000Z"),
-    );
-    await tokens.markConsumed("token-1");
-    const recentCount = await tokens.countCreatedSince(
-      "USER@Example.COM",
-      "login",
-      new Date("2026-04-29T23:50:00.000Z"),
-    );
-
-    expect(valid).toEqual({
-      id: "token-1",
-      emailNormalized: "user@example.com",
-      userId: "user-1",
-    });
-    expect(recentCount).toBe(3);
-    expect(db.queries[0].sql).toMatch(/insert\s+into\s+email_login_tokens/i);
-    expect(db.queries[0].sql).toMatch(/token_hash/i);
-    expect(db.queries[1].sql).toMatch(/consumed_at\s+is\s+null/i);
-    expect(db.queries[1].sql).toMatch(/expires_at\s+>\s+\?/i);
-    expect(db.queries[2].sql).toMatch(/consumed_at/i);
-    expect(db.queries[3].sql).toMatch(/count\(\*\)/i);
-    expect(db.queries[3].params).toContain("user@example.com");
-    expect(JSON.stringify(db.queries)).not.toContain("plain-email-token");
-  });
-
-  it("stores revocable sessions by token hash and revokes them without token plaintext", async () => {
-    const db = new RecordingDb();
-    const sessions = createSessionsRepository(db, {
-      now: () => new Date("2026-04-30T00:00:00.000Z"),
-      id: () => "session-1",
-    });
-
-    await sessions.create({
-      userId: "user-1",
-      tokenHash: "hash-1",
-      ip: "127.0.0.1",
-      userAgent: "vitest",
-      expiresAt: new Date("2026-05-30T00:00:00.000Z"),
-    });
-    await sessions.revoke("session-1");
-
-    expect(db.queries[0].sql).toMatch(/insert\s+into\s+sessions/i);
-    expect(db.queries[0].sql).toMatch(/token_hash/i);
-    expect(db.queries[0].params).toContain("hash-1");
-    expect(JSON.stringify(db.queries)).not.toContain("plain-session-token");
-    expect(db.queries[1].sql).toMatch(/revoked_at/i);
-    expect(db.queries[1].params).toContain("session-1");
-  });
-
   it("filters project lookups by owner_user_id for ordinary users", async () => {
     const db = new RecordingDb();
     db.nextRows.push([
@@ -204,51 +89,30 @@ describe("persistence repositories", () => {
     ]);
   });
 
-  it("supports admin read-only user and project lookups without owner filters", async () => {
+  it("supports admin read-only project lookups without owner filters", async () => {
+    // 用户列表已经不在 MySQL 了（旧账号体系整套下掉，身份改由 Python 的
+    // Neon `sliderule_user` 持有），这里只剩项目这一半。
     const db = new RecordingDb();
-    db.nextRows.push(
-      [
-        {
-          id: "user-1",
-          email: "user@example.com",
-          email_normalized: "user@example.com",
-          password_hash: "hash",
-          display_name: null,
-          avatar_url: null,
-          role: "user",
-          status: "active",
-          email_verified_at: null,
-          last_login_at: null,
-          last_login_ip: null,
-          created_at: new Date("2026-04-30T00:00:00.000Z"),
-          updated_at: new Date("2026-04-30T00:00:00.000Z"),
-        },
-      ],
-      [
-        {
-          id: "project-1",
-          owner_user_id: "user-1",
-          name: "Project",
-          description: null,
-          status: "active",
-          source: "user",
-          created_at: new Date("2026-04-30T00:00:00.000Z"),
-          updated_at: new Date("2026-04-30T00:00:00.000Z"),
-          archived_at: null,
-        },
-      ],
-    );
-    const users = createUsersRepository(db);
+    db.nextRows.push([
+      {
+        id: "project-1",
+        owner_user_id: "user-1",
+        name: "Project",
+        description: null,
+        status: "active",
+        source: "user",
+        created_at: new Date("2026-04-30T00:00:00.000Z"),
+        updated_at: new Date("2026-04-30T00:00:00.000Z"),
+        archived_at: null,
+      },
+    ]);
     const projects = createProjectsRepository(db);
 
-    await users.list();
     await projects.findById("project-1");
 
-    expect(db.queries[0].sql).toMatch(/from\s+users/i);
-    expect(db.queries[0].sql).not.toMatch(/owner_user_id/i);
-    expect(db.queries[1].sql).toMatch(/where\s+id\s+=\s+\?/i);
-    expect(db.queries[1].sql).not.toMatch(/owner_user_id\s+=\s+\?/i);
-    expect(db.queries[1].params).toEqual(["project-1"]);
+    expect(db.queries[0].sql).toMatch(/where\s+id\s+=\s+\?/i);
+    expect(db.queries[0].sql).not.toMatch(/owner_user_id\s+=\s+\?/i);
+    expect(db.queries[0].params).toEqual(["project-1"]);
   });
 
   it("stores project scoped resources under a project id", async () => {

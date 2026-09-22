@@ -1,12 +1,12 @@
 /**
- * EntityRelationGraph — React Flow 渲染的实体关系图（DataModel 屏主路径）。
+ * EntityRelationGraph — DataModel 屏主路径（xyflow Database Schema 表节点）。
  *
- * 实体卡是真 React 组件（标题栏 + 逐字段行，ref 字段珊瑚色标注 → 目标实体），
- * @dagrejs/dagre 计算左→右布局，smoothstep 平滑边带字段名标签——标签是
- * 纯 DOM，永远水平（取代 G6 版：其边标签随线段旋转导致文字倾斜）。
- * 数据来自 deriveErGraphData（与 mermaid 降级路径同一套 ref 关联推断）。
+ * 2026-08-18：按 GitHub 上能抄的那套改——表是白底细边，字段名在左、类型在右，
+ * PK/FK 标在行上，线从 FK 行接到被引用表的 PK（没有 id 就接到表头）。
+ * 推断仍走 deriveErGraphData，不许在这里另猜一层关联。
+ *
+ * 上一版卡腰上进出线、类型在左、浅蓝表头：看起来不像表，像便签。
  */
-
 import React from "react";
 import {
   ReactFlow,
@@ -22,56 +22,90 @@ import "@xyflow/react/dist/style.css";
 import dagre from "@dagrejs/dagre";
 import {
   deriveErGraphData,
+  type ErGraphField,
   type ErGraphNode,
   type FiveSystemModel,
 } from "./five-system-model";
 import { useContainerSized } from "./use-sized";
 
-const CARD_W = 236;
-const ROW_H = 22;
-const TITLE_H = 30;
+const CARD_W = 240;
+const ROW_H = 24;
+const TITLE_H = 32;
 const MAX_ROWS = 9;
+const INK = "#737373";
 
-function cardHeight(node: ErGraphNode): number {
-  return TITLE_H + Math.min(node.fields.length, MAX_ROWS) * ROW_H + (node.fields.length > MAX_ROWS ? ROW_H : 0) + 6;
+export function isPkField(field: ErGraphField): boolean {
+  return field.id === "id";
 }
 
-type ErFlowNode = Node<{ er: ErGraphNode }, "erNode">;
+export function pkHandleId(node: ErGraphNode): string {
+  return node.fields.some(isPkField) ? "id" : "table";
+}
 
-function ErNodeCard({ data }: NodeProps<ErFlowNode>) {
-  const { er } = data;
+function cardHeight(node: ErGraphNode): number {
+  return (
+    TITLE_H +
+    Math.min(node.fields.length, MAX_ROWS) * ROW_H +
+    (node.fields.length > MAX_ROWS ? ROW_H : 0)
+  );
+}
+
+type ErFlowNode = Node<
+  { er: ErGraphNode; selectedKey: string | null; onSelect: (key: string) => void },
+  "erNode"
+>;
+
+export function ErTableCard({
+  er,
+  selectedKey = null,
+  onSelect,
+}: {
+  er: ErGraphNode;
+  selectedKey?: string | null;
+  onSelect?: (key: string) => void;
+}) {
   const rows = er.fields.slice(0, MAX_ROWS);
+  const hasPk = er.fields.some(isPkField);
   return (
     <div
+      data-testid={`er-table-${er.id}`}
       style={{
         width: CARD_W,
         boxSizing: "border-box",
         background: "#fff",
-        border: "1px solid #E3DED2",
-        borderRadius: 10,
-        overflow: "hidden",
-        boxShadow: "0 2px 8px rgba(90,80,60,0.10)",
+        border: "1px solid #e5e7eb",
+        borderRadius: 6,
+        overflow: "visible",
         fontFamily: "inherit",
       }}
     >
-      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
-      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
       <div
+        data-testid="er-table-header"
         style={{
+          position: "relative",
           height: TITLE_H,
           display: "flex",
           alignItems: "center",
-          gap: 7,
+          gap: 8,
           padding: "0 10px",
-          background: "#eef0f4",
+          borderBottom: "1px solid #e5e7eb",
+          background: "#fff",
         }}
       >
-        <span style={{ width: 7, height: 7, borderRadius: 4, background: "#1677ff", flexShrink: 0 }} />
+        {!hasPk && (
+          <Handle
+            type="target"
+            position={Position.Right}
+            id="table"
+            isConnectable={false}
+            style={{ width: 7, height: 7, background: INK, border: "none", right: -4 }}
+          />
+        )}
         <span
           style={{
             fontSize: 12,
             fontWeight: 600,
-            color: "#33302a",
+            color: "#171717",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -79,68 +113,119 @@ function ErNodeCard({ data }: NodeProps<ErFlowNode>) {
         >
           {er.name}
         </span>
-        <span style={{ marginLeft: "auto", color: "#b8b2a4", fontSize: 9, fontFamily: "monospace" }}>{er.id}</span>
-      </div>
-      {rows.map((f) => (
-        <div
-          key={f.id}
+        <span
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            height: ROW_H,
-            padding: "0 10px",
-            borderTop: "1px solid #f4f1ea",
+            marginLeft: "auto",
+            color: "#a1a1aa",
+            fontSize: 10,
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
           }}
         >
-          <span
+          {er.id}
+        </span>
+      </div>
+      {rows.map(f => {
+        const pk = isPkField(f);
+        const fk = Boolean(f.refTarget);
+        const key = `${er.id}:${f.id}`;
+        const selected = selectedKey === key;
+        return (
+          <button
+            key={f.id}
+            type="button"
+            data-testid={`er-field-${er.id}-${f.id}`}
+            data-pk={pk ? "true" : "false"}
+            data-fk={fk ? "true" : "false"}
+            onClick={() => onSelect?.(key)}
+            onPointerDown={event => event.stopPropagation()}
             style={{
-              color: "#8c8c8c",
-              fontSize: 9,
-              width: 46,
-              flexShrink: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              width: "100%",
+              height: ROW_H,
+              padding: "0 10px",
+              borderTop: "1px solid #f4f4f5",
+              background: selected ? "#f4f4f5" : "#fff",
+              cursor: "pointer",
+              textAlign: "left",
             }}
           >
-            {f.type}
-          </span>
-          <span
-            style={{
-              color: "#3b3b3b",
-              fontSize: 11,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {f.name}
-          </span>
-          {f.refTarget && (
-            <span style={{ marginLeft: "auto", color: "#0958d9", fontSize: 9, whiteSpace: "nowrap" }}>
-              → {f.refTarget}
+            {fk && (
+              <Handle
+                type="source"
+                position={Position.Left}
+                id={f.id}
+                isConnectable={false}
+                style={{ width: 7, height: 7, background: "#2563eb", border: "none", left: -4 }}
+              />
+            )}
+            {pk && (
+              <Handle
+                type="target"
+                position={Position.Right}
+                id={f.id}
+                isConnectable={false}
+                style={{ width: 7, height: 7, background: "#d97706", border: "none", right: -4 }}
+              />
+            )}
+            <span
+              aria-hidden
+              title={pk ? "主键" : fk ? "外键" : undefined}
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                flexShrink: 0,
+                background: pk ? "#d97706" : fk ? "#2563eb" : "transparent",
+              }}
+            />
+            <span
+              style={{
+                color: "#171717",
+                fontSize: 11,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {f.name}
             </span>
-          )}
-        </div>
-      ))}
+            <span
+              style={{
+                marginLeft: "auto",
+                color: "#a1a1aa",
+                fontSize: 10,
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                flexShrink: 0,
+              }}
+            >
+              {f.type}
+            </span>
+          </button>
+        );
+      })}
       {er.fields.length > MAX_ROWS && (
         <div
           style={{
             height: ROW_H,
             lineHeight: `${ROW_H}px`,
             padding: "0 10px",
-            borderTop: "1px solid #f4f1ea",
-            color: "#bbb",
+            borderTop: "1px solid #f4f4f5",
+            color: "#a1a1aa",
             fontSize: 10,
           }}
         >
           … 共 {er.fields.length} 个字段
         </div>
       )}
-      <div style={{ height: 4 }} />
     </div>
   );
+}
+
+function ErNodeCard({ data }: NodeProps<ErFlowNode>) {
+  return <ErTableCard er={data.er} selectedKey={data.selectedKey} onSelect={data.onSelect} />;
 }
 
 const NODE_TYPES = { erNode: ErNodeCard };
@@ -150,17 +235,15 @@ function layoutPositions(data: {
   edges: Array<{ source: string; target: string; label: string }>;
 }) {
   const g = new dagre.graphlib.Graph({ multigraph: true });
-  g.setGraph({ rankdir: "LR", nodesep: 44, ranksep: 60 });
+  g.setGraph({ rankdir: "LR", nodesep: 48, ranksep: 72 });
   g.setDefaultEdgeLabel(() => ({}));
   for (const n of data.nodes) g.setNode(n.id, { width: CARD_W, height: cardHeight(n) });
-  // dagre 的 LR 秩沿边方向增长；ER 边是"多→一"，反着喂让被引用实体排前面。
-  // 把标签实际尺寸喂给 dagre（labelpos:c）——列间距按最长字段名自动撑开，
-  // 标签不再钻进卡片底下（节点层在边层之上，盖住即不可读）。
+  // dagre 的 LR 秩沿边方向增长；ER 边是"多→一"，反着喂让被引用实体排左边。
   for (const [i, e] of data.edges.entries()) {
     g.setEdge(
       e.target,
       e.source,
-      { width: Math.max(e.label.length * 6.4 + 16, 40), height: 18, labelpos: "c" },
+      { width: 24, height: 12 },
       `e-${i}`
     );
   }
@@ -182,37 +265,45 @@ export function EntityRelationGraph({
 }) {
   const data = React.useMemo(() => deriveErGraphData(datamodel), [datamodel]);
   const { ref: containerRef, sized } = useContainerSized();
+  const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
+  const onSelect = React.useCallback((key: string) => {
+    setSelectedKey(cur => (cur === key ? null : key));
+  }, []);
 
   const flowNodes: ErFlowNode[] = React.useMemo(() => {
     if (!data) return [];
     const positions = layoutPositions(data);
-    return data.nodes.map((n) => ({
+    return data.nodes.map(n => ({
       id: n.id,
       type: "erNode" as const,
       position: positions[n.id] ?? { x: 0, y: 0 },
-      data: { er: n },
+      data: { er: n, selectedKey, onSelect },
     }));
+  }, [data, selectedKey, onSelect]);
+
+  const byId = React.useMemo(() => {
+    const map = new Map<string, ErGraphNode>();
+    for (const n of data?.nodes ?? []) map.set(n.id, n);
+    return map;
   }, [data]);
 
   const flowEdges: Edge[] = React.useMemo(
     () =>
-      (data?.edges ?? []).map((e, i) => ({
-        id: `r-${i}`,
-        // 视觉上从"一"侧指向"多"侧持 ref 的实体？不——箭头语义保持"多引用一"：
-        // 源 = 持 ref 实体，靶 = 被引用实体，与 er 图 crow-foot 阅读习惯一致
-        source: e.target,
-        target: e.source,
-        type: "smoothstep",
-        pathOptions: { borderRadius: 12 },
-        label: e.label,
-        style: { stroke: "#C9C2B2", strokeWidth: 1.5 },
-        labelStyle: { fontSize: 10, fill: "#8c8577" },
-        labelBgStyle: { fill: "#FCFBF8", fillOpacity: 1 },
-        labelBgPadding: [4, 2] as [number, number],
-        labelBgBorderRadius: 4,
-        markerEnd: { type: "arrowclosed" as const, color: "#C9C2B2", width: 18, height: 18 },
-      })),
-    [data]
+      (data?.edges ?? []).map((e, i) => {
+        const targetNode = byId.get(e.target);
+        return {
+          id: `r-${i}`,
+          source: e.source,
+          sourceHandle: e.label,
+          target: e.target,
+          targetHandle: targetNode ? pkHandleId(targetNode) : "table",
+          type: "smoothstep",
+          pathOptions: { borderRadius: 10 },
+          style: { stroke: INK, strokeWidth: 1.25 },
+          markerEnd: { type: "arrowclosed" as const, color: INK, width: 14, height: 14 },
+        };
+      }),
+    [data, byId]
   );
 
   if (!data) return null;
@@ -225,18 +316,19 @@ export function EntityRelationGraph({
           edges={flowEdges}
           nodeTypes={NODE_TYPES}
           fitView
-          fitViewOptions={{ padding: 0.15 }}
+          fitViewOptions={{ padding: 0.16 }}
           minZoom={0.2}
           proOptions={{ hideAttribution: true }}
           nodesConnectable={false}
           deleteKeyCode={null}
+          onPaneClick={() => setSelectedKey(null)}
         >
           <Background gap={18} size={1} color="#e5e7eb" />
           <Controls showInteractive={false} position="bottom-right" />
         </ReactFlow>
       )}
-      <span className="pointer-events-none absolute bottom-2 left-3 rounded-full bg-black/20 px-2 py-0.5 text-[9px] text-white/90">
-        拖拽移动 · 滚轮缩放
+      <span className="pointer-events-none absolute bottom-2 left-3 text-[10px] text-stone-400">
+        点字段看主键/外键 · 拖拽移动 · 滚轮缩放
       </span>
     </div>
   );

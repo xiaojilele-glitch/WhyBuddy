@@ -3,9 +3,9 @@
 ## 这是干嘛的
 
 生成总览页时会先让生图模型画一张「首页参照板」（见
-freeform_block._generate_overview_sheet_b64），设计 LLM 照着它排版式。那张图
-用完就丢——但它恰好就是这个应用首页长什么样，也正是应用中心卡片该显示的东西，
-而且钱已经付过了。
+freeform_block._generate_overview_sheet_b64），设计 LLM 照着它排版式。运营总览
+直接收这张参照板；营销首页因完整视觉稿不能再充当运行时 Hero，改收与它并发生成的
+独立 Hero 媒体。两者都是这次生成的代表画面，也都避免应用中心重新活渲染。
 
 对面那头（应用中心）此前靠**活渲染**：每张卡挂一个真的 AppRuntimeScreen，
 antd 表格 + echarts 全套跑一遍。AppsWorkbench 自己的注释记着实测数字——

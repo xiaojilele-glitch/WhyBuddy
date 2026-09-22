@@ -5,6 +5,7 @@ import { TurnRouteTimeline } from "./TurnRouteTimeline";
 import type { TurnRouteFacts } from "@shared/blueprint/sliderule-turn-route";
 import type { TurnStep } from "./types";
 import type { ActionTrace } from "@shared/blueprint/capability-process-labels";
+import { ThinkingOrbMark } from "./ThinkingOrbMark";
 import type {
   CrossRuntimeGraphSummary,
   PublishClosureSummary,
@@ -146,9 +147,8 @@ export function ArchitectureProcessPanel({
           }`}
         >
           {!liveAction.external && (
-            <span className="mr-1.5 inline-flex gap-0.5 align-middle">
-              <span className="size-1 animate-pulse rounded-full bg-stone-400" />
-              <span className="size-1 animate-pulse rounded-full bg-stone-400 [animation-delay:100ms]" />
+            <span className="mr-1.5 inline-flex align-middle" aria-hidden>
+              <ThinkingOrbMark label={liveAction.label} size={20} />
             </span>
           )}
           {liveAction.label}

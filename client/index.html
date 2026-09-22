@@ -2,13 +2,22 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- B5: CSP for GitHub Pages BYOK browser-llm (connect to LLM vendors only; no proxy). Injected via Vite for build too to avoid html-proxy transform issues. -->
     <!-- CSP meta is dynamically injected by Vite plugin during build (see vite.config.ts) for clean static output. For dev it falls back to this or the plugin. -->
-    <!-- 品牌标：S 型折叠尺（矢量优先，老浏览器回退 PNG）。标签标题由页面按当前会话话题动态刷新。 -->
-    <link rel="icon" type="image/svg+xml" href="%BASE_URL%assets/sliderule-mark.svg" />
-    <link rel="icon" type="image/png" href="%BASE_URL%sliderule-mark.png" />
-    <title>SlideRule · 产品推演引擎</title>
+    <!-- 品牌标：面团 AI（2026-08-03 换标）。标签标题由页面按当前会话话题动态刷新。
+         2026-08-07 调换顺序：**ico 在前**。
+         原注释说"ico 里那几档是给 Windows 快捷方式/旧 IE 用的，标签页上
+         PNG 更清楚"——这条现在不成立了。favicon.ico 的 16/32 已改成专画帧
+         （scripts/build_favicon.py：轮廓走缩放、五官在目标分辨率上盖硬边），
+         而 512 的 PNG 被浏览器一步缩到 16 时，五官会糊成一团灰。
+         实测两者在 16px 上几乎逐像素相同——也就是说 PNG 排前面的话，
+         专画那一版根本用不上。
+         512 的 PNG 保留给 apple-touch-icon 与大尺寸场景。 -->
+    <link rel="icon" href="%BASE_URL%favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="512x512" href="%BASE_URL%miantuan-mark-512.png" />
+    <link rel="apple-touch-icon" href="%BASE_URL%miantuan-mark-512.png" />
+    <title>面团 AI · 产品推演引擎</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

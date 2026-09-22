@@ -35,7 +35,7 @@ export function serializeSlideRuleDeliveryMd(
   const replay = replayCoverage(state);
   const lines: string[] = [];
 
-  lines.push("# SlideRule 交付包");
+  lines.push("# 面团 AI 交付包");
   lines.push("");
   lines.push(`> ${seal.displayLine}`);
   lines.push("");

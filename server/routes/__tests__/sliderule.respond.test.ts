@@ -18,6 +18,10 @@ describe("POST /api/sliderule/respond", () => {
 
   beforeEach(async () => {
     vi.restoreAllMocks();
+    // 本文件测的是 Node 兜底叙述这条 legacy 路径（mock 的是 Node 自己的 LLM 客户端）。
+    // 路由默认 SLIDERULE_V5_BACKEND=python，会直接 404 thin_proxy_only，
+    // 根本走不到被 mock 的代码；显式选 legacy 才是这些断言的真实被测对象。
+    vi.stubEnv("SLIDERULE_V5_BACKEND", "legacy");
     ({ restore: restoreLlmKey } = withStubbedLlmKey());
     server = createServer(app);
     await new Promise<void>((resolve) => server.listen(0, resolve));

@@ -1,0 +1,44 @@
+services:
+  db-api:
+    build:
+      context: .
+    image: local/postgres-https-api:latest
+    container_name: local-db-api
+    restart: unless-stopped
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      DB_HOST: ${DB_HOST:-local-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_SSLMODE: ${DB_SSLMODE:-require}
+      DB_API_DB_USER: ${DB_API_DB_USER:-db_api_user}
+      DB_API_MAX_ROWS: ${DB_API_MAX_ROWS:-5000}
+      DB_API_STATEMENT_TIMEOUT_MS: ${DB_API_STATEMENT_TIMEOUT_MS:-30000}
+      DB_API_MAX_STATEMENT_TIMEOUT_MS: ${DB_API_MAX_STATEMENT_TIMEOUT_MS:-120000}
+      DB_API_MAX_BODY_BYTES: ${DB_API_MAX_BODY_BYTES:-4194304}
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/livez', timeout=5).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks:
+      - db-internal
+      - whybuddy
+
+networks:
+  db-internal:
+    external: true
+    name: ${DB_API_DB_NETWORK:-postgres-stack-internal}
+  whybuddy:
+    external: true
+    name: ${DB_API_WEB_NETWORK:-whybuddy-deploy_default}

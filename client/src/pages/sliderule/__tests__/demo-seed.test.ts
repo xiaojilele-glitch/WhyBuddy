@@ -160,11 +160,29 @@ describe("demo-seed · 造行", () => {
   });
 
   it("摘不出词干就老实退回「字段名 + 序号」，不硬凑", () => {
+    // 原来这条用的是「摘要」。2026-08-11 起「摘要/说明/备注」这类归了 prose 档
+    // （见下面那条），不再走这个兜底，所以换一个**真的**认不出语义、又摘不出
+    // 词干的字段来守这条底线。这条守的是"合成不了就别装"，跟具体挑哪个词无关。
+    const rows = buildSeedRows(
+      { id: "x", fields: [{ id: "flavor", name: "风味", type: "string" }] },
+      NOW
+    );
+    expect(String(rows[0].values.flavor)).toBe("风味 1");
+  });
+
+  it("摘要/说明这类字段填一句话，不把字段名当值", () => {
+    // 截图里逮到的：「经营表现摘要: 经营表现摘要 1」。上面那条兜底只对
+    // "名称类"字段说得过去（「豆种 1」还像个名字，「经营表现摘要 1」不像
+    // 任何东西），所以这一档单独走 proseValue。
     const rows = buildSeedRows(
       { id: "x", fields: [{ id: "memo", name: "摘要", type: "string" }] },
       NOW
     );
-    expect(String(rows[0].values.memo)).toBe("摘要 1");
+    const vals = rows.map(r => String(r.values.memo));
+    expect(vals.every(v => !/^摘要 \d+$/.test(v))).toBe(true);
+    expect(vals[0]).toContain("示例");
+    // 12 行全同一句话时表格看着像渲染坏了
+    expect(new Set(vals).size).toBeGreaterThan(1);
   });
 
   it("enum 没有声明取值时留空，不瞎编枚举", () => {
@@ -196,10 +214,20 @@ describe("demo-seed · 语义识别", () => {
   });
 
   it("认不出就返回 null —— 宁可少认不可认错", () => {
-    // 把「备注」当人名填上「陈思源」比填「备注 1」更糟
-    expect(semanticOf("note", "备注")).toBeNull();
+    // 把「风味」当人名填上「陈思源」比填「风味 1」更糟。
+    //（这条原来举的例子是「备注」，2026-08-11 起它归 prose 档了；
+    //  换一个仍然认不出的词，守的纪律没变。）
+    expect(semanticOf("flavor", "风味")).toBeNull();
     expect(semanticOf("bean_name", "豆种名称")).toBeNull();
     expect(semanticOf("", "")).toBeNull();
+  });
+
+  it("散文档垫在最后 —— 更具体的规则先拿走它该拿的", () => {
+    expect(semanticOf("note", "备注")).toBe("prose");
+    expect(semanticOf("perf_summary", "经营表现摘要")).toBe("prose");
+    // 「说明书编号」里的「说明」不许抢在「编号」前面
+    expect(semanticOf("manual_code", "说明书编号")).toBe("code");
+    expect(semanticOf("owner_note", "负责人说明")).toBe("person");
   });
 });
 

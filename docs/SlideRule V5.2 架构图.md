@@ -1,3 +1,5 @@
+%% ⚠ 非权威 / 历史实验室笔记。禁止再打新 ⚑。
+%% 权威图只留自动生成的：SlideRule V6.2 / WhyBuddy TS / WhyBuddy 全仓 / grok-build。
 %% SlideRule V5.2 架构图（推演引擎规格）
 %% 2026-07-08 审查：本图各区块已全部落地（KEYPOOL 的 FIFO/per-key 计费仍如注待补）。
 %% 2026-07-09 增量审查：引擎规格零结构变化；技能库六期、加厚 schema 三期（字段语义/

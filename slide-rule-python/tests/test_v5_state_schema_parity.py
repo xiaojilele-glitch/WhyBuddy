@@ -1144,6 +1144,61 @@ def test_durable_v52_session_schema_parity_with_ts_blueprint():
     assert "UserIntervention" in str(schema) or any("UserIntervention" in str(v) for v in props.values())
 
 
+def test_await_reason_includes_control_ask_and_control_scope():
+    """M1 停泊必须是展开后的 control_ask / control_scope，禁止复用 ready/user_input/confirm。"""
+    from pathlib import Path
+
+    py_src = Path(__file__).resolve().parents[1] / "models" / "v5_state.py"
+    ts_src = Path(__file__).resolve().parents[2] / "shared" / "blueprint" / "v5-reasoning-state.ts"
+    py_text = py_src.read_text(encoding="utf-8")
+    ts_text = ts_src.read_text(encoding="utf-8")
+    for token in ('"control_ask"', '"control_scope"'):
+        assert token in py_text
+        assert token in ts_text
+    parked = V5SessionState(
+        sessionId="ctl-await-1",
+        goal={"text": "x", "status": "needs_refinement"},
+        awaitReason="control_ask",
+    )
+    assert parked.awaitReason == "control_ask"
+    parked2 = V5SessionState(
+        sessionId="ctl-await-2",
+        goal={"text": "x", "status": "needs_refinement"},
+        awaitReason="control_scope",
+    )
+    assert parked2.awaitReason == "control_scope"
+    import pytest
+
+    with pytest.raises(Exception):
+        V5SessionState(
+            sessionId="ctl-await-bad",
+            goal={"text": "x", "status": "needs_refinement"},
+            awaitReason="control_wait",
+        )
+
+
+def test_control_transcript_defaults_empty_and_legacy_missing_reads_as_empty():
+    """controlTranscript 是 schema 字段；老会话缺字段读成 []。"""
+    fresh = V5SessionState(
+        sessionId="ctl-tr-1",
+        goal={"text": "x", "status": "needs_refinement"},
+    )
+    assert fresh.controlTranscript == []
+    schema = V5SessionState.model_json_schema()
+    assert "controlTranscript" in schema.get("properties", {})
+    legacy = V5SessionState(
+        **{
+            "sessionId": "ctl-tr-legacy",
+            "goal": {"text": "old", "status": "clear"},
+            "artifacts": [],
+        }
+    )
+    assert legacy.controlTranscript == []
+    dumped = legacy.model_dump()
+    reloaded = V5SessionState(**dumped)
+    assert reloaded.controlTranscript == []
+
+
 if __name__ == "__main__":
     # allow direct run
     test_v5_session_state_declares_ts_core_fields()

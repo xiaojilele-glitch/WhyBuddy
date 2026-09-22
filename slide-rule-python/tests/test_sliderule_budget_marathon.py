@@ -12,6 +12,8 @@ Directly proves:
 Vitest only for thin proxy contract if needed; here pytest is primary for PYTHON_AUTHORITY.
 """
 
+from plan_approval_support import approved_execution_payload
+
 import sys
 
 import pytest
@@ -398,7 +400,7 @@ def test_drive_marathon_route_is_python_budget_authority():
         client = TestClient(app, raise_server_exceptions=False)
         resp = client.post(
             "/api/sliderule/drive-marathon",
-            json={"state": st.model_dump(), "seedText": "seed", "budget": {"maxTokens": 1000}, "maxRounds": 3},
+            json=approved_execution_payload({"state": st.model_dump(), "seedText": "seed", "budget": {"maxTokens": 1000}, "maxRounds": 3}),
             headers={"X-Internal-Key": "dev-slide-rule-internal"},
         )
         assert resp.status_code == 200, resp.text

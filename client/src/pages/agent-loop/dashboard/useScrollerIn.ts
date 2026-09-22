@@ -34,19 +34,43 @@ export function useScrollerIn(
     const grid = gridRef.current;
     if (!grid) return;
 
-    const scroller = findScrollParent(grid);
-    // 找不到可滚动祖先就退回文档滚动（页面本身在滚），行为等同官方实现。
-    const target: HTMLElement | Window = scroller ?? window;
-
     let frame = 0;
     let idleTimer: ReturnType<typeof setTimeout> | undefined;
     let last = 0;
     const minGap = 1000 / fps;
+    let attached: HTMLElement | Window | null = null;
+    let observed: HTMLElement | null = null;
+    let ro: ResizeObserver | null = null;
+
+    const onScroll = () => {
+      // rAF 合帧 + 最小间隔节流：滚动事件本身能到 100+/s，每次都 setState 会
+      // 把整面墙的 diff 拖进滚动帧里。
+      const now = Date.now();
+      if (frame || now - last < minGap) return;
+      last = now;
+      frame = requestAnimationFrame(measure);
+    };
+
+    const bind = (target: HTMLElement | Window) => {
+      if (attached === target) return;
+      if (attached) attached.removeEventListener("scroll", onScroll);
+      attached = target;
+      target.addEventListener("scroll", onScroll, { passive: true });
+    };
 
     const measure = () => {
       frame = 0;
       const g = gridRef.current;
       if (!g) return;
+      // 每次重找：首帧墙可能还没溢出（width=0 占位只有 1px），那时绑到
+      // window，真容器永远收不到 scroll——滚到底不加载。2026-08-18 踩过。
+      const scroller = findScrollParent(g);
+      bind(scroller ?? window);
+      if (ro && scroller && observed !== scroller) {
+        if (observed) ro.unobserve(observed);
+        ro.observe(scroller);
+        observed = scroller;
+      }
       let raw: number;
       let height: number;
       let offset: number;
@@ -77,30 +101,17 @@ export function useScrollerIn(
       );
     };
 
-    const onScroll = () => {
-      // rAF 合帧 + 最小间隔节流：滚动事件本身能到 100+/s，每次都 setState 会
-      // 把整面墙的 diff 拖进滚动帧里。
-      const now = Date.now();
-      if (frame || now - last < minGap) return;
-      last = now;
-      frame = requestAnimationFrame(measure);
-    };
+    ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => measure());
+    if (ro) ro.observe(grid);
 
     // 首帧先量一次：height 要拿容器的真实 clientHeight 顶掉上面那个初值。
     measure();
     setState(prev => (prev.isScrolling ? { ...prev, isScrolling: false } : prev));
 
-    target.addEventListener("scroll", onScroll, { passive: true });
-    // 容器变高变矮（窗口缩放 / 侧栏收起）都要重算视口高度。
-    const ro =
-      typeof ResizeObserver === "undefined" || !scroller
-        ? null
-        : new ResizeObserver(() => measure());
-    if (ro && scroller) ro.observe(scroller);
     window.addEventListener("resize", measure);
 
     return () => {
-      target.removeEventListener("scroll", onScroll);
+      if (attached) attached.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", measure);
       ro?.disconnect();
       if (frame) cancelAnimationFrame(frame);
@@ -112,17 +123,23 @@ export function useScrollerIn(
 }
 
 /** 往上找第一个真正会滚的祖先；找不到返回 null（表示文档在滚）。 */
-function findScrollParent(el: HTMLElement): HTMLElement | null {
+/**
+ * 最近的可滚动祖先。导出是给「换了筛选条件要回到顶部」用的（2026-08-08）：
+ * 谁在滚，就得让谁回顶，而这个判断只有这里有。
+ */
+export function findScrollParent(el: HTMLElement): HTMLElement | null {
   let node: HTMLElement | null = el.parentElement;
+  let overflowAuto: HTMLElement | null = null;
   while (node && node !== document.body && node !== document.documentElement) {
+    // 应用中心滚的就是它。首帧墙还没溢出时 scrollHeight===clientHeight，
+    // 旧写法会跳过，监听绑到 window——window 一格都不滚。
+    if (node.classList.contains("native-content")) return node;
     const { overflowY } = getComputedStyle(node);
-    if (
-      (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
-      node.scrollHeight > node.clientHeight
-    ) {
-      return node;
+    if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
+      if (node.scrollHeight > node.clientHeight) return node;
+      if (!overflowAuto) overflowAuto = node;
     }
     node = node.parentElement;
   }
-  return null;
+  return overflowAuto;
 }

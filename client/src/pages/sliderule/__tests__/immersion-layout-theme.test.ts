@@ -10,7 +10,7 @@ describe("SlideRule immersion layout theme", () => {
     expect(autopilotTheme.overlayBar).toContain("px-0");
     expect(autopilotTheme.overlayBar).not.toContain("bg-white");
     expect(autopilotTheme.overlayBar).not.toContain("shadow");
-    expect(autopilotTheme.immersionOverlayBottom).toContain("pb-[max(28px,env(safe-area-inset-bottom))]");
+    expect(autopilotTheme.immersionOverlayBottom).toContain("pb-[max(16px,env(safe-area-inset-bottom))]");
     expect(autopilotTheme.composerDockWidth).toContain("max-w-[min(100%,760px)]");
     expect(autopilotTheme.grokInputBar).toContain("min-h-[64px]");
     expect(autopilotTheme.grokInputBar).toContain("px-4");

@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import {
+  hrefFromWindow,
+  sessionIdFromHref,
+  slideruleSessionPath,
+} from "@/lib/sliderule-session-id";
+import { ACTIVE_SESSION_KEY } from "./dashboard/SidebarSessions";
 
 import { DashboardApp, DashboardDetailApp } from "./dashboard/DashboardApp";
 import { setCommandHandler } from "./dashboard/bridge";
+import { getStaffConsolePath } from "@/pages/admin/StaffConsolePage";
 import {
   cancelCurrent,
   fetchDetail,
@@ -26,20 +33,46 @@ if (typeof window !== "undefined") {
 }
 
 type View = "overview" | "detail";
-type DashboardRouteView = "sliderule" | "workbench" | "workbench-legacy" | "skills" | "help" | "settings" | "settings-legacy";
+type DashboardRouteView = "sliderule" | "workbench" | "workbench-legacy" | "skills" | "components" | "help" | "settings" | "settings-legacy" | "dashboard" | "admin";
 
 export type AgentLoopRouteState =
   | { kind: "sliderule" }
   | { kind: "workbench" }
   | { kind: "workbench-legacy" }
   | { kind: "skills" }
+  | { kind: "components" }
   | { kind: "help" }
   | { kind: "settings" }
   | { kind: "settings-legacy" }
+  | { kind: "dashboard" }
+  | { kind: "admin" }
   | { kind: "detail"; runId: string };
 
 export function getAgentLoopSliderulePath(): string {
   return "/agent-loop/sliderule";
+}
+
+/** 切回推演页时把当前会话写进地址栏，免得导航把自己刚打开的 id 剥掉。 */
+export function currentSliderulePath(href?: string, stored?: string | null): string {
+  let fromStore = stored;
+  if (fromStore === undefined) {
+    try {
+      fromStore =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem(ACTIVE_SESSION_KEY)
+          : null;
+    } catch {
+      fromStore = null;
+    }
+  }
+  const id = String(
+    sessionIdFromHref(
+      href ?? (typeof window !== "undefined" ? hrefFromWindow(window) : "")
+    ) ||
+      fromStore ||
+      ""
+  ).trim();
+  return id ? slideruleSessionPath(id) : getAgentLoopSliderulePath();
 }
 
 export function getAgentLoopWorkbenchPath(): string {
@@ -52,6 +85,10 @@ export function getAgentLoopWorkbenchLegacyPath(): string {
 }
 
 /** 技能库（TRAE 论坛技能索引，回链原帖） */
+export function getAgentLoopComponentsPath(): string {
+  return "/agent-loop/components";
+}
+
 export function getAgentLoopSkillsPath(): string {
   return "/agent-loop/skills";
 }
@@ -63,6 +100,14 @@ export function getAgentLoopHelpPath(): string {
 
 export function getAgentLoopSettingsPath(): string {
   return "/agent-loop/settings";
+}
+
+export function getAgentLoopDashboardPath(): string {
+  return "/agent-loop/dashboard";
+}
+
+export function getAgentLoopAdminPath(): string {
+  return getStaffConsolePath();
 }
 
 /** legacy AgentLoop 设置页：摘除导航、保留 URL 直达。 */
@@ -88,6 +133,9 @@ export function parseAgentLoopLocation(location: string): AgentLoopRouteState {
   if (normalized === "/agent-loop/workbench/legacy") {
     return { kind: "workbench-legacy" };
   }
+  if (normalized === "/agent-loop/components") {
+    return { kind: "components" };
+  }
   if (normalized === "/agent-loop/skills") {
     return { kind: "skills" };
   }
@@ -99,6 +147,15 @@ export function parseAgentLoopLocation(location: string): AgentLoopRouteState {
   }
   if (normalized === "/agent-loop/settings") {
     return { kind: "settings" };
+  }
+  if (normalized === "/agent-loop/dashboard") {
+    return { kind: "dashboard" };
+  }
+  if (
+    normalized === "/agent-loop/admin" ||
+    normalized.startsWith("/agent-loop/admin/")
+  ) {
+    return { kind: "admin" };
   }
 
   const runPrefix = "/agent-loop/runs/";
@@ -121,7 +178,10 @@ export function resolveAgentLoopLiveEventRunId(
     route.kind === "sliderule" ||
     route.kind === "settings" ||
     route.kind === "settings-legacy" ||
+    route.kind === "admin" ||
+    route.kind === "dashboard" ||
     route.kind === "skills" ||
+    route.kind === "components" ||
     route.kind === "help" ||
     route.kind === "workbench"
   ) {
@@ -233,13 +293,21 @@ export default function AgentLoopPage() {
     }
     const path =
       next === "sliderule"
-        ? getAgentLoopSliderulePath()
+        ? currentSliderulePath()
         : next === "settings"
           ? getAgentLoopSettingsPath()
+          : next === "dashboard"
+            ? getAgentLoopDashboardPath()
+          : next === "admin"
+            ? (route.kind === "admin"
+              ? (location.split(/[?#]/, 1)[0] || getAgentLoopAdminPath())
+              : getAgentLoopAdminPath())
           : next === "settings-legacy"
             ? getAgentLoopSettingsLegacyPath()
             : next === "skills"
               ? getAgentLoopSkillsPath()
+              : next === "components"
+                ? getAgentLoopComponentsPath()
               : next === "help"
                 ? getAgentLoopHelpPath()
                 : next === "workbench-legacy"
@@ -575,12 +643,18 @@ export default function AgentLoopPage() {
   const dashboardView: DashboardRouteView =
     route.kind === "settings"
       ? "settings"
+      : route.kind === "dashboard"
+        ? "dashboard"
+      : route.kind === "admin"
+        ? "admin"
       : route.kind === "settings-legacy"
         ? "settings-legacy"
         : route.kind === "sliderule"
           ? "sliderule"
           : route.kind === "skills"
             ? "skills"
+            : route.kind === "components"
+              ? "components"
             : route.kind === "help"
               ? "help"
               : route.kind === "workbench-legacy"
@@ -596,7 +670,7 @@ export default function AgentLoopPage() {
       ) : null}
       {!mounted ? (
         <div data-testid="agent-loop-loading" className="agent-loop-loading">
-          SlideRule 控制台加载中…
+          面团 AI 控制台加载中…
         </div>
       ) : view === "detail" && detail ? (
         <DashboardDetailApp payload={detail} />
@@ -607,13 +681,21 @@ export default function AgentLoopPage() {
           onViewChange={showDashboardView}
           getViewPath={(next) => (
             next === "sliderule"
-              ? getAgentLoopSliderulePath()
+              ? currentSliderulePath()
               : next === "settings"
                 ? getAgentLoopSettingsPath()
+                : next === "dashboard"
+                  ? getAgentLoopDashboardPath()
+                : next === "admin"
+                  ? (route.kind === "admin"
+                    ? (location.split(/[?#]/, 1)[0] || getAgentLoopAdminPath())
+                    : getAgentLoopAdminPath())
                 : next === "settings-legacy"
                   ? getAgentLoopSettingsLegacyPath()
                   : next === "skills"
                     ? getAgentLoopSkillsPath()
+                    : next === "components"
+                      ? getAgentLoopComponentsPath()
                     : next === "help"
                       ? getAgentLoopHelpPath()
                       : next === "workbench-legacy"

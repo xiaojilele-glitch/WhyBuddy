@@ -1,0 +1,328 @@
+{
+  "note": "真机 sr-20260906045441 那一轮的 SSE 事件里，reasoning_step / reasoning_step_result / progress_heartbeat 三类原样抽出。整轮 443 个事件，其中 progress_heartbeat 只有 3 个、specfirst.pages 开 3 次收 0 次、specfirst.bind 开 1 次收 0 次。",
+  "sessionId": "sr-20260906045441",
+  "totalEvents": 443,
+  "events": [
+    {
+      "type": "reasoning_step",
+      "label": "planning"
+    },
+    {
+      "type": "reasoning_step",
+      "label": "risk.analyze"
+    },
+    {
+      "type": "reasoning_step",
+      "label": "critique.generate"
+    },
+    {
+      "type": "reasoning_step",
+      "label": "report.write"
+    },
+    {
+      "type": "reasoning_step",
+      "label": "appbundle.runtimeClosure"
+    },
+    {
+      "type": "reasoning_step_result",
+      "label": "evidence.search",
+      "error": false
+    },
+    {
+      "type": "reasoning_step_result",
+      "label": "risk.analyze",
+      "error": false
+    },
+    {
+      "type": "reasoning_step_result",
+      "label": "critique.generate",
+      "error": false
+    },
+    {
+      "type": "reasoning_step_result",
+      "label": "report.write",
+      "error": false
+    },
+    {
+      "type": "reasoning_step",
+      "stage": "specfirst.spec",
+      "label": "起草规格：成功判据、需求节点与页面清单",
+      "stageGroup": "起草",
+      "stageOrder": 1,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "elapsedMs": 0,
+      "productStep": 2
+    },
+    {
+      "type": "progress_heartbeat",
+      "stage": "specfirst.spec",
+      "label": "起草规格：成功判据、需求节点与页面清单",
+      "pageId": null,
+      "device": null,
+      "elapsedMs": 15024,
+      "productStep": 2
+    },
+    {
+      "type": "reasoning_step_result",
+      "stage": "specfirst.spec",
+      "label": "起草规格：成功判据、需求节点与页面清单",
+      "stageGroup": "起草",
+      "stageOrder": 1,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "ms": 22335,
+      "elapsedMs": 22335,
+      "error": false,
+      "skippedReason": null,
+      "productStep": 2
+    },
+    {
+      "type": "reasoning_step_result",
+      "label": "appbundle.runtimeClosure",
+      "error": false
+    },
+    {
+      "type": "reasoning_step",
+      "label": "planning"
+    },
+    {
+      "type": "reasoning_step",
+      "label": "factory.structure"
+    },
+    {
+      "type": "reasoning_step",
+      "label": "factory.bind"
+    },
+    {
+      "type": "reasoning_step",
+      "stage": "specfirst.design",
+      "label": "定这个应用的设计语言",
+      "stageGroup": "起草",
+      "stageOrder": 2,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "elapsedMs": 0,
+      "productStep": 2
+    },
+    {
+      "type": "progress_heartbeat",
+      "stage": "specfirst.design",
+      "label": "定这个应用的设计语言",
+      "pageId": null,
+      "device": null,
+      "elapsedMs": 15128,
+      "productStep": 2
+    },
+    {
+      "type": "reasoning_step_result",
+      "stage": "specfirst.design",
+      "label": "定这个应用的设计语言",
+      "stageGroup": "起草",
+      "stageOrder": 2,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "ms": 18772,
+      "elapsedMs": 18772,
+      "error": false,
+      "skippedReason": null,
+      "productStep": 2
+    },
+    {
+      "type": "reasoning_step",
+      "stage": "specfirst.pages",
+      "label": "逐页画界面（并发）",
+      "stageGroup": "画界面",
+      "stageOrder": 5,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "elapsedMs": 0,
+      "productStep": 3
+    },
+    {
+      "type": "reasoning_step_result",
+      "label": "factory.pages",
+      "error": false
+    },
+    {
+      "type": "reasoning_step",
+      "stage": "specfirst.pages",
+      "label": "逐页画界面（并发）",
+      "stageGroup": "画界面",
+      "stageOrder": 5,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "elapsedMs": 0,
+      "productStep": 3
+    },
+    {
+      "type": "reasoning_step_result",
+      "label": "factory.structure",
+      "error": false
+    },
+    {
+      "type": "reasoning_step",
+      "stage": "specfirst.pages",
+      "label": "逐页画界面（并发）",
+      "stageGroup": "画界面",
+      "stageOrder": 5,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "elapsedMs": 0,
+      "productStep": 3
+    },
+    {
+      "type": "reasoning_step_result",
+      "label": "factory.bind",
+      "error": false
+    },
+    {
+      "type": "reasoning_step",
+      "label": "planning"
+    },
+    {
+      "type": "reasoning_step_result",
+      "label": "planning",
+      "error": false
+    },
+    {
+      "type": "reasoning_step",
+      "label": "factory.structure"
+    },
+    {
+      "type": "reasoning_step",
+      "label": "factory.bind"
+    },
+    {
+      "type": "reasoning_step",
+      "stage": "specfirst.structure",
+      "label": "从界面反推数据模型与关联关系",
+      "stageGroup": "反推模型",
+      "stageOrder": 6,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "elapsedMs": 0,
+      "productStep": 4
+    },
+    {
+      "type": "progress_heartbeat",
+      "stage": "specfirst.structure",
+      "label": "从界面反推数据模型与关联关系",
+      "pageId": null,
+      "device": null,
+      "elapsedMs": 15111,
+      "productStep": 4
+    },
+    {
+      "type": "reasoning_step_result",
+      "stage": "specfirst.structure",
+      "label": "从界面反推数据模型与关联关系",
+      "stageGroup": "反推模型",
+      "stageOrder": 6,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "ms": 26124,
+      "elapsedMs": 26124,
+      "error": false,
+      "skippedReason": null,
+      "productStep": 4
+    },
+    {
+      "type": "reasoning_step",
+      "stage": "specfirst.semantics",
+      "label": "推导权限、工作流与不变式",
+      "stageGroup": "反推模型",
+      "stageOrder": 7,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "elapsedMs": 0,
+      "productStep": 5
+    },
+    {
+      "type": "reasoning_step_result",
+      "stage": "specfirst.semantics",
+      "label": "推导权限、工作流与不变式",
+      "stageGroup": "反推模型",
+      "stageOrder": 7,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "ms": 9677,
+      "elapsedMs": 9677,
+      "error": false,
+      "skippedReason": null,
+      "productStep": 5
+    },
+    {
+      "type": "reasoning_step",
+      "stage": "specfirst.assemble",
+      "label": "汇合五系统模型并过结构闸",
+      "stageGroup": "收口",
+      "stageOrder": 8,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "elapsedMs": 0,
+      "productStep": 6
+    },
+    {
+      "type": "reasoning_step_result",
+      "stage": "specfirst.assemble",
+      "label": "汇合五系统模型并过结构闸",
+      "stageGroup": "收口",
+      "stageOrder": 8,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "ms": 6392,
+      "elapsedMs": 6392,
+      "error": false,
+      "skippedReason": null,
+      "productStep": 6
+    },
+    {
+      "type": "reasoning_step",
+      "stage": "specfirst.bind",
+      "label": "给界面接上数据",
+      "stageGroup": "收口",
+      "stageOrder": 9,
+      "stageOf": null,
+      "pageId": null,
+      "device": null,
+      "elapsedMs": 0,
+      "productStep": 6
+    },
+    {
+      "type": "reasoning_step",
+      "label": "planning"
+    },
+    {
+      "type": "reasoning_step",
+      "label": "planning"
+    },
+    {
+      "type": "reasoning_step_result",
+      "label": "planning",
+      "error": false
+    },
+    {
+      "type": "reasoning_step",
+      "label": "appbundle.runtimeClosure"
+    },
+    {
+      "type": "reasoning_step_result",
+      "label": "appbundle.runtimeClosure",
+      "error": false
+    }
+  ]
+}

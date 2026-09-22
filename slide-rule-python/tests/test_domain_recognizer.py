@@ -14,16 +14,24 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from services.builtin_examples import _EXAMPLE_META
 from services.v5_capability_executor import DOMAIN_INTENT_MARKERS, _recognize_domain
+
+# 原 E41 示例卡的四句预填意图（示例库 2026-08-14 下架、builtin_examples 模块
+# 删除，但这四句是"最标准的领域表述"，识别器的召回契约照旧用它们锁）。
+_CANONICAL_INTENTS = {
+    "purchase_approval": "设计一个采购审批系统，包含采购申请、部门审批和供应商管理",
+    "leave_approval": "设计一个请假审批系统，包含请假申请、主管审批和假期额度管理",
+    "service_ticket": "我们客服团队需要一个服务工单系统，支持工单流转、SLA 升级和客服绩效",
+    "employee_onboarding": "设计一个员工入职系统，包含入职流程、部门分配和 HR 权限管理",
+}
 
 
 # ── 该认的认 ────────────────────────────────────────────────
 
 def test_example_card_intents_recognized():
-    """四张示例卡的预填意图必须精确落回各自的域（点卡即近路的契约）。"""
-    for domain, meta in _EXAMPLE_META.items():
-        assert _recognize_domain(meta["intent"]) == domain
+    """四句标准领域表述必须精确落回各自的域（识别器召回契约）。"""
+    for domain, intent in _CANONICAL_INTENTS.items():
+        assert _recognize_domain(intent) == domain
 
 
 def test_domain_specific_phrases_recognized():

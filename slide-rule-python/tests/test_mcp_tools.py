@@ -114,10 +114,28 @@ def test_retrieve_evidence_web_saturates_top_k(search_on, monkeypatch):
 
 def test_distill_queries_prefix_ladder():
     qs = _distill_queries("宠物医院预约问诊系统")
-    assert "宠物医院" in qs and "宠物" in qs  # 递减前缀候选
+    assert "宠物医院" in qs  # 递减前缀候选
     qs2 = _distill_queries("民宿房态管理与动态定价助手")
     assert any(q.startswith("民宿") for q in qs2)
     assert any(q.startswith("动态定价") or q == "动态定价" for q in qs2)
+
+
+def test_distill_queries_不再降到两字():
+    """2 字前缀这一级 2026-08-09 撤掉了，这条钉住别加回来。
+
+    原来这里断言的是 `"宠物" in qs`。撤的理由是它过不了相关性闸那一关——
+    2 字词太泛，几乎什么标题都"包含"它：
+
+        opensearch("黑灰") → 黑灰蝶 ✓ 黑灰蝶屬 ✓ 黑灰蚁鵙 ✓
+        opensearch("宠物") → 宠物 ✓ 宠物店男孩 ✓ 宠物狗寄宿 ✓
+
+    留着它等于给"黑灰产→蝴蝶"留后门：3 字那级被闸拦下，退到 2 字又原样放行。
+    """
+    qs = _distill_queries("宠物医院预约问诊系统")
+    assert "宠物" not in qs
+    assert all(len(q) >= 3 for q in qs), qs
+    # 黑灰产那条真实事故：蒸馏出来的最短一级必须还是 3 字，不能有"黑灰"
+    assert "黑灰" not in _distill_queries("黑灰产情报自动化分析系统")
 
 
 def test_registry_descriptor_mcp_shape():
@@ -240,3 +258,122 @@ def test_live_e2b_code_run_smoke(monkeypatch):
     assert out is not None and out["ok"] is True
     assert "sliderule-sandbox-ok" in out["stdout"]
     assert out["provenance"] == "sandbox:e2b" and out["sandboxId"]
+
+
+# ── 检索相关性闸（2026-08-09）──────────────────────────────────────────
+
+
+class Test维基相关性闸:
+    """真实事故：搜"黑灰产"，搜回来一只蝴蝶。
+
+    线上一趟推演（黑灰产情报自动化分析系统，22 分 52 秒）三次收口喂进模型的
+    "外部证据"都是同一条 `[web-wiki-zh-黑灰蝶] 黑灰蝶（學名：Niphanda fusca）
+    ……一種寄生性蝴蝶`。复现是确定的：
+
+        opensearch("黑灰产") → ['黑灰蝶', '黑灰蝶屬', '黑灰蚁鵙']
+
+    opensearch 是搜索框补全接口，按标题**前缀**匹配；而这一层命中即采纳。
+    """
+
+    def test_黑灰产不该命中黑灰蝶(self):
+        from services.mcp_tools import _title_matches_term
+
+        for junk in ("黑灰蝶", "黑灰蝶屬", "黑灰蚁鵙"):
+            assert not _title_matches_term("黑灰产", junk), junk
+
+    def test_真命中要留住(self):
+        from services.mcp_tools import _title_matches_term
+
+        assert _title_matches_term("剧本杀", "剧本杀")
+        assert _title_matches_term("情报分析", "情报分析")
+        # 标题被词包含也算 —— 「宠物医」→「宠物」是正确的泛化，
+        # 只留"标题含词"这一个方向会把它毙掉
+        assert _title_matches_term("宠物医", "宠物")
+
+    def test_同前缀但不同概念一律拒(self):
+        from services.mcp_tools import _title_matches_term
+
+        assert not _title_matches_term("情报分析", "情景分析")
+        assert not _title_matches_term("情报分析", "情報分析管理")  # 简繁不互认，宁缺勿噪
+        assert not _title_matches_term("剧本杀", "剧本统筹")
+
+    def test_空值不炸(self):
+        from services.mcp_tools import _title_matches_term
+
+        assert not _title_matches_term("", "宠物")
+        assert not _title_matches_term("宠物", "")
+        assert not _title_matches_term("  ", " ")
+
+    def test_大小写不敏感(self):
+        from services.mcp_tools import _title_matches_term
+
+        assert _title_matches_term("crm", "CRM")
+        assert _title_matches_term("Inventory management", "inventory management software")
+
+    def test_闸装在_wiki_titles_上并打日志(self, monkeypatch, capsys):
+        """判据对不等于接线对：闸必须真的过滤掉返回值。"""
+        import services.mcp_tools as m
+
+        monkeypatch.setattr(
+            m, "_wiki_api",
+            lambda lang, params: ["黑灰产", ["黑灰蝶", "黑灰蝶屬", "黑灰蚁鵙"], [], []],
+        )
+        assert m._wiki_titles("zh", "黑灰产", 3) == []
+        out = capsys.readouterr().out
+        assert "相关性闸拦下 3 条" in out, out
+        assert "黑灰蝶" in out  # 被拒的要写出来，否则"没证据"和"检索坏了"分不开
+
+    def test_闸不误伤正常命中(self, monkeypatch):
+        import services.mcp_tools as m
+
+        monkeypatch.setattr(
+            m, "_wiki_api",
+            lambda lang, params: ["剧本杀", ["剧本杀", "剧本", "剧本统筹"], [], []],
+        )
+        assert m._wiki_titles("zh", "剧本杀", 3) == ["剧本杀", "剧本"]
+
+
+def test_检索词不该把能力id拼进去():
+    """线上实测：查询里带能力 id，蒸馏出的英文碎词把维基整成了噪声源。
+
+        "黑灰产情报自动化分析系统 for appbundle.runtimeClosure"
+          → ['黑灰产情', '黑灰产', 'for', 'appb', 'app']
+              'for'  → Fortran、Formula of Love
+              'app'  → AppBlock、Apple晶片、APPBP1
+              'inte' → Internet、Intel Core i7處理器（intent.parse 那一路）
+
+    而且 " for " 是模板硬编码，所以 Fortran 出现在**每个能力、每趟推演**里。
+
+    相关性闸拦不住——那些条目字面上真的含 'for'/'app'。所以修的是查询本身
+    （v5_capability_executor 里 retrieve_evidence 只传 topic）。这条从两头钉：
+    脏查询确实会蒸馏出英文碎词，干净查询不会。
+    """
+    from services.mcp_tools import _title_matches_term
+
+    dirty = _distill_queries("黑灰产情报自动化分析系统 for appbundle.runtimeClosure")
+    assert "for" in dirty and "app" in dirty, dirty
+    # 闸放行它们是对的 —— 说明问题不在闸，在查询
+    assert _title_matches_term("for", "Fortran")
+    assert _title_matches_term("app", "AppBlock")
+
+    clean = _distill_queries("黑灰产情报自动化分析系统")
+    assert not any(t.isascii() for t in clean), clean
+
+
+def test_能力执行只拿话题去检索(monkeypatch):
+    """接线：execute 不许再把 capability_id 拼进检索词。"""
+    import services.v5_capability_executor as ex
+
+    seen = []
+    monkeypatch.setattr(ex, "retrieve_evidence", lambda q, top_k=6: seen.append(q) or [])
+    monkeypatch.setattr(ex, "generate_with_rag", lambda p, e: "内容")
+    from models.v5_state import V5SessionState
+
+    st = V5SessionState(sessionId="s", goal={"text": "黑灰产情报自动化分析系统", "status": "clear"})
+    try:
+        ex.execute_v5_capability("appbundle.runtimeClosure", st, [], "role-1", "loop-1")
+    except Exception:
+        pass  # 只关心检索词，后续链路炸不炸不影响本判定
+    assert seen, "没调到 retrieve_evidence"
+    assert "appbundle" not in seen[0], f"能力 id 又进检索词了：{seen[0]!r}"
+    assert " for " not in seen[0], f"脚手架词又进检索词了：{seen[0]!r}"

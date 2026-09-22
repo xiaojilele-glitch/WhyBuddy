@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.v5_state import V5SessionState  # noqa: E402
 from services.slide_rule_coverage import author_coverage_contract  # noqa: E402
-from services.slide_rule_session import pick_repair_capabilities  # noqa: E402
+from services.engine_scheduling import pick_repair_capabilities  # noqa: E402
 from services.v5_full_driver import transient_blocked_signal  # noqa: E402
 
 GOAL = "做一个宠物医院预约管理系统，包含预约排班、宠物档案和医生工作台"

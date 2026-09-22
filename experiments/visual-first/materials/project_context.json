@@ -1,0 +1,49 @@
+{
+  "goal": "轻量 CRM 客户跟进系统",
+  "summary": "面向个人销售的小型 Web CRM，第一版聚焦客户档案、跟进记录、下次跟进提醒与客户状态管理，优先保证录入效率与日常跟进闭环。",
+  "sources": [
+    "user_input:轻量 CRM 客户跟进系统",
+    "clarification:核心功能=客户+跟进",
+    "assumption:目标用户=销售个人版",
+    "assumption:交付形态=Web 单页应用",
+    "assumption:账号体系=先单账号"
+  ],
+  "evidence": [
+    {
+      "type": "user_input",
+      "ref": "user_input:轻量 CRM 客户跟进系统",
+      "status": "ok",
+      "note": "用户给出产品方向"
+    },
+    {
+      "type": "clarification",
+      "ref": "clarification:核心功能=客户+跟进",
+      "status": "ok",
+      "note": "用户明确第一版至少包含客户与跟进能力"
+    },
+    {
+      "type": "assumption",
+      "ref": "assumption_bundle:v1_defaults",
+      "status": "assumed",
+      "note": "其余未答项按 whybuddy 推荐默认值处理，并在 open items 中待确认"
+    }
+  ],
+  "constraints": [
+    "MVP 优先，范围控制在单人销售日常客户跟进",
+    "默认浏览器访问，兼顾桌面常用分辨率",
+    "默认单账号，无复杂权限模型",
+    "先保证核心流程可用，再考虑报表、协作和商机扩展"
+  ],
+  "degradations": [
+    {
+      "stage": "input",
+      "reason": "未提供现有代码仓库、接口文档或截图",
+      "impact": "接口契约、技术选型与数据迁移只能形成草稿，待后续接地核实"
+    }
+  ],
+  "grounding": {
+    "repoAvailable": false,
+    "repoStatus": "not_provided",
+    "note": "本轮为 greenfield 规格定义，无真实仓库可读"
+  }
+}

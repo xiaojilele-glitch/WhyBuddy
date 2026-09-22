@@ -77,6 +77,14 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
+          # ⚠ 工作台 CSP 的 frame-src 在**编译期**定死（见 Dockerfile 里那段注释）。
+          #   不传这个，构建出来的包就是 `frame-src 'self'`，私有预览的 iframe
+          #   会被浏览器拦掉——而且不报 502，只是「打不开」。
+          #   放 repo variable（不是 secret）：它是公开域名，不是凭据。
+          #   没配时传空串，CSP 退回只允许本站 iframe，等于旧行为。
+          #   python 那个 Dockerfile 不认这个 ARG，多传无害。
+          build-args: |
+            WHYBUDDY_PROJECT_PREVIEW_ORIGIN_TEMPLATE=${{ vars.WHYBUDDY_PROJECT_PREVIEW_ORIGIN_TEMPLATE }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}

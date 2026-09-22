@@ -28,9 +28,14 @@ except Exception as e:
 
 client = TestClient(app)
 
+# 2026-08-04：/api/rag/* 补了内部密钥守卫（此前两种守卫都没有，而 ingest 是
+# 写向量库的接口——检索结果会进推演的证据链，那是投毒面）。契约测试跟着带上
+# 这个头：它现在是契约的一部分，不是测试的脚手架。
+HDR = {"x-internal-key": "dev-slide-rule-internal"}
+
 
 def test_rag_search_returns_python_provenance_and_results():
-    resp = client.post("/api/rag/search", json={"query": "RBAC 权限 风险", "options": {"topK": 3, "mode": "hybrid"}})
+    resp = client.post("/api/rag/search", json={"query": "RBAC 权限 风险", "options": {"topK": 3, "mode": "hybrid"}}, headers=HDR)
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data.get("results"), list)
@@ -43,7 +48,7 @@ def test_rag_search_returns_python_provenance_and_results():
 
 
 def test_rag_search_requires_query():
-    resp = client.post("/api/rag/search", json={"options": {}})
+    resp = client.post("/api/rag/search", json={"options": {}}, headers=HDR)
     assert resp.status_code == 400
     body = resp.json()
     message = body.get("message") or body.get("detail") or ""
@@ -52,7 +57,7 @@ def test_rag_search_requires_query():
 
 def test_rag_ingest_returns_python_signals():
     payload = {"sourceType": "task_result", "sourceId": "t-105", "content": "test rag query task content", "projectId": "p105", "timestamp": "2026-07-02T00:00:00Z"}
-    resp = client.post("/api/rag/ingest", json={"payload": payload})
+    resp = client.post("/api/rag/ingest", json={"payload": payload}, headers=HDR)
     assert resp.status_code == 200
     data = resp.json()
     assert data.get("provenance") == "python-rag-query"
@@ -61,7 +66,7 @@ def test_rag_ingest_returns_python_signals():
 
 
 def test_rag_ingest_batch_contract_shape():
-    resp = client.post("/api/rag/ingest/batch", json={"payloads": [{"sourceType": "document", "sourceId": "d1", "content": "c", "projectId": "p", "timestamp": "t"}]})
+    resp = client.post("/api/rag/ingest/batch", json={"payloads": [{"sourceType": "document", "sourceId": "d1", "content": "c", "projectId": "p", "timestamp": "t"}]}, headers=HDR)
     assert resp.status_code == 200
     data = resp.json()
     assert data.get("provenance") == "python-rag-query"
@@ -75,3 +80,19 @@ def test_rag_rag_health_under_prefix():
     data = resp.json()
     assert data.get("backend") == "slide-rule-python"
     assert data.get("provenance") == "python-rag-query"
+
+
+def test_rag_write_surfaces_reject_anonymous_callers():
+    """没有内部密钥一律 403。
+
+    这三个接口 2026-08-04 之前**谁都能调**。ingest 尤其要紧：它往检索库里写
+    内容，而检索结果会作为证据进入推演链路——不设门等于开放投毒。
+    """
+    for path, body in (
+        ("/api/rag/search", {"query": "x"}),
+        ("/api/rag/ingest", {"payload": {}}),
+        ("/api/rag/ingest/batch", {"payloads": []}),
+    ):
+        assert client.post(path, json=body).status_code == 403, path
+    # 探活接口保持匿名可读——它只回一个可用性布尔
+    assert client.get("/api/rag/health").status_code == 200

@@ -23,6 +23,11 @@ const TOPIC = arg("topic");
 const TEMPLATE_OUT = arg("template");
 const GALLERY_OUT = arg("gallery-out");
 const BASE = arg("base") || "http://localhost:3000";
+const AUTH_TOKEN = process.env.SLIDERULE_TEST_AUTH_TOKEN || "";
+const requestHeaders = {
+  "Content-Type": "application/json",
+  ...(AUTH_TOKEN ? { Cookie: `sliderule_token=${AUTH_TOKEN}` } : {}),
+};
 if (!TOPIC || (!TEMPLATE_OUT && !GALLERY_OUT)) {
   console.error("usage: --topic <意图> (--template <ts路径> | --gallery-out <json路径>)");
   process.exit(2);
@@ -34,7 +39,7 @@ const log = m => process.stderr.write(`[capture] ${m}\n`);
 // 1) 种子会话
 const put = await fetch(`${BASE}/api/sliderule/sessions/${sid}`, {
   method: "PUT",
-  headers: { "Content-Type": "application/json" },
+  headers: requestHeaders,
   body: JSON.stringify({
     sessionId: sid,
     goal: { text: TOPIC, status: "clear" },
@@ -47,7 +52,7 @@ log(`session ${sid} seeded`);
 // 2) 真实推演，逐事件收集
 const res = await fetch(`${BASE}/api/sliderule/drive-full-stream`, {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: requestHeaders,
   body: JSON.stringify({ sessionId: sid, userText: TOPIC }),
 });
 if (!res.ok || !res.body) throw new Error(`stream POST ${res.status}`);

@@ -1,0 +1,61 @@
+# Overlay for docker-compose.prod.yml. TLS/DNS are provisioned outside Compose.
+# Python remains the session + execution owner; this adds only a preview transport.
+services:
+  python:
+    environment:
+      NODE_ENV: production
+      WHYBUDDY_PROJECT_ROLLOUT: ${WHYBUDDY_PROJECT_ROLLOUT:-disabled}
+      WHYBUDDY_PROJECT_CLEANUP_ENABLED: "1"
+      WHYBUDDY_PROJECT_ALLOWED_USERS: ${WHYBUDDY_PROJECT_ALLOWED_USERS:-}
+      WHYBUDDY_PROJECT_PREVIEW_AGENT_BUNDLE: /dist/project-preview/agent.cjs
+      # ⚠ 2026-09-16 补：这两个原来只靠 python 服务的 `env_file: .env` 间接拿。
+      #   它们是 `os.getenv` 读的（services/project_preview_config.py），
+      #   缺任何一个 `preview_configuration_enabled()` 就是 False，界面停在
+      #   「工程预览尚未配置」——**而网关侧照样起得来**，于是看上去只是
+      #   「预览打不开」，不会有人想到是 Python 少了一个变量。
+      #
+      #   写在这里还有第二个作用：跟下面网关服务**引用同一个变量名**，
+      #   两侧的 key 从一个源出来，不可能各配各的。
+      #   （两边 key 不一致是最阴的一种坏法：票照发、界面照常就绪，
+      #     兑票时静默失败。scripts/project-preview-doctor.py 有一条专门钉它。）
+      WHYBUDDY_PROJECT_PREVIEW_GATEWAY_KEY: ${WHYBUDDY_PROJECT_PREVIEW_GATEWAY_KEY:?separate gateway key required}
+      WHYBUDDY_PROJECT_PREVIEW_ORIGIN_TEMPLATE: ${WHYBUDDY_PROJECT_PREVIEW_ORIGIN_TEMPLATE:?preview origin template required, e.g. https://{runtimeId}.preview.example.com}
+    restart: unless-stopped
+
+  project-preview:
+    build:
+      context: .
+      dockerfile: server/project-preview/Dockerfile
+    depends_on:
+      python:
+        condition: service_healthy
+    environment:
+      # ⚠ 2026-09-16 线上抓到：这里原本写死 `http://python:9700/...`，
+      #   而网关自己的校验（server/project-preview/service.ts，
+      #   `preview_authority_https_required`）只放行 http: + localhost/127.0.0.1/[::1]。
+      #   `python` 是服务名、不是回环 → **网关一起来就抛**。
+      #   也就是说仓里发的是一份网关自己拒收的配置，谁照着部署都起不来，
+      #   而且报的是一个跟"预览打不开"毫无字面关系的 config 错。
+      #
+      #   不放宽那条校验（网关 key 是以 Bearer 明文发给授权端的，
+      #   "同一个 compose 网络所以没事"这种判断一旦写进代码就会被复制到别处）。
+      #   改成由部署方显式给一个 https 地址——通常就是工作台自己：
+      #       WHYBUDDY_PROJECT_PREVIEW_AUTHORITY_URL=https://你的域名/api/sliderule/internal/project-preview
+      #   缺了直接起不来并打印这句话，比静默退回"尚未配置"强。
+      WHYBUDDY_PROJECT_PREVIEW_AUTHORITY_URL: ${WHYBUDDY_PROJECT_PREVIEW_AUTHORITY_URL:?HTTPS authority url required, e.g. https://example.com/api/sliderule/internal/project-preview}
+      WHYBUDDY_PROJECT_PREVIEW_GATEWAY_KEY: ${WHYBUDDY_PROJECT_PREVIEW_GATEWAY_KEY:?separate gateway key required}
+      WHYBUDDY_PROJECT_WORKBENCH_ORIGIN: ${WHYBUDDY_PROJECT_WORKBENCH_ORIGIN:?HTTPS workbench origin required}
+      WHYBUDDY_PROJECT_PREVIEW_PUBLIC_PROTOCOL: "https:"
+      WHYBUDDY_PROJECT_PREVIEW_PORT: "3002"
+    # ⚠ 2026-09-16：Caddy 现在按**服务名**反代（`project-preview:3002`，
+    #   同一个 default 网络），不再走宿主的 172.18.0.1。这条 publish 因此
+    #   不是链路的一环，只留给宿主上排查用——
+    #   `scripts/project-preview-doctor.py` 的「网关进程在不在」查的就是它。
+    #   ⚠ 保持绑在 127.0.0.1：预览必须只经 TLS 入口对外，不许直接裸露。
+    ports:
+      - "127.0.0.1:3002:3002"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

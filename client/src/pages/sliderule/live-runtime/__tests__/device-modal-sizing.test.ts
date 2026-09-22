@@ -1,7 +1,7 @@
 /**
  * 弹层不许顶穿画布 —— 展会现场访客点「新建」直接能看见的那个 bug。
  *
- * 根因是 antd Modal 是桌面组件：不给 width 默认 520，而手机画布只有 390 宽。
+ * 根因是 antd Modal 是桌面组件：不给 width 默认 520，而手机画布只有 405 宽。
  * 旁边的详情 Drawer 早就按 isPhone 改成底部弹起了，Modal 这块一直漏着。
  */
 import { describe, it, expect } from "vitest";
@@ -11,11 +11,11 @@ import { deviceModalSizing } from "../AppRuntimeScreen";
 const CANVAS = {
   desktop: { w: 1440, h: 810 },
   tablet: { w: 1112, h: 834 },
-  phone: { w: 390, h: 844 },
+  phone: { w: 405, h: 720 },
 } as const;
 
 describe("deviceModalSizing", () => {
-  it("三种设备下弹框都窄于画布（回归：手机 520 > 390 顶穿两边）", () => {
+  it("三种设备下弹框都窄于画布（回归：手机 520 > 405 顶穿两边）", () => {
     for (const device of ["desktop", "tablet", "phone"] as const) {
       const { width } = deviceModalSizing(device);
       expect(width).toBeLessThan(CANVAS[device].w);

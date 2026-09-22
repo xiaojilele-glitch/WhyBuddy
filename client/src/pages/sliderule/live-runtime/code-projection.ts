@@ -26,7 +26,7 @@ export interface ProjectedFile {
 }
 
 const HEADER_NOTE =
-  "由 SlideRule 五系统 schema 确定性投影生成（只读视图）——想改这里的内容，请回到意图重新推演，而不是改这份代码";
+  "由面团 AI 五系统 schema 确定性投影生成（只读视图）——想改这里的内容，请回到意图重新推演，而不是改这份代码";
 
 function comment(lang: ProjectedFile["language"], text: string): string {
   return lang === "sql"

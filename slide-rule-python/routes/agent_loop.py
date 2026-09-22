@@ -38,6 +38,23 @@ from services.agent_loop_settings import (
     validate_enums,
 )
 from services.agent_loop_provider_health import get_provider_health
+
+from middlewares.current_user import CurrentUser
+
+# ── 谁能调这些接口（2026-08-04 补）────────────────────────────────
+#
+# 这个路由此前**两种守卫都没有**：既不要登录，也不要内部密钥。而它是浏览器
+# 直连的（前端 pages/agent-loop/dashboard/agentLoopApi.ts 经 Vite 代理打过来），
+# 所以补的是**用户身份**而不是内部密钥——内部密钥是给机器对机器的通道用的，
+# 浏览器拿不到也不该拿到。
+#
+# 只给**写**接口加（跑任务、重跑、取消、改设置）：这几个要么烧钱（真起 LLM
+# 任务）、要么改别人正在跑的东西、要么动全局设置。读接口（health/runs/事件流/
+# 静态面板）保持匿名可读，跟应用中心"浏览无需登录"的产品规则一致。
+#
+# ⚠️ 这是"要登录"，不是"是你的才让动"——目前 agent-loop 的运行记录没有
+# owner 字段，做不了逐条归属判定。补上归属之前，登录用户之间仍然可以互相
+# 取消任务。如实写在这里，不假装它是完整的授权。
 from models.agent_loop import AgentLoopSettingsStatus, RouteState
 
 router = APIRouter()
@@ -232,7 +249,15 @@ async def run_events_stream_v2(run_id: str, live: Optional[bool] = False):
 
 
 @router.post("/queue/run")
-async def start_queue_run(req: CommandRequest):
+# ⚠ `def` 而不是 `async def`——**故意的，别改回去**（2026-08-21）。
+# 函数体里跑的是同步的慢活（LLM / 子进程），写成 async 就是整段跑在事件
+# 循环那条线程上：真机实测两个人各打一次 intake-judge（单次 7.9s），
+# 第三个人的 /api/health 等了 10.5s——空载是 0.0013s。
+# 同 /drive-full 头注那条（2026-08-02 同款事故），修法用 FastAPI 官方口径：
+# 普通 def 会被丢进 anyio 线程池，而不是直接占住循环。
+# 判据：tests/test_routes_do_not_block_event_loop.py（跑真 ASGI 应用量行为，
+# 不扫源码——扫描器在这件事上误报过两次）。
+def start_queue_run(req: CommandRequest, _user: CurrentUser):
     """Start a queue run via bridge. Validates task id, queue path, mode.
     Dry-run returns the exact redacted command without executing.
     Runtime non-secrets from payload (112) are now visible to this layer (no longer dropped by CommandRequest).
@@ -270,7 +295,15 @@ async def start_queue_run(req: CommandRequest):
 
 
 @router.post("/task/run")
-async def start_task_run(req: CommandRequest):
+# ⚠ `def` 而不是 `async def`——**故意的，别改回去**（2026-08-21）。
+# 函数体里跑的是同步的慢活（LLM / 子进程），写成 async 就是整段跑在事件
+# 循环那条线程上：真机实测两个人各打一次 intake-judge（单次 7.9s），
+# 第三个人的 /api/health 等了 10.5s——空载是 0.0013s。
+# 同 /drive-full 头注那条（2026-08-02 同款事故），修法用 FastAPI 官方口径：
+# 普通 def 会被丢进 anyio 线程池，而不是直接占住循环。
+# 判据：tests/test_routes_do_not_block_event_loop.py（跑真 ASGI 应用量行为，
+# 不扫源码——扫描器在这件事上误报过两次）。
+def start_task_run(req: CommandRequest, _user: CurrentUser):
     """Single-task run endpoint. Validates inputs. Dry-run supported.
     Accepts runtime non-secret fields (see CommandRequest) for contract; backend owns most resolution.
     """
@@ -291,7 +324,15 @@ async def start_task_run(req: CommandRequest):
 
 
 @router.post("/rerun")
-async def rerun_command(req: CommandRequest):
+# ⚠ `def` 而不是 `async def`——**故意的，别改回去**（2026-08-21）。
+# 函数体里跑的是同步的慢活（LLM / 子进程），写成 async 就是整段跑在事件
+# 循环那条线程上：真机实测两个人各打一次 intake-judge（单次 7.9s），
+# 第三个人的 /api/health 等了 10.5s——空载是 0.0013s。
+# 同 /drive-full 头注那条（2026-08-02 同款事故），修法用 FastAPI 官方口径：
+# 普通 def 会被丢进 anyio 线程池，而不是直接占住循环。
+# 判据：tests/test_routes_do_not_block_event_loop.py（跑真 ASGI 应用量行为，
+# 不扫源码——扫描器在这件事上误报过两次）。
+def rerun_command(req: CommandRequest, _user: CurrentUser):
     """Rerun via bridge (treated as queue start by default)."""
     task = _validate_task_id(req.task)
     mode = _validate_mode(req.mode or "rerun")
@@ -310,7 +351,7 @@ async def rerun_command(req: CommandRequest):
 
 
 @router.post("/cancel")
-async def cancel_command(req: Optional[CommandRequest] = None):
+async def cancel_command(_user: CurrentUser, req: Optional[CommandRequest] = None):
     """Cancel endpoint returns explicit unsupported/queued-cancel placeholder.
     Never pretends success; no PID killing.
     """
@@ -347,7 +388,7 @@ async def get_settings():
 
 
 @router.post("/settings")
-async def save_settings(payload: Dict[str, Any]):
+async def save_settings(payload: Dict[str, Any], _user: CurrentUser):
     """Save non-secret settings.
     - Skips any secret-like keys (do not write raw keys).
     - Rejects unsupported enum values with 400.

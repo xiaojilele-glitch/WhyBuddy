@@ -39,6 +39,8 @@ sys.path.insert(0, str(_ROOT))
 
 from dotenv import load_dotenv  # noqa: E402
 
+from sliderule_llm.config import default_max_tokens  # noqa: E402
+
 load_dotenv(_ROOT.parent / ".env")
 load_dotenv(_ROOT / ".env", override=False)
 
@@ -172,7 +174,7 @@ def _llm_verdict(skill: dict) -> tuple[str, str]:
         ],
         required_keys=("verdict", "reason"),
         temperature=0.0,
-        max_tokens=400,
+        max_tokens=default_max_tokens(),
         max_retries=1,
     )
     verdict = str(payload.get("verdict") or "").strip()

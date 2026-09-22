@@ -2,7 +2,7 @@
  * PhoneFormPopup — 手机档「新建」表单（antd-mobile Popup + Form，④）。
  *
  * 替掉桌面档的 antd Modal。Modal 是桌面组件：默认 520 宽、居中浮层，塞进
- * 390 的手机画布会顶穿两边（真机量过右侧溢出 130 设计像素，「保存」整个
+ * 405 的手机画布会顶穿两边（真机量过右侧溢出 130 设计像素，「保存」整个
  * 按钮在画布外，填完了提交不了）。
  *
  * 内部用 antd-mobile 的 Form 而不是手搓 <div>标签</div>+<控件>：官方那套
@@ -15,7 +15,7 @@
  */
 
 import React from "react";
-import { Popup, Form } from "antd-mobile";
+import { Button, ErrorBlock, Form, NavBar, Popup } from "antd-mobile";
 import PhoneFormField from "./PhoneFormField";
 import type { AppFormFieldSchema } from "../app-runtime-schema";
 
@@ -67,61 +67,29 @@ export default function PhoneFormPopup({
       data-testid="phone-form-popup"
     >
       {/* 顶栏左取消右保存 —— iOS/Android 表单页的通用形态 */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          padding: "12px 16px",
-          borderBottom: "1px solid var(--adm-color-border, #eeeeee)",
-          flexShrink: 0,
-        }}
+      <NavBar
+        back={null}
+        left={
+          <Button fill="none" size="small" onClick={onCancel} data-testid="phone-form-cancel">
+            取消
+          </Button>
+        }
+        right={
+          <Button color="primary" fill="none" size="small" onClick={onSubmit} data-testid="phone-form-submit">
+            保存
+          </Button>
+        }
       >
-        <a
-          onClick={onCancel}
-          style={{ color: "var(--adm-color-weak, #999999)", fontSize: 15 }}
-          data-testid="phone-form-cancel"
-        >
-          取消
-        </a>
-        <span
-          style={{
-            flex: 1,
-            textAlign: "center",
-            fontWeight: 600,
-            fontSize: 16,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            padding: "0 8px",
-          }}
-        >
-          {title}
-        </span>
-        <a
-          onClick={onSubmit}
-          style={{
-            color: "var(--adm-color-primary, #1677ff)",
-            fontSize: 15,
-            fontWeight: 600,
-          }}
-          data-testid="phone-form-submit"
-        >
-          保存
-        </a>
-      </div>
+        {title}
+      </NavBar>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: 12 }}>
         {fields.length === 0 ? (
-          <div
-            style={{
-              color: "var(--adm-color-light, #cccccc)",
-              fontSize: 13,
-              textAlign: "center",
-              padding: "24px 0",
-            }}
-          >
-            本页没有可录入字段
-          </div>
+          <ErrorBlock
+            status="empty"
+            title="本页没有可录入字段"
+            description="请返回并选择其他业务页面"
+          />
         ) : (
           <Form layout="horizontal" mode="card">
             {fields.map(f => (

@@ -3,7 +3,7 @@
  * 锁：kanban 分组（声明列序、声明外进未归类）、月历纯日期算术
  * （周一起始、整周补位、数据月推导）、KanbanBoard/CalendarBoard 静态渲染。
  */
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   KANBAN_UNASSIGNED,
@@ -137,6 +137,29 @@ describe("视图组件静态渲染", () => {
     expect(html).toContain("ant-badge-status-success");
     expect(html).toContain("ant-badge-status-warning");
     expect(html).not.toContain("#52c41a");
+  });
+
+  /**
+   * 把"今天"钉死在数据所在的那个月里（2026-08-09 修）。
+   *
+   * 这条用例本来是**定时炸弹**：它让日历停在数据的月份（2026-07），却断言
+   * 画面上有"今天"的高亮。而 antd 的月视图是 6 周 42 格，只覆盖
+   * 2026-06-28 ~ 2026-08-08 —— 也就是说：
+   *
+   *     真实日期 ≤ 2026-08-08  → 今天在格子里，绿
+   *     真实日期 = 2026-08-09  → 今天差一天出界，红
+   *
+   * 它在 08-08 那天还是绿的，08-09 就红了，而代码一行没动。这种红最费人：
+   * 单跑也红、全量也红，但 git blame 指不到任何改动。
+   *
+   * 冻住时间之后，断言才真的在验"今天有没有高亮"，而不是在验"今天是几号"。
+   */
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-15T00:00:00"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("CalendarBoard：换成 antd Calendar 后白拿到的两样东西", () => {

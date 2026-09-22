@@ -1140,23 +1140,10 @@
   background: rgba(217, 119, 87, 0.06);
 }
 
-/* --- SlideRule 流式指示动效（2026-07-10 用户裁决：点点动画要明显、光标别乱闪） --- */
-/* 思考点：弹跳 + 透明度呼吸，比 animate-pulse 醒目一个量级 */
-@keyframes sr-dot-bounce {
-  0%,
-  80%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.35;
-  }
-  40% {
-    transform: translateY(-3px);
-    opacity: 1;
-  }
-}
-.sr-dot {
-  animation: sr-dot-bounce 1.2s ease-in-out infinite;
-}
+/* --- SlideRule 流式指示动效 --- */
+/* 2026-09-15：思考点不再走 sr-dot / SpinKit。用户说三点 bounce 死，
+   换成 thinking-orbs 的画笔（见 ThinkingOrbMark.tsx）。系统
+   prefers-reduced-motion 不许冻这颗球——真机冻过一次。 */
 
 /* 打字机光标：终端式阶跃闪烁（steps 硬切，不做平滑渐隐——平滑版看着"发虚"） */
 @keyframes sr-caret-blink {
@@ -1173,15 +1160,138 @@
   animation: sr-caret-blink 1.1s steps(1, end) infinite;
 }
 
+/* 输入框上方的审查/澄清弹出。对照 ComposerDock + 菜单：从下方 8px 淡入。
+   2026-08-20：进 flex 流会把输入框顶走；动画只做出现，卸载即消失。 */
+@keyframes sr-composer-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.sr-composer-pop {
+  animation: sr-composer-pop 0.16s ease-out;
+}
+
+/* 待办进行中：assistant-ui TodoList 的转圈，不是单选圆点。
+   没有模型给的百分比，不许画 25% 这种假进度，只转。 */
+@keyframes sr-todo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.sr-todo-spin {
+  animation: sr-todo-spin 1.1s linear infinite;
+}
+
+/* 预览空态：小浏览器 + 页骨架扫光。停着也扫，醒了加快。
+   没有模型给的百分比，不许画假进度条。 */
+@keyframes sr-preview-page-shimmer {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+@keyframes sr-preview-wake-breathe {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 10px 28px rgb(15 23 42 / 0.06);
+  }
+  50% {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 32px rgb(15 23 42 / 0.1);
+  }
+}
+@keyframes sr-preview-wake-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+@keyframes sr-preview-wake-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.sr-preview-page {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 10px 0;
+  background-image: linear-gradient(
+    90deg,
+    #fff 0%,
+    #f3f3f5 46%,
+    #fff 82%
+  );
+  background-size: 220% 100%;
+  animation: sr-preview-page-shimmer 2.6s ease-in-out infinite;
+}
+.sr-preview-page-line {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: #ececef;
+}
+.sr-preview-wake-window {
+  animation: sr-preview-wake-breathe 1.8s ease-in-out infinite;
+}
+.sr-preview-wake-window .sr-preview-page {
+  animation-duration: 1.15s;
+}
+.sr-preview-wake-pane {
+  position: relative;
+  overflow: hidden;
+}
+.sr-preview-wake-pane::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.7),
+    transparent
+  );
+  animation: sr-preview-wake-sweep 1.4s ease-in-out infinite;
+}
+.sr-preview-wake-spin {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border: 2px solid #e4e4e7;
+  border-top-color: #171717;
+  border-radius: 9999px;
+  animation: sr-preview-wake-spin 0.7s linear infinite;
+}
+
 /* 减少动态效果（偏好开关 sr-reduce-motion + 系统 prefers-reduced-motion 双入口） */
-.sr-reduce-motion .sr-dot,
 .sr-reduce-motion .sr-caret,
+.sr-reduce-motion .sr-composer-pop,
+.sr-reduce-motion .sr-todo-spin,
+.sr-reduce-motion .sr-preview-page,
+.sr-reduce-motion .sr-preview-wake-window,
+.sr-reduce-motion .sr-preview-wake-pane::after,
+.sr-reduce-motion .sr-preview-wake-spin,
 .sr-reduce-motion .animate-pulse {
   animation: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  .sr-dot,
-  .sr-caret {
+  .sr-caret,
+  .sr-composer-pop,
+  .sr-todo-spin,
+  .sr-preview-page,
+  .sr-preview-wake-window,
+  .sr-preview-wake-pane::after,
+  .sr-preview-wake-spin {
     animation: none;
   }
 }

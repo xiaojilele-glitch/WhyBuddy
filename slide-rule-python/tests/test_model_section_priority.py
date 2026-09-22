@@ -14,7 +14,13 @@ modelSection，appIdentity/generatedTheme 从未到达前端，演示域与 LLM 
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# 整个文件测的都是"夹具产物不被壳产物抢占槽位"，前提是夹具快路径开着。
+# 该开关 2026-08-10 起默认关（见 _demo_fixture_enabled 头注）。
+pytestmark = pytest.mark.usefixtures("demo_fixture_path")
 
 from models.v5_state import Artifact, V5SessionState
 from services.v5_capability_executor import (

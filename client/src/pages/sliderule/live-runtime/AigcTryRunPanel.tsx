@@ -7,6 +7,8 @@
  */
 
 import React from "react";
+import { Alert, Button, Card, Empty, Flex, Form, Input, Segmented, Spin, Tag, Typography } from "antd";
+import { PlayCircleOutlined } from "@ant-design/icons";
 import {
   type FiveSystemModel,
   resolveFieldRef,
@@ -74,106 +76,95 @@ export function AigcTryRunPanel({
 
   if (capabilities.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-xs text-stone-400">
-        本话题模型未声明 AI 能力，推演闭环后可试跑
-      </div>
+      <Empty description="本话题模型未声明 AI 能力，推演闭环后可试跑" />
     );
   }
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-auto p-4" data-testid="aigc-tryrun-panel">
-      <div className="rounded bg-pink-50 px-3 py-2 text-[11px] text-pink-700 ring-1 ring-pink-200">
-        真跑一次：走与五系统生成同一条 LLM 通道，输出/失败均如实展示
-      </div>
+    <Flex vertical gap="middle" className="h-full overflow-auto p-4" data-testid="aigc-tryrun-panel">
+      <Alert
+        type="info"
+        showIcon
+        message="真跑一次：走与五系统生成同一条 LLM 通道，输出与失败均如实展示"
+      />
 
-      {/* 能力切页 */}
-      <div className="flex flex-wrap gap-1.5">
-        {capabilities.map((c, i) => (
-          <button
-            key={c.id || c.name || i}
-            type="button"
-            data-testid={`aigc-tryrun-cap-${c.id || i}`}
-            onClick={() => selectCap(i)}
-            className={`rounded-full px-3 py-1 text-[11px] font-medium ring-1 transition-colors ${
-              i === activeIdx
-                ? "bg-pink-500 text-white ring-pink-500"
-                : "bg-white text-stone-600 ring-[#e5e7eb] hover:bg-pink-50"
-            }`}
-          >
-            {c.name || c.id}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        value={activeIdx}
+        onChange={value => selectCap(Number(value))}
+        options={capabilities.map((item, index) => ({
+          value: index,
+          label: (
+            <span data-testid={`aigc-tryrun-cap-${item.id || index}`}>
+              {item.name || item.id}
+            </span>
+          ),
+        }))}
+      />
 
       {cap && (
-        <div className="rounded-md border border-[#e5e7eb] bg-white p-3">
-          <div className="text-[11px] font-semibold text-stone-600">输入字段</div>
-          <div className="mt-2 flex flex-col gap-2">
+        <Card size="small" title="输入字段">
+          <Form layout="vertical" size="small">
             {(cap.inputFields ?? []).map((ref) => {
               const res = resolveFieldRef(ref, model);
               return (
-                <label key={ref} className="flex items-center gap-2 text-[11px]">
-                  <span
-                    className={`w-36 shrink-0 truncate ${res.resolved ? "text-stone-500" : "text-red-500"}`}
-                    title={ref}
-                  >
-                    {res.resolved ? res.label : `✗ ${res.label}`}
-                  </span>
-                  <input
-                    className="flex-1 rounded border border-[#e5e7eb] px-2 py-1 text-xs focus:border-pink-300 focus:outline-none"
+                <Form.Item
+                  key={ref}
+                  label={res.resolved ? res.label : <Typography.Text type="danger">未解析 · {res.label}</Typography.Text>}
+                  tooltip={ref}
+                >
+                  <Input
                     value={inputs[ref] ?? ""}
                     placeholder="填一个试跑值"
                     onChange={(e) => setInputs((prev) => ({ ...prev, [ref]: e.target.value }))}
                   />
-                </label>
+                </Form.Item>
               );
             })}
             {(cap.inputFields ?? []).length === 0 && (
-              <span className="text-[10px] text-stone-300">该能力未声明输入字段</span>
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="该能力未声明输入字段" />
             )}
-          </div>
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              type="button"
+          </Form>
+          <Flex align="center" gap="small" wrap>
+            <Button
+              type="primary"
+              icon={<PlayCircleOutlined />}
               data-testid="aigc-tryrun-run"
               onClick={run}
-              disabled={running}
-              className={`rounded-full px-3 py-1 text-[11px] font-medium text-white transition-colors ${
-                running ? "bg-stone-300" : "bg-pink-500 hover:bg-pink-600"
-              }`}
+              loading={running}
             >
-              {running ? "LLM 生成中…" : "▶ 试跑"}
-            </button>
+              {running ? "LLM 生成中…" : "试跑"}
+            </Button>
             {cap.outputField && (
-              <span className="text-[10px] text-stone-400">
-                输出 → {resolveFieldRef(cap.outputField, model).label}
-              </span>
+              <Tag>输出 → {resolveFieldRef(cap.outputField, model).label}</Tag>
             )}
             {result?.elapsedMs !== undefined && (
-              <span className="ml-auto font-mono text-[10px] text-stone-400">
+              <Typography.Text code>
                 {(result.elapsedMs / 1000).toFixed(1)}s
-              </span>
+              </Typography.Text>
             )}
-          </div>
-        </div>
+          </Flex>
+        </Card>
       )}
 
       {running && (
-        <div className="rounded-md bg-[#2A2620] px-3 py-2 font-mono text-[10px] text-stone-400">
-          ▍等待 LLM 返回……（同一通道，真实调用）
-        </div>
+        <Spin tip="等待 LLM 返回（同一通道，真实调用）"><div style={{ minHeight: 48 }} /></Spin>
       )}
       {result && result.ok && (
-        <div className="rounded-md bg-[#2A2620] px-3 py-2.5 font-mono text-[11px] leading-5 text-emerald-200 whitespace-pre-wrap" data-testid="aigc-tryrun-output">
-          {result.output}
-        </div>
+        <Card size="small" title="生成结果" data-testid="aigc-tryrun-output">
+          <Typography.Paragraph code style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>
+            {result.output}
+          </Typography.Paragraph>
+        </Card>
       )}
       {result && !result.ok && (
-        <div className="rounded-md border border-red-200 bg-red-50/60 px-3 py-2 text-[11px] text-red-600" data-testid="aigc-tryrun-error">
-          <span className="rounded bg-red-100 px-1.5 py-0.5 font-mono font-medium">{result.code}</span>
-          <span className="ml-2">{result.detail}</span>
-        </div>
+        <Alert
+          data-testid="aigc-tryrun-error"
+          type="error"
+          showIcon
+          message={result.code}
+          description={result.detail}
+        />
       )}
-    </div>
+    </Flex>
   );
 }

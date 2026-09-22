@@ -10,10 +10,12 @@
  */
 
 import React, { useEffect, useMemo, useState } from "react";
+import { DEFAULT_SESSION_ID } from "@/lib/sliderule-session-id";
+import { Alert, Segmented } from "antd";
 import type { PublishClosureSummary } from "../derive-cross-runtime-summary";
 import { EvidenceBadges } from "./EvidenceBadges";
 import { EmptyScreenHint } from "./EmptyScreenHint";
-import type { FiveSystemModel } from "./five-system-model";
+import { normalizeRoles, type FiveSystemModel } from "./five-system-model";
 import { deriveAppRuntimeSchema } from "../live-runtime/app-runtime-schema";
 import { deriveRoleAccess, pageAccessForRole } from "../live-runtime/rbac-preview";
 import {
@@ -36,7 +38,10 @@ interface RbacScreenProps {
 }
 
 interface RoleEntry {
+  /** 引用键（menu.roleRefs / assigneeRole 里存的就是它） */
   role: string;
+  /** 给人看的名字；补中文名之前生成的应用与 role 相同 */
+  label?: string;
   permissions: string[];
   menus: string[];
   dataRules?: string;
@@ -73,14 +78,16 @@ function parseRolesFromContent(content: string): RoleEntry[] | null {
 
 /** model.rbac → 角色行：权限/菜单从 menus 的 roleRefs/permissionRefs 反推。 */
 function rolesFromModel(rbac: FiveSystemModel["rbac"] | null | undefined): RoleEntry[] | null {
-  const roleIds = rbac?.roles ?? [];
-  if (roleIds.length === 0) return null;
+  // 归一后取 id：menu.roleRefs 存的是引用键，拿显示名去 includes 会全落空
+  const roleEntries = normalizeRoles({ rbac } as FiveSystemModel);
+  if (roleEntries.length === 0) return null;
   const menus = rbac?.menus ?? [];
-  return roleIds.map((role) => {
+  return roleEntries.map(({ id: role, label }) => {
     const roleMenus = menus.filter((m) => (m.roleRefs ?? []).includes(role));
     const permissions = [...new Set(roleMenus.flatMap((m) => m.permissionRefs ?? []))];
     return {
       role,
+      label,
       permissions,
       menus: roleMenus.map((m) => m.label || m.id || "").filter(Boolean),
     };
@@ -121,27 +128,20 @@ function RolePreviewPanel({
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-auto p-4" data-testid="rbac-role-preview">
-      <div className="rounded bg-orange-50 px-3 py-2 text-[11px] text-orange-700 ring-1 ring-orange-200">
-        选中角色实时作用于 AppBundle 屏的「运行应用」—— 菜单与「新建」按钮按该角色权限锁定
-      </div>
+      <Alert
+        type="info"
+        showIcon
+        message="选中角色实时作用于 AppBundle 的运行应用；菜单与新建按钮按该角色权限锁定"
+      />
 
-      <div className="flex flex-wrap gap-1.5">
-        {roleAccess.map((r) => (
-          <button
-            key={r.role}
-            type="button"
-            data-testid={`rbac-preview-role-${r.role}`}
-            onClick={() => selectRole(r.role)}
-            className={`rounded-full px-3 py-1 text-[11px] font-medium ring-1 transition-colors ${
-              r.role === selected?.role
-                ? "bg-orange-500 text-white ring-orange-500"
-                : "bg-white text-stone-600 ring-[#e5e7eb] hover:bg-orange-50"
-            }`}
-          >
-            {r.role}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        value={selected?.role}
+        onChange={value => selectRole(String(value))}
+        options={roleAccess.map(item => ({
+          value: item.role,
+          label: <span data-testid={`rbac-preview-role-${item.role}`}>{item.role}</span>,
+        }))}
+      />
 
       {selected && (
         <div className="rounded-md border border-[#e5e7eb] bg-[#eef0f4]/60 p-3">
@@ -228,7 +228,7 @@ export function RbacScreen({
   publishClosure,
   rawContent,
   model,
-  sessionId = "sliderule-v51-product",
+  sessionId = DEFAULT_SESSION_ID,
   isActive = false,
   className = "",
 }: RbacScreenProps) {
@@ -270,29 +270,19 @@ export function RbacScreen({
         </span>
         <div className="ml-auto flex items-center gap-1.5">
           {canPreview && (
-            <div
-              className="flex items-center gap-0.5 rounded-full bg-[#e9edf2] p-0.5 ring-1 ring-[#e5e7eb]/80"
+            <Segmented
+              size="small"
               data-testid="rbac-mode-toggle"
-            >
-              {([
+              value={screenMode}
+              onChange={value => setScreenMode(value as "matrix" | "preview")}
+              options={[
                 { id: "matrix" as const, label: "权限矩阵" },
                 { id: "preview" as const, label: "角色预览" },
-              ]).map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  data-testid={`rbac-mode-${id}`}
-                  onClick={() => setScreenMode(id)}
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                    screenMode === id
-                      ? "bg-white text-stone-800 shadow-sm"
-                      : "text-stone-500 hover:text-stone-700"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+              ].map(({ id, label }) => ({
+                value: id,
+                label: <span data-testid={`rbac-mode-${id}`}>{label}</span>,
+              }))}
+            />
           )}
           <EvidenceBadges evidence={evidence} />
         </div>

@@ -1,0 +1,330 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "work_order",
+    "name": "工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elderly_name",
+      "name": "长者姓名",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务项目",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "enum"
+     },
+     {
+      "id": "caregiver",
+      "name": "指派护理员",
+      "type": "string"
+     },
+     {
+      "id": "emergency_level",
+      "name": "紧急程度",
+      "type": "enum"
+     }
+    ]
+   },
+   {
+    "id": "emergency_alert",
+    "name": "紧急求助",
+    "fields": [
+     {
+      "id": "event_desc",
+      "name": "事件",
+      "type": "string"
+     },
+     {
+      "id": "trigger_time",
+      "name": "触发时间",
+      "type": "string"
+     },
+     {
+      "id": "location",
+      "name": "实时位置",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "health_record",
+    "name": "健康档案",
+    "fields": [
+     {
+      "id": "heart_rate",
+      "name": "最近心率",
+      "type": "string"
+     },
+     {
+      "id": "blood_pressure",
+      "name": "血压",
+      "type": "string"
+     },
+     {
+      "id": "sleep_quality",
+      "name": "昨夜睡眠质量",
+      "type": "string"
+     },
+     {
+      "id": "update_time",
+      "name": "更新时间",
+      "type": "date"
+     }
+    ]
+   },
+   {
+    "id": "service_booking",
+    "name": "服务预约",
+    "fields": [
+     {
+      "id": "service_project",
+      "name": "上门服务项目",
+      "type": "string"
+     },
+     {
+      "id": "booking_time",
+      "name": "期望上门时间",
+      "type": "date"
+     },
+     {
+      "id": "address",
+      "name": "服务地址",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_admin",
+    "name": "社区养老管理员"
+   },
+   {
+    "id": "role_family",
+    "name": "家属"
+   },
+   {
+    "id": "role_caregiver",
+    "name": "一线护理员"
+   }
+  ],
+  "permissions": [
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "emergency_alert:create",
+   "emergency_alert:read",
+   "emergency_alert:manage",
+   "health_record:create",
+   "health_record:read",
+   "health_record:update",
+   "service_booking:create",
+   "service_booking:read",
+   "service_booking:approve"
+  ],
+  "menus": [
+   {
+    "id": "menu_admin",
+    "label": "运营管理",
+    "roleRefs": [
+     "role_admin"
+    ],
+    "permissionRefs": [
+     "work_order:read",
+     "emergency_alert:manage"
+    ]
+   },
+   {
+    "id": "menu_family",
+    "label": "家属服务",
+    "roleRefs": [
+     "role_family"
+    ],
+    "permissionRefs": [
+     "service_booking:create",
+     "health_record:read"
+    ]
+   },
+   {
+    "id": "menu_caregiver",
+    "label": "护理作业",
+    "roleRefs": [
+     "role_caregiver"
+    ],
+    "permissionRefs": [
+     "work_order:update",
+     "health_record:create"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_pending",
+    "name": "待派单",
+    "assigneeRole": "role_admin",
+    "phase": "initial"
+   },
+   {
+    "id": "node_processing",
+    "name": "服务中",
+    "assigneeRole": "role_caregiver",
+    "phase": "execution"
+   },
+   {
+    "id": "node_completed",
+    "name": "已完成",
+    "assigneeRole": "role_caregiver",
+    "phase": "closed"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_pending",
+    "to": "node_processing",
+    "condition": "系统自动匹配或管理员完成派单"
+   },
+   {
+    "from": "node_processing",
+    "to": "node_completed",
+    "condition": "护理员完成拍照与定位打卡"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "运营管理工作台",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "家属服务门户",
+    "kind": "workbench",
+    "fieldBindings": [
+     "service_booking.service_project",
+     "service_booking.booking_time"
+    ],
+    "actionPermissions": [
+     "service_booking:create",
+     "service_booking:read"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "护理员移动端作业台",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.elderly_name",
+     "emergency_alert.event_desc"
+    ],
+    "actionPermissions": [
+     "work_order:update",
+     "emergency_alert:read"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "数据统计与报表页",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "health_record.heart_rate",
+     "health_record.blood_pressure"
+    ],
+    "actionPermissions": [
+     "health_record:read"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "aigc_health_analysis",
+    "name": "健康指标智能分析",
+    "inputFields": [
+     "health_record.heart_rate",
+     "health_record.blood_pressure"
+    ],
+    "outputField": "health_record.sleep_quality",
+    "roleRefs": [
+     "role_caregiver",
+     "role_admin"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p1",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "node_processing"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_admin",
+   "role_family",
+   "role_caregiver"
+  ],
+  "dataModelRefs": [
+   "work_order",
+   "emergency_alert",
+   "health_record",
+   "service_booking"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_work_order_status",
+    "statement": "工单的当前状态必须跟随工作流节点进行流转",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.status",
+     "node_pending",
+     "node_processing",
+     "node_completed"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

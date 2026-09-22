@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="zh-CN" class="w-full h-full">
+<head><style id="sliderule-desktop-fill">html,body{margin:0!important;width:100%!important;height:100%!important;min-height:100%!important;max-width:none!important;overflow:hidden!important}body{align-items:stretch!important;justify-content:flex-start!important;padding:0!important}body>[class*="mx-auto"]{max-width:none!important;width:100%!important;height:100%!important;margin:0!important;box-sizing:border-box!important;border-radius:0!important;box-shadow:none!important}body>div[class*="min-h-screen"],body>div[class*="justify-center"]{display:flex!important;align-items:stretch!important;justify-content:flex-start!important;width:100%!important;height:100%!important;max-width:none!important;padding:0!important;margin:0!important;box-sizing:border-box!important}body>div[class*="min-h-screen"]>[class*="mx-auto"],body>div[class*="min-h-screen"]>[class*="max-w-"],body>div[class*="justify-center"]>[class*="mx-auto"],body>div[class*="justify-center"]>[class*="max-w-"]{max-width:none!important;width:100%!important;height:100%!important;margin:0!important;box-sizing:border-box!important;border-radius:0!important;box-shadow:none!important}</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安养通 - 服务工单调度页</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles adhering to design system */
+        .bg-primary { background-color: #2B7A78; }
+        .text-primary { color: #2B7A78; }
+        .border-primary { border-color: #2B7A78; }
+        .bg-accent { background-color: #E07A5F; }
+        .text-accent { color: #E07A5F; }
+        .bg-app-gray { background-color: #F4F6F8; }
+    </style>
+<style>aside [aria-current="page"]{background-color:color-mix(in srgb, var(--primary, currentColor) 16%, transparent);color:var(--chrome-fg, inherit);font-weight:600}header nav[aria-label="Breadcrumb"] [aria-current="page"]{background-color:transparent;color:var(--chrome-fg, inherit);font-weight:600}</style><style id="sliderule-theme">:root{--background:#e7f9f8;--foreground:#0f172a;--chrome:#f2fffe;--chrome-fg:#0f172a;--card:#ffffff;--card-fg:#0f172a;--primary:#2b7a78;--primary-fg:#f8fafc;--muted:#e1f3f2;--border:#d1e2e1;--radius:8px;}html,body{background-color:var(--background)!important;color:var(--foreground)!important}header,aside,nav.fixed{background-color:var(--chrome)!important;color:var(--chrome-fg)!important}html[data-theme="light"] main .bg-black,html[data-theme="light"] main .bg-slate-800,html[data-theme="light"] main .bg-slate-900,html[data-theme="light"] main .bg-slate-950,html[data-theme="light"] main .bg-gray-800,html[data-theme="light"] main .bg-gray-900,html[data-theme="light"] main .bg-gray-950,html[data-theme="light"] main .bg-zinc-800,html[data-theme="light"] main .bg-zinc-900,html[data-theme="light"] main .bg-zinc-950,html[data-theme="light"] main .bg-neutral-800,html[data-theme="light"] main .bg-neutral-900,html[data-theme="light"] main .bg-neutral-950,html[data-theme="light"] main .bg-stone-800,html[data-theme="light"] main .bg-stone-900,html[data-theme="light"] main .bg-stone-950{background-color:var(--card)!important;color:var(--card-fg)!important;border-color:var(--border)!important}html[data-theme="light"] header .text-white,html[data-theme="light"] header .text-slate-100,html[data-theme="light"] header .text-slate-200,html[data-theme="light"] header .text-gray-100,html[data-theme="light"] aside .text-white,html[data-theme="light"] aside .text-slate-100,html[data-theme="light"] aside .text-slate-200,html[data-theme="light"] aside .text-gray-100{color:var(--chrome-fg,#0f172a)!important}html[data-theme="light"] header .bg-black,html[data-theme="light"] header .bg-slate-800,html[data-theme="light"] header .bg-slate-900,html[data-theme="light"] header .bg-slate-950,html[data-theme="light"] header .bg-gray-800,html[data-theme="light"] header .bg-gray-900,html[data-theme="light"] header .bg-gray-950,html[data-theme="light"] header .bg-zinc-800,html[data-theme="light"] header .bg-zinc-900,html[data-theme="light"] header .bg-zinc-950,html[data-theme="light"] header .bg-neutral-800,html[data-theme="light"] header .bg-neutral-900,html[data-theme="light"] header .bg-neutral-950,html[data-theme="light"] header .bg-stone-800,html[data-theme="light"] header .bg-stone-900,html[data-theme="light"] header .bg-stone-950{background-color:var(--muted)!important;color:var(--chrome-fg,#0f172a)!important}aside nav a{box-sizing:border-box;width:100%;display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside>:first-child:not(nav):not(:has(nav)){display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside :is(img,svg){flex-shrink:0}aside:has(nav a){min-width:16rem!important;box-sizing:border-box}aside[class*="fixed"]:has(nav a),aside[class*="absolute"]:has(nav a){width:16rem!important}aside[class*="fixed"]:has(nav a)~*,aside[class*="absolute"]:has(nav a)~*{margin-left:16rem!important}aside [aria-current="page"]{background-color:color-mix(in srgb,var(--primary,currentColor) 16%,var(--chrome,transparent))!important;color:var(--chrome-fg,inherit)!important;font-weight:600}header nav[aria-label="Breadcrumb"] [aria-current="page"],header nav[aria-label="breadcrumb"] [aria-current="page"]{background-color:transparent!important;color:var(--chrome-fg,inherit)!important;font-weight:600}</style><script>
+/* sliderule-theme-tokens */
+tailwind.config = { theme: { extend: { colors: {
+  background: '#e7f9f8',
+  foreground: '#0f172a',
+  chrome: '#f2fffe',
+  card: '#ffffff',
+  primary: '#2b7a78',
+  muted: '#e1f3f2',
+  border: '#d1e2e1'
+} } } };
+</script></head>
+<body class="w-full h-full bg-app-gray text-slate-700 font-sans text-sm m-0 overflow-hidden flex">
+
+    <!-- 左侧固定主导航 (w-64) -->
+    <aside class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 h-full">
+        <!-- 品牌区 -->
+        <div class="h-16 flex items-center px-6 border-b border-slate-100 gap-3">
+            <div class="w-8 h-8 rounded-lg bg-[#2B7A78] flex items-center justify-center text-white font-bold text-base">安</div>
+            <div class="flex flex-col">
+                <span class="font-bold text-slate-800 text-base tracking-wide">安养通</span>
+                <span class="text-xs text-slate-400">社区养老服务平台</span>
+            </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+<a data-page-id="p1" href="#" class="flex gap-3 items-center px-3 py-2.5 rounded-lg transition-colors"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg><span>老人档案列表</span></a>
+<a aria-current="page" data-page-id="p2" href="#" class="bg-[#2B7A78]/10 flex font-medium gap-3 items-center px-3 py-2.5 rounded-lg text-[#2B7A78] transition-colors"><svg class="w-5 h-5 text-[#2B7A78]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg><span>服务工单调度</span></a>
+<a data-page-id="p3" href="#" class="flex gap-3 items-center px-3 py-2.5 rounded-lg transition-colors"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg><span>运营数据总览看板</span></a>
+<a data-page-id="p4" href="#" class="flex gap-3 items-center px-3 py-2.5 rounded-lg transition-colors"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg><span>财务结算报表</span></a>
+<a data-page-id="p5" href="#" class="flex gap-3 items-center px-3 py-2.5 rounded-lg transition-colors"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg><span>我的任务</span></a>
+</nav>
+
+        <!-- 底部用户信息 -->
+        <div class="p-4 border-t border-slate-100 flex items-center gap-3">
+            <img src="https://placehold.co/40x40" alt="consultant avatar portrait" class="w-10 h-10 rounded-full object-cover">
+            <div class="flex flex-col min-w-0">
+                <span class="font-medium text-slate-800 truncate">张顾问</span>
+                <span class="text-xs text-slate-400 truncate">社区养老顾问</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 右侧主体内容区 -->
+    <div class="flex-1 flex flex-col min-w-0 h-full">
+        
+        <!-- 顶栏 header -->
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
+            <!-- 面包屑 -->
+            <nav aria-label="Breadcrumb">
+                <ol class="flex items-center gap-2 text-sm">
+                    <li><a href="#" class="text-slate-500 hover:text-slate-800">安养通</a></li>
+                    <li class="text-slate-300">/</li>
+                    <li><a href="#" aria-current="page" class="text-slate-800 font-medium">服务工单调度页</a></li>
+                </ol>
+            </nav>
+
+            <!-- 顶栏右侧工具栏 -->
+            <div class="flex items-center gap-4">
+                <div class="flex bg-slate-100 p-1 rounded-lg">
+                    <button class="px-3 py-1.5 text-xs font-medium bg-white text-slate-800 rounded shadow-sm">实时调度</button>
+                    <button class="px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800">历史工单</button>
+                </div>
+                <div class="h-4 w-[1px] bg-slate-200"></div>
+                <div class="flex items-center gap-2 text-slate-600">
+                    <span class="relative flex h-3 w-3">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                    <span class="text-xs font-medium text-slate-600">系统运行正常</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 正文内容区 main：高频交互左右不对称分栏 (60% / 40%) -->
+        <main class="flex-1 p-6 overflow-hidden flex gap-6">
+
+            <!-- 左侧：待指派工单列表 (60%) -->
+            <section class="w-3/5 flex flex-col bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <!-- 列表头部操作栏 -->
+                <div class="p-4 border-b border-slate-100 flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-2">
+                        <h2 class="font-bold text-slate-800 text-base">待指派工单</h2>
+                        <span class="bg-[#2B7A78]/10 text-[#2B7A78] text-xs font-semibold px-2 py-0.5 rounded-full"><span data-value="work_order" data-aggregate="count">12</span> 条待处理</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="relative">
+                            <input type="text" placeholder="搜索老人姓名/工单号" class="w-48 pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-[#2B7A78]">
+                            <svg class="w-4 h-4 text-slate-400 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        </div>
+                        <button data-action="createRecord" data-entity="work_order" class="bg-[#2B7A78] hover:bg-[#236361] text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            新增工单
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 工单卡片流 (纵向滚动) -->
+                <div class="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/50" data-rows="work_order" data-sort="appointment_time" data-order="desc" data-limit="8">
+                    
+                    <!-- 工单卡片 1 (紧急) -->
+                    <div class="bg-white p-4 rounded-lg border border-slate-200 hover:border-[#2B7A78]/50 transition-all shadow-xs flex flex-col gap-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-xs text-slate-400" data-field="order_no">GD-202X-1024</span>
+                                <span class="bg-[#E07A5F] text-white text-xs font-medium px-2 py-0.5 rounded" data-field="order_type">紧急求助</span>
+                            </div>
+                            <span class="text-xs text-slate-500 font-medium">预约: <span data-field="appointment_time">今天 14:00 - 15:30</span></span>
+                        </div>
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <h3 class="font-bold text-slate-800 text-sm mb-1" data-field="order_type">上门助浴与基础体征监测</h3>
+                                <p class="text-xs text-slate-600 flex items-center gap-1">
+                                    <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                    阳光花园小区 3栋 201室 (<span data-field="resident_ref">王大爷</span> 82岁)
+                                </p>
+                            </div>
+                            <button data-action="openRecord" data-entity="work_order" class="bg-[#2B7A78] hover:bg-[#236361] text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors shrink-0">
+                                快捷指派
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- 右侧：服务人员状态看板 (40%) -->
+            <section class="w-2/5 flex flex-col bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <!-- 看板顶部状态统计数字 -->
+                <div class="p-4 border-b border-slate-100 bg-slate-50">
+                    <h2 class="font-bold text-slate-800 text-base mb-3">服务人员实时状态</h2>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-white p-3 rounded-lg border border-slate-200 flex flex-col">
+                            <span class="text-xs text-slate-500">在线空闲</span>
+                            <span class="text-2xl font-bold text-emerald-600 mt-1"><span data-value="caregiver" data-aggregate="count">18</span><span class="text-xs font-normal text-slate-400 ml-1">人</span></span>
+                        </div>
+                        <div class="bg-white p-3 rounded-lg border border-slate-200 flex flex-col">
+                            <span class="text-xs text-slate-500">服务中</span>
+                            <span class="text-2xl font-bold text-[#E07A5F] mt-1"><span data-value="caregiver" data-aggregate="count">12</span><span class="text-xs font-normal text-slate-400 ml-1">人</span></span>
+                        </div>
+                        <div class="bg-white p-3 rounded-lg border border-slate-200 flex flex-col">
+                            <span class="text-xs text-slate-500">离线休息</span>
+                            <span class="text-2xl font-bold text-slate-400 mt-1">3<span class="text-xs font-normal text-slate-400 ml-1">人</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 人员列表过滤标签 -->
+                <div class="px-4 py-2 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                    <span>人员名单与实时定位</span>
+                    <span class="text-[#2B7A78] font-medium cursor-pointer">仅看空闲人员</span>
+                </div>
+
+                <!-- 实时人员列表 -->
+                <div class="flex-1 p-4 overflow-y-auto space-y-3" data-rows="caregiver" data-sort="name" data-order="asc" data-limit="5">
+                    
+                    <!-- 人员 1 (空闲) -->
+                    <div class="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                        <div class="flex items-center gap-3">
+                            <div class="relative">
+                                <img src="https://placehold.co/40x40" alt="caregiver portrait male" class="w-10 h-10 rounded-full object-cover">
+                                <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium text-slate-800 text-sm" data-field="name">张师傅</span>
+                                    <span class="text-xs bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded" data-field="status">在线空闲</span>
+                                </div>
+                                <p class="text-xs text-slate-400 mt-0.5">高级护理员 · 社区活动中心附近</p>
+                            </div>
+                        </div>
+                        <button data-action="editRecord" data-entity="caregiver" class="border border-[#2B7A78] text-[#2B7A78] hover:bg-[#2B7A78] hover:text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-all">
+                            指派给TA
+                        </button>
+                    </div>
+
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+</body>
+</html>

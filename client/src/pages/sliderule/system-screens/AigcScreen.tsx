@@ -11,6 +11,7 @@
  */
 
 import React, { useMemo, useState } from "react";
+import { Segmented } from "antd";
 import { MermaidDiagram } from "../MermaidDiagram";
 import type { PublishClosureSummary } from "../derive-cross-runtime-summary";
 import { EvidenceBadges } from "./EvidenceBadges";
@@ -110,11 +111,12 @@ export function AigcScreen({
         </span>
         <div className="ml-auto flex items-center gap-1.5">
           {hasModel && (
-            <div
-              className="flex items-center gap-0.5 rounded-full bg-[#e9edf2] p-0.5 ring-1 ring-[#e5e7eb]/80"
+            <Segmented
+              size="small"
               data-testid="aigc-mode-toggle"
-            >
-              {([
+              value={screenMode}
+              onChange={value => setScreenMode(value as "list" | "tryrun" | "pipeline")}
+              options={[
                 { id: "list" as const, label: "能力清单" },
                 { id: "tryrun" as const, label: "能力试跑" },
                 // 编排档只在模型产出了管线时出现（不造空壳入口）；
@@ -122,22 +124,11 @@ export function AigcScreen({
                 ...(pipelines.length > 0
                   ? [{ id: "pipeline" as const, label: "能力编排" }]
                   : []),
-              ]).map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  data-testid={`aigc-mode-${id}`}
-                  onClick={() => setScreenMode(id)}
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                    screenMode === id
-                      ? "bg-white text-stone-800 shadow-sm"
-                      : "text-stone-500 hover:text-stone-700"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+              ].map(({ id, label }) => ({
+                value: id,
+                label: <span data-testid={`aigc-mode-${id}`}>{label}</span>,
+              }))}
+            />
           )}
           <EvidenceBadges evidence={evidence} />
         </div>

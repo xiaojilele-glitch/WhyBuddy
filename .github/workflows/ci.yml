@@ -49,6 +49,12 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Independent preview transport runs real loopback HTTP/WS without cloud keys.
+      - run: pnpm run build:project-preview
+      - run: pnpm run test:project-preview
+      # 收据合同：名单报满 + 失败带归因。没有真浏览器时，依赖 web-first
+      # 断言的那几条会 skip，补名单与归因词表那几条照跑（2026-09-17 加）。
+      - run: pnpm run test:project-receipt
       # 与 verify:sliderule-v5 的 server 段同清单（假 Python 夹具，hermetic）
       - run: >
           pnpm exec vitest run --config vitest.config.server.ts
@@ -67,6 +73,14 @@ jobs:
         working-directory: slide-rule-python
     steps:
       - uses: actions/checkout@v4
+      # The full-repository architecture check invokes the TypeScript scanner.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

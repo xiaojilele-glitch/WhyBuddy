@@ -20,7 +20,7 @@ export const messages = {
       unavailable: "--",
     },
     app: {
-      name: "SlideRule",
+      name: "面团 AI",
       subtitle: "多智能体办公室",
       localeSwitch: "切换语言",
       localeDescription: "中英文切换会自动保存，下次打开保持上次选择。",
@@ -42,7 +42,7 @@ export const messages = {
       runtimeChip: (label: string) => `当前模式：${label}`,
       agentChip: (count: number) => `在线 Agent：${count}`,
       workflowChip: (count: number) => `活跃工作流：${count}`,
-      desktopOfficeLabel: "SlideRule / 办公室",
+      desktopOfficeLabel: "面团 / 办公室",
       taskHubTitle: "任务主路径",
       newMission: "新建任务",
       liveDemo: "载入演示",
@@ -738,7 +738,7 @@ export const messages = {
         life: "生活部协作区",
         meta: "元部门审计区",
       },
-      brand: "SlideRule",
+      brand: "面团",
     },
     lineage: {
       title: "数据血缘",
@@ -859,7 +859,7 @@ export const messages = {
       unavailable: "--",
     },
     app: {
-      name: "SlideRule",
+      name: "面团 AI",
       subtitle: "Multi-Agent Office",
       localeSwitch: "Switch language",
       localeDescription:
@@ -883,7 +883,7 @@ export const messages = {
       runtimeChip: (label: string) => `Mode: ${label}`,
       agentChip: (count: number) => `Agents online: ${count}`,
       workflowChip: (count: number) => `Active workflows: ${count}`,
-      desktopOfficeLabel: "SlideRule / Office",
+      desktopOfficeLabel: "MianTuan / Office",
       taskHubTitle: "Task Path",
       newMission: "New Mission",
       liveDemo: "Load Demo",
@@ -1647,7 +1647,7 @@ export const messages = {
         life: "Life team zone",
         meta: "Meta audit zone",
       },
-      brand: "SlideRule",
+      brand: "MianTuan",
     },
     lineage: {
       title: "Data Lineage",

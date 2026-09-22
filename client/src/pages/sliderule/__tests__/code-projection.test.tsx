@@ -285,6 +285,7 @@ describe("CodeProjectionView 渲染", () => {
     expect(html).toContain('data-testid="code-dir-src/api"');
     expect(html).toContain('data-testid="code-file-db/schema.sql"');
     expect(html).toContain('data-testid="code-file-src/pages/p_board.tsx"');
+    expect(html).toContain("ant-tree");
     // 顶部说明条已按用户裁决移除；诚实声明留在投影文件首行注释（上一用例锁）
     expect(html).not.toContain("要改内容请回到意图重新推演");
     // 编辑器懒加载未就绪时回退 <pre>，内容为默认展示文件（README）

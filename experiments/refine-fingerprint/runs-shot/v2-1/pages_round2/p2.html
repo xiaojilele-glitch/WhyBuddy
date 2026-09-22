@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安居颐养 - 服务工单调度页</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0E8388',
+                        primaryHover: '#0b6a6e',
+                        accent: '#F59E0B',
+                        surface: '#F8FAFC',
+                        cardBg: '#FFFFFF',
+                        textMain: '#1E293B',
+                        textSub: '#64748B',
+                        borderCol: '#E2E8F0'
+                    },
+                    borderRadius: {
+                        DEFAULT: '8px',
+                    }
+                }
+            }
+        }
+    </script>
+<style>[aria-current="page"]{background-color:color-mix(in srgb, currentColor 12%, transparent);font-weight:600}</style></head>
+<body class="bg-surface text-textMain font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- 顶部 Header -->
+    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 z-10">
+            <nav aria-label="Breadcrumb">
+                <ol class="flex items-center space-x-2 text-sm">
+                    <li><a href="#" class="text-slate-400 hover:text-slate-600">平台数据中心</a></li>
+                    <li><span class="text-slate-300 mx-2">/</span></li>
+                    <li><a href="#" class="text-slate-800 font-medium" aria-current="page">服务工单调度页</a></li>
+                </ol>
+            </nav>
+            <div class="flex items-center space-x-4">
+                <span class="text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">数据统计周期：2023-11-01 至 2023-11-30</span>
+                <button class="bg-primary hover:bg-primary-light text-white text-sm font-medium px-4 py-2 rounded transition-colors shadow-sm flex items-center space-x-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    <span>导出运营报表</span>
+                </button>
+            </div>
+        </header>
+
+    <div class="flex pt-16 flex-1">
+        <!-- 左侧固定主导航 <aside class="w-64 bg-white border-r border-slate-200 flex flex-col z-10">
+        <!-- Logo 区域 -->
+        <div class="h-16 flex items-center px-6 border-b border-slate-100">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded bg-primary flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                    安居颐养
+                </div>
+                <div>
+                    <h1 class="font-bold text-base text-slate-800 tracking-wide">安居颐养居颐养</h1>
+                    <p class="text-xs text-slate-400">社区养老服务平台</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
+<a data-page-id="p1" href="#" class="flex font-medium items-center px-3.5 py-2.5 rounded text-sm"><svg class="w-5 h-5 mr-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg><span>老人档案管理页</span></a>
+<a aria-current="page" data-page-id="p2" href="#" class="flex font-medium items-center px-3.5 py-2.5 rounded text-slate-600 text-sm transition-colors"><svg class="w-5 h-5 mr-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg><span>服务工单调度页</span></a>
+<a data-page-id="p3" href="#" class="flex font-medium items-center px-3.5 py-2.5 rounded text-sm"><svg class="w-5 h-5 mr-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg><span>服务人员移动端工作台</span></a>
+<a data-page-id="p4" href="#" class="flex font-medium items-center px-3.5 py-2.5 rounded text-sm"><svg class="w-5 h-5 mr-3 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg><span>运营数据看板页</span></a>
+</nav>
+
+        <!-- 用户信息栏 -->
+        <div class="p-4 border-t border-slate-100 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <img class="w-9 h-9 rounded-full object-cover border border-slate-200" src="https://placehold.co/100x100?text=主管" alt="头像">
+                <div>
+                    <p class="text-sm font-bold text-slate-800">张主任</p>
+                    <p class="text-xs text-slate-400">社区养老顾问</p>
+                </div>
+            </div>
+            <button class="text-slate-400 hover:text-slate-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+            </button>
+        </div>
+    </aside>
+
+        <!-- 主体内容 <main> -->
+        <main class="ml-64 flex-1 p-6 flex flex-col space-y-6">
+            
+            <!-- 模块功能操作条：创建工单及筛选 -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-cardBg p-4 rounded border border-borderCol shadow-sm">
+                <div class="flex flex-wrap items-center gap-3">
+                    <span class="text-sm font-bold text-textMain">工单类型筛选:</span>
+                    <select class="border border-borderCol rounded px-3 py-1.5 text-sm bg-surface focus:outline-none focus:border-primary">
+                        <option>全部类型</option>
+                        <option>上门护理</option>
+                        <option>日间照料</option>
+                        <option>居家保洁</option>
+                        <option>康复理疗</option>
+                    </select>
+                    <select class="border border-borderCol rounded px-3 py-1.5 text-sm bg-surface focus:outline-none focus:border-primary">
+                        <option>全部紧急程度</option>
+                        <option class="text-accent font-medium">紧急特派</option>
+                        <option>普通工单</option>
+                    </select>
+                    <div class="relative">
+                        <input type="text" placeholder="搜索老人姓名 / 工单编号" class="border border-borderCol rounded pl-8 pr-4 py-1.5 text-sm bg-surface w-60 focus:outline-none focus:border-primary">
+                        <svg class="w-4 h-4 text-textSub absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                </div>
+                <div>
+                    <button data-action="createRecord" data-entity="work_order" class="bg-primary hover:bg-primaryHover text-white px-4 py-2 rounded text-sm font-medium flex items-center space-x-2 transition-colors shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        <span>创建新服务工单</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 调度概览指标卡（3张卡） -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- 卡片1：待指派工单 -->
+                <div class="bg-cardBg p-5 rounded border border-borderCol shadow-sm flex items-center justify-between">
+                    <div>
+                        <div class="text-textSub text-xs font-medium uppercase tracking-wider">待指派工单</div>
+                        <div class="text-2xl font-bold text-textMain mt-1"><span data-value="work_order" data-aggregate="count">12</span> <span class="text-xs font-normal text-textSub">单</span></div>
+                        <div class="text-xs text-accent mt-2 flex items-center space-x-1">
+                            <span class="inline-block w-1.5 h-1.5 rounded-full bg-accent"></span>
+                            <span>需尽快安排服务人员</span>
+                        </div>
+                    </div>
+                    <div class="w-12 h-12 rounded bg-teal-50 flex items-center justify-center text-primary">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                </div>
+                <!-- 卡片2：进行中工单 -->
+                <div class="bg-cardBg p-5 rounded border border-borderCol shadow-sm flex items-center justify-between">
+                    <div>
+                        <div class="text-textSub text-xs font-medium uppercase tracking-wider">进行中工单</div>
+                        <div class="text-2xl font-bold text-textMain mt-1"><span data-value="work_order" data-aggregate="count">34</span> <span class="text-xs font-normal text-textSub">单</span></div>
+                        <div class="text-xs text-primary mt-2 flex items-center space-x-1">
+                            <span class="inline-block w-1.5 h-1.5 rounded-full bg-primary"></span>
+                            <span>服务人员已在路中或上门中</span>
+                        </div>
+                    </div>
+                    <div class="w-12 h-12 rounded bg-blue-50 flex items-center justify-center text-blue-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                </div>
+                <!-- 卡片3：今日超时预警 -->
+                <div class="bg-cardBg p-5 rounded border border-borderCol shadow-sm flex items-center justify-between border-l-4 border-l-accent">
+                    <div>
+                        <div class="text-textSub text-xs font-medium uppercase tracking-wider">今日超时预警</div>
+                        <div class="text-2xl font-bold text-accent mt-1"><span data-value="work_order" data-aggregate="count">2</span> <span class="text-xs font-normal text-textSub">单</span></div>
+                        <div class="text-xs text-textSub mt-2">
+                            <span>预约时间临近尚未指派</span>
+                        </div>
+                    </div>
+                    <div class="w-12 h-12 rounded bg-amber-50 flex items-center justify-center text-accent">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 左右分栏主体区：左侧工单主力区，右侧服务人员负载面板 -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                
+                <!-- 左侧：待调度工单主列表 (占2列) -->
+                <div class="lg:col-span-2 bg-cardBg rounded border border-borderCol shadow-sm overflow-hidden">
+                    <div class="p-4 border-b border-borderCol flex items-center justify-between bg-surface">
+                        <h2 class="font-bold text-sm text-textMain flex items-center space-x-2">
+                            <span>待调度与处理工单列表</span>
+                            <span class="px-2 py-0.5 bg-teal-50 text-primary text-xs rounded-full">共 46 条</span>
+                        </h2>
+                        <span class="text-xs text-textSub">数据更新时间: 2026-03-30 10:30</span>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-surface text-textSub border-b border-borderCol text-xs">
+                                    <th class="py-3 px-4 font-semibold">工单编号</th>
+                                    <th class="py-3 px-4 font-semibold">服务老人</th>
+                                    <th class="py-3 px-4 font-semibold">服务项目</th>
+                                    <th class="py-3 px-4 font-semibold">预约时段</th>
+                                    <th class="py-3 px-4 font-semibold">当前状态</th>
+                                    <th class="py-3 px-4 font-semibold text-right">指派操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-borderCol text-xs" data-rows="work_order" data-sort="order_no" data-order="desc" data-limit="8">
+                                <!-- 行 1 -->
+                                <tr class="hover:bg-surface transition-colors">
+                                    <td class="py-3.5 px-4 font-mono text-textSub" data-field="order_no">GD2026033001</td>
+                                    <td class="py-3.5 px-4 font-medium text-textMain" data-field="elder_ref">李奶奶 (82岁)</td>
+                                    <td class="py-3.5 px-4 text-textMain" data-field="service_item">上门日常护理</td>
+                                    <td class="py-3.5 px-4 text-textSub" data-field="appointment_time">2026-03-30 14:00-15:30</td>
+                                    <td class="py-3.5 px-4"><span class="px-2 py-1 rounded bg-amber-50 text-accent font-medium" data-field="status">待指派</span></td>
+                                    <td class="py-3.5 px-4 text-right">
+                                        <button data-action="openRecord" data-entity="work_order" class="bg-teal-50 text-primary hover:bg-primary hover:text-white px-3 py-1 rounded transition-colors text-xs font-medium">智能派单</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 分页 -->
+                    <div class="p-4 border-t border-borderCol flex items-center justify-between text-xs text-textSub bg-surface">
+                        <div>显示第 1 到第 5 条，共 46 条记录</div>
+                        <div class="flex items-center space-x-1">
+                            <button class="px-2 py-1 border border-borderCol rounded bg-cardBg disabled:opacity-50">上一页</button>
+                            <button class="px-3 py-1 border border-primary bg-primary text-white rounded">1</button>
+                            <button class="px-3 py-1 border border-borderCol rounded bg-cardBg hover:bg-surface">2</button>
+                            <button class="px-3 py-1 border border-borderCol rounded bg-cardBg hover:bg-surface">3</button>
+                            <button class="px-2 py-1 border border-borderCol rounded bg-cardBg">下一页</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：服务人员实时负载面板 (占1列) -->
+                <div class="lg:col-span-1 bg-cardBg rounded border border-borderCol shadow-sm p-4 flex flex-col space-y-4">
+                    <div class="flex items-center justify-between border-b border-borderCol pb-3">
+                        <h2 class="font-bold text-sm text-textMain">服务人员实时负载</h2>
+                        <span class="text-xs text-textSub">在线/总人数: <strong class="text-primary">8</strong>/10</span>
+                    </div>
+
+                    <p class="text-xs text-textSub">以下展示当前各服务人员的接单饱和度与工作状态，供指派工单时参考。</p>
+
+                    <div data-rows="service_staff" data-sort="name" data-order="desc" data-limit="4" class="space-y-4">
+                        <!-- 负载条目 1 -->
+                        <div class="space-y-1.5 p-2 bg-surface rounded border border-borderCol" data-record="service_staff">
+                            <div class="flex items-center justify-between text-xs">
+                                <div class="flex items-center space-x-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span class="font-medium text-textMain" data-field="name">张师傅 (高级护理员)</span>
+                                </div>
+                                <span class="text-primary font-semibold" data-field="title">85% 饱和</span>
+                            </div>
+                            <!-- 纯 SVG 负载进度条 -->
+                            <div class="w-full bg-borderCol rounded-full h-2 overflow-hidden">
+                                <div class="bg-primary h-2 rounded-full" style="width: 85%"></div>
+                            </div>
+                            <div class="flex justify-between text-[11px] text-textSub pt-0.5">
+                                <span>今日已接: 4 单</span>
+                                <span>空闲时段: 16:00后</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-2 border-t border-borderCol">
+                        <button class="w-full py-2 bg-surface hover:bg-borderCol border border-borderCol text-textMain rounded text-xs font-medium transition-colors">
+                            查看全部 10 位服务人员负荷表
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+        </main>
+    </div>
+
+</body>
+</html>

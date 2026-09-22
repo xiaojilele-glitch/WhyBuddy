@@ -13,7 +13,7 @@
  */
 
 import React from "react";
-import { Card, Grid, Steps, Tag } from "antd-mobile";
+import { Card, ErrorBlock, Grid, Steps, Tag } from "antd-mobile";
 
 const { Step } = Steps;
 
@@ -117,9 +117,11 @@ export default function PhoneHome({
 
       <Card title="审批动态" bodyStyle={{ padding: "8px 12px 12px" }}>
         {timeline.length === 0 ? (
-          <div style={{ fontSize: 12, color: "var(--adm-color-light, #cccccc)" }}>
-            {timelineEmptyHint}
-          </div>
+          <ErrorBlock
+            status="empty"
+            title="暂无审批动态"
+            description={timelineEmptyHint}
+          />
         ) : (
           <Steps direction="vertical" style={{ "--title-font-size": "13px" }}>
             {timeline.map(item => {

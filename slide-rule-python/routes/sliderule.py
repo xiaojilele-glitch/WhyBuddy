@@ -145,7 +145,15 @@ async def do_orchestrate(payload: Dict[str, Any], x_internal_key: Optional[str] 
     return await _run_orchestrate_plan(payload)
 
 @router.post("/execute-capability")
-async def do_execute(payload: Dict[str, Any], x_internal_key: Optional[str] = Header(None)):
+# ⚠ `def` 而不是 `async def`——**故意的，别改回去**（2026-08-21）。
+# 函数体里跑的是同步的慢活（LLM / 子进程），写成 async 就是整段跑在事件
+# 循环那条线程上：真机实测两个人各打一次 intake-judge（单次 7.9s），
+# 第三个人的 /api/health 等了 10.5s——空载是 0.0013s。
+# 同 /drive-full 头注那条（2026-08-02 同款事故），修法用 FastAPI 官方口径：
+# 普通 def 会被丢进 anyio 线程池，而不是直接占住循环。
+# 判据：tests/test_routes_do_not_block_event_loop.py（跑真 ASGI 应用量行为，
+# 不扫源码——扫描器在这件事上误报过两次）。
+def do_execute(payload: Dict[str, Any], x_internal_key: Optional[str] = Header(None)):
     _check_internal_key(x_internal_key)
     cap_id = payload["capabilityId"]
     # Migrated-for-real caps (intent.clarify, ...) run on the REAL LLM brain (sliderule_llm).

@@ -1,11 +1,19 @@
 """builtin_examples — 官方示例库的数据源（E41）。
 
-示例 = E35 冻结的四个过门演示域模型（builtin_domain_models.json）。这里
-只做提炼投影：产品身份（E40.2 已入夹具）+ 真实指标（页面/角色/AI 能力数
-= 模型里数出来的，不发明）+ 起手意图（点卡即预填的话题原文）。
+示例 = 过门冻结模型（builtin_domain_models.json）的提炼投影：产品身份 +
+真实指标（页面/角色/AI 能力数 = 模型里数出来的，不发明）+ 起手意图
+（点卡即预填的话题原文）。
 
 北极星纪律：示例永远来自过门冻结模型——没有过门模型就没有示例卡，
-数量如实（4 个就是 4 个，不摆 12 个假货架）。
+数量如实（有几个摆几个，不摆假货架）。
+
+⚑ 2026-08-14 数据清空（用户裁决：「只是清数据，不是删除这个功能」）：
+  原四条示例（采购审批/请假审批/服务工单/员工入职）诞生于老区块链路，
+  spec-first 成为默认链路后不再代表现在的生成效果，从货架撤下。
+  功能骨架（本模块 + GET /builtin-examples + 前端示例 tab）原样保留，
+  等新链路产出可展示的示例后往 _EXAMPLE_META 里加条目即可重新上架。
+  冻结模型本体（builtin_domain_models.json）未动——域识别近路与
+  组件库还在用。
 """
 
 from __future__ import annotations
@@ -16,25 +24,11 @@ from typing import Any, Dict, List, Optional
 
 _MODELS_PATH = Path(__file__).resolve().parent / "data" / "builtin_domain_models.json"
 
-# 起手意图与场景分类（点「使用模板」预填的话题原文；分类按域如实标注）
-_EXAMPLE_META: Dict[str, Dict[str, str]] = {
-    "purchase_approval": {
-        "intent": "设计一个采购审批系统，包含采购申请、部门审批和供应商管理",
-        "category": "供应链",
-    },
-    "leave_approval": {
-        "intent": "设计一个请假审批系统，包含请假申请、主管审批和假期额度管理",
-        "category": "人力资源",
-    },
-    "service_ticket": {
-        "intent": "我们客服团队需要一个服务工单系统，支持工单流转、SLA 升级和客服绩效",
-        "category": "客户服务",
-    },
-    "employee_onboarding": {
-        "intent": "设计一个员工入职系统，包含入职流程、部门分配和 HR 权限管理",
-        "category": "人力资源",
-    },
-}
+# 起手意图与场景分类（点「使用模板」预填的话题原文；分类按域如实标注）。
+# 当前为空 = 货架如实空着（见模块 docstring 的清空说明）。上架格式：
+#   "<domain>": {"intent": "<预填话题原文>", "category": "<场景分类>"}
+# 其中 <domain> 必须是 builtin_domain_models.json 里存在的键。
+_EXAMPLE_META: Dict[str, Dict[str, str]] = {}
 
 _cache: Optional[List[Dict[str, Any]]] = None
 

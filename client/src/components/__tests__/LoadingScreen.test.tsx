@@ -1,3 +1,4 @@
+import { BRAND_NAME_DISPLAY, BRAND_TAGLINE_ZH } from "@shared/brand";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -24,7 +25,7 @@ import { LoadingScreen } from "../LoadingScreen";
  * The pixel-art / hologram skin was replaced with a flat MiroFish surface:
  *   - white background, #FF4500 single-accent
  *   - 1px solid #E5E5E5 borders (no gradients, no shadows)
- *   - SlideRule wordmark renders the current brand assets and copy
+ *   - 字标渲染当前品牌资产与文案（品牌名走 shared/brand.ts，不写死）
  *   - status rail still shows INIT / SYNC / CONFIG / FINALIZE
  *   - progress bar still binds to --loading-progress and the percent label
  *
@@ -49,15 +50,16 @@ describe("LoadingScreen — MiroFish skin", () => {
     expect(markup).toContain('data-testid="loading-status-rail"');
     expect(markup).toContain('data-testid="loading-brand-wordmark"');
 
-    // Brand swap: SlideRule replaces previous project names
-    expect(markup).toContain("SlideRule");
-    expect(markup).toContain("/brand/logo.png");
+    // 品牌名不写死在断言里：它由 shared/brand.ts 决定（2026-08-03 换成面团 AI）。
+    // 写死的话每次换名都要改测试，而这条真正要守的是"字标渲染的是当前品牌名"，
+    // 不是"品牌名等于某个具体字符串"。
+    expect(markup).toContain(BRAND_NAME_DISPLAY);
+    expect(markup).toContain("/brand/miantuan-mark.png");
     expect(markup).not.toContain("Duan" + "yun");
     expect(markup).not.toContain("Cube Pets " + "Office");
 
-    // Tagline
-    expect(markup).toContain("把想法问清楚");
-    expect(markup).toContain("把产品跑起来");
+    // 标语同样走常量，理由同上（品牌名那条）
+    expect(markup).toContain(BRAND_TAGLINE_ZH);
 
     // — Status rail labels
     expect(markup).toContain("SYSTEM");

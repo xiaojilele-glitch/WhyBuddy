@@ -17,14 +17,13 @@ import sys
 import time
 from pathlib import Path
 
-try:  # Windows 控制台默认 GBK，中文诊断需要 UTF-8
-    sys.stdout.reconfigure(encoding="utf-8")
-except Exception:
-    pass
-
 _PY_DIR = Path(__file__).resolve().parent.parent
 _ROOT = _PY_DIR.parent
 sys.path.insert(0, str(_PY_DIR))
+
+from stdio_utf8 import configure_stdio_utf8
+
+configure_stdio_utf8()
 
 
 def _load_env_file(path: Path) -> int:
@@ -59,7 +58,7 @@ def main() -> int:
     print(f"[smoke] goal={goal}")
     print("[smoke] calling generate_five_system_model (same path as the app; may take 1-3 min)...")
 
-    from services.v5_llm_generate import generate_five_system_model, last_generate_diagnostic  # noqa: E402
+    from services.v5_llm_generate import generate_five_system_model, get_generate_diagnostic  # noqa: E402
     import services.v5_llm_generate as _gen  # noqa: E402
 
     t0 = time.time()
@@ -81,7 +80,7 @@ def main() -> int:
         print("[smoke] RESULT: PASS — the app's LLM path should close 6/6 for this goal.")
         return 0
 
-    diag = getattr(_gen, "last_generate_diagnostic", None) or last_generate_diagnostic
+    diag = get_generate_diagnostic()
     print(f"[smoke] LLM FAILED in {elapsed:.1f}s")
     print(f"[smoke] diagnostic: {diag}")
     print("[smoke] RESULT: FAIL — 把上面 diagnostic 一行发给协作者即可定位。")

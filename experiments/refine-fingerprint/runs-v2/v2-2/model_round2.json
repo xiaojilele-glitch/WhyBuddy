@@ -1,0 +1,280 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "work_order",
+    "name": "工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elderly_name",
+      "name": "长者姓名",
+      "type": "ref",
+      "refEntity": "elderly"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "urgency",
+      "name": "紧急程度",
+      "type": "enum"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "enum"
+     },
+     {
+      "id": "staff_ref",
+      "name": "指派人员",
+      "type": "ref",
+      "refEntity": "staff"
+     }
+    ]
+   },
+   {
+    "id": "staff",
+    "name": "服务人员",
+    "fields": [
+     {
+      "id": "staff_name",
+      "name": "服务人员",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "elderly",
+    "name": "长者档案",
+    "fields": [
+     {
+      "id": "elderly_name",
+      "name": "长者姓名",
+      "type": "string"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "number"
+     },
+     {
+      "id": "address",
+      "name": "居住地址",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_advisor",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "role_staff",
+    "name": "上门服务人员"
+   },
+   {
+    "id": "role_family",
+    "name": "家属"
+   }
+  ],
+  "permissions": [
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "staff:read"
+  ],
+  "menus": [
+   {
+    "id": "m1",
+    "label": "监控大屏",
+    "roleRefs": [
+     "role_advisor"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "m2",
+    "label": "工单管理",
+    "roleRefs": [
+     "role_staff"
+    ],
+    "permissionRefs": [
+     "work_order:update",
+     "work_order:assign"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "待派单",
+    "assigneeRole": "role_advisor",
+    "phase": "创建"
+   },
+   {
+    "id": "node_dispatched",
+    "name": "待服务",
+    "assigneeRole": "role_staff",
+    "phase": "执行"
+   },
+   {
+    "id": "node_finished",
+    "name": "已完成",
+    "assigneeRole": "role_staff",
+    "phase": "结束"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_dispatched",
+    "condition": "完成服务派单"
+   },
+   {
+    "from": "node_dispatched",
+    "to": "node_finished",
+    "condition": "上门服务完成"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "monitor_screen",
+    "name": "监控大屏",
+    "kind": "monitor",
+    "fieldBindings": [
+     "work_order.status",
+     "work_order.urgency"
+    ],
+    "actionPermissions": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "work_order_center",
+    "name": "工单管理中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elderly_name",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "mobile_service_desk",
+    "name": "移动端服务台",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_type"
+    ],
+    "actionPermissions": [
+     "work_order:update"
+    ]
+   },
+   {
+    "id": "family_miniprogram",
+    "name": "家属端小程序",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elderly.elderly_name",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_summary",
+    "name": "工单智能分类",
+    "inputFields": [
+     "work_order.service_type",
+     "work_order.urgency"
+    ],
+    "outputField": "work_order.status",
+    "roleRefs": [
+     "role_staff"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "monitor_screen",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "work_order_center",
+    "workflowRef": "node_created"
+   },
+   {
+    "pageRef": "mobile_service_desk",
+    "workflowRef": "node_dispatched"
+   },
+   {
+    "pageRef": "family_miniprogram",
+    "workflowRef": "node_finished"
+   }
+  ],
+  "landingPageRef": "monitor_screen",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_advisor",
+   "role_staff",
+   "role_family"
+  ],
+  "dataModelRefs": [
+   "work_order",
+   "staff",
+   "elderly"
+  ],
+  "appIdentity": {
+   "appName": "颐养管家"
+  },
+  "invariants": [
+   {
+    "id": "inv_order_creation",
+    "statement": "工单在待派单节点时必须包含工单编号和长者姓名",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.order_no",
+     "work_order.elderly_name",
+     "node_created"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

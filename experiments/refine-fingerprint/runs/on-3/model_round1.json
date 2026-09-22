@@ -1,0 +1,339 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder_profile",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "gender_age",
+      "name": "性别 / 年龄",
+      "type": "string"
+     },
+     {
+      "id": "health_level",
+      "name": "健康状况评级",
+      "type": "string"
+     },
+     {
+      "id": "phone",
+      "name": "联系电话",
+      "type": "string"
+     },
+     {
+      "id": "staff",
+      "name": "负责护理员",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约时间",
+      "type": "date"
+     },
+     {
+      "id": "assigned_staff",
+      "name": "指派人员",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "service_staff",
+    "name": "服务人员",
+    "fields": [
+     {
+      "id": "staff_name",
+      "name": "人员/机构名称",
+      "type": "string"
+     },
+     {
+      "id": "work_hours",
+      "name": "有效服务工时",
+      "type": "string"
+     },
+     {
+      "id": "completed_orders",
+      "name": "完成工单量",
+      "type": "number"
+     },
+     {
+      "id": "base_salary",
+      "name": "基础服务薪酬",
+      "type": "string"
+     },
+     {
+      "id": "subsidy",
+      "name": "政府补贴明细",
+      "type": "string"
+     },
+     {
+      "id": "total_amount",
+      "name": "实结总额",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "consultant",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "staff",
+    "name": "服务人员"
+   },
+   {
+    "id": "supervisor",
+    "name": "运营主管"
+   }
+  ],
+  "permissions": [
+   "elder_profile:create",
+   "elder_profile:read",
+   "elder_profile:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "service_staff:read",
+   "service_staff:manage"
+  ],
+  "menus": [
+   {
+    "id": "menu_workbench",
+    "label": "工作台",
+    "roleRefs": [
+     "consultant",
+     "staff",
+     "supervisor"
+    ],
+    "permissionRefs": [
+     "elder_profile:read",
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "待派单",
+    "assigneeRole": "consultant",
+    "phase": "创建"
+   },
+   {
+    "id": "node_executing",
+    "name": "服务中",
+    "assigneeRole": "staff",
+    "phase": "执行"
+   },
+   {
+    "id": "node_completed",
+    "name": "已完成",
+    "assigneeRole": "supervisor",
+    "phase": "结算"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_executing",
+    "condition": "顾问指派服务人员"
+   },
+   {
+    "from": "node_executing",
+    "to": "node_completed",
+    "condition": "服务人员提交服务完成记录"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "工作台首页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder_profile.name",
+     "elder_profile.gender_age",
+     "elder_profile.health_level",
+     "elder_profile.phone",
+     "elder_profile.staff"
+    ],
+    "actionPermissions": [
+     "elder_profile:read",
+     "elder_profile:create",
+     "elder_profile:update"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "服务工单中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_name",
+     "work_order.service_type",
+     "work_order.appointment_time",
+     "work_order.assigned_staff",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:create",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "移动端任务执行页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_type",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update"
+    ]
+   },
+   {
+    "id": "p5",
+    "name": "财务结算管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "service_staff.staff_name",
+     "service_staff.work_hours",
+     "service_staff.completed_orders",
+     "service_staff.base_salary",
+     "service_staff.subsidy",
+     "service_staff.total_amount"
+    ],
+    "actionPermissions": [
+     "service_staff:read",
+     "service_staff:manage"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_health_assess",
+    "name": "健康评估生成",
+    "inputFields": [
+     "elder_profile.gender_age"
+    ],
+    "outputField": "elder_profile.health_level",
+    "roleRefs": [
+     "supervisor"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p3",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p4",
+    "workflowRef": "node_executing"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "consultant",
+   "staff",
+   "supervisor"
+  ],
+  "dataModelRefs": [
+   "elder_profile",
+   "work_order",
+   "service_staff"
+  ],
+  "appIdentity": {
+   "appName": "颐养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_1",
+    "statement": "更新老人档案健康等级时必须实时保存并同步",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "elder_profile",
+     "elder_profile.health_level"
+    ]
+   },
+   {
+    "id": "inv_2",
+    "statement": "工单流转至服务中状态时必须已关联指派人员",
+    "systems": [
+     "workflow",
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.assigned_staff",
+     "node_executing"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

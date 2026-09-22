@@ -86,7 +86,10 @@ def driver(monkeypatch, tmp_path):
     import services.v5_full_driver as driver_mod
 
     # persistence writes are irrelevant here; keep the run hermetic + fast
-    monkeypatch.setattr(driver_mod, "persist_state", lambda s: s)
+    # ⚠ 2026-08-27：PR-8(M14) 起 persist_state 必须返回 {"ok": True} 的 dict，
+    #   否则能力结束落 pendingRuns 判为写失败并 fail-closed 中止本轮。
+    #   `lambda s: s` 会让驱动器跑完第一个能力就退出。
+    monkeypatch.setattr(driver_mod, "persist_state", lambda s: {"ok": True})
     return driver_mod
 
 
@@ -217,7 +220,25 @@ def test_stream_driver_parallel_step_event_pairing(driver, monkeypatch):
     events = asyncio.run(_collect())
     assert probe.max_active >= 2
 
-    step_types = [e["type"] for e in events if e["type"] in ("reasoning_step", "reasoning_step_result")]
+    # 2026-08-04：选材那一步自己也会发一对 planning 事件（它是整条链上最长的
+    # 一段静默，20~26s，此前完全没有事件）。它**不属于能力批次**，所以这里先
+    # 把它摘掉——下面那条"批内全部先报再出结果"针对的是能力批次的可见性，
+    # 不是"整条流里第一个 result 之前不许有别的东西"。
+    #
+    # 摘之前先确认它确实成对出现：漏掉收尾的话前端那一条会一直转到下一批
+    # capability_start 才被顶掉，看着像卡在 planning。
+    planning_types = [
+        e["type"] for e in events
+        if e.get("label") == "planning" and e["type"] in ("reasoning_step", "reasoning_step_result")
+    ]
+    assert planning_types.count("reasoning_step") == planning_types.count("reasoning_step_result")
+    assert planning_types.count("reasoning_step") >= 1
+
+    cap_events = [
+        e for e in events
+        if e["type"] in ("reasoning_step", "reasoning_step_result") and e.get("label") != "planning"
+    ]
+    step_types = [e["type"] for e in cap_events]
     n_steps = step_types.count("reasoning_step")
     n_results = step_types.count("reasoning_step_result")
     assert n_steps == n_results and n_steps >= 3
@@ -226,8 +247,8 @@ def test_stream_driver_parallel_step_event_pairing(driver, monkeypatch):
     assert all(t == "reasoning_step" for t in step_types[:first_result])
     assert first_result == n_steps
     # per-cap result labels match the announced steps (pairing coherent)
-    step_labels = [e["label"] for e in events if e["type"] == "reasoning_step"]
-    result_labels = [e["label"] for e in events if e["type"] == "reasoning_step_result"]
+    step_labels = [e["label"] for e in cap_events if e["type"] == "reasoning_step"]
+    result_labels = [e["label"] for e in cap_events if e["type"] == "reasoning_step_result"]
     assert step_labels == result_labels
     # skill_start/skill_result closure walk still paired 1:1 in order
     skill_seq = [(e["type"], e.get("skill")) for e in events if e["type"] in ("skill_start", "skill_result")]

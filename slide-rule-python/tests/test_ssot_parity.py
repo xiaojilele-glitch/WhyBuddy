@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from services import freeform_block, schema_legal
 from services.freeform_block import _theme_palette, is_valid_generated_theme
-from services.identity_palette_hint import FALLBACK_SEED
+from services.identity_palette_hint import BRAND_LABEL, BRAND_SEED
 from services.identity_theme_gen import IdentityThemeSeedSpec
 from services.v5_model_gate import validate_five_system_model  # noqa: F401 — import 即哨兵
 
@@ -46,14 +46,14 @@ def test_legacy_icon_aliases_derived_from_catalog():
 
 # ── 槽位从目录派生（gate 不再手抄）─────────────────────────
 
-def test_gate_layout_slots_derived_from_catalog():
-    assert set(schema_legal.EXPERIENCE_BLOCK_ALLOWED_SLOTS) == set(CATALOG["allowedSlots"])
+def test_gate_layout_regions_derived_from_catalog():
+    assert set(schema_legal.EXPERIENCE_BLOCK_ALLOWED_REGIONS) == set(CATALOG["pageRegions"])
     # gate 源码不允许再出现手抄槽位集合
     gate_src = (Path(__file__).resolve().parent.parent / "services" / "v5_model_gate.py").read_text(
         encoding="utf-8"
     )
     assert 'LAYOUT_SLOTS = {"summary"' not in gate_src
-    assert "LAYOUT_SLOTS = set(EXPERIENCE_BLOCK_ALLOWED_SLOTS)" in gate_src
+    assert "LAYOUT_SLOTS = set(EXPERIENCE_BLOCK_ALLOWED_REGIONS)" in gate_src
 
 
 # ── 生成主题契约：与前端同一判定（2026-07-30 起只有 seed 一个必填字段）──
@@ -70,17 +70,39 @@ VALID_THEME = {"seed": "#123456", "label": "测试主题"}
 
 
 def test_generated_theme_contract_accepts_valid():
+    """契约判定本身还在（存量数据要能被识别），但**不再决定颜色**。"""
     assert is_valid_generated_theme(VALID_THEME)
-    palette = _theme_palette("azure", VALID_THEME)
-    assert palette["primary"] == VALID_THEME["seed"]
-    assert palette["label"] == VALID_THEME["label"]
 
 
-def test_generated_theme_contract_rejects_missing_seed():
-    assert not is_valid_generated_theme({"label": "只有标签没有种子色"})
-    # 落回 FALLBACK_SEED 派生的中性色板，不是某个预设 id
-    fallback = _theme_palette("azure", {"label": "只有标签没有种子色"})
-    assert fallback["primary"] == FALLBACK_SEED
+def test_palette_is_always_the_brand_seed(monkeypatch):
+    """全站一个颜色（2026-08-03，用户裁决）：不管传什么都出品牌色板。
+
+    这条锁的是"不会有半套新半套旧"：库里的存量应用带着各自的
+    generatedTheme，如果它们还能影响配色，同一个应用中心里就会既有品牌色
+    的新应用、又有五颜六色的老应用——而外壳（白菜单/白 Header）是统一的，
+    混在一起比全都不统一更难看。
+    """
+    for arg in (VALID_THEME, {"label": "只有标签没有种子色"}, None, {"seed": "#ff0000"}):
+        palette = _theme_palette("azure", arg)
+        assert palette["primary"] == BRAND_SEED.lower(), f"{arg} 影响了配色"
+        assert palette["label"] == BRAND_LABEL
+
+
+def test_brand_seed_is_read_from_the_shared_ledger():
+    """种子色必须来自前后端同读的那份账本，不能在 Python 里写死。
+
+    写死的话，改一次颜色要记得改两个地方；漏掉一边的症状是"提示词说的颜色
+    和实际渲染的颜色不一样"——只有肉眼比对才看得出来。
+    """
+    import json
+    from pathlib import Path
+
+    ledger = json.loads(
+        (Path(__file__).resolve().parent.parent / "services" / "data" / "identity_theme_presets.json")
+        .read_text(encoding="utf-8")
+    )
+    assert BRAND_SEED == ledger["brandSeed"]["seed"]
+    assert BRAND_LABEL == ledger["brandSeed"]["label"]
 
 
 def test_generated_theme_contract_rejects_trailing_newline():

@@ -1,0 +1,264 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人基本信息",
+      "type": "string"
+     },
+     {
+      "id": "gender_age",
+      "name": "性别 / 年龄",
+      "type": "string"
+     },
+     {
+      "id": "residence",
+      "name": "居住状态",
+      "type": "string"
+     },
+     {
+      "id": "health_level",
+      "name": "健康等级",
+      "type": "string"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单号",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elder"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "r_consultant",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "r_worker",
+    "name": "服务人员"
+   },
+   {
+    "id": "r_supervisor",
+    "name": "运营主管"
+   }
+  ],
+  "permissions": [
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "work_order:export"
+  ],
+  "menus": [
+   {
+    "id": "menu_workbench",
+    "label": "工作台菜单",
+    "roleRefs": [
+     "r_supervisor",
+     "r_consultant"
+    ],
+    "permissionRefs": [
+     "elder:read",
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_create",
+    "name": "工单创建",
+    "assigneeRole": "r_consultant",
+    "phase": "创建阶段"
+   },
+   {
+    "id": "node_assign",
+    "name": "智能派单",
+    "assigneeRole": "r_consultant",
+    "phase": "派单阶段"
+   },
+   {
+    "id": "node_execute",
+    "name": "服务执行",
+    "assigneeRole": "r_worker",
+    "phase": "执行阶段"
+   },
+   {
+    "id": "node_complete",
+    "name": "服务闭环",
+    "assigneeRole": "r_supervisor",
+    "phase": "归档阶段"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_create",
+    "to": "node_assign",
+    "condition": "求助或咨询需求生成后"
+   },
+   {
+    "from": "node_assign",
+    "to": "node_execute",
+    "condition": "系统自动匹配服务人员并下发后"
+   },
+   {
+    "from": "node_execute",
+    "to": "node_complete",
+    "condition": "服务人员现场打卡并提交内容后"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "平台工作台",
+    "kind": "workbench",
+    "fieldBindings": [],
+    "actionPermissions": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.gender_age",
+     "elder.residence",
+     "elder.health_level",
+     "elder.emergency_contact"
+    ],
+    "actionPermissions": [
+     "elder:create",
+     "elder:read",
+     "elder:update"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "智能派单中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_ref"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:assign",
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "移动端服务执行页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_ref"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "cap_health_analysis",
+    "name": "老人健康智能分析",
+    "inputFields": [
+     "elder.health_level"
+    ],
+    "outputField": "elder.emergency_contact",
+    "roleRefs": [
+     "r_consultant"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p1",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "node_create"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "node_assign"
+   },
+   {
+    "pageRef": "p4",
+    "workflowRef": "node_execute"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "r_consultant",
+   "r_worker",
+   "r_supervisor"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "work_order"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_order_elder",
+    "statement": "每张服务工单必须关联且仅关联一个有效的老人档案",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.elder_ref",
+     "elder",
+     "node_create"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

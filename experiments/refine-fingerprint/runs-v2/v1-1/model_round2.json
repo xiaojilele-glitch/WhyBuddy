@@ -1,0 +1,393 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "gender_age",
+      "name": "性别/年龄",
+      "type": "string"
+     },
+     {
+      "id": "room_bed",
+      "name": "房间床位",
+      "type": "string"
+     },
+     {
+      "id": "health_level",
+      "name": "健康等级",
+      "type": "string"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "任务编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "plan_time",
+      "name": "计划时间",
+      "type": "string"
+     },
+     {
+      "id": "assignee",
+      "name": "指派人员",
+      "type": "string"
+     },
+     {
+      "id": "urgency",
+      "name": "紧急程度",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "rescue",
+    "name": "紧急救援记录",
+    "fields": [
+     {
+      "id": "rescue_no",
+      "name": "任务单号",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "alert_type",
+      "name": "告警类型",
+      "type": "string"
+     },
+     {
+      "id": "linkage",
+      "name": "指派人员/家属联动",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前进展状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "bill",
+    "name": "财务账单",
+    "fields": [
+     {
+      "id": "bill_no",
+      "name": "账单编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "bill_month",
+      "name": "账单月份",
+      "type": "string"
+     },
+     {
+      "id": "total_amount",
+      "name": "总金额",
+      "type": "string"
+     },
+     {
+      "id": "payment_status",
+      "name": "缴费状态",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "工单创建",
+    "assigneeRole": "role_consultant",
+    "phase": "init"
+   },
+   {
+    "id": "node_dispatched",
+    "name": "工单调度",
+    "assigneeRole": "role_dispatcher",
+    "phase": "scheduling"
+   },
+   {
+    "id": "node_processing",
+    "name": "服务执行中",
+    "assigneeRole": "role_caregiver",
+    "phase": "execution"
+   },
+   {
+    "id": "node_completed",
+    "name": "服务完成",
+    "assigneeRole": "role_caregiver",
+    "phase": "finished"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_dispatched",
+    "condition": "顾问录入预约后提交调度"
+   },
+   {
+    "from": "node_dispatched",
+    "to": "node_processing",
+    "condition": "调度员指派护理员接单"
+   },
+   {
+    "from": "node_processing",
+    "to": "node_completed",
+    "condition": "护理员上门打卡并完成服务"
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_consultant",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "role_dispatcher",
+    "name": "服务调度员"
+   },
+   {
+    "id": "role_caregiver",
+    "name": "一线护理员"
+   }
+  ],
+  "permissions": [
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "rescue:create",
+   "rescue:read",
+   "rescue:update",
+   "bill:read",
+   "bill:create"
+  ],
+  "menus": [
+   {
+    "id": "menu_main",
+    "label": "主菜单",
+    "roleRefs": [
+     "role_consultant",
+     "role_dispatcher",
+     "role_caregiver"
+    ],
+    "permissionRefs": [
+     "elder:read",
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1_workbench",
+    "name": "工作台首页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_type"
+    ],
+    "actionPermissions": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "p2_elder_profile",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.gender_age",
+     "elder.room_bed",
+     "elder.health_level",
+     "elder.emergency_contact"
+    ],
+    "actionPermissions": [
+     "elder:read",
+     "elder:update"
+    ]
+   },
+   {
+    "id": "p3_emergency_monitor",
+    "name": "紧急救援监控页",
+    "kind": "monitor",
+    "fieldBindings": [
+     "rescue.rescue_no",
+     "rescue.alert_type",
+     "rescue.status"
+    ],
+    "actionPermissions": [
+     "rescue:read",
+     "rescue:update"
+    ]
+   },
+   {
+    "id": "p4_dispatch_kanban",
+    "name": "工单调度看板",
+    "kind": "kanban",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.assignee",
+     "work_order.urgency"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p5_mobile_task",
+    "name": "护理员移动端任务页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_type",
+     "work_order.plan_time"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update"
+    ]
+   },
+   {
+    "id": "p6_finance",
+    "name": "财务结算管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "bill.bill_no",
+     "bill.total_amount",
+     "bill.payment_status"
+    ],
+    "actionPermissions": [
+     "bill:read"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "aigc_health_assess",
+    "name": "健康等级智能评估",
+    "inputFields": [
+     "elder.gender_age",
+     "elder.emergency_contact"
+    ],
+    "outputField": "elder.health_level",
+    "roleRefs": [
+     "role_consultant"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p1_workbench",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p4_dispatch_kanban",
+    "workflowRef": "node_dispatched"
+   },
+   {
+    "pageRef": "p5_mobile_task",
+    "workflowRef": "node_processing"
+   }
+  ],
+  "landingPageRef": "p1_workbench",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_consultant",
+   "role_dispatcher",
+   "role_caregiver"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "work_order",
+   "rescue",
+   "bill"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_elder_profile",
+    "statement": "老人档案必须包含完整的健康与家属信息",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "elder",
+     "elder.health_level",
+     "elder.emergency_contact"
+    ]
+   },
+   {
+    "id": "inv_order_dispatch",
+    "statement": "服务工单必须经过调度节点指派人员",
+    "systems": [
+     "workflow",
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.assignee",
+     "node_dispatched"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

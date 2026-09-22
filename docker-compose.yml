@@ -1,6 +1,6 @@
 # SlideRule — one-command bootstrap
 #
-#   cp .env.example .env   # 填 LLM_API_KEY + SESSION_SECRET
+#   cp .env.example .env   # 填 LLM_API_KEY + SLIDERULE_AUTH_SECRET
 #   docker compose up -d --build
 #   → http://localhost:3000/agent-loop/workbench
 #
@@ -24,7 +24,7 @@
 #   - Feishu integration (mock mode by default)
 #
 # Required env: copy .env.example to .env and fill at least LLM_API_KEY +
-# SESSION_SECRET. Compose passes the host's .env into both app containers.
+# SLIDERULE_AUTH_SECRET. Compose passes the host's .env into both app containers.
 
 services:
   python:
@@ -43,6 +43,9 @@ services:
     volumes:
       # 会话/推演产物持久化（data/sliderule-sessions.json 等，JSON 文件库）
       - sliderule-python-data:/app/data
+    networks:
+      - default
+      - postgres-internal
     healthcheck:
       test:
         [
@@ -88,6 +91,9 @@ services:
       AGENT_LOOP_API_TARGET: http://python:9700
     ports:
       - "3000:3001"
+    networks:
+      - default
+      - postgres-internal
     healthcheck:
       test:
         [
@@ -137,3 +143,8 @@ volumes:
     name: sliderule-mysql-data
   sliderule-python-data:
     name: sliderule-python-data
+
+networks:
+  postgres-internal:
+    external: true
+    name: postgres-stack-internal

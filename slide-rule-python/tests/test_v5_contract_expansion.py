@@ -1,3 +1,5 @@
+
+from plan_approval_support import approved_execution_payload
 from fastapi.testclient import TestClient
 
 from app import app
@@ -68,14 +70,14 @@ def test_python_native_dialogue_caps_use_real_llm_not_rag_stub(monkeypatch):
     ]:
         response = client.post(
             "/api/sliderule/execute-capability",
-            json={
+            json=approved_execution_payload({
                 "capabilityId": cap,
                 "state": state,
                 "inputArtifactIds": [],
                 "roleId": "agent",
                 "turnId": f"native-{cap}",
                 "userText": "find the missing assumptions before planning",
-            },
+            }),
             headers={"X-Internal-Key": INTERNAL_KEY},
         )
         assert response.status_code == 200, response.text
@@ -138,14 +140,14 @@ def test_python_native_report_write_uses_real_llm_json_not_rag_stub(monkeypatch)
     }
     response = client.post(
         "/api/sliderule/execute-capability",
-        json={
+        json=approved_execution_payload({
             "capabilityId": "report.write",
             "state": state,
             "inputArtifactIds": [],
             "roleId": "综合",
             "turnId": "native-report-write",
             "userText": "write the final feasibility report",
-        },
+        }),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
     assert response.status_code == 200, response.text

@@ -20,6 +20,17 @@ python-dotenv>=1.0.0
 httpx>=0.27.0
 pytest>=8.0.0
 
+# 目录窄化（services/block_narrowing.py）：按题意从 358 个区块里挑一小批注进
+# prompt。BM25 打分用它，numpy-only、无重依赖。
+#
+# ⚠️ 这条**必须装上**，虽然代码是 fail-open 的。缺了它窄化整个退回全量目录，
+# 而窄化不是可有可无的增强——目录里可达的只有前 ~50 个格子，剩下的靠它才够得着
+# （对题件被选中 0.67 → 3.25，p=0.00004，见 docs/block-narrowing-eval.md）。
+# 2026-08-11 实测踩到：它当时漏在这份清单外，而 Dockerfile 只装这一个文件，
+# 部署上去窄化会一声不吭地整个失效。现在缺失会打一行 stderr 告警，
+# 并由 tests/test_narrowing_dependency_declared.py 钉住声明。
+rank-bm25>=0.2.2
+
 # RAG / retrieval (real external evidence, replacing Node stubs)
 qdrant-client>=1.12.0
 openai>=1.50.0  # for LLM calls in stable style (reference project uses similar)
@@ -39,3 +50,12 @@ e2b-code-interpreter>=2.8.0
 # （分辨率不减）。见 services/thumb_image.py。
 # 惰性导入 + fail-open：装不上时整条压缩链路静默失效、原样存 PNG，不影响功能。
 pillow>=10.4
+
+# 身份体系（2026-08-02）：邮箱注册/登录 + 匿名可读/登录可写/超管三档。
+# 密码哈希用 Argon2（内存硬、抗 GPU 爆破），算法选择与写法对齐
+# fastapi/full-stack-fastapi-template 与 fastapi-users——两者 2026 年都已
+# 把默认从 bcrypt 换成 Argon2。
+# ⚠️ 这两条**不 fail-open**：装不上时身份体系整体不可用，而不是降级放行。
+#    密码哈希没有"弱一点也能用"的选项。
+pwdlib[argon2]>=0.2
+pyjwt>=2.8

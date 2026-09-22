@@ -4,8 +4,9 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
-import { defineConfig, type Plugin, type ViteDevServer } from "vite";
+import { defineConfig, loadEnv, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
+import { PROJECT_PREVIEW_ORIGIN_ENV, workbenchContentSecurityPolicy } from "./scripts/project-preview-csp.mjs";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -155,7 +156,7 @@ function vitePluginManusDebugCollector(): Plugin {
 import { resolveApiTarget } from "./api-target";
 export { resolveApiTarget };
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
   const repository = process.env.GITHUB_REPOSITORY || "opencroc/sliderule";
   const repositoryName = repository.split("/")[1] || "sliderule";
   const repositoryUrl = `https://github.com/${repository}`;
@@ -170,7 +171,11 @@ export default defineConfig(() => {
   // blob: 允许同文档内 createObjectURL（three.js GLTFLoader 解 GLB 内嵌贴图
   // 走 blob URL——Work 模式 3D 角色需要）；blob 只能由本页脚本创建，
   // 不放开任何外联，zero-trust 姿态不变。
-  const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' blob: https://api.openai.com https://api.deepseek.com https://openrouter.ai https://api.anthropic.com https://api.groq.com data:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:;" />`;
+  // Vite does not load .env into process.env before this callback. Read the one
+  // public template in both serve/build; gateway credentials stay server-only.
+  const previewEnv = loadEnv(mode, PROJECT_ROOT, PROJECT_PREVIEW_ORIGIN_ENV);
+  const csp = workbenchContentSecurityPolicy(previewEnv[PROJECT_PREVIEW_ORIGIN_ENV]);
+  const cspMeta = `<meta http-equiv="Content-Security-Policy" content="${csp}" />`;
   const vitePluginCspForByok = {
     name: "csp-for-byok-pages",
     transformIndexHtml(html) {
@@ -205,6 +210,21 @@ export default defineConfig(() => {
     // 跨文件全局态污染（fetch/localStorage 模块级 stub），省的时间不值风险。
     test: {
       pool: "vmThreads",
+      // antd-mobile 的 `cjs/global/index.js` 是未转译的 TS 语法，node 直接
+      // require 会在第 3 行崩「Unexpected token ':'」。任何**导入完整基础组件
+      // 目录**的用例都会踩到（目录 = 桌面 + 手机两档）。inline 让 vite 先转译
+      // 它再交给测试，跟浏览器里走的是同一条路。
+      //
+      // 只列这一个包，不开 `inline: true` 全量 —— 全量会把 antd 这类大依赖
+      // 也拖进转译，collect 阶段本来就是大头（见上）。
+      // 走它的 ESM 产物：node 的 require 条件会挑到 `cjs/`，那份没转译干净。
+      // 浏览器里 vite 本来就走 es/，这里只是让测试跟浏览器同路。
+      alias: {
+        "antd-mobile": path.resolve(
+          import.meta.dirname,
+          "node_modules/antd-mobile/es/index.js"
+        ),
+      },
     },
     plugins,
     resolve: {
@@ -212,11 +232,35 @@ export default defineConfig(() => {
         "@": path.resolve(import.meta.dirname, "client", "src"),
         "@shared": path.resolve(import.meta.dirname, "shared"),
         // E40.1 合法域单一真相源：客户端与 python 门/修复器/生成契约同读一份账本
-        "@legal": path.resolve(import.meta.dirname, "slide-rule-python/services/data/five_system_legal.json"),
+        "@legal": path.resolve(
+          import.meta.dirname,
+          "slide-rule-python/services/data/five_system_legal.json"
+        ),
         // 体验区块目录：Gate/Repair/Prompt/前端 Registry 共用，不在 TS 手抄区块清单
-        "@experience-blocks": path.resolve(import.meta.dirname, "slide-rule-python/services/data/experience_block_catalog.json"),
+        "@experience-blocks": path.resolve(
+          import.meta.dirname,
+          "slide-rule-python/services/data/experience_block_catalog.json"
+        ),
+        // 意图词表：与 services/block_narrowing.py 共用同一份（见该 JSON 的 _note）
+        "@block-intent-lexicon": path.resolve(
+          import.meta.dirname,
+          "slide-rule-python/services/data/block_intent_lexicon.json"
+        ),
         // 身份主题预设 + 生成主题契约：前端 THEMES 与 Python 色板提示/使用判定同读一份
-        "@identity-themes": path.resolve(import.meta.dirname, "slide-rule-python/services/data/identity_theme_presets.json"),
+        "@identity-themes": path.resolve(
+          import.meta.dirname,
+          "slide-rule-python/services/data/identity_theme_presets.json"
+        ),
+        // 产品原型账本：「什么算闭环」的单一真相源。前端 skills 的六系统清单
+        // 由 parity 判据锁在这份账本上（第四条：同一件事的第二处）。
+        "@archetypes": path.resolve(
+          import.meta.dirname,
+          "slide-rule-python/services/data/product_archetypes.json"
+        ),
+        "@design-systems": path.resolve(
+          import.meta.dirname,
+          "slide-rule-python/services/data/design_systems.json"
+        ),
         "@assets": path.resolve(import.meta.dirname, "attached_assets"),
       },
     },

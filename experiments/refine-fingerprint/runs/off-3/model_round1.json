@@ -1,0 +1,319 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "elder_name",
+      "name": "长者姓名",
+      "type": "string"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约时间",
+      "type": "date"
+     },
+     {
+      "id": "service_staff",
+      "name": "服务人员",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "elder_profile",
+    "name": "长者档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "gender",
+      "name": "性别",
+      "type": "string"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "string"
+     },
+     {
+      "id": "community",
+      "name": "居住社区",
+      "type": "string"
+     },
+     {
+      "id": "care_level",
+      "name": "照护等级",
+      "type": "string"
+     },
+     {
+      "id": "health_status",
+      "name": "健康状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "emergency_rescue",
+    "name": "紧急救援",
+    "fields": [
+     {
+      "id": "rescue_time",
+      "name": "求助时间",
+      "type": "date"
+     },
+     {
+      "id": "elder_name",
+      "name": "长者姓名",
+      "type": "string"
+     },
+     {
+      "id": "location",
+      "name": "定位地址",
+      "type": "string"
+     },
+     {
+      "id": "rescue_type",
+      "name": "求助类型",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "r1",
+    "name": "社区养老专员"
+   },
+   {
+    "id": "r2",
+    "name": "长者及家属"
+   }
+  ],
+  "permissions": [
+   "elder_profile:create",
+   "elder_profile:read",
+   "elder_profile:update",
+   "emergency_rescue:create",
+   "emergency_rescue:read",
+   "emergency_rescue:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign"
+  ],
+  "menus": [
+   {
+    "id": "menu_1",
+    "label": "工作台首页",
+    "roleRefs": [
+     "r1"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "工单已创建",
+    "assigneeRole": "r1",
+    "phase": "待派发"
+   },
+   {
+    "id": "node_assigned",
+    "name": "已派发服务人员",
+    "assigneeRole": "r1",
+    "phase": "执行中"
+   },
+   {
+    "id": "node_completed",
+    "name": "服务已完成",
+    "assigneeRole": "r1",
+    "phase": "已完成"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_assigned",
+    "condition": "专员选择服务人员并完成派单"
+   },
+   {
+    "from": "node_assigned",
+    "to": "node_completed",
+    "condition": "服务人员完成上门服务并回填"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p4",
+    "name": "服务工单中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_type",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder_profile.name",
+     "elder_profile.age",
+     "elder_profile.care_level"
+    ],
+    "actionPermissions": [
+     "elder_profile:read",
+     "elder_profile:update"
+    ]
+   },
+   {
+    "id": "p1",
+    "name": "工作台首页",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "work_order.status",
+     "emergency_rescue.status"
+    ],
+    "actionPermissions": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "紧急救援监控页",
+    "kind": "monitor",
+    "fieldBindings": [
+     "emergency_rescue.rescue_time",
+     "emergency_rescue.location",
+     "emergency_rescue.status"
+    ],
+    "actionPermissions": [
+     "emergency_rescue:read"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_1",
+    "name": "健康评估",
+    "inputFields": [
+     "elder_profile.health_status",
+     "elder_profile.age"
+    ],
+    "outputField": "elder_profile.care_level",
+    "roleRefs": [
+     "r1"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p4",
+    "workflowRef": "node_created"
+   },
+   {
+    "pageRef": "p1",
+    "workflowRef": "main_flow"
+   }
+  ],
+  "landingPageRef": "p4",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "r1",
+   "r2"
+  ],
+  "dataModelRefs": [
+   "work_order",
+   "elder_profile",
+   "emergency_rescue"
+  ],
+  "appIdentity": {
+   "appName": "颐安云"
+  },
+  "invariants": [
+   {
+    "id": "inv_1",
+    "statement": "服务工单必须记录工单编号和当前状态",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.order_no",
+     "work_order.status"
+    ]
+   },
+   {
+    "id": "inv_2",
+    "statement": "服务工单流转必须从创建节点开始，并能最终流转到完成状态",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "node_created",
+     "node_assigned",
+     "node_completed"
+    ]
+   },
+   {
+    "id": "inv_3",
+    "statement": "紧急救援记录必须关联长者姓名与求助时间",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "emergency_rescue",
+     "emergency_rescue.elder_name",
+     "emergency_rescue.rescue_time"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

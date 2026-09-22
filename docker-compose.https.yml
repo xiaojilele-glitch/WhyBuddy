@@ -1,0 +1,25 @@
+services:
+  app:
+    ports: !override
+      - "127.0.0.1:3000:3001"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: sliderule-caddy
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - sliderule-caddy-data:/data
+      - sliderule-caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  sliderule-caddy-data:
+    name: sliderule-caddy-data
+  sliderule-caddy-config:
+    name: sliderule-caddy-config

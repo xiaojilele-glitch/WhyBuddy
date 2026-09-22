@@ -422,6 +422,24 @@ function isModelEndpointMismatchMessage(message: string): boolean {
   );
 }
 
+// 网关用鉴权码表达"容量满了"：状态码撒谎时以响应体为准。
+//
+// ⚠ 2026-08-25：Python 侧 `_normalize_error` 因为同一件事连挂四轮真机——
+//   `{"error":{"message":"All available accounts exhausted","type":"server_error"}}`
+//   带着 401 回来，被判成鉴权失败 → 不可重试 → 整条推演断在中途。
+//   这两处是**一对**实现（Python 那份的 docstring 直接写着 "Port of
+//   normalizeLLMError"），只改一边不会报错，只会有一半不生效：Python 修好了
+//   而这边照样把容量错误喊成"Check the API key"，把下一个排查的人送去查 key。
+//   改这里或那里，先 grep 另一处。
+//
+// 原先只有 403 认 quota/billing；401 同样会被网关拿来表达容量问题，一并纳入。
+// 真鉴权失败（响应体没有容量语义）仍然落到下面的 401/403 分支。
+function isCapacityBehindAuthStatus(lower: string): boolean {
+  return /billing_error|quota|rate limit|rate_limit|insufficient_quota|out of quota|accounts? exhausted|no available accounts?|capacity|"?type"?\s*[:=]\s*"?server_error/i.test(
+    lower
+  );
+}
+
 function normalizeLLMError(
   provider: ProviderConfig,
   status: number,
@@ -436,7 +454,7 @@ function normalizeLLMError(
   }
   if (
     status === 429 ||
-    (status === 403 && /billing_error|quota|rate limit|rate_limit|insufficient_quota|out of quota/i.test(lower))
+    ((status === 401 || status === 403) && isCapacityBehindAuthStatus(lower))
   ) {
     return new Error(
       `LLM rate limited or out of quota on ${providerName}.${trimmed ? ` Details: ${trimmed.substring(0, 160)}` : ""}`

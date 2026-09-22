@@ -4,6 +4,8 @@ These tests stay inside FastAPI TestClient and mocked runtime failures. They do
 not call a real LLM, external agent, vector database, or production service.
 """
 
+from plan_approval_support import approved_execution_payload
+
 import os
 import sys
 import time
@@ -73,14 +75,14 @@ def test_runtime_config_reads_required_live_smoke_env_without_external_services(
 def test_wrong_internal_key_is_visible_before_any_llm_or_agent_call():
     response = client.post(
         "/api/sliderule/execute-capability",
-        json={
+        json=approved_execution_payload({
             "capabilityId": "intent.clarify",
             "state": _state("deployment-wrong-key", "clarify deployment smoke"),
             "inputArtifactIds": [],
             "roleId": "agent",
             "turnId": "deployment-wrong-key",
             "userText": "clarify deployment smoke",
-        },
+        }),
         headers={"X-Internal-Key": "wrong-key"},
     )
 
@@ -99,14 +101,14 @@ def test_config_missing_live_smoke_returns_explicit_failure_without_fallback_suc
 
     response = client.post(
         "/api/sliderule/execute-capability",
-        json={
+        json=approved_execution_payload({
             "capabilityId": "intent.clarify",
             "state": _state("deployment-config-missing", "clarify deployment smoke"),
             "inputArtifactIds": [],
             "roleId": "agent",
             "turnId": "deployment-config-missing",
             "userText": "clarify deployment smoke",
-        },
+        }),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
 

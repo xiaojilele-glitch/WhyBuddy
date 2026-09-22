@@ -72,7 +72,10 @@ const DEFAULT_REDACTION_KEYWORDS: readonly string[] = [
   "bearer",
   "access_token",
 ];
-const DEFAULT_EMAIL_PATTERN = /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g;
+// 前置负向后顾 + RFC 5321 长度上界，见 spec-tree/policy.ts 同名字段注释：
+// 无界写法在「长串合法本地部字符但没有 @」的输入上是二次复杂度（5MB 约 4 小时）。
+const DEFAULT_EMAIL_PATTERN =
+  /(?<![\w.+-])[\w.+-]{1,64}@[\w.-]{1,255}\.[A-Za-z]{2,}/g;
 /**
  * Covers GitHub classic PATs (`gh[pousr]_` + 36 base62 chars) and fine-grained
  * PATs (`github_pat_` + 22 base62 chars). Both are case-sensitive prefixes.
@@ -201,7 +204,10 @@ export function applyMcpGithubCapabilityRedaction(
   // 3. keyword: value / keyword = value pairs
   for (const keyword of policy.redactionKeywords) {
     const pattern = new RegExp(
-      `(${escapeRegex(keyword)})\\s*[:=]\\s*"?[^"\\s,;]+"?`,
+      // 值部取到换行/逗号/分号，而不是取到空白：带 scheme 前缀的凭据
+      // （`Authorization: Bearer <token>`）只脱到空白就只盖掉 "Bearer"，
+      // token 本体原样漏出。对齐 spec-tree / aigc-spec-node 的写法。
+      `(${escapeRegex(keyword)})\\s*[:=]\\s*"?[^"\\r\\n,;]+"?`,
       "gi",
     );
     result = result.replace(pattern, "$1: [redacted]");

@@ -5,6 +5,8 @@ These use FastAPI TestClient against the real /api/sliderule route surface, but
 monkeypatch the LLM callers so the suite never needs real external LLM keys.
 """
 
+from plan_approval_support import approved_execution_payload
+
 from fastapi.testclient import TestClient
 import pytest
 
@@ -34,14 +36,14 @@ def _state(session_id: str, goal: str) -> dict:
 def _post_execute(capability_id: str, *, state: dict, turn_id: str, user_text: str = ""):
     return client.post(
         "/api/sliderule/execute-capability",
-        json={
+        json=approved_execution_payload({
             "capabilityId": capability_id,
             "state": state,
             "inputArtifactIds": [],
             "roleId": "agent",
             "turnId": turn_id,
             "userText": user_text,
-        },
+        }),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
 

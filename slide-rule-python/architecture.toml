@@ -1,0 +1,1408 @@
+# 架构清单 —— 依赖要**显式声明**，没声明的边判据当场变红。
+#
+# 抄 grok-build：他们 91 个 crate 各自在 Cargo.toml 里声明依赖，边上还写着
+# 为什么依赖（`# CompactionDetail, embedded in CompactionMode::Segments.`），
+# 347 条边全由编译器强制。我们没有那个编译器，这份清单 + tests/test_architecture.py
+# 就是它。详见 arch_graph.py 模块头。
+#
+# ⚠ 改这个文件 = 改架构。加一条 may_depend_on 之前先问：这条依赖是必须的，
+#   还是"顺手 import 一下"？后者的代价是下一个人再也分不清哪些边是设计、
+#   哪些是历史。
+
+[layer.models]
+rank = 0
+what = "数据形状"
+# 数据模型不依赖任何内部模块——它被所有人依赖，反过来就成环。
+may_depend_on = []
+
+[layer.config]
+rank = 0
+what = "配置"
+may_depend_on = []
+
+[layer.sliderule_llm]
+rank = 1
+what = "LLM 通道"
+# 网关要读配置、要用状态模型的形状。
+may_depend_on = ["config", "models"]
+
+[layer.services]
+rank = 2
+what = "业务"
+# 业务层调 LLM 通道、读配置、用状态模型。**不许反向依赖 routes/app**。
+may_depend_on = ["config", "models", "sliderule_llm"]
+
+[layer.middlewares]
+rank = 2
+what = "中间件"
+# 身份中间件要读配置与用户模型。
+#
+# ⚠ 2026-08-29 补 services：`current_user` 要 `services.auth_tokens`（验令牌）
+#   与 `services.identity_store`（查用户、查停用/撤销）。这不是绕开分层——
+#   鉴权本来就要问身份服务，把这两样搬进中间件等于让身份逻辑长出第二份。
+#   与 routes 同 rank：两者都是「HTTP 边缘」，都可以调业务，业务不许反过来调它们。
+may_depend_on = ["config", "models", "services"]
+
+[layer.routes]
+rank = 3
+what = "HTTP 路由"
+# 路由是薄的：拼装业务、读配置、用中间件鉴权。
+may_depend_on = ["config", "models", "services", "sliderule_llm", "middlewares"]
+
+[layer.app]
+rank = 4
+what = "装配根"
+# 对应 grok 的 composition root（xai-grok-pager-bin）：只负责把东西装起来。
+#
+# ⚠ sliderule_llm 这一项是 2026-09-08 加的，理由不是「装配要用 LLM」——
+#   装配根不调 LLM。是 `ensure_llm_proxy_bypass()`：Windows 上 HTTP_PROXY
+#   为空时 httpx 走注册表里的 Clash，NO_PROXY 环境变量不生效，控制面每句
+#   都 Cloudflare 522。绕过名单要在**任何服务 import 之前**设好，而算这份
+#   名单要读 LLM_BASE_URL——那份逻辑的家在 sliderule_llm.config，抄一份到
+#   装配根只会有两份会漂的名单。config 是叶子（顶层只有标准库、import 期
+#   不读 env、httpx 由 PEP 562 推迟），所以这条边顶层 import 就行，
+#   不必躲进函数体。
+may_depend_on = ["config", "models", "routes", "services", "sliderule_llm", "middlewares", "stdio_utf8"]
+
+[layer.scripts]
+rank = 5
+what = "运维脚本"
+# 一次性脚本可以够到任何东西——它不在产品链上，出事也炸不到用户。
+may_depend_on = ["config", "models", "services", "routes", "sliderule_llm", "app", "middlewares", "stdio_utf8"]
+
+# ── 顶层单文件模块：自己就是一个包 ────────────────────────────────────────────
+#
+# ⚠ 2026-08-29 之前这三个**根本不在架构图里**。扫描器的包名单是手写的，
+#   而那份名单同时当「哪些 import 算内部边」的筛子和 `_pkg_of` 的分类器用，
+#   于是漏一项漏两次：`app.py` 第 24 行顶层 `from stdio_utf8 import ...` 那条边
+#   在图里不存在，`stdio_utf8` 反而以"零入度、没人用"的样子躺在孤儿名单里；
+#   就算边补出来，`_pkg_of` 也会给它打 `"?"`，而 `layer_violations` 见 `"?"` 整条跳过。
+#   现在包名单从真实模块集合派生，这三个必须各自声明。
+#   一并浮出水面的还有 `complete_migration -> models / services` 两条边——
+#   在此之前它们**从来没被任何一道闸看见过**。
+
+[layer.stdio_utf8]
+rank = 0
+what = "顶层叶子：Windows 管道 UTF-8 钉桩"
+# 必须赶在任何会 print 的 import 之前执行，所以它谁都不能依赖。
+may_depend_on = []
+
+[layer.arch_graph]
+rank = 0
+what = "架构编译器自己"
+# 抄 grok 的「根 Cargo.toml 是生成的」。它读代码，不参与产品链，零内部依赖。
+may_depend_on = []
+
+[layer.complete_migration]
+rank = 5
+what = "一次性迁移记录"
+# 跟 scripts 同一性质：不在产品链上。⚠ 它的两条依赖 2026-08-29 才第一次被闸看见。
+may_depend_on = ["models", "services"]
+
+
+# ── services 内部分层（抄 grok 的叶子 crate）──────────────────────────────────
+#
+# grok 把 51 个共用叶子（token 估算、路径、文件工具…）切成独立 crate，依赖方向
+# 由编译器焊死：大块能用叶子，叶子永远碰不到大块。我们 195 个 services 模块平铺
+# 在一个命名空间里，谁都能 import 谁——这正是「463 条 import 藏在函数体里」的根：
+# 放在文件头会循环导入，只好挪进函数体。
+#
+# ⚠ 这份分层是**从今天的真实依赖深度算出来的**（arch_graph.suggest_services_layers），
+#   不是重新设计。它是一条棘轮基线：先把现状固定成契约，此后只许变好。
+#   别把它读成「架构本该如此」。
+#
+# ⚠ 同层之间互相依赖是允许的（util 层实测没有内部边，core/flow 有）。
+#   闸只挡**越层向上**：叶子碰上层、core 碰 flow。
+#
+# ⚠ 新加模块要落进某一层。落不进说明它既不是工具也不是编排——那通常意味着
+#   它该被拆成两个。
+
+[services_layer.util]
+rank = 0
+what = "纯工具：不依赖 services 里任何其它模块"
+# 深度 0 实测 117 个：不依赖 services 内任何模块。对应 grok 的叶子 crate。
+may_depend_on = []
+modules = [
+  "services.control_budget",
+  "services.control_context_compact",
+  "services.control_transcript_log",
+  "services.control_goal_continuation",
+  "services.control_checkpoint",
+  "services.control_run_store",
+  "services.archetype_legal",
+  "services.project_rollout",
+  "services.project_preview_config",
+  # 预览 Host 注入是纯字符串/命令拼装：不碰 E2B、不读存储。worker 启动
+  # Vite 时引用；Agent 源码接不接 allowedHosts 都走这一份。
+  "services.vite_preview_hosts",
+  "services.project_tool_contracts",
+  "services.project_browser_interact",
+  "services.project_tool_summary",
+  "services.project_verification_gate",
+  "services.project_workspace_artifacts",
+  "services.project_acceptance",
+  # 交付面可用性：只吃 HTML 字符串与 SPEC 字典，services 里谁都不依赖 → 叶子。
+  # 跟 gate_health 同一个理由被闭环判定顶层 import。
+  "services.deliverable_surface",
+  # 批准计划上的交付物类别。只吃计划字典，不读会话、不读工程库 → 叶子。
+  "services.deliverable_kind",
+  # 闸的体检：谁都不依赖（只吃「结论 + 指纹」两个字符串），所以是叶子。
+  # 它反过来被闭环判定顶层 import——叶子层的意义就在这儿：谁都能安全引它。
+  "services.gate_health",
+  "services.sql_gateway",
+  # 工程源码清单是纯校验/哈希：不接 E2B、不读存储，保证路径与内容
+  # 合同可在 provider 和持久化两边复用。
+  "services.project_manifest",
+  "services.workspace_provider",
+  "services.stage_legal",
+  # 阶段配对台账：只吃「阶段名 + start 事件字典」，出度 0 → 叶子。
+  # 被驱动器顶层 import——它是**流级**状态，不许每个泵新建一本
+  # （真机那轮心跳全灭就是泵局部变量每几秒清零一次）。
+  "services.stage_pairing",
+  "services.capability_plan",
+  # 原地打转游标：只吃「这一轮的调用列表 + 一个 bool」，services 里谁都不依赖 → 叶子。
+  # 抄 grok `IdenticalToolCallRun` 的**分工**：分档（哪些工具算紧档）留在
+  # rehearsal_control，因为那要查 TOOL_SCOPE；游标本身只收算好的 bool。
+  # 把分档搬进来它就立刻不是叶子了——跟 closed_tools 那句「运行时谓词留在
+  # rehearsal_control」同一个理由。
+  "services.action_stationarity",
+  # 报完工的判决词表：只吃四个算好的值（completed / blocked_reason /
+  # 判官三态 / 已驳回次数），services 里谁都不依赖 → 叶子。
+  # 同 action_stationarity 那条分工：查 state 的活（指纹、数次数、拼理由）
+  # 留在 rehearsal_control，搬进来它就立刻不是叶子。
+  "services.done_claim",
+  # 活儿清单的纯算法：吃「旧清单 + 这一笔改动」吐新清单，services 里谁都不依赖 → 叶子。
+  # 同 action_stationarity / done_claim 那条分工：查 state、发事件、落库留在
+  # rehearsal_control，搬进来就立刻不是叶子。
+  "services.plan_todo",
+  # 问用户那几道题的形状与四条结果文案（抄 grok AskUserQuestion）：
+  # 吃「模型送来的入参」吐归一后的题、吃「选了什么」吐回喂给模型的那段话，
+  # services 里谁都不依赖 → 叶子。
+  # 同 action_stationarity / plan_todo 那条分工：查 state（上一发问了什么）、
+  # 发事件、落库留在 rehearsal_control，搬进来它就立刻不是叶子。
+  "services.user_questions",
+  # 跳的前置表达式树（抄 grok Expr<T>）：叶子怎么判由调用方那个闭包给，
+  # 本模块不认识 state → services 里谁都不依赖 → 叶子。
+  # 这也是它能当单一真相源的前提：谁都能安全 import 它去问「跑得动吗」。
+  "services.hop_requirements",
+  # 生命周期钩子的事件闭集 + 派发器：只吃「事件名 + 一份 dict」，
+  # services 里谁都不依赖 → 叶子。注册表是进程内的，不从文件发现
+  # （配置来源是产品决定，见模块头注）。
+  "services.hook_events",
+  "services.closed_tools",
+  # 技能商店：zip 开箱 / OSS 字节 / 控制面短目录。三个都是叶子。
+  "services.skill_package_format",
+  "services.skill_blob_store",
+  "services.control_skills",
+  "services.session_events",
+  "services.workflow_registry",
+  "services.workflow_journal",
+  "services.turn_context",
+  "services.page_naming",
+  "services.a2a_core_route_cutover",
+  "services.a2a_production_transport_ownership_closure",
+  "services.a2a_runtime",
+  "services.a2a_session_stream_runtime_slice",
+  "services.agent_loop_event_schema",
+  "services.agent_loop_paths",
+  "services.agent_loop_redaction",
+  "services.agent_loop_settings",
+  "services.agent_loop_state_reducer",
+  "services.app_access",
+  "services.app_preview",
+  "services.app_screenshot",
+  "services.attachment_extract",
+  "services.audit_durable_store_retention_takeover",
+  "services.audit_retention_export",
+  "services.audit_sink",
+  "services.auth_tokens",
+  "services.blueprint_artifact_memory",
+  "services.blueprint_event_bus_runtime_takeover",
+  "services.blueprint_job_event_stream",
+  "services.blueprint_job_runtime",
+  "services.blueprint_job_store_runtime_takeover",
+  "services.blueprint_job_store_scope_decision",
+  "services.blueprint_ledger_runtime_takeover",
+  "services.blueprint_preview_state_runtime_takeover",
+  "services.blueprint_production_denominator_reconciliation",
+  "services.blueprint_production_ownership_closure",
+  "services.blueprint_prompt_package_runtime_takeover",
+  "services.blueprint_prompt_preview",
+  "services.blueprint_replan_runtime_takeover",
+  "services.blueprint_review_export",
+  "services.blueprint_shell_state_cutover",
+  "services.blueprint_stage_edit",
+  "services.blueprint_state",
+  "services.builtin_examples",
+  "services.composition_root_state",
+  "services.connectors",
+  "services.env_flags",
+  "services.executor_dispatch_decisions",
+  "services.executor_event_projection",
+  "services.external_dependency_live_smoke",
+  "services.freeform_preview_store",
+  "services.full_migration_note",
+  "services.identity_palette_hint",
+  "services.knowledge_admin_runtime",
+  "services.llm_channel",
+  "services.llm_error_text",
+  "services.mcp_runtime",
+  "services.mcp_tools",
+  "services.merge_patch",
+  "services.mission_event_replay",
+  "services.nl_command_runtime",
+  "services.bind_hole_freeze",
+  "services.page_edit_blocks",
+  "services.palette_guard",
+  "services.permission_audit_durable_store_boundary",
+  "services.permission_audit_hooks",
+  "services.permission_audit_policy_store_cutover",
+  "services.permission_audit_production_ownership_closure",
+  "services.permission_management",
+  "services.permission_policy_store_takeover",
+  "services.permission_rate_limit",
+  "services.rbac_roles",
+  "services.repeat_policy",
+  "services.request_context",
+  "services.role_runtime",
+  "services.run_cancel",
+  "services.run_degradation",
+  "services.schema_legal",
+  "services.sheet_palette",
+  "services.skill_runtime",
+  "services.slide_rule_budget",
+  "services.slide_rule_interactive_gates",
+  "services.slide_rule_trust",
+  "services.sliderule_session_sanitizer",
+  "services.spec_llm_call",
+  "services.stock_images",
+  "services.task_durable_mission_store_takeover",
+  "services.task_event_persistence_takeover",
+  "services.task_executor_runtime",
+  "services.task_lifecycle_durable_ownership_closure",
+  "services.task_lifecycle_runtime",
+  "services.task_mission_store_runtime_slice",
+  "services.task_production_denominator_reconciliation",
+  "services.task_project_auth_runtime_takeover",
+  "services.task_scheduler_runtime_takeover",
+  "services.task_store",
+  "services.task_store_auth_scheduler_cutover",
+  "services.telemetry",
+  "services.telemetry_runtime",
+  "services.thumb_image",
+  "services.v5_design_reference",
+  "services.v5_eval_baseline",
+  "services.v5_explainable",
+  "services.v5_publish_closure_response",
+  "services.v5_skill_packages",
+  "services.v5_skill_reference",
+  "services.v5_skill_runtime_graph",
+  "services.vector_rag",
+  "services.web_aigc_ai_ppt_adapter",
+  "services.web_aigc_device_location_adapter",
+  "services.web_aigc_dynamic_chart_adapter",
+  "services.web_aigc_external_provider_ownership_closure",
+  "services.web_aigc_file_adapter",
+  "services.web_aigc_media_adapter",
+  "services.web_aigc_ocr_static_adapter",
+  "services.web_aigc_open_adapter",
+  "services.web_aigc_orchestration_adapter",
+  "services.web_aigc_provider_closure",
+  "services.web_aigc_real_provider_live_contract",
+  "services.web_aigc_real_provider_readiness",
+  "services.web_aigc_search_adapter",
+  "services.web_aigc_transaction_flow_adapter",
+  "services.web_aigc_web_qa_adapter",
+  "services.workflow_runtime",
+]
+
+[services_layer.core]
+rank = 1
+what = "核心：模型 / 闸 / 闭环 / 生成件"
+# 深度 1~2。
+may_depend_on = ["util"]
+modules = [
+  "services.project_access",
+  # 模型自己攒的记忆（抄 grok xai-grok-memory 的分寸，不抄它那套向量索引）。
+  # **不是叶子**：要借 identity_store 那条执行器落库（跟 product_charter 同一条，
+  # 不另开数据库、也不共用它那张表）。只依赖 util，碰不到驱动器 → core。
+  "services.model_memory",
+  # 持久工程索引/源码版本/操作与事件的 SQL 边界。依赖 util 里的 SQL 网关，
+  # 不反向调用 routes 或控制循环；归组在 persist component。
+  "services.project_store",
+  "services.project_application_data",
+  "services.project_office_artifacts",
+  "services.project_export",
+  "services.project_verification_store",
+  "services.project_preview_access",
+  "services.project_runtime",
+  "services.e2b_workspace_provider",
+  "services.project_browser_provider",
+  # 点选编辑存库前的体检。**不是叶子**：它复用 html_bindings.scan_bindings
+  # 数数据孔——数孔这件事只该有一把尺子（§4），为了当叶子另写一个才是错的。
+  "services.page_edit_guard",
+  # 工厂菜单 → 钟面步集。组合 capability_plan 与 stage_legal 两个 util 叶子——
+  # 两个叶子谁也不许 import 谁，所以组合只能落在这一层；而写 goal["tools"] 的
+  # flow 模块有两个（rehearsal_control / v5_full_driver），抄两份就是 §4 的
+  # 「同一件事两条实现」。2026-09-02 删前端步骤表时建。
+  "services.factory_plan_steps",
+  "services.agent_loop_artifacts",
+  "services.agent_loop_event_store",
+  "services.agent_loop_events",
+  "services.agent_loop_legacy_adapter",
+  "services.agent_loop_process_registry",
+  "services.agent_loop_provider_health",
+  "services.agent_loop_python_worker",
+  "services.app_store",
+  "services.app_template",
+  "services.block_assembler",
+  "services.block_narrowing",
+  "services.block_proposer",
+  "services.blueprint_main_runtime_closure",
+  "services.blueprint_state_runtime",
+  "services.closure_block_reason",
+  "services.closure_relevance",
+  "services.design_language",
+  "services.device_policy",
+  # 2026-08-30：范围授予的 persist-as-authority。依赖 device_policy，不是叶子。
+  "services.scope_authority",
+  "services.engine_scheduling",
+  "services.enrich_timing",
+  "services.external_provider_cutover",
+  "services.final_provider_a2a_scope_reconciliation",
+  "services.html_bindings",
+  "services.html_structure",
+  "services.identity_store",
+  # 技能货架借 identity 执行器；开箱文件图给 runtime 写沙盒。
+  "services.skill_catalog_store",
+  "services.skill_hydrate",
+  "services.intake_judge",
+  "services.mailer",
+  "services.model_assembly",
+  "services.node_bridge_runtime",
+  "services.page_archetypes",
+  "services.page_assembler",
+  "services.page_blocks",
+  "services.page_id_freeze",
+  # 2026-08-30：设备合法域改从账本读之后不再是叶子，从 util 升上来。
+  "services.page_reconstruction",
+  "services.page_shell",
+  "services.rag_ingestion",
+  "services.rag_service",
+  "services.refine_page_scope",
+  "services.run_pause",
+  "services.run_registry",
+  "services.session_blob_store",
+  "services.slide_rule_coverage",
+  "services.slide_rule_llm",
+  "services.slide_rule_orchestrator",
+  "services.spec_page_html",
+  "services.spec_semantics",
+  "services.task_lifecycle_production_closure",
+  "services.theme_tokens",
+  "services.turn_narration",
+  "services.v5_agentic_pick",
+  "services.subagent_tasks",
+  "services.v5_closure_summary",
+  "services.v5_content_quality",
+  "services.v5_llm_judge",
+  "services.v5_model_gate",
+  "services.v5_model_repair",
+  "services.v5_parallel_generate",
+  "services.web_aigc_vision_audio_adapter",
+]
+
+[services_layer.flow]
+rank = 2
+what = "编排：驱动器 / 流水线 / 控制面 / 会话"
+# 深度 >=3。这一层是 grok 里 xai-grok-shell 那种大块，内部随便缠没关系，
+# 但**不许被下面两层反过来依赖**。
+may_depend_on = ["util", "core"]
+  modules = [
+    "services.control_run_service",
+    "services.project_actor_access",
+    "services.project_runtime_worker",
+    "services.project_source_sync",
+    "services.project_browser_verification",
+    "services.project_verification_build",
+    "services.project_application_runtime",
+    "services.project_source_operations",
+    "services.project_delivery",
+    "services.project_preview_runtime",
+    "services.project_authority",
+    "services.project_creation",
+    "services.project_tools",
+  "services.model_versions",
+  "services.model_version_restore",
+  "services.agent_loop_bridge",
+  "services.agent_loop_runs",
+  "services.app_graph",
+  "services.app_working_session",
+  "services.auth_service",
+  "services.capability_maps",
+  "services.component_preset_store",
+  "services.cost_ledger",
+  "services.drive_full_factory",
+  "services.freeform_block",
+  "services.identity_theme_gen",
+  "services.persistence",
+  "services.product_charter",
+  "services.refine_graph_scope",
+  "services.refine_short_circuit",
+  "services.rehearsal_control",
+  "services.slide_rule_executor",
+  "services.slide_rule_full_executor",
+  "services.slide_rule_marathon",
+  "services.slide_rule_session",
+  "services.spec_first_pipeline",
+  "services.workflow_select",
+  "services.workflow_validate",
+  "services.spec_tree",
+  "services.v5_capability_executor",
+  "services.v5_full_driver",
+  "services.v5_llm_generate",
+  "services.v5_session_driver",
+]
+
+
+# ── component：crate 级的边界（2026-08-29 抄 grok 的 Cargo.toml）─────────────
+#
+# grok 有 90 个 crate、347 条**声明过**的依赖边，边界由编译器焊死。我们的模块
+# 粒度比 crate 细（270 个文件），所以在这里显式声明「哪几个模块是同一个 crate」，
+# 以及「哪个 crate 可以依赖哪个」。
+#
+# ⚠ 这份归组与 may_depend_on **是从今天的真实依赖算出来的**（棘轮基线），
+#   不是重新设计。先把现状固定成契约，此后只许变好。
+#
+# ⚠ 内部成环默认**红**，要单独 allow_internal_cycles = true 并说明理由。
+#   归组的目的是声明依赖，不是给环发通行证。
+
+
+[component.a2a]
+why = """A2A 协议面：Agent-to-Agent 的会话、报告与分析投影。与推演工厂是两个平面，不共用状态。"""
+may_depend_on = []
+modules = [
+  "services.a2a_core_route_cutover",
+  "services.a2a_production_transport_ownership_closure",
+  "services.a2a_runtime",
+  "services.a2a_session_stream_runtime_slice",
+]
+
+[component.agent_loop]
+why = """Agent Loop 面：事件仓、运行记录、控制目录、心跳。"""
+may_depend_on = ["identity", "platform"]
+modules = [
+  "routes.agent_loop",
+  "services.agent_loop_artifacts",
+  "services.agent_loop_bridge",
+  "services.agent_loop_event_schema",
+  "services.agent_loop_event_store",
+  "services.agent_loop_events",
+  "services.agent_loop_legacy_adapter",
+  "services.agent_loop_paths",
+  "services.agent_loop_process_registry",
+  "services.agent_loop_provider_health",
+  "services.agent_loop_python_worker",
+  "services.agent_loop_redaction",
+  "services.agent_loop_runs",
+  "services.agent_loop_settings",
+  "services.agent_loop_state_reducer",
+]
+
+[component.app_store]
+why = """生成物的家：应用记录、版本、可见性、预览、组件预设。"""
+may_depend_on = ["identity", "platform"]
+modules = [
+  "services.app_preview",
+  "services.app_screenshot",
+  "services.app_store",
+  "services.component_preset_store",
+  "services.thumb_image",
+]
+
+[component.audit]
+why = """审计：留痕落盘、保留期与导出。写失败必须出声——审计静默失败等于没有审计。"""
+may_depend_on = []
+modules = [
+  "services.audit_durable_store_retention_takeover",
+  "services.audit_retention_export",
+  "services.audit_sink",
+]
+
+[component.blueprint]
+why = """蓝图子系统：作业、规格文档、提示词包运行时。"""
+may_depend_on = ["platform"]
+modules = [
+  "services.blueprint_artifact_memory",
+  "services.blueprint_event_bus_runtime_takeover",
+  "services.blueprint_job_event_stream",
+  "services.blueprint_job_runtime",
+  "services.blueprint_job_store_runtime_takeover",
+  "services.blueprint_job_store_scope_decision",
+  "services.blueprint_ledger_runtime_takeover",
+  "services.blueprint_main_runtime_closure",
+  "services.blueprint_preview_state_runtime_takeover",
+  "services.blueprint_production_denominator_reconciliation",
+  "services.blueprint_production_ownership_closure",
+  "services.blueprint_prompt_package_runtime_takeover",
+  "services.blueprint_prompt_preview",
+  "services.blueprint_replan_runtime_takeover",
+  "services.blueprint_review_export",
+  "services.blueprint_shell_state_cutover",
+  "services.blueprint_stage_edit",
+  "services.blueprint_state",
+  "services.blueprint_state_runtime",
+]
+
+[component.capability_engine]
+# ⚠ 全仓唯一 opt-in 允许内部互指的组，理由见 why。
+allow_internal_cycles = true
+why = """能力执行引擎：slide_rule_executor 是原语与总入口，capability_maps 是能力→实现的映射表。两者互相委托是**有意的**——源码注释写着 structure.decompose 那条分支原本是第二份拷贝，「所以这里改成委托，不再各写一份」。拆开会让同一段逻辑再变成两份，那正是这个仓踩过三次的坑。"""
+may_depend_on = ["evidence", "llm_gateway", "platform", "spec_first"]
+modules = [
+  "services.capability_maps",
+  "services.slide_rule_executor",
+]
+
+[component.diagnostics]
+why = """就绪与切换诊断：只读探针，不在产品链上。"""
+may_depend_on = ["a2a", "evidence", "model_core", "platform", "web_aigc"]
+modules = [
+  "complete_migration",
+  "services.builtin_examples",
+  "services.external_dependency_live_smoke",
+  "services.external_provider_cutover",
+  "services.final_provider_a2a_scope_reconciliation",
+  "services.full_migration_note",
+]
+
+[component.control]
+why = """控制面闭集工具环。handoff 点火工厂，结果交回控制面（host 循环另算）。
+和 drive 必须是两个 crate：混居的话图上看不见两层终局。
+回流是运行时合同（factory_complete → control_tool_result），不必画成 import 边。"""
+may_depend_on = [
+  "drive",
+  # Session-bound tools reuse durable source storage; the runtime owner is injected.
+  "persist",
+  "evidence",
+  # 2026-09-11 补齐既有 model_memory 归属：它借 identity_store 的执行器持久化。
+  "identity",
+  "llm_gateway",
+  "model_core",
+  "platform",
+  "spec_first",
+]
+modules = [
+  "services.control_run_service",
+  "services.project_tools",
+  "services.action_stationarity",
+  "services.done_claim",
+  "services.hook_events",
+  "services.hop_requirements",
+  "services.model_memory",
+  "services.plan_todo",
+  "services.rehearsal_control",
+  "services.user_questions",
+]
+
+[component.drive]
+why = """工厂信封与会话权威。被控制面 handoff 点火；工厂 complete 改名 factory_complete，不结束 host。"""
+may_depend_on = ["capability_engine", "evidence", "identity", "model_core", "observability", "persist", "platform", "run_control", "spec_first"]
+modules = [
+  "services.app_working_session",
+  "services.drive_full_factory",
+  "services.nl_command_runtime",
+  "services.product_charter",
+  "services.model_version_restore",
+  "services.run_registry",
+  "services.slide_rule_marathon",
+  "services.slide_rule_session",
+  "services.sliderule_session_sanitizer",
+]
+
+[component.entrypoint]
+why = """组合根（对应 grok 的 xai-grok-pager-bin）：只负责把东西装起来。**被依赖数必须是 0**——箭头只进不出。
+llm_gateway 是 2026-09-08 加的一条：装配根不调 LLM，但要在任何服务 import 前调
+`ensure_llm_proxy_bypass()` 设好代理绕过名单（Windows/Clash 下控制面 522），
+而算名单要读 LLM_BASE_URL。理由全文见 [layer.app]。"""
+  # Lifespan owns both the durable control producer and project runtime worker.
+  may_depend_on = ["agent_loop", "control", "drive", "http_routes", "llm_gateway", "model_core", "permission", "persist", "platform", "runtime", "spec_first", "task_exec", "workspace"]
+modules = [
+  "app",
+]
+
+[component.evidence]
+why = """外部证据：检索、连接器、MCP、技能包、入站判定。全部 fail-closed，不许编数据。"""
+may_depend_on = ["llm_gateway", "platform"]
+modules = [
+  "services.attachment_extract",
+  "services.connectors",
+  "services.intake_judge",
+  "services.knowledge_admin_runtime",
+  "services.mcp_runtime",
+  "services.mcp_tools",
+  "services.rag_ingestion",
+  "services.rag_service",
+  "services.skill_runtime",
+  "services.slide_rule_llm",
+  "services.vector_rag",
+]
+
+[component.http_routes]
+why = """HTTP 边缘：路由只做拼装与鉴权，业务不许住在这里。"""
+  may_depend_on = ["app_store", "audit", "blueprint", "capability_engine", "control", "diagnostics", "drive", "evidence", "identity", "llm_gateway", "model_core", "observability", "persist", "platform", "runtime", "spec_first", "task_exec"]
+modules = [
+  "routes.account",
+  "routes.audit",
+  "routes.blueprint_jobs",
+  "routes.blueprint_spec_docs",
+  "routes.rag",
+  "routes.project_runtime",
+  "routes.project_sources",
+  "routes.project_preview",
+  "routes.skill_store",
+  "routes.sliderule",
+  "routes.sliderule_full",
+  "routes.tasks",
+]
+
+[component.identity]
+why = """身份与权限：账号、令牌、验证码投递、应用归属、鉴权中间件。fail-closed。"""
+may_depend_on = ["platform"]
+modules = [
+  "middlewares.auth",
+  "middlewares.current_user",
+  "services.app_access",
+  "services.auth_service",
+  "services.auth_tokens",
+  "services.identity_store",
+  "services.skill_catalog_store",
+  "services.project_actor_access",
+  "services.mailer",
+]
+
+[component.llm_gateway]
+why = """LLM 通道：模型调用、流式、通道配置、熔断。业务不该知道用的是哪家模型。
+`spec_llm_call` 也在这里：名字带 spec 前缀，干的却是「把传输挂了和模型吐了坏 JSON 分开」，
+依赖只有 sliderule_llm，spec-first 和 refine 都在用——按名字前缀归组是这仓踩过三次的坑。"""
+may_depend_on = ["platform"]
+modules = [
+  "services.llm_channel",
+  "services.llm_error_text",
+  "services.spec_llm_call",
+  "sliderule_llm.__init__",
+  "sliderule_llm.capabilities",
+  "sliderule_llm.client",
+  "sliderule_llm.config",
+  "sliderule_llm.control_client",
+  "sliderule_llm.doom_loop",
+  "sliderule_llm.empty_sample",
+  "sliderule_llm.evidence",
+  "sliderule_llm.evidence_context",
+  "sliderule_llm.gateway_circuit",
+  "sliderule_llm.image_client",
+  "sliderule_llm.pool",
+  "sliderule_llm.retry_budget",
+  "sliderule_llm.scoped",
+  "sliderule_llm.structured",
+  "sliderule_llm.vector",
+]
+
+[component.model_core]
+why = """五系统模型：生成、结构闸、修复、闭环证据、覆盖门、信任。产品的心脏。"""
+may_depend_on = ["app_store", "evidence", "llm_gateway", "observability", "persist", "platform", "run_control", "spec_first"]
+modules = [
+  "services.closure_block_reason",
+  "services.engine_scheduling",
+  "services.merge_patch",
+  "services.model_versions",
+  "services.role_runtime",
+  "services.slide_rule_coverage",
+  "services.slide_rule_full_executor",
+  "services.slide_rule_interactive_gates",
+  "services.slide_rule_orchestrator",
+  "services.slide_rule_trust",
+  "services.v5_agentic_pick",
+  "services.subagent_tasks",
+  "services.v5_capability_executor",
+  "services.v5_closure_summary",
+  "services.v5_content_quality",
+  "services.v5_design_reference",
+  "services.v5_eval_baseline",
+  "services.v5_explainable",
+  "services.v5_full_driver",
+  "services.v5_llm_generate",
+  "services.v5_llm_judge",
+  "services.v5_parallel_generate",
+  "services.v5_publish_closure_response",
+  "services.v5_session_driver",
+  "services.v5_skill_packages",
+  "services.v5_skill_reference",
+  "services.v5_skill_runtime_graph",
+]
+
+[component.observability]
+why = """可观测：成本台账、分阶段计时、遥测、预算。增强类，炸了不许拖垮主链路。"""
+may_depend_on = ["llm_gateway", "persist", "platform"]
+modules = [
+  "services.cost_ledger",
+  "services.enrich_timing",
+  "services.gate_health",
+  "services.slide_rule_budget",
+  "services.stage_pairing",
+  "services.telemetry",
+  "services.telemetry_runtime",
+]
+
+[component.ops_scripts]
+why = """一次性运维脚本与架构工具。不在产品链上，可以够到任何东西。"""
+may_depend_on = ["app_store", "entrypoint", "evidence", "identity", "llm_gateway", "model_core", "platform", "spec_first"]
+modules = [
+  "arch_graph",
+  "scripts.agentic_pick_eval",
+  "scripts.backfill_app_badge_counts",
+  "scripts.backfill_page_id_aliases",
+  "scripts.backfill_session_owner",
+  "scripts.block_selection_metrics",
+  "scripts.connector_entity_ab",
+  "scripts.content_quality_eval",
+  "scripts.enrich_builtin_domain_models",
+  "scripts.enrich_timing_report",
+  "scripts.eval_five_system_generation",
+  "scripts.eval_intake_device",
+  "scripts.eval_intake_judge",
+  "scripts.evidence_context_ab",
+  "scripts.forum_analyze",
+  "scripts.forum_fetch",
+  "scripts.forum_fit_body",
+  "scripts.forum_fit_device",
+  "scripts.forum_fit_grade",
+  "scripts.forum_neon",
+  "scripts.freeform_trend_palette_smoke",
+  "scripts.freeform_vision_smoke",
+  "scripts.fresh_topic_shot",
+  "scripts.image_gen_smoke",
+  "scripts.label_block_generality",
+  "scripts.label_block_page_kinds",
+  "scripts.layout_diversity_report",
+  "scripts.llm_smoke",
+  "scripts.mail_check",
+  "scripts.migrate_app_ownership",
+  "scripts.overnight_device_iter",
+  "scripts.overview_sheet_probe",
+  "scripts.run_full_build",
+  "scripts.run_panel7_stages",
+  "scripts.run_real_topics",
+  "scripts.stock_image_fill_ab",
+  "scripts.sync_block_labels",
+  "scripts.thumb_recompress",
+  "scripts.triage_skills",
+  "scripts.verify_sliderule_flow",
+]
+
+[component.permission]
+why = """权限：契约词表与运行时判定。词表跨 Python/TS 两侧，判据直接读 TS 文件比对。"""
+may_depend_on = ["identity", "platform"]
+modules = [
+  "routes.permissions",
+  "services.permission_audit_durable_store_boundary",
+  "services.permission_audit_hooks",
+  "services.permission_audit_policy_store_cutover",
+  "services.permission_audit_production_ownership_closure",
+  "services.permission_management",
+  "services.permission_policy_store_takeover",
+  "services.permission_rate_limit",
+]
+
+[component.persist]
+why = """会话落库与单调守卫。谁写、写成什么样，只有这里说了算。"""
+may_depend_on = ["platform"]
+modules = [
+  "services.control_run_store",
+  "services.project_creation",
+  "services.persistence",
+  "services.project_store",
+  "services.project_application_data",
+  "services.project_office_artifacts",
+  "services.project_export",
+  "services.project_source_operations",
+  "services.project_delivery",
+  "services.project_verification_store",
+  "services.session_blob_store",
+]
+
+[component.workspace]
+why = "E2B workspace provider contract and lifecycle adapter; shared manifest validation rejects invalid source paths before remote IO."
+may_depend_on = ["platform"]
+modules = [
+  "services.workspace_provider",
+  "services.project_workspace_artifacts",
+  "services.e2b_workspace_provider",
+  "services.project_browser_provider",
+]
+
+[component.runtime]
+why = "工程运行编排：把持久源码、租约和 E2B provider 组合成可恢复的运行实例。"
+  # Recover with persisted plan authority and recheck the owner's current account access.
+  may_depend_on = ["platform", "persist", "workspace", "identity"]
+  modules = [
+    "services.project_runtime",
+    "services.skill_hydrate",
+    "services.project_runtime_worker",
+    "services.project_source_sync",
+    "services.project_browser_verification",
+    "services.project_verification_build",
+    "services.project_application_runtime",
+    "services.project_preview_runtime",
+    "services.project_preview_access",
+    "services.project_preview_config",
+    "services.vite_preview_hosts",
+]
+
+
+[component.platform]
+why = """最底下的共用叶子：配置、数据形状、请求域上下文、零依赖的契约与工具。
+判定标准是**性质不是题材**——它谁都不依赖，所以谁都能安全 import 它。
+⚠ 但「零依赖的叶子」≠「该放这里」：全仓 121 个 util 叶子里有 39 个长在别的组且被跨组
+依赖，那是**对的**（connectors 属 evidence、auth_tokens 属 identity、audit_sink 属 audit）。
+叶子被多个组用是 grok 叶子 crate 的常态，只有**成环**时才是问题。别拿零依赖当搬家理由。"""
+may_depend_on = []
+modules = [
+  "services.control_budget",
+  "services.control_context_compact",
+  "services.control_transcript_log",
+  "services.control_goal_continuation",
+  "services.control_checkpoint",
+  "services.project_authority",
+  "services.project_access",
+  "services.project_rollout",
+  "services.project_acceptance",
+  "services.project_tool_contracts",
+  "services.project_browser_interact",
+  "services.project_tool_summary",
+  "services.project_verification_gate",
+  "config.env_flags",
+  "config.settings",
+  "models.agent_loop",
+  "models.blueprint_state",
+  "models.v5_state",
+  "models.project_runtime",
+  "services.archetype_legal",
+  "services.closed_tools",
+  "services.skill_package_format",
+  "services.skill_blob_store",
+  "services.control_skills",
+  "services.deliverable_kind",
+  "services.session_events",
+  "services.workflow_registry",
+  "services.workflow_journal",
+  "services.closure_relevance",
+  "services.composition_root_state",
+  "services.device_policy",
+  "services.scope_authority",
+  "services.env_flags",
+  "services.rbac_roles",
+  "services.request_context",
+  "services.schema_legal",
+  "services.sql_gateway",
+  "services.project_manifest",
+  "services.stage_legal",
+  "services.turn_context",
+  "services.turn_narration",
+  "stdio_utf8",
+]
+
+[component.run_control]
+why = """本轮运行的控制面标记：该不该停（取消/暂停）、降级过没有、同一步连着跑了几次。
+四个都是零依赖叶子，被引擎、驱动、spec-first 和路由共用。
+
+⚠ 单独成组是**订正一处自打脸的归组**：`run_cancel` 一直在 platform，而它的三个亲兄弟
+`run_pause` / `run_degradation` / `repeat_policy` 在 drive——同一件事被拆在两个组，
+于是引擎（model_core）为了读一个降级标记，就得反过来依赖驱动组，
+`model_core ⇄ drive` 那 21 条边里有 14 条是这么来的。
+
+抄 grok 的小叶子 crate：一件事一个 crate，谁都能依赖它，它谁都不依赖。"""
+may_depend_on = ["platform"]
+modules = [
+  "services.repeat_policy",
+  "services.run_cancel",
+  "services.run_degradation",
+  "services.run_pause",
+]
+
+[component.spec_first]
+why = """spec-first 七步与页面产出：spec 树、逐页 HTML、外壳、绑定、配色、区块目录。
+精修那三个范围计算器（refine_graph_scope / refine_page_scope / refine_short_circuit）也在这里：
+它们**唯一的 import 方是 spec_first_pipeline**，同时又回读这条流水线自己的校验器
+（html_structure / spec_tree / app_graph）——按 grok 的口径这是同一个 crate 内部的模块互指，
+不是两个 crate。⚠ 2026-08-29 之前把它们单列一组，理由是"refine_page_scope 有 8 个消费者散在三个组"，
+那个数字是**裸 grep 数出来的**（命中的是注释和文档字符串），依赖图里只有 1 个消费者。"""
+may_depend_on = ["app_store", "llm_gateway", "observability", "platform", "run_control"]
+modules = [
+  "services.app_graph",
+  "services.app_template",
+  "services.block_assembler",
+  "services.block_narrowing",
+  "services.block_proposer",
+  "services.capability_plan",
+  "services.workflow_select",
+  "services.workflow_validate",
+  "services.design_language",
+  "services.deliverable_surface",
+  "services.factory_plan_steps",
+  "services.freeform_block",
+  "services.freeform_preview_store",
+  "services.html_bindings",
+  "services.html_structure",
+  "services.identity_palette_hint",
+  "services.identity_theme_gen",
+  "services.model_assembly",
+  "services.page_archetypes",
+  "services.page_assembler",
+  "services.page_blocks",
+  "services.bind_hole_freeze",
+  "services.page_edit_blocks",
+  "services.page_edit_guard",
+  "services.page_id_freeze",
+  "services.page_naming",
+  "services.page_reconstruction",
+  "services.page_shell",
+  "services.palette_guard",
+  "services.refine_graph_scope",
+  "services.refine_page_scope",
+  "services.refine_short_circuit",
+  "services.sheet_palette",
+  "services.spec_first_pipeline",
+  "services.spec_page_html",
+  "services.spec_semantics",
+  "services.spec_tree",
+  "services.stock_images",
+  "services.theme_tokens",
+  "services.v5_model_gate",
+  "services.v5_model_repair",
+]
+
+[component.task_exec]
+why = """任务执行面：执行器回调投影、派单、任务生命周期、工作流运行时。与推演工厂是两个平面。"""
+may_depend_on = ["evidence", "platform"]
+modules = [
+  "routes.executor_dispatch",
+  "routes.executor_events",
+  "services.executor_dispatch_decisions",
+  "services.executor_event_projection",
+  "services.mission_event_replay",
+  "services.node_bridge_runtime",
+  "services.task_durable_mission_store_takeover",
+  "services.task_event_persistence_takeover",
+  "services.task_executor_runtime",
+  "services.task_lifecycle_durable_ownership_closure",
+  "services.task_lifecycle_production_closure",
+  "services.task_lifecycle_runtime",
+  "services.task_mission_store_runtime_slice",
+  "services.task_production_denominator_reconciliation",
+  "services.task_project_auth_runtime_takeover",
+  "services.task_scheduler_runtime_takeover",
+  "services.task_store",
+  "services.task_store_auth_scheduler_cutover",
+  "services.workflow_runtime",
+]
+
+[component.web_aigc]
+why = """Web/AIGC 外部供给：生图、外部服务商、素材。"""
+may_depend_on = []
+modules = [
+  "services.web_aigc_ai_ppt_adapter",
+  "services.web_aigc_device_location_adapter",
+  "services.web_aigc_dynamic_chart_adapter",
+  "services.web_aigc_external_provider_ownership_closure",
+  "services.web_aigc_file_adapter",
+  "services.web_aigc_media_adapter",
+  "services.web_aigc_ocr_static_adapter",
+  "services.web_aigc_open_adapter",
+  "services.web_aigc_orchestration_adapter",
+  "services.web_aigc_provider_closure",
+  "services.web_aigc_real_provider_live_contract",
+  "services.web_aigc_real_provider_readiness",
+  "services.web_aigc_search_adapter",
+  "services.web_aigc_transaction_flow_adapter",
+  "services.web_aigc_vision_audio_adapter",
+  "services.web_aigc_web_qa_adapter",
+]
+
+# ── 显式例外：有意为之，并且写清了理由 ──────────────────────────────────────
+#
+# ⚠ 跟 [baseline] 是**两件事**：baseline 是欠账（只许变少），这里是「就该这样，
+#   原因如下」。grok 的对应物是 Cargo.toml 依赖行上那句注释——依赖存在是事实，
+#   **为什么存在**得写下来。
+#
+# ⚠ 门槛：必须写 why，判据还盯着总量。拿它消违规等于把闸关掉。
+#   一个包对只有在它背后**每一条**具体边都在这里时才不算违规。
+
+# ── 入口：没人 import 它是**对的** ──────────────────────────────────────────────
+#
+# 抄 grok：他们 90 个 crate 里被依赖数为 0 的只有装配根 `xai-grok-pager-bin`
+# 一个——因为它是 binary。入口天然没有上游，其余模块没上游就得解释。
+#
+# ⚠ 这里只许放**真入口**，不许拿通配符消孤儿。判据
+#   `test_入口声明不许当消孤儿的开关` 盯着：任何能一口气罩住整个包的模式
+#   （services.* / routes.* 之类）直接红。
+[entrypoints]
+patterns = [
+  "app",                 # 装配根。uvicorn 用 `app:app` 起它。
+  "arch_graph",          # 架构编译器自己，命令行工具。
+  "complete_migration",  # 一次性迁移记录，跟 scripts 同性质。
+  "scripts.*",           # 运维/评测脚本，每个都是自己的入口。
+]
+
+
+# ── 孤儿的归类 ──────────────────────────────────────────────────────────────
+#
+# `[baseline].orphans` 只记「有多少」，不记「为什么」。这一节补的是后者。
+#
+# ⚠ 为什么必须记：§26 说这 54 个"挨个看了，绝大多数各有理由"，§30 订正说
+#   "挨个看了是假的，只读了 3 个就外推了 54 个"，并留下 19 个"❓没说清归谁"。
+#   2026-08-29 夜真的逐个读了模块头，**又翻出第三种可能**：接线在，只是在另一
+#   门语言里（见 cross_language_entry）。一张没有归类的名单，下一个人只能重新
+#   读一遍——而前两次重读都得出了不同的、且都不完整的结论。
+#
+# 五类，含义各不相同，**别混着用**：
+#
+#   cross_language_entry  Node 在子进程里按**拼出来的字符串** __import__ 它。
+#                         依赖图两侧都看不见这条边。**是产线代码，不许删。**
+#                         由 tests/test_cross_language_entrypoints.py 两头钉住。
+#
+#   migration_ledger      迁移记账：产出的是「哪块归 Python、哪块留 Node」的报告，
+#                         消费者只有判据。不在产品链上，**这是设计如此**，
+#                         不是欠账。占 25 个，是这份名单的主体。
+#
+#   contract_mirror       Node 拥有运行时，Python 只锁信封形状（模块头自己写着
+#                         "remain Node-owned" / "side-effect free fake runtime"）。
+#
+#   superseded            明说被取代或未挂载。**这批是真的可以删**，但删之前
+#                         要确认没有判据靠它的存在（routes.sliderule 未挂载，
+#                         app.py 只 include sliderule_full）。
+#
+#   unwired               ⚠ **这批才是该问的**：Python 自己拥有运行时（模块头
+#                         明写 Python-owned + 真实现，不是契约壳），却没有任何
+#                         接线，也不是跨语言入口。每一个都要回答"这块运行时
+#                         到底该不该被 wire 起来"——那是产品判断，不是架构活，
+#                         所以这里只记账不处理。
+#
+# ⚠ 判据（Test孤儿都要有归类）钉两头：孤儿必须有归类（正），
+#   归类不许指向已经不是孤儿的模块（反）。只钉一头，名单会慢慢变成一份过期的历史。
+[orphan_reasons]
+
+"routes.sliderule" = "superseded"
+"services.a2a_core_route_cutover" = "migration_ledger"
+"services.a2a_runtime" = "unwired"
+"services.a2a_session_stream_runtime_slice" = "contract_mirror"
+"services.agent_loop_python_worker" = "contract_mirror"
+"services.blueprint_event_bus_runtime_takeover" = "migration_ledger"
+"services.blueprint_job_store_runtime_takeover" = "migration_ledger"
+"services.blueprint_job_store_scope_decision" = "migration_ledger"
+"services.blueprint_ledger_runtime_takeover" = "migration_ledger"
+"services.blueprint_main_runtime_closure" = "migration_ledger"
+"services.blueprint_preview_state_runtime_takeover" = "migration_ledger"
+"services.blueprint_production_denominator_reconciliation" = "migration_ledger"
+"services.blueprint_production_ownership_closure" = "migration_ledger"
+"services.blueprint_prompt_package_runtime_takeover" = "migration_ledger"
+"services.blueprint_replan_runtime_takeover" = "migration_ledger"
+"services.blueprint_shell_state_cutover" = "migration_ledger"
+"services.blueprint_stage_edit" = "contract_mirror"
+"services.external_provider_cutover" = "migration_ledger"
+"services.final_provider_a2a_scope_reconciliation" = "migration_ledger"
+"services.full_migration_note" = "superseded"
+"services.knowledge_admin_runtime" = "contract_mirror"
+"services.nl_command_runtime" = "contract_mirror"
+"services.rag_ingestion" = "unwired"
+"services.role_runtime" = "contract_mirror"
+"services.slide_rule_full_executor" = "superseded"
+"services.task_durable_mission_store_takeover" = "migration_ledger"
+"services.task_event_persistence_takeover" = "migration_ledger"
+"services.task_executor_runtime" = "contract_mirror"
+"services.task_lifecycle_durable_ownership_closure" = "migration_ledger"
+"services.task_lifecycle_production_closure" = "migration_ledger"
+"services.task_mission_store_runtime_slice" = "contract_mirror"
+"services.task_production_denominator_reconciliation" = "migration_ledger"
+"services.task_project_auth_runtime_takeover" = "migration_ledger"
+"services.task_scheduler_runtime_takeover" = "migration_ledger"
+"services.task_store_auth_scheduler_cutover" = "migration_ledger"
+"services.telemetry" = "contract_mirror"
+"services.telemetry_runtime" = "contract_mirror"
+"services.v5_session_driver" = "superseded"
+"services.web_aigc_ai_ppt_adapter" = "contract_mirror"
+"services.web_aigc_device_location_adapter" = "cross_language_entry"
+"services.web_aigc_dynamic_chart_adapter" = "contract_mirror"
+"services.web_aigc_external_provider_ownership_closure" = "migration_ledger"
+"services.web_aigc_file_adapter" = "contract_mirror"
+"services.web_aigc_ocr_static_adapter" = "contract_mirror"
+"services.web_aigc_open_adapter" = "cross_language_entry"
+"services.web_aigc_orchestration_adapter" = "cross_language_entry"
+"services.web_aigc_provider_closure" = "migration_ledger"
+"services.web_aigc_real_provider_readiness" = "migration_ledger"
+"services.web_aigc_search_adapter" = "contract_mirror"
+"services.web_aigc_transaction_flow_adapter" = "contract_mirror"
+"services.web_aigc_vision_audio_adapter" = "contract_mirror"
+"services.web_aigc_web_qa_adapter" = "cross_language_entry"
+"services.workflow_runtime" = "contract_mirror"
+"sliderule_llm.pool" = "unwired"
+
+
+# ── 编排环（spine）──────────────────────────────────────────────────────────
+#
+# 抄 grok-build 的 spine 图：边从真依赖算，不手画盒子。
+# ⚠ 节点不要用 component.run_control——那一组是 pause/cancel 叶子，
+#   不是 rehearsal_control。控制面在 component.control 里。
+# 回流（工厂收工交回控制面）是 SSE 合同，不是 import 边，不画进 spine。
+# handoff 额外要求 from 文件里有 `def via`，且函数体调用 to 的符号
+# （CLAUDE.md 第一条：import 在不等于那条链在跑）。
+
+[spine.nodes.rehearsal_control]
+rank = 0
+module = "services.rehearsal_control"
+what = "控制面闭集工具环"
+
+[spine.nodes.drive_full_factory]
+rank = 1
+module = "services.drive_full_factory"
+what = "工厂点火信封"
+
+[spine.nodes.v5_full_driver]
+rank = 2
+module = "services.v5_full_driver"
+what = "主循环驱动"
+
+[spine.nodes.v5_capability_executor]
+rank = 3
+module = "services.v5_capability_executor"
+what = "能力执行器（活路径调 run_spec_first）"
+
+[spine.nodes.spec_first_pipeline]
+rank = 4
+module = "services.spec_first_pipeline"
+what = "spec-first 七步"
+
+[spine.handoff]
+from_module = "services.rehearsal_control"
+via = "_handoff_factory"
+calls = "start_drive_full_factory_run"
+to_module = "services.drive_full_factory"
+
+
+# ── 跨语言边（Nx implicitDependencies）──────────────────────────────────────
+#
+# Node 用拼出来的字符串 __import__ Python 模块。两侧静态分析都看不见。
+# 抄 Nx：静态看不见的边必须显式声明，否则图上是孤儿、删了判据全绿、
+# 线上只返回 {"ok": false, "code": "py_bridge"}。
+# 闸：声明的 adapter 必须 == server/index.ts 里 createPythonWebAigcAdapter("…")。
+
+[[cross_language_edge]]
+from = "server/index.ts"
+from_pkg = "server"
+to = "services.web_aigc_open_adapter"
+adapter = "open"
+why = "createPythonWebAigcAdapter 拼字符串 __import__"
+
+[[cross_language_edge]]
+from = "server/index.ts"
+from_pkg = "server"
+to = "services.web_aigc_orchestration_adapter"
+adapter = "orchestration"
+why = "createPythonWebAigcAdapter 拼字符串 __import__"
+
+[[cross_language_edge]]
+from = "server/index.ts"
+from_pkg = "server"
+to = "services.web_aigc_web_qa_adapter"
+adapter = "web_qa"
+why = "createPythonWebAigcAdapter 拼字符串 __import__"
+
+[[cross_language_edge]]
+from = "server/index.ts"
+from_pkg = "server"
+to = "services.web_aigc_device_location_adapter"
+adapter = "device_location"
+why = "createPythonWebAigcAdapter 拼字符串 __import__"
+
+
+# ── 棘轮基线 ────────────────────────────────────────────────────────────────
+#
+# 存量违规与环冻在这里，判据只比「有没有变多」。**这份清单只许变短。**
+#
+# ⚠ 为什么不一次改干净：这些环穿过的是最核心的几对文件
+#   （v5_full_driver ⇄ v5_capability_executor 之类）。一次性拆依赖的风险，
+#   远大于它能换来的整洁——而风险落在一条跑一次要 20 分钟真钱的链上。
+#   想清哪条清哪条，清完从这里删掉。
+#
+# ⚠ 往这里加东西 = 有意接受一笔新欠账。`--freeze` 会一把全写进来，
+#   所以它不该出现在日常流程里；日常应该是让判据红，然后**改代码**。
+[baseline]
+# 函数体里的内部 import 条数。只许变少。新模块顶层 import。
+# grok 没有这个病：Cargo 边写在 crate 上，藏进函数体绕不过编译器。
+#
+# 2026-09-06：483 → 477。给 `/runs/*` 补归属判定时，闸先咬住 484（新写的
+# `_visible_run` 带了两条函数体 import）。查下来 `app_access` 本来就在
+# `routes/sliderule_full.py` 顶层，`run_registry` 也没有环 —— 于是把
+# `run_registry` 提到顶层，顺手删掉 `_require_session` 与四条 run 端点里
+# 那五条重复的函数体 import。**闸把"多加一条"逼成了"少了六条"。**
+#
+# 2026-09-06（同日第二轮）：477 → 476。给 quality_notice 补流级去重时要从
+# `services.session_events` 拿 `RepeatSuppressor`，而 `_enrich_stage_event` 里
+# 本来就有一条 `from services.session_events import envelope` 的函数体 import。
+# 既然要加顶层 import，那一条顺手提上去。session_events 是 util 叶子（出度 0），
+# 提上去不可能成环。
+deferred = 474
+# 明说不体检的拦截理由条数（[gate_codes] 里值为空串的）。**只许变少**。
+# 2026-09-05 建账时 9 条，第一笔要还的是 CLOSURE_DEGRADED_RUN。
+# ⚠ 同日 11 条：清单从「只扫 services/」扩到「services/ + routes/」，
+#   多认出 LLM_EMPTY_OUTPUT / PACKAGE_NOT_FOUND 两条接口层反馈。
+#   **这不是新欠了两笔账**——那两条一直在，只是清单先前看不见它们。
+#   涨基线只在"量程变宽"时允许，日常流程里往这加数字＝有意接受新欠账。
+gate_codes_without_health = 11
+violations = [
+]
+services_violations = [
+]
+component_violations = [
+]
+# ⚠ 组间的环。2026-08-29 第一次量到 17 个，一路还到 2 个：
+#     17 → 13（归组规则打架 + SQL 网关埋错地方）
+#     13 → 8 （语义陷阱：identity 在这仓里有两个意思）
+#     8  → 6 （契约和闸放回该在的位置）
+#     6  → 5 （装配根不许被业务层 import：探针改成装配根自己钉标记）
+#     5  → 2 （请求域上下文切成叶子 turn_context：宪章 / 连接器 / 技能三块
+#             prompt 上下文原本长在 drive 和 model_core 里，谁要拼就得反过来
+#             import 上层，一条边连着三个环）
+#     2  → 1 （refine 并进 spec_first：它三个模块的唯一 import 方就是
+#             spec_first_pipeline，同时又回读这条流水线自己的校验器——
+#             按 grok 的口径这是同一个 crate 内部的模块互指，不是两个 crate。
+#             ⚠ 我先前拒绝过这次合并，理由是"有 8 个消费者散在三个组"，
+#             那个数字是裸 grep 数出来的，依赖图里只有 1 个。见 §29）
+#   模块级的环早已清零，组级还剩这两个——不矛盾：**粒度不同看到的东西不同**。
+#   **只许变少。** 剩下这两个都不是"挪个文件"能了的，见
+#   docs/欠缺模块清单-对照Claude与Grok-build.md §23。
+component_cycles = [
+]
+cycles = [
+]
+# 2026-09-11: SCC 成环边取代 DFS 见证环作为棘轮。对照源版本
+# 527cc265b65403fae43ebad09ac2961af3f901a0 重新扫描，跨 component
+# 模块成环边与 component 成环边均为 0；未接纳任何新增循环债务。
+# cycles/component_cycles 仅保留旧诊断展示兼容，不再用于判定新增环。
+cyclic_edges = []
+component_cyclic_edges = []
+# ⚠ 没人 import 的模块。**这不是待删清单**——实测这批里绝大多数是三类
+#   各有理由的东西（Node 边界镜像 / 脚本插座 / 未挂载的基线面），
+#   详见 arch_graph.orphans() 的文档。这里给的是棘轮：**只许变少**，
+#   新长出来的孤儿必须当场解释——要么接上，要么写进 [entrypoints]。
+orphans = [
+  "routes.sliderule",
+  "services.a2a_core_route_cutover",
+  "services.a2a_runtime",
+  "services.a2a_session_stream_runtime_slice",
+  "services.agent_loop_python_worker",
+  "services.blueprint_event_bus_runtime_takeover",
+  "services.blueprint_job_store_runtime_takeover",
+  "services.blueprint_job_store_scope_decision",
+  "services.blueprint_ledger_runtime_takeover",
+  "services.blueprint_main_runtime_closure",
+  "services.blueprint_preview_state_runtime_takeover",
+  "services.blueprint_production_denominator_reconciliation",
+  "services.blueprint_production_ownership_closure",
+  "services.blueprint_prompt_package_runtime_takeover",
+  "services.blueprint_replan_runtime_takeover",
+  "services.blueprint_shell_state_cutover",
+  "services.blueprint_stage_edit",
+  "services.external_provider_cutover",
+  "services.final_provider_a2a_scope_reconciliation",
+  "services.full_migration_note",
+  "services.knowledge_admin_runtime",
+  "services.nl_command_runtime",
+  "services.rag_ingestion",
+  "services.role_runtime",
+  "services.slide_rule_full_executor",
+  "services.task_durable_mission_store_takeover",
+  "services.task_event_persistence_takeover",
+  "services.task_executor_runtime",
+  "services.task_lifecycle_durable_ownership_closure",
+  "services.task_lifecycle_production_closure",
+  "services.task_mission_store_runtime_slice",
+  "services.task_production_denominator_reconciliation",
+  "services.task_project_auth_runtime_takeover",
+  "services.task_scheduler_runtime_takeover",
+  "services.task_store_auth_scheduler_cutover",
+  "services.telemetry",
+  "services.telemetry_runtime",
+  "services.v5_session_driver",
+  "services.web_aigc_ai_ppt_adapter",
+  "services.web_aigc_device_location_adapter",
+  "services.web_aigc_dynamic_chart_adapter",
+  "services.web_aigc_external_provider_ownership_closure",
+  "services.web_aigc_file_adapter",
+  "services.web_aigc_ocr_static_adapter",
+  "services.web_aigc_open_adapter",
+  "services.web_aigc_orchestration_adapter",
+  "services.web_aigc_provider_closure",
+  "services.web_aigc_real_provider_readiness",
+  "services.web_aigc_search_adapter",
+  "services.web_aigc_transaction_flow_adapter",
+  "services.web_aigc_vision_audio_adapter",
+  "services.web_aigc_web_qa_adapter",
+  "services.workflow_runtime",
+  "sliderule_llm.pool",
+]
+
+# ── 闸清单：每条拦截理由归哪道被体检的闸 ────────────────────────────
+#
+# 2026-09-05 建。起因是「为什么几个月没审查出来」——答案里有一条是**没人知道
+# 这个系统里到底有几道闸**。它们散在四五个模块里各发各的 code，没有任何一处
+# 把它们摆在一起，于是「15 个会话全被同一道闸按同一个理由拦下」这种事
+# 没有观察它的位置。
+#
+# 值 = `services/gate_health.py` 里的闸名（进体检）；空串 = 明说不体检。
+# **新增一条 code 必须在这里出现**，否则 arch_graph --check 变红——
+# 逼着加闸的人回答一句「它坏成一直响的时候，谁会发现」。
+#
+# ⚠ 空串那几条是欠账，只许变少。
+[gate_codes]
+
+# 闭环判定三道，都进体检（v5_capability_executor 落）
+"APPBUNDLE_RUNTIME_CLOSURE_BLOCKED" = "evidence"
+"CLOSURE_GOAL_RELEVANCE_FAILED" = "relevance"
+"CLOSURE_FACTORY_TODO_OPEN" = "factoryTodo"
+# 第四道：交付面可用性（2026-09-06）。前三道量的都是"流程走完没有"——证据交齐了
+# 吗、对不对题、产出跳跑完了吗。没有一道量"用户真正看到的那一屏能不能用"。
+# 换 LLM 供应商之后同类题目交付物差三倍（7 页 22 个 input → 3 页 1 个 input），
+# 而前三道的输出**逐字相同**。实测数字见 services/deliverable_surface.py 模块头。
+# 五条同属一道闸：拦的只有 UNSERVED，其余四条只报不拦，但都由它记进体检。
+"CLOSURE_SUBMIT_INTENT_UNSERVED" = "deliverableSurface"
+"CLOSURE_SUBMIT_INTENT_UNMAPPED" = "deliverableSurface"
+"CLOSURE_NO_ENTRY_SURFACE" = "deliverableSurface"
+"CLOSURE_ONE_PAGE_PER_ROLE" = "deliverableSurface"
+"CLOSURE_PAGE_WITHOUT_CONTROLS" = "deliverableSurface"
+
+# 生成链路的失败留痕：它们不是"判定"，是**诊断**——随 blocker 透出来给人看，
+# 不参与 blocked/hash。诊断没有"一直说同一句话"的退化形态（它只在真失败时
+# 出现），所以不进体检。
+"LLM_GENERATE_DISABLED" = ""
+"LLM_GENERATE_FAILED" = ""
+"REFINE_PAINT_FAILED" = ""
+"CLOSURE_REBUILD_FAILED" = ""
+"MODEL_GATE_BLOCKED" = ""
+
+# 降级闸：参与 blocked，**该进体检还没进**。今天的欠账，下一笔要还的就是它
+# （一轮里所有能力全退兜底 → 每次都同一条 CLOSURE_DEGRADED_RUN，
+#  正是"一直说同一句话"那种形状）。
+"CLOSURE_DEGRADED_RUN" = ""
+
+# ⚠ 2026-09-05 下半场：清单原来只扫 services/，routes/ 整片没算。补上之后
+#   多出来这两条——它们一直在那儿，只是清单看不见。两条都是**接口层的即时
+#   反馈**（AI 改提示词返回空 / 点了一个不存在的技能包），当场回给调用方，
+#   不参与任何闭环判定，也没有"一直说同一句话"的退化形态：不进体检。
+"LLM_EMPTY_OUTPUT" = ""
+"PACKAGE_NOT_FOUND" = ""
+
+# 不是闭环闸：连通性自检 / 任务生命周期鉴权，跟"产出合不合格"无关。
+"LLM_TEST_ERROR" = ""
+"LLM_TEST_FAILED" = ""
+"TASK_LIFECYCLE_AUTH_DENIED" = ""

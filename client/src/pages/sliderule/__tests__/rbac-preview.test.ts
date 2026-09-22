@@ -3,6 +3,7 @@ import { deriveAppRuntimeSchema } from "../live-runtime/app-runtime-schema";
 import {
   accessForRole,
   deriveRoleAccess,
+  deriveHtmlActionGates,
   pageAccessForRole,
   resolveVisiblePageId,
 } from "../live-runtime/rbac-preview";
@@ -114,5 +115,68 @@ describe("rbac-preview（角色 → 页面可见性/操作权）", () => {
     expect(
       resolveVisiblePageId(schema.pages, allLocked, schema.landingPageId)
     ).toBe("home");
+  });
+});
+
+describe("deriveHtmlActionGates（HTML 页的角色上下文，2026-08-14 晚）", () => {
+  // leave_page 挂上审批流：workflowEntities 该有 leave_request
+  const WF_MODEL: FiveSystemModel = {
+    ...MODEL,
+    appbundle: { pageBindings: [{ pageRef: "leave_page", workflowRef: "wf_leave" }] },
+  };
+  const schemaPages = () => deriveAppRuntimeSchema(WF_MODEL)!.pages;
+
+  it("createGate 是实体视角的 canCreate：employee 放行、auditor 锁", () => {
+    const emp = deriveHtmlActionGates(WF_MODEL, schemaPages(), "employee");
+    expect(emp.role).toBe("employee");
+    expect(emp.createGate!.leave_request).toEqual({
+      permission: "leave:create",
+      granted: true,
+    });
+
+    const aud = deriveHtmlActionGates(WF_MODEL, schemaPages(), "auditor");
+    expect(aud.createGate!.leave_request).toEqual({
+      permission: "leave:create",
+      granted: false,
+    });
+  });
+
+  it("页面没声明 *:create → 该实体不设卡（公共动作语义）", () => {
+    // audit_page 声明的是 audit:read，不含 create → audit_log 不该有卡
+    const gates = deriveHtmlActionGates(WF_MODEL, schemaPages(), "employee");
+    expect(gates.createGate!.audit_log).toBeUndefined();
+  });
+
+  it("workflowEntities 只收 workflowLinked 页面的主实体", () => {
+    const gates = deriveHtmlActionGates(WF_MODEL, schemaPages(), "employee");
+    expect(gates.workflowEntities).toEqual(["leave_request"]);
+  });
+
+  it("同一实体多张卡取最严的：有一处锁着就不放行", () => {
+    // 复制 leave_page 成第二页，声明一个 employee 没有的 create 权限
+    const twoPages: FiveSystemModel = {
+      ...WF_MODEL,
+      rbac: {
+        ...WF_MODEL.rbac!,
+        permissions: [...WF_MODEL.rbac!.permissions, "leave_admin:create"],
+      },
+      page: {
+        pages: [
+          ...WF_MODEL.page!.pages,
+          {
+            id: "leave_admin_page",
+            name: "请假管理页",
+            fieldBindings: ["leave_request.reason"],
+            actionPermissions: ["leave_admin:create"],
+          },
+        ],
+      },
+    };
+    const gates = deriveHtmlActionGates(
+      twoPages,
+      deriveAppRuntimeSchema(twoPages)!.pages,
+      "employee"
+    );
+    expect(gates.createGate!.leave_request.granted).toBe(false);
   });
 });

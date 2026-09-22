@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="zh-CN" class="w-full h-full">
+<head><style id="sliderule-desktop-fill">html,body{margin:0!important;width:100%!important;height:100%!important;min-height:100%!important;max-width:none!important;overflow:hidden!important}body{align-items:stretch!important;justify-content:flex-start!important;padding:0!important}body>[class*="mx-auto"]{max-width:none!important;width:100%!important;height:100%!important;margin:0!important;box-sizing:border-box!important;border-radius:0!important;box-shadow:none!important}body>div[class*="min-h-screen"],body>div[class*="justify-center"]{display:flex!important;align-items:stretch!important;justify-content:flex-start!important;width:100%!important;height:100%!important;max-width:none!important;padding:0!important;margin:0!important;box-sizing:border-box!important}body>div[class*="min-h-screen"]>[class*="mx-auto"],body>div[class*="min-h-screen"]>[class*="max-w-"],body>div[class*="justify-center"]>[class*="mx-auto"],body>div[class*="justify-center"]>[class*="max-w-"]{max-width:none!important;width:100%!important;height:100%!important;margin:0!important;box-sizing:border-box!important;border-radius:0!important;box-shadow:none!important}</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安养通 - 财务结算报表页</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2B7A78',
+                        accent: '#E07A5F',
+                        background: '#F4F6F8',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                        textMain: '#1F2937',
+                        textSub: '#6B7280'
+                    }
+                }
+            }
+        }
+    </script>
+<style>aside [aria-current="page"]{background-color:color-mix(in srgb, var(--primary, currentColor) 16%, transparent);color:var(--chrome-fg, inherit);font-weight:600}header nav[aria-label="Breadcrumb"] [aria-current="page"]{background-color:transparent;color:var(--chrome-fg, inherit);font-weight:600}</style><style id="sliderule-theme">:root{--background:#e7f9f8;--foreground:#0f172a;--chrome:#f2fffe;--chrome-fg:#0f172a;--card:#ffffff;--card-fg:#0f172a;--primary:#2b7a78;--primary-fg:#f8fafc;--muted:#e1f3f2;--border:#d1e2e1;--radius:8px;}html,body{background-color:var(--background)!important;color:var(--foreground)!important}header,aside,nav.fixed{background-color:var(--chrome)!important;color:var(--chrome-fg)!important}html[data-theme="light"] main .bg-black,html[data-theme="light"] main .bg-slate-800,html[data-theme="light"] main .bg-slate-900,html[data-theme="light"] main .bg-slate-950,html[data-theme="light"] main .bg-gray-800,html[data-theme="light"] main .bg-gray-900,html[data-theme="light"] main .bg-gray-950,html[data-theme="light"] main .bg-zinc-800,html[data-theme="light"] main .bg-zinc-900,html[data-theme="light"] main .bg-zinc-950,html[data-theme="light"] main .bg-neutral-800,html[data-theme="light"] main .bg-neutral-900,html[data-theme="light"] main .bg-neutral-950,html[data-theme="light"] main .bg-stone-800,html[data-theme="light"] main .bg-stone-900,html[data-theme="light"] main .bg-stone-950{background-color:var(--card)!important;color:var(--card-fg)!important;border-color:var(--border)!important}html[data-theme="light"] header .text-white,html[data-theme="light"] header .text-slate-100,html[data-theme="light"] header .text-slate-200,html[data-theme="light"] header .text-gray-100,html[data-theme="light"] aside .text-white,html[data-theme="light"] aside .text-slate-100,html[data-theme="light"] aside .text-slate-200,html[data-theme="light"] aside .text-gray-100{color:var(--chrome-fg,#0f172a)!important}html[data-theme="light"] header .bg-black,html[data-theme="light"] header .bg-slate-800,html[data-theme="light"] header .bg-slate-900,html[data-theme="light"] header .bg-slate-950,html[data-theme="light"] header .bg-gray-800,html[data-theme="light"] header .bg-gray-900,html[data-theme="light"] header .bg-gray-950,html[data-theme="light"] header .bg-zinc-800,html[data-theme="light"] header .bg-zinc-900,html[data-theme="light"] header .bg-zinc-950,html[data-theme="light"] header .bg-neutral-800,html[data-theme="light"] header .bg-neutral-900,html[data-theme="light"] header .bg-neutral-950,html[data-theme="light"] header .bg-stone-800,html[data-theme="light"] header .bg-stone-900,html[data-theme="light"] header .bg-stone-950{background-color:var(--muted)!important;color:var(--chrome-fg,#0f172a)!important}aside nav a{box-sizing:border-box;width:100%;display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside>:first-child:not(nav):not(:has(nav)){display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside :is(img,svg){flex-shrink:0}aside:has(nav a){min-width:16rem!important;box-sizing:border-box}aside[class*="fixed"]:has(nav a),aside[class*="absolute"]:has(nav a){width:16rem!important}aside[class*="fixed"]:has(nav a)~*,aside[class*="absolute"]:has(nav a)~*{margin-left:16rem!important}aside [aria-current="page"]{background-color:color-mix(in srgb,var(--primary,currentColor) 16%,var(--chrome,transparent))!important;color:var(--chrome-fg,inherit)!important;font-weight:600}header nav[aria-label="Breadcrumb"] [aria-current="page"],header nav[aria-label="breadcrumb"] [aria-current="page"]{background-color:transparent!important;color:var(--chrome-fg,inherit)!important;font-weight:600}</style><script>
+/* sliderule-theme-tokens */
+tailwind.config = { theme: { extend: { colors: {
+  background: '#e7f9f8',
+  foreground: '#0f172a',
+  chrome: '#f2fffe',
+  card: '#ffffff',
+  primary: '#2b7a78',
+  muted: '#e1f3f2',
+  border: '#d1e2e1'
+} } } };
+</script></head>
+<body class="w-full h-full bg-[#F4F6F8] text-[#1F2937] flex overflow-hidden font-sans antialiased">
+
+    <!-- 左侧主导航 -->
+    <aside class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 h-full">
+        <!-- 品牌区 -->
+        <div class="h-16 flex items-center px-6 border-b border-slate-100 gap-3">
+            <div class="w-8 h-8 rounded-lg bg-[#2B7A78] flex items-center justify-center text-white font-bold text-base">安</div>
+            <div class="flex flex-col">
+                <span class="font-bold text-slate-800 text-base tracking-wide">安养通</span>
+                <span class="text-xs text-slate-400">社区养老服务平台</span>
+            </div>
+        </div>
+
+        <!-- 导航菜单 -->
+        <nav class="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+<a data-page-id="p1" href="#" class="flex gap-3 items-center px-3 py-2.5 rounded-lg transition-colors"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg><span>老人档案列表</span></a>
+<a data-page-id="p2" href="#" class="flex gap-3 items-center px-3 py-2.5 rounded-lg transition-colors"><svg class="w-5 h-5 text-[#2B7A78]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg><span>服务工单调度</span></a>
+<a data-page-id="p3" href="#" class="flex gap-3 items-center px-3 py-2.5 rounded-lg transition-colors"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg><span>运营数据总览看板</span></a>
+<a aria-current="page" data-page-id="p4" href="#" class="bg-[#2B7A78]/10 flex font-medium gap-3 items-center px-3 py-2.5 rounded-lg text-[#2B7A78] transition-colors"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg><span>财务结算报表</span></a>
+<a data-page-id="p5" href="#" class="flex gap-3 items-center px-3 py-2.5 rounded-lg transition-colors"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg><span>我的任务</span></a>
+</nav>
+
+        <!-- 底部用户信息 -->
+        <div class="p-4 border-t border-slate-100 flex items-center gap-3">
+            <img src="https://placehold.co/40x40" alt="consultant avatar portrait" class="w-10 h-10 rounded-full object-cover">
+            <div class="flex flex-col min-w-0">
+                <span class="font-medium text-slate-800 truncate">张顾问</span>
+                <span class="text-xs text-slate-400 truncate">社区养老顾问</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 右侧主内容区 -->
+    <div class="flex-1 flex flex-col h-full overflow-hidden">
+        
+        <!-- 顶栏 Header -->
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
+            <!-- 面包屑 -->
+            <nav aria-label="Breadcrumb">
+                <ol class="flex items-center gap-2 text-sm">
+                    <li><a href="#" class="text-slate-500 hover:text-slate-800">安养通</a></li>
+                    <li class="text-slate-300">/</li>
+                    <li><a href="#" aria-current="page" class="text-slate-800 font-medium">财务结算报表页</a></li>
+                </ol>
+            </nav>
+
+            <!-- 顶栏右侧工具栏 -->
+            <div class="flex items-center gap-4">
+                <div class="flex bg-slate-100 p-1 rounded-lg">
+                    <button class="px-3 py-1.5 text-xs font-medium bg-white text-slate-800 rounded shadow-sm">实时调度</button>
+                    <button class="px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800">历史工单</button>
+                </div>
+                <div class="h-4 w-[1px] bg-slate-200"></div>
+                <div class="flex items-center gap-2 text-slate-600">
+                    <span class="relative flex h-3 w-3">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                    <span class="text-xs font-medium text-slate-600">系统运行正常</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 正文 Main -->
+        <main class="flex-1 overflow-y-auto p-8 space-y-6">
+            
+            <!-- 财务总览面板 (统揽 + 环形图) -->
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <!-- 3张大字号财务卡片 -->
+                <div class="bg-white rounded-xl p-6 border border-[#E2E8F0] shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-[#6B7280]">本月总服务费 (元)</span>
+                        <span class="text-xs px-2 py-1 bg-emerald-50 text-emerald-600 rounded-md font-medium">环比 +8.4%</span>
+                    </div>
+                    <div class="my-4">
+                        <span class="text-3xl font-bold text-[#1F2937]" data-value="financial_settlement" data-aggregate="sum:fee_amount">¥ 128,430</span>
+                    </div>
+                    <div class="text-xs text-[#6B7280] flex justify-between">
+                        <span>包含上门护理、助餐、保洁等</span>
+                        <span class="text-[#2B7A78]">查看明细 &rarr;</span>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 border border-[#E2E8F0] shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-[#6B7280]">政府补贴核销总额 (元)</span>
+                        <span class="text-xs px-2 py-1 bg-blue-50 text-[#2B7A78] rounded-md font-medium">核销率 87.2%</span>
+                    </div>
+                    <div class="my-4">
+                        <span class="text-3xl font-bold text-[#2B7A78]" data-value="financial_settlement" data-aggregate="sum:subsidy_amount">¥ 94,200</span>
+                    </div>
+                    <div class="text-xs text-[#6B7280] flex justify-between">
+                        <span>民政特困及高龄补贴</span>
+                        <span class="text-[#2B7A78]">对账说明 &rarr;</span>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 border border-[#E2E8F0] shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-[#6B7280]">待结算笔数 (笔)</span>
+                        <span class="text-xs px-2 py-1 bg-amber-50 text-amber-600 rounded-md font-medium">需及时处理</span>
+                    </div>
+                    <div class="my-4">
+                        <span class="text-3xl font-bold text-[#E07A5F]" data-value="financial_settlement" data-aggregate="count">18</span>
+                    </div>
+                    <div class="text-xs text-[#6B7280] flex justify-between">
+                        <span>等待区民政局复审</span>
+                        <span class="text-[#E07A5F]">催办提醒 &rarr;</span>
+                    </div>
+                </div>
+
+                <!-- 补贴核销进度环形图面板 -->
+                <div class="bg-white rounded-xl p-6 border border-[#E2E8F0] shadow-sm flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-[#1F2937]">补贴核销进度</h3>
+                        <p class="text-xs text-[#6B7280] mt-1">2026年10月周期</p>
+                        <div class="mt-4 space-y-2">
+                            <div class="flex items-center text-xs text-[#6B7280]">
+                                <span class="w-3 h-3 rounded-full bg-[#2B7A78] mr-2"></span>已核销：¥94,200 (87.2%)
+                            </div>
+                            <div class="flex items-center text-xs text-[#6B7280]">
+                                <span class="w-3 h-3 rounded-full bg-[#E2E8F0] mr-2"></span>待审核：¥13,800 (12.8%)
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 简易 SVG 环形图 -->
+                    <div class="relative w-24 h-24 flex items-center justify-center">
+                        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                            <path class="text-[#E2E8F0]" stroke-width="4" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+                            <path class="text-[#2B7A78]" stroke-dasharray="87, 100" stroke-width="4" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+                        </svg>
+                        <div class="absolute text-center">
+                            <span class="text-sm font-bold text-[#1F2937]">87.2%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 表格区域：主财务结算报表 -->
+            <div class="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
+                <!-- 表格头部工具栏 -->
+                <div class="p-6 border-b border-[#E2E8F0] flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div class="flex items-center space-x-3 w-full sm:w-auto">
+                        <div class="relative w-full sm:w-64">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6B7280]">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            </span>
+                            <input type="text" placeholder="搜索结算单号 / 服务对象" class="w-full pl-10 pr-4 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#2B7A78]">
+                        </div>
+                        <select class="border border-[#E2E8F0] rounded-lg px-3 py-2 text-sm text-[#6B7280] bg-white focus:outline-none focus:border-[#2B7A78]">
+                            <option>全部服务类型</option>
+                            <option>居家上门护理</option>
+                            <option>日间照料助餐</option>
+                            <option>专业清洁保洁</option>
+                        </select>
+                        <select class="border border-[#E2E8F0] rounded-lg px-3 py-2 text-sm text-[#6B7280] bg-white focus:outline-none focus:border-[#2B7A78]">
+                            <option>全部核销状态</option>
+                            <option>已核销</option>
+                            <option>待审核</option>
+                            <option>驳回</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-3 w-full sm:w-auto justify-end">
+                        <button class="px-4 py-2 border border-[#E2E8F0] text-[#6B7280] rounded-lg text-sm font-medium hover:bg-[#F4F6F8] flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            导出报表
+                        </button>
+                        <button data-action="createRecord" data-entity="financial_settlement" class="px-4 py-2 bg-[#2B7A78] text-white rounded-lg text-sm font-medium hover:bg-[#236361] shadow-sm flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                            新增结算
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 7列财务结算报表表格 -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-[#F4F6F8] text-[#6B7280] text-xs font-semibold uppercase tracking-wider border-b border-[#E2E8F0]">
+                                <th class="py-3 px-6">结算单号</th>
+                                <th class="py-3 px-6">服务类型</th>
+                                <th class="py-3 px-6">服务对象</th>
+                                <th class="py-3 px-6 text-right">费用金额 (元)</th>
+                                <th class="py-3 px-6 text-right">政府补贴金额 (元)</th>
+                                <th class="py-3 px-6 text-center">核销状态</th>
+                                <th class="py-3 px-6 text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[#E2E8F0] text-sm text-[#1F2937]" data-rows="financial_settlement" data-sort="settlement_no" data-order="desc" data-limit="8">
+                            <tr class="hover:bg-[#F4F6F8]/50 transition-colors">
+                                <td class="py-4 px-6 font-medium text-[#2B7A78]" data-field="settlement_no">JS-202610-001</td>
+                                <td class="py-4 px-6" data-field="service_type">居家上门护理</td>
+                                <td class="py-4 px-6" data-field="target">张大爷 (82岁)</td>
+                                <td class="py-4 px-6 text-right font-medium" data-field="fee_amount">¥ 1,200.00</td>
+                                <td class="py-4 px-6 text-right text-[#6B7280]" data-field="subsidy_amount">¥ 800.00</td>
+                                <td class="py-4 px-6 text-center">
+                                    <span class="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600" data-field="status">已核销</span>
+                                </td>
+                                <td class="py-4 px-6 text-center space-x-2">
+                                    <button data-action="openRecord" data-entity="financial_settlement" class="text-[#2B7A78] hover:underline font-medium">详情</button>
+                                    <span class="text-[#E2E8F0]">|</span>
+                                    <button data-action="editRecord" data-entity="financial_settlement" class="text-[#6B7280] hover:text-[#1F2937]">打印</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 表格底部页码 -->
+                <div class="px-6 py-4 border-t border-[#E2E8F0] flex items-center justify-between text-sm text-[#6B7280]">
+                    <div>显示第 1 到第 5 条记录，共 128 条</div>
+                    <div class="flex items-center space-x-2">
+                        <button class="px-3 py-1 border border-[#E2E8F0] rounded-lg disabled:opacity-50" disabled>上一页</button>
+                        <button class="px-3 py-1 bg-[#2B7A78] text-white rounded-lg">1</button>
+                        <button class="px-3 py-1 border border-[#E2E8F0] rounded-lg hover:bg-[#F4F6F8]">2</button>
+                        <button class="px-3 py-1 border border-[#E2E8F0] rounded-lg hover:bg-[#F4F6F8]">3</button>
+                        <span class="px-1">...</span>
+                        <button class="px-3 py-1 border border-[#E2E8F0] rounded-lg hover:bg-[#F4F6F8]">26</button>
+                        <button class="px-3 py-1 border border-[#E2E8F0] rounded-lg hover:bg-[#F4F6F8]">下一页</button>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+</body>
+</html>

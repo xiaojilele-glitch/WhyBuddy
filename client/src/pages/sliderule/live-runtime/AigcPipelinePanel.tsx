@@ -11,6 +11,8 @@
  */
 
 import React from "react";
+import { Alert, Button, Card, Empty, Flex, Form, Input, List, Segmented, Steps, Tag, Typography } from "antd";
+import { PlayCircleOutlined } from "@ant-design/icons";
 import {
   type AigcPipeline,
   type FiveSystemModel,
@@ -18,13 +20,6 @@ import {
 } from "../system-screens/five-system-model";
 import { derivePipelineFlow, makeAigcNodeRunner } from "./flow-definition";
 import { executeFlow, type FlowResult, type NodeRunStatus } from "./flow-executor";
-
-const STATUS_RING: Record<NodeRunStatus, string> = {
-  running: "border-pink-400 ring-2 ring-pink-100",
-  success: "border-emerald-300 bg-emerald-50/40",
-  failed: "border-red-300 bg-red-50/60",
-  skipped: "border-[#e5e7eb] opacity-50",
-};
 
 export function AigcPipelinePanel({
   model,
@@ -69,198 +64,123 @@ export function AigcPipelinePanel({
 
   if (pipelines.length === 0) {
     return (
-      <div
-        className="flex h-full items-center justify-center px-6 text-center text-xs text-stone-400"
+      <Empty
         data-testid="aigc-pipeline-empty"
-      >
-        本话题模型未声明能力编排——当两个能力经数据字段衔接（一个的输出是另一个的输入）时，
-        推演会自动产出管线
-      </div>
+        description="本话题模型未声明能力编排；当两个能力经数据字段衔接时，推演会自动产出管线"
+      />
     );
   }
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-auto p-4" data-testid="aigc-pipeline-panel">
-      {/* 管线选择 */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[10px] text-stone-400">能力编排</span>
-        {pipelines.map((p, i) => (
-          <button
-            key={p.id || i}
-            type="button"
-            data-testid={`aigc-pipeline-${p.id || i}`}
-            onClick={() => {
-              setActiveIdx(i);
-              setInputs({});
-              setResult(null);
-              setStatuses({});
-            }}
-            className={`rounded-full px-2 py-0.5 text-[11px] ring-1 transition-colors ${
-              i === activeIdx
-                ? "bg-pink-50 text-pink-700 ring-pink-200"
-                : "bg-white text-stone-500 ring-[#e5e7eb] hover:text-stone-700"
-            }`}
-          >
-            {p.name || p.id || `管线 ${i + 1}`}
-          </button>
-        ))}
-      </div>
+    <Flex vertical gap="middle" className="h-full overflow-auto p-4" data-testid="aigc-pipeline-panel">
+      <Segmented
+        value={activeIdx}
+        onChange={value => {
+          setActiveIdx(Number(value));
+          setInputs({});
+          setResult(null);
+          setStatuses({});
+        }}
+        options={pipelines.map((item, index) => ({
+          value: index,
+          label: (
+            <span data-testid={`aigc-pipeline-${item.id || index}`}>
+              {item.name || item.id || `管线 ${index + 1}`}
+            </span>
+          ),
+        }))}
+      />
 
-      {/* 步骤链：能力卡（执行状态实时点亮）+ 衔接字段标注 */}
-      <div className="flex flex-wrap items-stretch gap-2" data-testid="aigc-pipeline-chain">
-        {steps.map((cap, i) => {
-          const status = statuses[cap.id ?? ""];
-          return (
-            <React.Fragment key={cap.id || i}>
-              {i > 0 && (
-                <div className="flex flex-col items-center justify-center px-1">
-                  <span className="text-stone-300">⭢</span>
-                  <span
-                    className="max-w-[120px] truncate font-mono text-[9px] text-stone-400"
-                    title={`衔接字段：${steps[i - 1]?.outputField ?? ""}（上一步产出注入本步输入）`}
-                  >
-                    {steps[i - 1]?.outputField ?? ""}
-                  </span>
-                </div>
-              )}
-              <div
-                className={`min-w-[150px] flex-1 rounded-md border bg-white p-2.5 transition-all ${
-                  status ? STATUS_RING[status] : "border-[#e5e7eb]"
-                }`}
-                data-testid={`aigc-pipeline-node-${cap.id}`}
-                data-status={status ?? "idle"}
-              >
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-stone-700">
-                  {status === "running" && (
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-pink-500" />
-                  )}
-                  {status === "success" && <span className="text-emerald-600">✓</span>}
-                  {status === "failed" && <span className="text-red-600">✗</span>}
-                  {i + 1}. {cap.name || cap.id}
-                </div>
-                <div className="mt-1 space-y-0.5">
-                  {(cap.inputFields ?? []).map((ref) => {
-                    const res = resolveFieldRef(ref, model);
-                    const isHandoff = handoffRefs.has(ref);
+      <Card size="small" title="能力编排" data-testid="aigc-pipeline-chain">
+        <Steps
+          responsive
+          current={steps.findIndex(item => statuses[item.id ?? ""] === "running")}
+          items={steps.map((cap, index) => {
+            const status = statuses[cap.id ?? ""];
+            return {
+              key: cap.id || String(index),
+              status: status === "success" ? "finish" : status === "failed" ? "error" : status === "running" ? "process" : "wait",
+              title: <span data-testid={`aigc-pipeline-node-${cap.id}`} data-status={status ?? "idle"}>{index + 1}. {cap.name || cap.id}</span>,
+              description: (
+                <Flex vertical gap={4}>
+                  {index > 0 && <Typography.Text code>{steps[index - 1]?.outputField}</Typography.Text>}
+                  {(cap.inputFields ?? []).map(ref => {
+                    const resolved = resolveFieldRef(ref, model);
                     return (
-                      <div key={ref} className="flex items-center gap-1 text-[9px]">
-                        <span className={res.resolved ? "text-stone-400" : "text-red-500"}>
-                          ← {res.resolved ? res.label : `✗ ${ref}`}
-                        </span>
-                        {isHandoff && (
-                          <span className="rounded bg-pink-50 px-1 text-[8px] text-pink-500">
-                            由上一步注入
-                          </span>
-                        )}
-                      </div>
+                      <Typography.Text key={ref} type={resolved.resolved ? "secondary" : "danger"}>
+                        ← {resolved.resolved ? resolved.label : `未解析 ${ref}`}{handoffRefs.has(ref) ? " · 由上一步注入" : ""}
+                      </Typography.Text>
                     );
                   })}
-                  {cap.outputField && (
-                    <div className="text-[9px] text-stone-500">
-                      → {resolveFieldRef(cap.outputField, model).label || cap.outputField}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </React.Fragment>
-          );
-        })}
-      </div>
+                  {cap.outputField && <Tag>输出 → {resolveFieldRef(cap.outputField, model).label || cap.outputField}</Tag>}
+                </Flex>
+              ),
+            };
+          })}
+        />
+      </Card>
 
       {/* 手工输入 + 试跑（图执行器：拓扑序逐节点真跑，状态实时点亮） */}
-      <div className="rounded-md border border-[#e5e7eb] bg-[#FBF9F4] p-3">
-        <div className="text-[11px] font-semibold text-stone-600">链路试跑</div>
+      <Card size="small" title="链路试跑">
         {projection.manualInputRefs.length > 0 && (
-          <div className="mt-2 space-y-1.5">
+          <Form layout="vertical" size="small">
             {projection.manualInputRefs.map((ref) => {
               const res = resolveFieldRef(ref, model);
               return (
-                <div key={ref} className="flex items-center gap-2">
-                  <span className="w-40 shrink-0 truncate text-[10px] text-stone-500" title={ref}>
-                    {res.resolved ? res.label : ref}
-                  </span>
-                  <input
+                <Form.Item key={ref} label={res.resolved ? res.label : ref} tooltip={ref}>
+                  <Input
                     value={inputs[ref] ?? ""}
                     onChange={(e) => setInputs((prev) => ({ ...prev, [ref]: e.target.value }))}
                     placeholder="输入值"
-                    className="min-w-0 flex-1 rounded border border-[#e5e7eb] bg-white px-2 py-1 text-[11px] outline-none focus:border-pink-300"
                   />
-                </div>
+                </Form.Item>
               );
             })}
-          </div>
+          </Form>
         )}
-        <button
-          type="button"
+        <Button
+          type="primary"
+          icon={<PlayCircleOutlined />}
           data-testid="aigc-pipeline-run"
-          disabled={running || projection.reason !== null}
+          loading={running}
+          disabled={projection.reason !== null}
           onClick={run}
-          className="mt-2 rounded-full bg-pink-500 px-3 py-1 text-[11px] font-medium text-white transition-colors hover:bg-pink-600 disabled:cursor-not-allowed disabled:opacity-50"
           title={projection.reason ?? undefined}
         >
           {running ? "链路运行中…（逐节点真跑 LLM）" : `试跑整条链（${steps.length} 步）`}
-        </button>
-      </div>
+        </Button>
+      </Card>
 
       {/* 执行日志：逐节点产出 / fail-fast 诊断 */}
       {result && (
-        <div className="space-y-2" data-testid="aigc-pipeline-result">
+        <Flex vertical gap="small" data-testid="aigc-pipeline-result">
           {result.error && (
-            <div className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-600">
-              {result.error}
-            </div>
+            <Alert type="error" showIcon message={result.error} />
           )}
-          {result.logs.map((log, i) => {
-            const cap = projection.capByNodeId.get(log.node_id);
-            const output = log.outputs?.[cap?.outputField || "output"];
-            return (
-              <div
-                key={log.node_id || i}
-                className={`rounded-md border p-2.5 ${
-                  log.status === "success"
-                    ? "border-[#e5e7eb] bg-white"
-                    : log.status === "skipped"
-                    ? "border-[#e5e7eb] bg-white opacity-50"
-                    : "border-red-200 bg-red-50/60"
-                }`}
-              >
-                <div className="flex items-center gap-2 text-[10px]">
-                  <span
-                    className={
-                      log.status === "success"
-                        ? "text-emerald-600"
-                        : log.status === "skipped"
-                        ? "text-stone-400"
-                        : "text-red-600"
-                    }
-                  >
-                    {log.status === "success" ? "✓" : log.status === "skipped" ? "⊘" : "✗"}
-                  </span>
-                  <span className="font-semibold text-stone-700">
-                    {i + 1}. {cap?.name || log.node_id}
-                  </span>
-                  {typeof log.duration_ms === "number" && (
-                    <span className="text-stone-300">{(log.duration_ms / 1000).toFixed(1)}s</span>
-                  )}
-                </div>
-                {log.status === "success" && (
-                  <div className="mt-1 whitespace-pre-wrap text-[11px] leading-5 text-stone-600">
-                    {String(output ?? "")}
-                  </div>
-                )}
-                {log.status === "failed" && (
-                  <div className="mt-1 text-[10px] text-red-600">{log.error}</div>
-                )}
-              </div>
-            );
-          })}
+          <List
+            size="small"
+            bordered
+            dataSource={result.logs}
+            renderItem={(log, index) => {
+              const item = projection.capByNodeId.get(log.node_id);
+              const output = log.outputs?.[item?.outputField || "output"];
+              return (
+                <List.Item>
+                  <List.Item.Meta
+                    title={<Flex gap="small"><Tag color={log.status === "success" ? "success" : log.status === "failed" ? "error" : "default"}>{log.status}</Tag>{index + 1}. {item?.name || log.node_id}</Flex>}
+                    description={log.status === "success" ? String(output ?? "") : log.error}
+                  />
+                </List.Item>
+              );
+            }}
+          />
           {result.status === "failed" && result.logs.length > 0 && (
-            <div className="text-[10px] text-stone-400">
+            <Typography.Text type="secondary">
               链路中断（fail-fast：下游缺上游产物，不伪造后续节点；失败节点已重试 1 次）
-            </div>
+            </Typography.Text>
           )}
-        </div>
+        </Flex>
       )}
-    </div>
+    </Flex>
   );
 }

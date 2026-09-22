@@ -1,0 +1,10 @@
+{
+  "name": "whybuddy-project-browser",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Trusted fixed-suite browser runner, installed only in the verifier template",
+  "dependencies": {
+    "@playwright/test": "1.61.1"
+  }
+}

@@ -1,0 +1,151 @@
+<html data-theme="light" lang="zh-CN" class="h-full">
+<head><style id="sliderule-phone-fill">html,body{margin:0!important;width:100%!important;height:100%!important;min-height:100%!important;max-width:none!important;overflow:hidden!important;background:#fff!important}body{display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important}body>*{width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important;box-sizing:border-box!important}body>div[class*="min-h-screen"],body>div[class*="justify-center"]{display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important;min-height:0!important;flex:1 1 auto!important;height:100%!important;width:100%!important;overflow:hidden!important}header{position:static!important;flex:0 0 auto!important;width:100%!important;padding-top:12px!important}main{flex:1 1 auto!important;min-height:0!important;width:100%!important;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch}main.pt-10,main.pt-12,main.pt-14,main.pt-16,main.pt-20,main.pt-24,main.pt-28,main.pt-32{padding-top:0!important}main.pb-20,main.pb-24,main.pb-28,main.pb-32,main.pb-36{padding-bottom:0!important}body>nav,body>div[class*="min-h-screen"]>nav,body>div[class*="justify-center"]>nav,nav.fixed,nav[class*="bottom-0"]{position:static!important;display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;justify-content:space-around!important;align-items:stretch!important;flex:0 0 auto!important;width:100%!important;min-height:56px!important;padding-top:6px!important;padding-bottom:16px!important}body>nav>a,body>div[class*="min-h-screen"]>nav>a,body>div[class*="justify-center"]>nav>a,nav.fixed>a,nav[class*="bottom-0"]>a{flex:1 1 0!important;min-width:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;white-space:nowrap!important;font-size:10px!important;line-height:1.2!important;text-align:center!important;padding:4px 8px!important}body>nav>a span,body>div[class*="min-h-screen"]>nav>a span,body>div[class*="justify-center"]>nav>a span,nav.fixed>a span,nav[class*="bottom-0"]>a span{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;max-width:100%!important;font-size:10px!important;line-height:15px!important}</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>铁人打卡 - 训练</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#FF4500', // 熔岩橙
+              light: '#FF6A33',
+              dark: '#CC3700'
+            },
+            success: '#00E676', // 极速绿
+            darkBg: '#121212',  // 深碳黑
+            cardBg: '#1E1E1E',  // 卡片背景
+            borderCol: '#2C2C2C'
+          }
+        }
+      }
+    }
+  </script>
+<style id="sliderule-theme">:root{--background:#fff2ee;--foreground:#0f172a;--chrome:#fffbf9;--chrome-fg:#0f172a;--card:#ffffff;--card-fg:#0f172a;--primary:#ff4500;--primary-fg:#0f172a;--muted:#ffe9e3;--border:#f1d8d1;--radius:8px;}html,body{background-color:var(--background)!important;color:var(--foreground)!important}header,aside,nav.fixed{background-color:var(--chrome)!important;color:var(--chrome-fg)!important}html[data-theme="light"] main .bg-black,html[data-theme="light"] main .bg-slate-800,html[data-theme="light"] main .bg-slate-900,html[data-theme="light"] main .bg-slate-950,html[data-theme="light"] main .bg-gray-800,html[data-theme="light"] main .bg-gray-900,html[data-theme="light"] main .bg-gray-950,html[data-theme="light"] main .bg-zinc-800,html[data-theme="light"] main .bg-zinc-900,html[data-theme="light"] main .bg-zinc-950,html[data-theme="light"] main .bg-neutral-800,html[data-theme="light"] main .bg-neutral-900,html[data-theme="light"] main .bg-neutral-950,html[data-theme="light"] main .bg-stone-800,html[data-theme="light"] main .bg-stone-900,html[data-theme="light"] main .bg-stone-950{background-color:var(--card)!important;color:var(--card-fg)!important;border-color:var(--border)!important}html[data-theme="light"] header .text-white,html[data-theme="light"] header .text-slate-100,html[data-theme="light"] header .text-slate-200,html[data-theme="light"] header .text-gray-100,html[data-theme="light"] aside .text-white,html[data-theme="light"] aside .text-slate-100,html[data-theme="light"] aside .text-slate-200,html[data-theme="light"] aside .text-gray-100{color:var(--chrome-fg,#0f172a)!important}html[data-theme="light"] header .bg-black,html[data-theme="light"] header .bg-slate-800,html[data-theme="light"] header .bg-slate-900,html[data-theme="light"] header .bg-slate-950,html[data-theme="light"] header .bg-gray-800,html[data-theme="light"] header .bg-gray-900,html[data-theme="light"] header .bg-gray-950,html[data-theme="light"] header .bg-zinc-800,html[data-theme="light"] header .bg-zinc-900,html[data-theme="light"] header .bg-zinc-950,html[data-theme="light"] header .bg-neutral-800,html[data-theme="light"] header .bg-neutral-900,html[data-theme="light"] header .bg-neutral-950,html[data-theme="light"] header .bg-stone-800,html[data-theme="light"] header .bg-stone-900,html[data-theme="light"] header .bg-stone-950{background-color:var(--muted)!important;color:var(--chrome-fg,#0f172a)!important}aside nav a{box-sizing:border-box;width:100%;display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside>:first-child:not(nav):not(:has(nav)){display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside :is(img,svg){flex-shrink:0}aside:has(nav a){min-width:16rem!important;box-sizing:border-box}aside[class*="fixed"]:has(nav a),aside[class*="absolute"]:has(nav a){width:16rem!important}aside[class*="fixed"]:has(nav a)~*,aside[class*="absolute"]:has(nav a)~*{margin-left:16rem!important}aside [aria-current="page"]{background-color:color-mix(in srgb,var(--primary,currentColor) 16%,var(--chrome,transparent))!important;color:var(--chrome-fg,inherit)!important;font-weight:600}header nav[aria-label="Breadcrumb"] [aria-current="page"],header nav[aria-label="breadcrumb"] [aria-current="page"]{background-color:transparent!important;color:var(--chrome-fg,inherit)!important;font-weight:600}</style><script>
+/* sliderule-theme-tokens */
+tailwind.config = { theme: { extend: { colors: {
+  background: '#fff2ee',
+  foreground: '#0f172a',
+  chrome: '#fffbf9',
+  card: '#ffffff',
+  primary: '#ff4500',
+  muted: '#ffe9e3',
+  border: '#f1d8d1'
+} } } };
+</script></head>
+<body class="flex flex-col h-full overflow-hidden bg-darkBg text-gray-100 font-sans">
+
+  <!-- 顶部 Header (文档流，flex-shrink: 0) -->
+  <header class="flex-shrink-0 bg-darkBg border-b border-borderCol px-4 py-3 flex items-center justify-between z-10">
+    <div class="flex items-center space-x-2">
+      <div class="w-8 h-8 rounded-lg bg-brand flex items-center justify-center font-bold text-white text-lg tracking-wider">铁</div>
+      <span class="font-bold text-lg tracking-wide text-white">铁人打卡</span>
+    </div>
+    <div class="flex items-center space-x-2 bg-cardBg px-3 py-1.5 rounded-full border border-borderCol">
+      <div class="w-2 h-2 rounded-full bg-success animate-pulse"></div>
+      <span class="text-xs text-gray-300">健身学员</span>
+    </div>
+  </header>
+
+  <!-- 中间主内容区 (flex: 1, min-height: 0, overflow-y: auto) -->
+  <main class="flex-1 min-height:0 overflow-y-auto px-4 py-4 space-y-4">
+    
+    <!-- 1. 顶部状态栏：日期与连续打卡天数指标卡 -->
+    <section class="bg-cardBg rounded-2xl p-4 border border-borderCol flex items-center justify-between shadow-lg">
+      <div>
+        <div class="text-xs text-gray-400">今日日期</div>
+        <div class="text-base font-semibold text-white mt-0.5">2023-10-25 星期三</div>
+      </div>
+      <div class="flex items-center space-x-3 bg-darkBg px-4 py-2 rounded-xl border border-borderCol">
+        <div class="text-brand text-xl">🔥</div>
+        <div>
+          <div class="text-[10px] text-gray-400">连续打卡</div>
+          <div class="text-sm font-bold text-white"><span data-value="checkin_record" data-aggregate="count">14</span> <span class="text-xs font-normal text-gray-400">天</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. 今日核心训练任务卡片 (单列 Hero 任务卡片) -->
+    <section class="bg-cardBg rounded-2xl border border-borderCol overflow-hidden shadow-xl" data-record="training_task">
+      <!-- 卡片头部背景图与状态标签 -->
+      <div class="relative h-40 w-full bg-gray-800">
+        <img src="https://placehold.co/600x400" alt="triathlon training running and cycling" class="w-full h-full object-cover opacity-60">
+        <div class="absolute inset-0 bg-gradient-to-t from-cardBg via-transparent to-black/30"></div>
+        
+        <div class="absolute top-3 left-3 flex items-center space-x-2">
+          <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-brand text-white shadow">铁三专项</span>
+          <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-darkBg/80 text-success border border-success/30">未打卡</span>
+        </div>
+
+        <div class="absolute bottom-3 left-4 right-4">
+          <h2 class="text-xl font-bold text-white tracking-wide" data-field="task_title">耐力突破：骑跑结合砖木训练</h2>
+          <p class="text-xs text-gray-300 mt-1">强度：<span data-field="intensity">高阶 (RPE 8)</span> • 预计耗时 <span data-field="duration">90</span>分钟</p>
+        </div>
+      </div>
+
+      <!-- 任务详情与参数 -->
+      <div class="p-4 space-y-4">
+        <!-- 核心指标数据 -->
+        <div class="grid grid-cols-3 gap-2 py-2 border-y border-borderCol text-center">
+          <div>
+            <div class="text-[10px] text-gray-400">目标距离</div>
+            <div class="text-sm font-semibold text-white mt-0.5"><span data-field="target_distance">42.5</span> 公里</div>
+          </div>
+          <div class="border-x border-borderCol">
+            <div class="text-[10px] text-gray-400">消耗估算</div>
+            <div class="text-sm font-semibold text-brand mt-0.5"><span data-field="calorie_burn">850</span> 千卡</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-gray-400">心率区间</div>
+            <div class="text-sm font-semibold text-white mt-0.5" data-field="heart_rate">145-165</div>
+          </div>
+        </div>
+
+        <!-- 3. 训练互动区：组数完成勾选交互 -->
+        <div class="space-y-2.5" data-rows="training_task" data-sort="duration" data-order="desc" data-limit="8">
+          <div class="text-xs font-medium text-gray-300 mb-1">今日动作拆解与勾选</div>
+          
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-darkBg border border-borderCol">
+            <div class="flex items-center space-x-3">
+              <input type="checkbox" checked disabled class="w-4 h-4 accent-brand rounded">
+              <span class="text-xs text-gray-200 line-through" data-field="task_title">热身：动态拉伸与核心激活</span>
+            </div>
+            <span class="text-[10px] text-success">已完成</span>
+            <button data-action="submitWorkflow" data-entity="training_task" class="hidden"></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 补充的成员招募入口卡片（顺带契合需求，排在下方滚动） -->
+    <section class="bg-cardBg rounded-2xl p-4 border border-borderCol flex items-center justify-between" data-record="recruitment_application">
+      <div>
+        <div class="text-xs text-brand font-medium">火热招募中</div>
+        <div class="text-sm font-bold text-white mt-0.5" data-field="target_event">铁人三项年度挑战赛战队</div>
+      </div>
+      <button class="px-3 py-1.5 bg-darkBg border border-brand text-brand text-xs font-medium rounded-lg" data-action="openRecord" data-entity="recruitment_application">查看报名</button>
+    </section>
+
+  </main>
+
+  <!-- 底部固定的全宽主按钮区与 TabBar (文档流，flex-shrink: 0) -->
+  <div class="flex-shrink-0 bg-darkBg border-t border-borderCol">
+    <!-- 常驻醒目橙色“立即打卡”主按钮 -->
+    <div class="px-4 pt-3 pb-2" data-record="checkin_record">
+      <button data-action="createRecord" data-entity="checkin_record" class="w-full py-3.5 bg-brand hover:bg-brand-dark active:scale-[0.98] transition-transform text-white font-bold rounded-xl shadow-lg shadow-brand/30 text-base flex items-center justify-center space-x-2">
+        <span>⚡ 立即打卡完成今日训练</span>
+      </button>
+    </div>
+
+    <!-- 底部 TabBar (官方标准) -->
+    <nav class="flex justify-around items-center py-2 bg-darkBg border-t border-borderCol/50">
+<a aria-current="page" data-page-id="p1" href="#" class="flex flex-col items-center text-brand"><svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 4.86 4.86 6.29 6.29 4.86 7.71 3.43 6.31 2 7.74 5.57 11.3 2 14.86 3.43 16.29 4.86 14.86 6.29 16.29 7.71 14.86 9.14 16.29 10.57 14.86 12 18.43 15.57 14.86 19.14 16.29 20.57 14.86z"/></svg><span>训练</span></a>
+<a data-page-id="p2" href="#" class="flex flex-col items-center"><svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg><span>记录</span></a>
+<a data-page-id="p3" href="#" class="flex flex-col items-center"><svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span>招募报名</span></a>
+</nav>
+  </div>
+
+</body>
+</html>

@@ -80,7 +80,15 @@ def record_provenance_and_trust_ledger(
                 break
         if target_run is None:
             # create minimal run to carry ledgerEntry (server path)
-            target_run = CapabilityRun(
+            target_run = CapabilityRun.server_record(
+                # ⚠ `unknown` 是这里的**正确答案**，不是偷懒。这条记录是为了
+                #   挂 ledgerEntryId 才造的空壳：真正那次执行没在台账里留下
+                #   记录，它的结局这条路径确实不知道。
+                #   抄 grok `ToolCallOutcome` 的 `#[serde(other)] Unknown`——
+                #   把不知道说成 success 才是事故。
+                status="unknown",
+                durationMs=None,
+                provenance="trust.ledger_stub",
                 id=run_id,
                 capabilityId=artifact.producedBy.capabilityId,
                 turnId=getattr(state, "lastTurnId", None) or "t",

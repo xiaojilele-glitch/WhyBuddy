@@ -1,0 +1,325 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder_profile",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "archive_no",
+      "name": "档案编号",
+      "type": "string"
+     },
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "gender",
+      "name": "性别",
+      "type": "enum"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "number"
+     },
+     {
+      "id": "phone",
+      "name": "联系电话",
+      "type": "string"
+     },
+     {
+      "id": "community",
+      "name": "居住社区",
+      "type": "string"
+     },
+     {
+      "id": "health_level",
+      "name": "健康等级",
+      "type": "string"
+     },
+     {
+      "id": "care_level",
+      "name": "照护等级",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "service_address",
+      "name": "服务地址",
+      "type": "string"
+     },
+     {
+      "id": "urgency",
+      "name": "紧急程度",
+      "type": "enum"
+     },
+     {
+      "id": "assignee",
+      "name": "指派人员",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "service_appointment",
+    "name": "服务预约",
+    "fields": [
+     {
+      "id": "elder_ref",
+      "name": "服务对象",
+      "type": "ref",
+      "refEntity": "elder_profile"
+     },
+     {
+      "id": "appointment_date",
+      "name": "预约日期",
+      "type": "date"
+     },
+     {
+      "id": "time_slot",
+      "name": "预约时间段",
+      "type": "string"
+     },
+     {
+      "id": "contact_phone",
+      "name": "家属联系电话",
+      "type": "string"
+     },
+     {
+      "id": "remark",
+      "name": "病情或特殊备注说明",
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_specialist",
+    "name": "社区养老服务专员"
+   },
+   {
+    "id": "role_family",
+    "name": "家属"
+   }
+  ],
+  "permissions": [
+   "elder_profile:create",
+   "elder_profile:read",
+   "elder_profile:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "service_appointment:create",
+   "service_appointment:read",
+   "service_appointment:approve"
+  ],
+  "menus": [
+   {
+    "id": "menu_specialist_workbench",
+    "label": "专员工作台",
+    "roleRefs": [
+     "role_specialist"
+    ],
+    "permissionRefs": [
+     "elder_profile:read",
+     "work_order:read",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "menu_family_portal",
+    "label": "家属服务",
+    "roleRefs": [
+     "role_family"
+    ],
+    "permissionRefs": [
+     "service_appointment:create",
+     "service_appointment:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "工单创建",
+    "assigneeRole": "role_specialist",
+    "phase": "创建阶段"
+   },
+   {
+    "id": "node_assigned",
+    "name": "已指派",
+    "assigneeRole": "role_specialist",
+    "phase": "流转阶段"
+   },
+   {
+    "id": "node_completed",
+    "name": "已完成",
+    "assigneeRole": "role_specialist",
+    "phase": "终态阶段"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_assigned",
+    "condition": "专员完成工单派发与人员指派"
+   },
+   {
+    "from": "node_assigned",
+    "to": "node_completed",
+    "condition": "服务执行完毕并确认完成"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "elder_archive_page",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder_profile.archive_no",
+     "elder_profile.name",
+     "elder_profile.gender",
+     "elder_profile.age",
+     "elder_profile.phone",
+     "elder_profile.community",
+     "elder_profile.health_level",
+     "elder_profile.care_level"
+    ],
+    "actionPermissions": [
+     "elder_profile:create",
+     "elder_profile:read",
+     "elder_profile:update"
+    ]
+   },
+   {
+    "id": "work_order_dispatch_center",
+    "name": "服务工单调度中心",
+    "kind": "monitor",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_type",
+     "work_order.elder_name",
+     "work_order.service_address",
+     "work_order.urgency",
+     "work_order.assignee",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "family_service_booking",
+    "name": "家属服务预约端",
+    "kind": "workbench",
+    "fieldBindings": [
+     "service_appointment.elder_ref",
+     "service_appointment.appointment_date",
+     "service_appointment.time_slot",
+     "service_appointment.contact_phone",
+     "service_appointment.remark"
+    ],
+    "actionPermissions": [
+     "service_appointment:create",
+     "service_appointment:read"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_health_assessment",
+    "name": "健康等级智能评估",
+    "inputFields": [
+     "elder_profile.age",
+     "elder_profile.health_level"
+    ],
+    "outputField": "elder_profile.care_level",
+    "roleRefs": [
+     "role_specialist"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "work_order_dispatch_center",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "work_order_dispatch_center",
+    "workflowRef": "node_assigned"
+   }
+  ],
+  "landingPageRef": "elder_archive_page",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_specialist",
+   "role_family"
+  ],
+  "dataModelRefs": [
+   "elder_profile",
+   "work_order",
+   "service_appointment"
+  ],
+  "appIdentity": {
+   "appName": "颐安云"
+  },
+  "invariants": [
+   {
+    "id": "inv_archive_no",
+    "statement": "老人档案保存时必须生成唯一档案编号",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "elder_profile",
+     "elder_profile.archive_no"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

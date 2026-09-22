@@ -7,6 +7,8 @@ gaps (resolveCoverageGapsFromState was never ported) and the picker never
 selected contract-required critique.generate — the loop then died on
 max_repeat_guard with all blocking gaps still open.
 """
+
+from plan_approval_support import approved_execution_payload
 import os
 import sys
 
@@ -15,12 +17,13 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.v5_state import ProducedBy, V5SessionState  # noqa: E402
+from conftest import TEST_USER_ID  # noqa: E402
 from services.slide_rule_coverage import (  # noqa: E402
     author_coverage_contract,
     evaluate_coverage_gate,
     resolve_coverage_gaps_from_state,
 )
-from services.slide_rule_session import commit_artifact, pick_next_capabilities  # noqa: E402
+from services.engine_scheduling import commit_artifact, pick_next_capabilities  # noqa: E402
 
 COMPLEX_GOAL = "做一个宠物医院预约管理系统，包含预约排班、宠物档案和医生工作台"
 
@@ -117,6 +120,7 @@ def test_drive_full_uses_persisted_server_state_as_authority(tmp_path, monkeypat
     # 服务端持久化：已收敛、带可信产物的会话
     state = _state_with_contract()
     state.sessionId = "authority-check"
+    state.ownerId = TEST_USER_ID
     for cap in ["critique.generate", "risk.analyze", "synthesis.merge", "evidence.search"]:
         _commit(state, cap)
     from services.slide_rule_coverage import resolve_coverage_gaps_from_state as _resolve
@@ -133,7 +137,7 @@ def test_drive_full_uses_persisted_server_state_as_authority(tmp_path, monkeypat
     }
     resp = client.post(
         "/api/sliderule/drive-full",
-        json={"state": degraded_client_copy, "userText": "打包交付：生成 spec 树、规格文档、提示词包", "max_loops": 4},
+        json=approved_execution_payload({"state": degraded_client_copy, "userText": "打包交付：生成 spec 树、规格文档、提示词包", "max_loops": 4}),
         headers={"X-Internal-Key": "dev-slide-rule-internal"},
     )
     assert resp.status_code == 200, resp.text

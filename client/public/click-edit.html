@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>点选编辑器 · 接真实 pages_json</title>
+<!--
+  这是「小样子」原型的下一步：不再喂写死的示例数据，画布加载的是应用中心
+  真实存过的 pages_json，保存按钮真的 PATCH 回后端（新增的
+  /api/sliderule/apps/{id}/pages/{pageId}）。
+
+  跟原型（Artifact 那份）的两处关键差别：
+    ① 选中判据从"手写的 data-editable 标签"改成"真实页面里已有的语义
+       孔"——真实生成的页面本来就打着 data-field / data-entity / data-action
+       这类孔（services/spec_first_pipeline.py 第 6.5 步打的），点哪个元素、
+       它对应模型里哪个字段，天然就知道，不用像示例数据那样手工标注。
+       没有语义孔的元素退回"最近的块级祖先"，保证任何真实页面都能点。
+    ② 保存不是序列化给你看，是真的 PATCH 回 pages_json——刷新应用中心的
+       预览会看到这次编辑的结果。
+
+  部署位置刻意选在 client/public/（vite 静态目录，零代码改动即可从
+  http://localhost:3000/click-edit.html 直接访问）——这是一次"试一下真实
+  链路通不通"的实验，不是往 AppsWorkbench 里加一个正式入口，所以没有碰
+  任何现有组件/路由。
+-->
+<style>
+  :root {
+    --bg: #12151c;
+    --panel: #191d26;
+    --panel-2: #212633;
+    --panel-3: #262c3a;
+    --border: #2a3040;
+    --text: #e7ebf3;
+    --text-dim: #8790a3;
+    --text-faint: #5b6478;
+    --accent: #5b8cff;
+    --accent-soft: rgba(91, 140, 255, 0.16);
+    --ok: #34d399;
+    --ok-soft: rgba(52, 211, 153, 0.14);
+    --warn: #f6ad55;
+    --warn-soft: rgba(246, 173, 85, 0.14);
+    --danger: #f36c6c;
+    --danger-soft: rgba(243, 108, 108, 0.14);
+    --radius: 8px;
+    --font-ui: "Manrope", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", "SF Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: var(--font-ui);
+    overflow: hidden;
+  }
+  body { display: flex; flex-direction: column; }
+
+  .topbar {
+    flex-shrink: 0;
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 18px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 14px; white-space: nowrap; }
+  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+
+  select, .btn {
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 11px;
+    cursor: pointer;
+  }
+  select { max-width: 260px; }
+  select:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; transition: background .12s, border-color .12s; }
+  .btn:hover { background: var(--panel-3); border-color: #3a4257; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover:not(:disabled) { background: #4a7bef; }
+
+  .page-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .page-tabs button {
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    color: var(--text-dim); background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px; cursor: pointer;
+  }
+  .page-tabs button.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+
+  .spacer { flex: 1; }
+  .status-msg {
+    font-size: 12px; padding: 5px 11px; border-radius: 999px;
+    white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .status-msg.ok { background: var(--ok-soft); color: var(--ok); }
+  .status-msg.err { background: var(--danger-soft); color: var(--danger); }
+  .status-msg.busy { background: var(--panel-2); color: var(--text-dim); border: 1px solid var(--border); }
+
+  .workbench { flex: 1; display: flex; min-height: 0; }
+  .canvas-zone { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 18px; gap: 10px; overflow: auto; }
+  .canvas-hint { font-size: 12px; color: var(--text-faint); display: flex; align-items: center; gap: 7px; }
+  .canvas-hint kbd { font-family: var(--font-mono); font-size: 10.5px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--text-dim); }
+
+  .device { position: relative; align-self: flex-start; background: #05070b; border-radius: 12px; padding: 10px 10px 0; box-shadow: 0 24px 60px -20px rgba(0,0,0,0.65), 0 0 0 1px #232838; }
+  .device .chrome-strip { display: flex; align-items: center; gap: 7px; padding: 0 6px 9px; }
+  .device .chrome-strip .traffic { display: flex; gap: 5px; }
+  .device .chrome-strip .traffic span { width: 8px; height: 8px; border-radius: 50%; background: #333a4a; }
+  .device .chrome-strip .urlbar { flex: 1; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); background: #0d1017; border-radius: 5px; padding: 3.5px 9px; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #canvas-frame { display: block; width: 1180px; height: 900px; border: none; border-radius: 0 0 6px 6px; background: #fff; }
+
+  .empty-state {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+    color: var(--text-dim); font-size: 13px; padding: 40px 8px; max-width: 480px;
+  }
+  .empty-state b { color: var(--text); }
+
+  #floating-toolbar {
+    position: fixed; z-index: 50; display: none; align-items: center; gap: 2px; padding: 5px;
+    background: var(--panel-3); border: 1px solid #3a4257; border-radius: 9px;
+    box-shadow: 0 10px 28px -10px rgba(0,0,0,0.6); font-size: 12px;
+  }
+  #floating-toolbar .label { font-size: 11px; color: var(--text-dim); padding: 0 8px 0 6px; border-right: 1px solid var(--border); margin-right: 3px; white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+  #floating-toolbar button { font-family: inherit; display: flex; align-items: center; justify-content: center; width: 27px; height: 27px; border: none; border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; font-size: 13px; }
+  #floating-toolbar button:hover { background: var(--panel-2); }
+  #floating-toolbar button.active { background: var(--accent-soft); color: var(--accent); }
+  #floating-toolbar button.danger:hover { background: var(--danger-soft); color: var(--danger); }
+  #floating-toolbar .size-val { width: 26px; text-align: center; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+  #floating-toolbar .sep { width: 1px; height: 18px; background: var(--border); margin: 0 3px; }
+  #floating-toolbar .ai-btn { width: auto; padding: 0 10px 0 7px; gap: 5px; color: var(--text-dim); }
+  #floating-toolbar .ai-btn:hover { color: var(--text); }
+
+  #ai-note { position: fixed; z-index: 51; display: none; max-width: 260px; background: var(--panel-3); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 1.55; color: var(--text); box-shadow: 0 10px 28px -10px rgba(0,0,0,0.6); }
+  #ai-note b { color: var(--accent); }
+
+  .side-panel { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--panel); border-left: 1px solid var(--border); min-height: 0; }
+  .side-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .side-tabs button { flex: 1; font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--text-dim); background: none; border: none; padding: 12px 0; cursor: pointer; border-bottom: 2px solid transparent; }
+  .side-tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+  .side-body { flex: 1; overflow: auto; min-height: 0; }
+  .side-pane { display: none; padding: 14px 16px; }
+  .side-pane.active { display: block; }
+
+  .log-empty { color: var(--text-faint); font-size: 12.5px; line-height: 1.7; padding: 8px 2px; }
+  .log-item { display: flex; gap: 9px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .log-item:last-child { border-bottom: none; }
+  .log-item .icon { flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-top: 1px; }
+  .log-item .icon.style { background: var(--warn-soft); color: var(--warn); }
+  .log-item .icon.text { background: var(--accent-soft); color: var(--accent); }
+  .log-item .icon.delete { background: var(--danger-soft); color: var(--danger); }
+  .log-item .body { flex: 1; min-width: 0; }
+  .log-item .what { color: var(--text); font-weight: 500; word-break: break-word; }
+  .log-item .when { color: var(--text-faint); font-size: 11px; margin-top: 2px; font-family: var(--font-mono); }
+
+  #html-output { margin: 0; padding: 12px 14px; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; color: #b9c6e0; white-space: pre-wrap; word-break: break-all; background: #0d1017; border-radius: 8px; border: 1px solid var(--border); max-height: 100%; }
+  .html-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 11.5px; color: var(--text-dim); }
+  .html-meta .count { font-family: var(--font-mono); color: var(--ok); }
+
+  .panel-footer { flex-shrink: 0; padding: 11px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-faint); line-height: 1.6; }
+
+  ::selection { background: var(--accent-soft); }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2c3242; border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a4257; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>点选编辑器</div>
+
+  <select id="scope-select">
+    <option value="mine">我的应用</option>
+    <option value="">全部可见</option>
+    <option value="market">应用市场</option>
+  </select>
+  <select id="app-select" disabled><option>加载中…</option></select>
+
+  <div class="page-tabs" id="page-tabs"></div>
+
+  <div class="spacer"></div>
+  <span class="status-msg" id="status" style="display:none;"></span>
+  <button class="btn" id="btn-reload" disabled>↺ 丢弃改动重载</button>
+  <button class="btn primary" id="btn-save" disabled>保存到 pages_json</button>
+</div>
+
+<div class="workbench">
+  <div class="canvas-zone" id="canvas-zone">
+    <div class="canvas-hint">悬停高亮，点一下选中，双击可直接改文字 · 按 <kbd>Esc</kbd> 取消选中</div>
+    <div class="device" id="device" style="display:none;">
+      <div class="chrome-strip">
+        <div class="traffic"><span></span><span></span><span></span></div>
+        <div class="urlbar" id="urlbar">—</div>
+      </div>
+      <iframe id="canvas-frame" title="可编辑画布"></iframe>
+    </div>
+    <div class="empty-state" id="empty-state">
+      <div>从左上角选一个<b>我拥有的应用</b>（保存需要写权限），再选一个页面，画布会加载它<b>真实的 pages_json</b>。</div>
+      <div>选中判据用的是页面自己打好的语义孔（<code style="font-family:var(--font-mono)">data-field</code> / <code style="font-family:var(--font-mono)">data-entity</code> / <code style="font-family:var(--font-mono)">data-action</code>……），点不到孔的地方会退回最近的块级祖先。</div>
+    </div>
+  </div>
+
+  <div class="side-panel">
+    <div class="side-tabs">
+      <button class="active" data-pane="log">变更记录</button>
+      <button data-pane="html">HTML 输出</button>
+    </div>
+    <div class="side-body">
+      <div class="side-pane active" id="pane-log">
+        <div class="log-empty" id="log-empty">还没有改动——先选一个应用和页面。</div>
+        <div id="log-list"></div>
+      </div>
+      <div class="side-pane" id="pane-html">
+        <div class="html-meta"><span>画布实时序列化出的 HTML</span><span class="count" id="html-bytes">—</span></div>
+        <pre id="html-output"></pre>
+      </div>
+    </div>
+    <div class="panel-footer">
+      「保存到 pages_json」调的是 <code style="font-family:var(--font-mono)">PATCH /api/sliderule/apps/{id}/pages/{pageId}</code>——原地覆盖当前页面，不开新版本（这是手动编辑，不是 AI 精修，两者版本纪律不一样，见后端 <code style="font-family:var(--font-mono)">update_page_html</code> 的注释）。存完刷新应用中心预览就能看到。
+    </div>
+  </div>
+</div>
+
+<div id="floating-toolbar">
+  <span class="label" id="tb-label"></span>
+  <button data-cmd="align" data-val="left" title="左对齐">⟵</button>
+  <button data-cmd="align" data-val="center" title="居中">≡</button>
+  <button data-cmd="align" data-val="right" title="右对齐">⟶</button>
+  <span class="sep"></span>
+  <button data-cmd="size" data-val="-1" title="字号 -">A-</button>
+  <span class="size-val" id="tb-size">14</span>
+  <button data-cmd="size" data-val="1" title="字号 +">A+</button>
+  <span class="sep"></span>
+  <button data-cmd="bold" title="加粗">B</button>
+  <span class="sep"></span>
+  <button data-cmd="ai" class="ai-btn" title="语义修改">✨ AI 编辑</button>
+  <span class="sep"></span>
+  <button data-cmd="delete" class="danger" title="删除">🗑</button>
+</div>
+<div id="ai-note">语义/数据类的修改（比如"把这一列换算成人民币"）需要喊 AI 精修——那条路走的是另一套逻辑（图判定范围、模型改版、字段合并）。<b>这个工具只做不用 AI 的那一半：样式和文字，改完直接存库。</b></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var API = "/api/sliderule";
+  var scopeSelect = document.getElementById("scope-select");
+  var appSelect = document.getElementById("app-select");
+  var pageTabs = document.getElementById("page-tabs");
+  var statusEl = document.getElementById("status");
+  var btnReload = document.getElementById("btn-reload");
+  var btnSave = document.getElementById("btn-save");
+  var device = document.getElementById("device");
+  var emptyState = document.getElementById("empty-state");
+  var urlbar = document.getElementById("urlbar");
+  var frame = document.getElementById("canvas-frame");
+  var toolbar = document.getElementById("floating-toolbar");
+  var tbLabel = document.getElementById("tb-label");
+  var tbSize = document.getElementById("tb-size");
+  var aiNote = document.getElementById("ai-note");
+  var logList = document.getElementById("log-list");
+  var logEmpty = document.getElementById("log-empty");
+  var htmlOutput = document.getElementById("html-output");
+  var htmlBytes = document.getElementById("html-bytes");
+
+  var currentApp = null;   // 完整记录（含 pages_json）
+  var currentPageId = null;
+  var originalHtml = null; // 当前页面加载时的原文，用来判断"有没有真的改过"
+  var selected = null;
+  var hoverEl = null;
+  var logEntries = [];
+
+  function setStatus(kind, text) {
+    statusEl.className = "status-msg " + kind;
+    statusEl.textContent = text;
+    statusEl.style.display = text ? "inline-block" : "none";
+  }
+
+  // ── 应用列表 ──────────────────────────────────────────────────────
+  function loadAppList() {
+    appSelect.disabled = true;
+    appSelect.innerHTML = "<option>加载中…</option>";
+    var scope = scopeSelect.value;
+    var qs = "limit=50" + (scope ? "&scope=" + encodeURIComponent(scope) : "");
+    fetch(API + "/apps?" + qs, { headers: { accept: "application/json" } })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (data) {
+        var apps = Array.isArray(data.apps) ? data.apps : [];
+        appSelect.innerHTML = "";
+        if (!apps.length) {
+          var o = document.createElement("option");
+          o.textContent = scope === "mine" ? "（还没有登录，或者你名下没有应用）" : "（没有可见的应用）";
+          appSelect.appendChild(o);
+          appSelect.disabled = true;
+          return;
+        }
+        apps.forEach(function (a) {
+          var o = document.createElement("option");
+          o.value = a.id;
+          o.textContent = (a.product_name || a.goal || a.id).slice(0, 28) + "（" + (a.page_count || 0) + " 页 · v" + a.version + "）";
+          appSelect.appendChild(o);
+        });
+        appSelect.disabled = false;
+        loadAppRecord(apps[0].id);
+      })
+      .catch(function (err) {
+        appSelect.innerHTML = "<option>加载失败</option>";
+        setStatus("err", "拉应用列表失败：" + err.message);
+      });
+  }
+
+  function loadAppRecord(appId) {
+    setStatus("busy", "拉取应用……");
+    fetch(API + "/apps/" + encodeURIComponent(appId), { headers: { accept: "application/json" } })
+      .then(function (r) {
+        if (!r.ok) throw new Error(r.status === 404 ? "看不到这个应用（没权限或不存在）" : "HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (rec) {
+        currentApp = rec;
+        var pages = (rec.pages_json && rec.pages_json.pages) || {};
+        var navItems = (rec.pages_json && rec.pages_json.navItems) || [];
+        var nameOf = {};
+        navItems.forEach(function (n) { if (n && n.id) nameOf[n.id] = n.name || n.id; });
+        var ids = Object.keys(pages);
+        pageTabs.innerHTML = "";
+        if (!ids.length) {
+          setStatus("err", "这个应用没有 pages_json——只有 spec-first 链路产出的应用才有整页 HTML 可编辑");
+          showEmpty();
+          return;
+        }
+        // 按 navItems 声明的顺序排，navItems 没提到的页排后面。
+        var ordered = navItems.map(function (n) { return n.id; }).filter(function (id) { return pages[id]; });
+        ids.forEach(function (id) { if (ordered.indexOf(id) === -1) ordered.push(id); });
+        ordered.forEach(function (id, i) {
+          var b = document.createElement("button");
+          b.textContent = nameOf[id] || id;
+          b.dataset.pageId = id;
+          if (i === 0) b.classList.add("active");
+          b.addEventListener("click", function () { selectPageTab(id); });
+          pageTabs.appendChild(b);
+        });
+        setStatus("", "");
+        selectPageTab(ordered[0]);
+      })
+      .catch(function (err) {
+        setStatus("err", err.message);
+        showEmpty();
+      });
+  }
+
+  function selectPageTab(pageId) {
+    pageTabs.querySelectorAll("button").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.pageId === pageId);
+    });
+    currentPageId = pageId;
+    var html = currentApp.pages_json.pages[pageId];
+    originalHtml = html;
+    urlbar.textContent = (currentApp.product_name || currentApp.goal || currentApp.id) + " · " + pageId + ".html";
+    logEntries = [];
+    renderLog();
+    showCanvas();
+    frame.srcdoc = html;
+    btnReload.disabled = false;
+    btnSave.disabled = true; // 还没改动，先禁用；有改动了才亮
+  }
+
+  function showCanvas() { device.style.display = ""; emptyState.style.display = "none"; }
+  function showEmpty() { device.style.display = "none"; emptyState.style.display = ""; pageTabs.innerHTML = ""; btnReload.disabled = true; btnSave.disabled = true; }
+
+  scopeSelect.addEventListener("change", loadAppList);
+  appSelect.addEventListener("change", function () { if (appSelect.value) loadAppRecord(appSelect.value); });
+  btnReload.addEventListener("click", function () { if (currentPageId) selectPageTab(currentPageId); });
+
+  // ── 画布交互（选中 / 工具栏 / 改样式 / 改文字 / 删除）────────────────
+  function idoc() { return frame.contentDocument; }
+
+  frame.addEventListener("load", function () {
+    var doc = idoc();
+    if (!doc || !doc.body) return;
+    doc.addEventListener("mouseover", onHover, true);
+    doc.addEventListener("mouseout", onUnhover, true);
+    doc.addEventListener("click", onClick, true);
+    doc.addEventListener("dblclick", onDblClick, true);
+    updateHtmlOutput();
+  });
+
+  //: 真实页面没有预先标注的 data-editable——判据改成"有没有语义孔"，
+  //  没有就退回最近的块级祖先。语义孔的优先级见 SEMANTIC_ATTRS：
+  //  这些是 spec_first_pipeline 第 6.5 步真的会打的孔（bind_pages /
+  //  html_bindings.build_prompt），点中它们说明这块内容在模型里有名有姓。
+  var SEMANTIC_ATTRS = ["data-field", "data-entity", "data-action", "data-record", "data-metric", "data-aggregate"];
+  var BLOCK_TAGS = ["BUTTON", "A", "TD", "TH", "LI", "LABEL", "H1", "H2", "H3", "H4", "H5", "H6", "SPAN", "P"];
+
+  function hasSemanticHook(el) {
+    if (!el.getAttribute) return false;
+    return SEMANTIC_ATTRS.some(function (a) { return el.hasAttribute(a); });
+  }
+
+  function closestEditable(el) {
+    var body = idoc().body;
+    if (!el || el === body) return null;
+    // 第一遍：找最近一个"带语义孔"的祖先——这是最有意义的编辑单元。
+    var probe = el;
+    while (probe && probe !== body) {
+      if (hasSemanticHook(probe)) return probe;
+      probe = probe.parentElement;
+    }
+    // 没有语义孔：退回最近的"块级/可点"标签。跳过纯容器 DIV，
+    // 避免选到一整块看不出边界的大盒子。
+    probe = el;
+    while (probe && probe !== body) {
+      if (BLOCK_TAGS.indexOf(probe.tagName) !== -1) return probe;
+      probe = probe.parentElement;
+    }
+    return null;
+  }
+
+  function labelOf(el) {
+    for (var i = 0; i < SEMANTIC_ATTRS.length; i++) {
+      var v = el.getAttribute(SEMANTIC_ATTRS[i]);
+      if (v) return SEMANTIC_ATTRS[i].replace("data-", "") + ": " + v;
+    }
+    var t = (el.textContent || "").trim().replace(/\s+/g, " ");
+    return el.tagName.toLowerCase() + (t ? "「" + truncate(t, 14) + "」" : "");
+  }
+
+  function ensureOutlineStyle() {
+    var doc = idoc();
+    if (doc.getElementById("__click_edit_style__")) return;
+    var style = doc.createElement("style");
+    style.id = "__click_edit_style__";
+    style.textContent =
+      ".__ce_hover__{outline:1.5px dashed #93c5fd !important;outline-offset:2px !important;}" +
+      ".__ce_selected__{outline:2px solid #2563eb !important;outline-offset:2px !important;box-shadow:0 0 0 4px rgba(37,99,235,.12) !important;}" +
+      "[contenteditable='true']{outline:2px solid #2563eb !important;outline-offset:1px !important;background:#fff !important;}" +
+      "*{cursor:pointer;}";
+    doc.head.appendChild(style);
+  }
+
+  function onHover(e) {
+    var el = closestEditable(e.target);
+    if (hoverEl && hoverEl !== el) hoverEl.classList.remove("__ce_hover__");
+    if (el && el !== selected) el.classList.add("__ce_hover__");
+    hoverEl = el;
+  }
+  function onUnhover(e) {
+    var el = closestEditable(e.target);
+    if (el) el.classList.remove("__ce_hover__");
+  }
+  function onClick(e) {
+    var el = closestEditable(e.target);
+    if (!el) { deselect(); return; }
+    if (el.getAttribute("contenteditable") === "true") return;
+    e.preventDefault();
+    select(el);
+  }
+  function onDblClick(e) {
+    var el = closestEditable(e.target);
+    if (!el) return;
+    e.preventDefault();
+    var hasElementChild = false;
+    for (var i = 0; i < el.children.length; i++) {
+      if (["SMALL", "SPAN", "B", "STRONG", "EM", "I"].indexOf(el.children[i].tagName) === -1) { hasElementChild = true; break; }
+    }
+    if (hasElementChild) return;
+    el.setAttribute("contenteditable", "true");
+    el.focus();
+    var before = el.textContent;
+    function commit() {
+      el.removeAttribute("contenteditable");
+      el.removeEventListener("blur", commit);
+      if (el.textContent !== before) addLog("text", "文字改成「" + truncate(el.textContent.trim(), 16) + "」");
+    }
+    el.addEventListener("blur", commit);
+  }
+
+  function select(el) {
+    if (selected) selected.classList.remove("__ce_selected__");
+    if (hoverEl) hoverEl.classList.remove("__ce_hover__");
+    selected = el;
+    selected.classList.add("__ce_selected__");
+    hoverEl = null;
+    showToolbar(el);
+  }
+  function deselect() {
+    if (selected) selected.classList.remove("__ce_selected__");
+    selected = null;
+    hideToolbar();
+  }
+  function showToolbar(el) {
+    tbLabel.textContent = labelOf(el);
+    var cs = idoc().defaultView.getComputedStyle(el);
+    tbSize.textContent = Math.round(parseFloat(cs.fontSize));
+    toolbar.style.display = "flex";
+    positionToolbar(el);
+    aiNote.style.display = "none";
+  }
+  function hideToolbar() { toolbar.style.display = "none"; aiNote.style.display = "none"; }
+
+  function positionToolbar(el) {
+    var elRect = el.getBoundingClientRect();
+    var frameRect = frame.getBoundingClientRect();
+    var top = frameRect.top + elRect.top;
+    var left = frameRect.left + elRect.left;
+    var tbH = 40;
+    var placeAbove = top - tbH - 8 > 8;
+    toolbar.style.left = Math.max(8, left) + "px";
+    toolbar.style.top = (placeAbove ? top - tbH - 8 : top + elRect.height + 8) + "px";
+  }
+
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") deselect(); });
+  window.addEventListener("resize", function () { if (selected) positionToolbar(selected); });
+  document.getElementById("canvas-zone").addEventListener("scroll", function () { if (selected) positionToolbar(selected); });
+
+  toolbar.addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-cmd]");
+    if (!btn || !selected) return;
+    var cmd = btn.getAttribute("data-cmd");
+    var cs = idoc().defaultView.getComputedStyle(selected);
+    var lbl = labelOf(selected);
+
+    if (cmd === "align") {
+      selected.style.textAlign = btn.getAttribute("data-val");
+      toolbar.querySelectorAll('[data-cmd="align"]').forEach(function (b) { b.classList.toggle("active", b === btn); });
+      addLog("style", lbl + " 对齐改成「" + ({ left: "左对齐", center: "居中", right: "右对齐" })[btn.getAttribute("data-val")] + "」");
+    } else if (cmd === "size") {
+      var next = Math.max(9, Math.min(40, parseFloat(cs.fontSize) + parseFloat(btn.getAttribute("data-val"))));
+      selected.style.fontSize = next + "px";
+      tbSize.textContent = Math.round(next);
+      addLog("style", lbl + " 字号改成 " + Math.round(next) + "px");
+    } else if (cmd === "bold") {
+      var isBold = parseInt(cs.fontWeight, 10) >= 700;
+      selected.style.fontWeight = isBold ? "400" : "700";
+      btn.classList.toggle("active", !isBold);
+      addLog("style", lbl + (isBold ? " 取消加粗" : " 改成加粗"));
+    } else if (cmd === "delete") {
+      var toRemove = selected;
+      deselect();
+      toRemove.style.display = "none";
+      addLog("delete", "「" + lbl + "」已删除", toRemove);
+    } else if (cmd === "ai") {
+      var r = btn.getBoundingClientRect();
+      aiNote.style.left = Math.max(8, r.left - 130) + "px";
+      aiNote.style.top = (r.bottom + 10) + "px";
+      aiNote.style.display = aiNote.style.display === "block" ? "none" : "block";
+      return;
+    }
+    updateHtmlOutput();
+  });
+
+  function truncate(s, n) { return s.length > n ? s.slice(0, n) + "…" : s; }
+
+  function addLog(kind, text, undoEl) {
+    logEntries.unshift({ kind: kind, text: text, time: new Date().toLocaleTimeString("zh-CN", { hour12: false }), el: undoEl || null });
+    renderLog();
+    updateHtmlOutput();
+    btnSave.disabled = false;
+  }
+
+  var iconMap = { style: "🎨", text: "✎", delete: "🗑" };
+  function renderLog() {
+    logEmpty.style.display = logEntries.length ? "none" : "block";
+    logList.innerHTML = "";
+    logEntries.forEach(function (entry) {
+      var row = document.createElement("div");
+      row.className = "log-item";
+      var revertBtn = entry.el ? '<button class="btn" style="margin-top:6px;padding:3px 9px;font-size:11px;" data-revert>撤回</button>' : "";
+      row.innerHTML =
+        '<div class="icon ' + entry.kind + '">' + iconMap[entry.kind] + '</div>' +
+        '<div class="body"><div class="what">' + escapeHtml(entry.text) + '</div><div class="when">' + entry.time + '</div>' + revertBtn + '</div>';
+      if (entry.el) {
+        row.querySelector("[data-revert]").addEventListener("click", function () {
+          entry.el.style.display = "";
+          entry.el = null;
+          renderLog();
+          updateHtmlOutput();
+        });
+      }
+      logList.appendChild(row);
+    });
+  }
+
+  function escapeHtml(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function currentSerializedHtml() {
+    var doc = idoc();
+    return doc ? "<!DOCTYPE html>\n" + doc.documentElement.outerHTML : "";
+  }
+
+  function updateHtmlOutput() {
+    var full = currentSerializedHtml();
+    htmlOutput.textContent = full;
+    htmlBytes.textContent = full ? new Blob([full]).size.toLocaleString("zh-CN") + " 字节" : "—";
+  }
+
+  document.querySelectorAll(".side-tabs button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".side-tabs button").forEach(function (b) { b.classList.remove("active"); });
+      document.querySelectorAll(".side-pane").forEach(function (p) { p.classList.remove("active"); });
+      btn.classList.add("active");
+      document.getElementById("pane-" + btn.getAttribute("data-pane")).classList.add("active");
+      if (btn.getAttribute("data-pane") === "html") updateHtmlOutput();
+    });
+  });
+
+  document.addEventListener("click", function (e) {
+    if (!aiNote.contains(e.target) && e.target.getAttribute("data-cmd") !== "ai") aiNote.style.display = "none";
+  });
+
+  // ── 保存：真的 PATCH 回 pages_json ───────────────────────────────
+  btnSave.addEventListener("click", function () {
+    if (!currentApp || !currentPageId) return;
+    var html = currentSerializedHtml();
+    if (!html) return;
+    btnSave.disabled = true;
+    setStatus("busy", "保存中……");
+    fetch(
+      API + "/apps/" + encodeURIComponent(currentApp.id) + "/pages/" + encodeURIComponent(currentPageId),
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ html: html }),
+      }
+    )
+      .then(function (r) {
+        return r.json().then(function (body) {
+          if (!r.ok) throw new Error(body.message || body.detail || ("HTTP " + r.status));
+          return body;
+        });
+      })
+      .then(function (body) {
+        setStatus("ok", "已存库：" + body.bytes.toLocaleString("zh-CN") + " 字节 · " + new Date().toLocaleTimeString("zh-CN"));
+        originalHtml = html;
+        currentApp.pages_json.pages[currentPageId] = html; // 本地也同步，刷新页签不会看到旧内容
+      })
+      .catch(function (err) {
+        setStatus("err", "保存失败：" + err.message);
+        btnSave.disabled = false;
+      });
+  });
+
+  // MutationObserver 顺带给画布打一次样式（悬停/选中的轮廓），
+  // 首次 load 已经挂了监听，这里在每次 srcdoc 变化后再补一次孔样式。
+  var origLoad = frame.addEventListener;
+  frame.addEventListener("load", function () {
+    try { ensureOutlineStyle(); } catch (e) { /* 空文档，跳过 */ }
+  });
+
+  loadAppList();
+})();
+</script>
+</body>
+</html>

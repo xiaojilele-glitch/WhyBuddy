@@ -14,10 +14,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useI18n } from "@/i18n";
-import { useAuthStore } from "@/lib/auth-store";
+import type { AuthUser } from "@/lib/auth-client";
 import { useProjectStore } from "@/lib/project-store";
+import { useAuth } from "@/lib/use-auth";
 import { cn } from "@/lib/utils";
-import type { CurrentUser } from "@shared/auth";
 
 type SidebarTone = "light" | "glass";
 
@@ -52,8 +52,8 @@ function SidebarHeader({
         )}
       >
         <img
-          src="/brand/transLogo.png"
-          alt="SlideRule"
+          src="/brand/miantuan-mark.png"
+          alt="面团 AI"
           className="relative size-9 object-contain"
         />
       </span>
@@ -168,7 +168,7 @@ function SidebarNavItem({
   return <li>{content}</li>;
 }
 
-function getUserInitials(user: CurrentUser | null) {
+function getUserInitials(user: AuthUser | null) {
   const source =
     user?.displayName?.trim() || user?.email.split("@")[0] || "Guest";
   const parts = source.split(/[\s._-]+/).filter(Boolean);
@@ -180,20 +180,24 @@ function getUserInitials(user: CurrentUser | null) {
   return initials.toUpperCase();
 }
 
-function getUserRoleLabel(
-  role: CurrentUser["role"] | undefined,
-  isZh: boolean
-) {
-  if (!role) return isZh ? "访客" : "Guest";
-  if (role === "super_admin") return isZh ? "超级管理员" : "Super Admin";
-  if (role === "admin") return isZh ? "管理员" : "Admin";
+/**
+ * 角色只有两档：超管、普通用户。
+ *
+ * 旧账号体系有三档（user/admin/super_admin），但新身份库只存一个布尔
+ * `is_superuser`。这里不再显示一个没有来源的"管理员"档——需要中间档时
+ * 先在身份库加字段，而不是在展示层编一个出来。
+ */
+function getUserRoleLabel(user: AuthUser | null, isZh: boolean) {
+  if (!user) return isZh ? "访客" : "Guest";
+  if (user.isSuperuser) return isZh ? "超级管理员" : "Super Admin";
   return isZh ? "普通用户" : "User";
 }
 
-function getUserStatusLabel(user: CurrentUser | null, isZh: boolean) {
+function getUserStatusLabel(user: AuthUser | null, isZh: boolean) {
+  // 停用账号在后端等同未登录（Python 侧 optional_user 直接返回 None），
+  // 所以这里拿到的 user 一定是启用状态——没有"已停用"这一档。
   if (!user) return isZh ? "未登录" : "Signed out";
-  if (user.status === "disabled") return isZh ? "已停用" : "Disabled";
-  if (!user.emailVerified) return isZh ? "邮箱未验证" : "Email unverified";
+  if (!user.isVerified) return isZh ? "邮箱未验证" : "Email unverified";
   return isZh ? "已登录" : "Signed in";
 }
 
@@ -206,7 +210,7 @@ function SidebarUserBlock({
   collapsed: boolean;
   tone: SidebarTone;
   locale: string;
-  currentUser: CurrentUser | null;
+  currentUser: AuthUser | null;
 }) {
   const glass = tone === "glass";
   const isZh = locale === "zh-CN";
@@ -216,7 +220,7 @@ function SidebarUserBlock({
     (isZh ? "未登录用户" : "Guest user");
   const email = currentUser?.email ?? (isZh ? "请先登录" : "Sign in required");
   const initials = getUserInitials(currentUser);
-  const roleLabel = getUserRoleLabel(currentUser?.role, isZh);
+  const roleLabel = getUserRoleLabel(currentUser, isZh);
   const statusLabel = getUserStatusLabel(currentUser, isZh);
   const avatar = (
     <span
@@ -225,15 +229,7 @@ function SidebarUserBlock({
         glass ? "border-white/72 bg-white/56" : "border-sky-100 bg-sky-50"
       )}
     >
-      {currentUser?.avatarUrl ? (
-        <img
-          src={currentUser.avatarUrl}
-          alt=""
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        initials
-      )}
+      {initials}
     </span>
   );
 
@@ -302,7 +298,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const [location, setLocation] = useLocation();
   const { locale, copy } = useI18n();
-  const currentUser = useAuthStore(state => state.currentUser);
+  const { user: currentUser } = useAuth();
   const currentProjectId = useProjectStore(state => state.currentProjectId);
   const activeId = getActiveSidebarId(location);
   const sidebarTone: SidebarTone = embedded ? "glass" : "light";

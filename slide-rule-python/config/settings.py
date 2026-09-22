@@ -16,6 +16,11 @@ _REPO_ROOT = _PACKAGE_DIR.parent
 class Settings(BaseSettings):
     PORT: int = 9700
     NODE_ENV: str = "development"
+    # A separate trusted E2B image owns the fixed browser suite. Empty means
+    # blocked; the generated application sandbox never hosts its own examiner.
+    E2B_API_KEY: str = ""
+    WHYBUDDY_PROJECT_BROWSER_TEMPLATE: str = ""
+    WHYBUDDY_PROJECT_BROWSER_TIMEOUT_SECONDS: int = 120
 
     # DB (reuse cube_pets_office or dedicated). Production credentials must come from .env.
     DB_HOST: str = "localhost"
@@ -36,14 +41,36 @@ class Settings(BaseSettings):
     LLM_FAST_MODEL: Optional[str] = "qwen-turbo"
     QWEN_EMBEDDING_MODEL: str = "text-embedding-v1"
 
-    # Internal key for SlideRule delegation (from Node)
+    # Internal key for SlideRule delegation (from Node).
+    #
+    # ⚠️ 这个默认值是**出厂密码**：它明文写在仓库里、也写在测试里，等于公开。
+    # 它守着 sliderule_full / permissions / tasks 等几十个写接口，生产环境沿用
+    # 默认值 = 那些接口对任何能连上端口的人敞开。
+    # 所以生产环境沿用默认值**直接拒绝启动**（见下面的 _enforce_non_default_secrets）。
     SLIDE_RULE_INTERNAL_KEY: str = "dev-slide-rule-internal"
+
+    # 允许携带凭据跨站访问本 API 的源。**留空 = 只允许同源**（浏览器默认行为）。
+    #
+    # 2026-08-04 之前这里没有这个字段，CORS 写死 allow_origins=["*"] +
+    # allow_credentials=True。Starlette 对这个组合的处理是**回显任意 Origin**
+    # （cors.py:167 `if self.allow_all_origins and self.allow_credentials`），
+    # 实测 `curl -H "Origin: https://evil.example"` 拿回的就是
+    # `access-control-allow-origin: https://evil.example`。当时没被打穿只是因为
+    # 登录 Cookie 带 samesite=lax、浏览器不会在跨站 fetch 上带它——整条防线
+    # 押在一个 Cookie 属性上，CORS 这层是零防御。
+    #
+    # 形状抄 fastapi/full-stack-fastapi-template 的 BACKEND_CORS_ORIGINS
+    # （core/config.py:39）：逗号分隔或 JSON 数组，启动时解析成列表。
+    BACKEND_CORS_ORIGINS: str = ""
 
     # Parallel capability batches in the full drive loop (services/v5_full_driver.py).
     # Each selected capability's provider call is independent; default ON overlaps
     # them (execute concurrently, commit sequentially in selection order).
     # Explicit false selects the serial reference path unchanged. Env var of the
     # same name wins at runtime (checked dynamically by _parallel_caps_enabled).
+    #
+    # persist-before-next-LLM（一轮里 A 落盘再跑 B，崩溃不重烧 A）要求串行：
+    # SLIDERULE_PARALLEL_CAPS=false。默认 ON 先把整组 LLM 花完再顺序 commit。
     SLIDERULE_PARALLEL_CAPS: bool = True
 
     # Durable task (mission) store for the /api/tasks surface (routes/tasks.py).
@@ -68,6 +95,11 @@ class Settings(BaseSettings):
     # 本地 JSON 文件（APP_STORE_FILE），行为与"没有 DB"时完全一致。跟账号功能
     # 的 MySQL DATABASE_URL（DB_* 那套）是两个独立子系统，互不影响。
     APP_STORE_DATABASE_URL: Optional[str] = None
+    # 受限网络专用：走自定义 HTTPS SQL API（例如本仓库的 /db-api）。
+    # 只在外部环境没有原生 Postgres 协议时使用；留空则不用。
+    APP_STORE_HTTP_API_URL: str = ""
+    # 自定义 HTTPS SQL API 的鉴权 token（通常是 Bearer token）。
+    APP_STORE_HTTP_API_KEY: str = ""
     # 本地库兜底（2026-07-28）：远端连不上时先落本地 SQLite，再不行才回 JSON。
     # SQLite 比 JSON 强在能查询/能索引/写入是事务性的（JSON 是整文件重写）。
     # 置空字符串则跳过这一级，直接 JSON——受限文件系统/只读容器里用得上。
@@ -92,6 +124,58 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         return self.NODE_ENV == "development"
 
+    @property
+    def is_production(self) -> bool:
+        """判据跟 services/auth_tokens._is_production 保持一致（NODE_ENV / APP_ENV）。"""
+        import os
+
+        env = (self.NODE_ENV or os.getenv("APP_ENV") or "").strip().lower()
+        return env in ("production", "prod")
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """解析后的跨站白名单。**空列表 = 不装 CORS 中间件 = 只允许同源。**
+
+        接受逗号分隔（`https://a.com,https://b.com`）或 JSON 数组，
+        形状同 full-stack-fastapi-template 的 `parse_cors`。
+        """
+        raw = (self.BACKEND_CORS_ORIGINS or "").strip()
+        if not raw:
+            return []
+        if raw.startswith("["):
+            import json
+
+            try:
+                return [str(x).rstrip("/") for x in json.loads(raw) if str(x).strip()]
+            except Exception:  # noqa: BLE001 — 配歪了按"没配"处理，不放开
+                return []
+        return [p.strip().rstrip("/") for p in raw.split(",") if p.strip()]
+
+    def _check_default_secret(self, name: str, value: str, default: str) -> None:
+        """出厂密码在生产环境**拒绝启动**，开发环境只警告。
+
+        逐行照 fastapi/full-stack-fastapi-template `core/config.py:96`
+        的 `_check_default_secret`——包括"local 只 warn、其余 raise"这个分档。
+        本地开发要能一把跑起来，上线必须换掉，两个需求靠环境区分而不是靠自觉。
+        """
+        if value != default:
+            return
+        message = (
+            f"{name} 仍是出厂默认值（{default!r}）。它明文写在仓库和测试里，"
+            f"等于公开——生产环境必须改掉。"
+        )
+        if self.is_production:
+            raise ValueError(message)
+        import warnings
+
+        warnings.warn(message, stacklevel=1)
+
+    def _enforce_non_default_secrets(self) -> "Settings":
+        self._check_default_secret(
+            "SLIDE_RULE_INTERNAL_KEY", self.SLIDE_RULE_INTERNAL_KEY, "dev-slide-rule-internal"
+        )
+        return self
+
     class Config:
         # 与 CWD 无关的确定性 env 链（真实事故：uvicorn 以 slide-rule-python 为
         # CWD 启动时，相对路径 ".env" 找不到根目录配置，静默落回 dashscope 默认，
@@ -105,6 +189,9 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    return Settings()
+    # 出厂密码检查放在这里而不是 pydantic 的 model_validator：这个模块被大量
+    # 测试直接 import，validator 会在**每次**构造 Settings 时跑，而测试里造
+    # Settings 是常态。放在缓存过的工厂里，每个进程只跑一次。
+    return Settings()._enforce_non_default_secrets()
 
 settings = get_settings()

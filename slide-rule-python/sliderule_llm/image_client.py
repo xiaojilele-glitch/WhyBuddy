@@ -33,10 +33,32 @@ DEFAULT_TIMEOUT_S = 600
 # fail-open 的语义只保证"不崩"（确实照常降级成纯文字），没人管过"要等多久"。
 # 对用户而言，转圈半小时和失败没有区别，只是更糟——他连失败都看不到。
 #
-# 240s 的取法：实测成功出图 34~107s（最慢那张是参照板），取 >2× 最慢值，
-# 不会切掉正常的慢出图；端点挂掉时最多浪费 4 分钟而不是 30 分钟。
-# 需要更宽可用 IMAGE_TOTAL_BUDGET_S 调；设 0 表示不限（回到老行为）。
-DEFAULT_TOTAL_BUDGET_S = 240
+# ── 取值依据（2026-08-06 上调 240 → 400）─────────────────────────────
+#
+# 240 当初的说法是"实测成功出图 34~107s，取 >2× 最慢值"，但 2×107 = 214，
+# 240 其实只有 1.12× 冗余，算错了。更要紧的是**这个倍数本来就该按重试算，
+# 不是按单次算**：预算约束的是「重试 + 退避」的总和，一次都不许重试的预算
+# 等于把重试机制关掉了。
+#
+# 按最坏的成功路径推：
+#   第 1 次瞬时失败（比如端点偶发 502，几秒就回）
+#   + 退避 5s
+#   + 第 2 次成功，赶上最慢的那张 ≈ 110s
+#   ≈ 120s ——240s 扛得住这一轮。
+# 但真正会咬人的是**第 1 次卡住不回**：单次超时取 min(600, 剩余预算)，
+# 240s 下第一次就能把预算耗光，重试连发都发不出去。
+#
+# 400s 的取法：容得下「一次 ~110s 的慢出图卡死 + 退避 5s + 再来一次完整
+# 110s」≈ 225s，还留一倍余量给端点变慢；同时相对老行为（3×600+30 = 30 分钟）
+# 仍然砍掉 93%。展会现场端点抖一下不至于整张丢掉。
+#
+# 实测（api.gpt.ge / gpt-image-2，2026-08-06）：
+#   参照板·桌面 2560x1440  103.6s
+#   参照板·手机 1440x2560   71.7s
+#   区块图·桌面 1280x720    51.5s
+#
+# 需要更宽/更窄用 IMAGE_TOTAL_BUDGET_S 调；设 0 表示不限（回到老行为）。
+DEFAULT_TOTAL_BUDGET_S = 400
 
 LABEL = "预览·未验证"
 
@@ -122,6 +144,41 @@ def _transient(exc: Exception) -> bool:
     return isinstance(exc, urllib.error.HTTPError) and exc.code in (429, 500, 502, 503, 504)
 
 
+def _png_from_payload(payload: dict, *, timeout: float) -> bytes:
+    """从生图响应里取出图片字节——**两种形状都要认**。
+
+    ## 为什么不能只认 b64_json
+
+    请求体里明写了 `response_format: "b64_json"`，但 api.gpt.ge + gpt-image-2
+    **不保证照办**。2026-08-13 实测，同一个尺寸（1024x1024）连着两次探测：
+    第一次返回 `data[0].b64_json`，第二次返回 `data[0].url`。五个尺寸各探一次
+    时全是 `url`。也就是说这不是"某些尺寸走 url"，是**同一路请求随机返两种**。
+
+    只认 b64_json 的后果不是"报错好查"，是**随机失败**：整条链路上生图是
+    fail-open 的（失败就静默退回纯文字设计），所以表现成"有时候有参照图、
+    有时候没有"，而且没有任何一处会说为什么。
+
+    ⚠ 这正是本仓那条老规矩的又一次兑现：**认不认某个参数是端点相关行为，
+    换端点必须整份重测，别把旧结论当常量**。上一版客户端是对着上一家端点写的。
+    """
+    data = (payload or {}).get("data") or []
+    if not data or not isinstance(data[0], dict):
+        raise ImageGenError(f"生图响应里没有 data：{str(payload)[:200]}")
+    item = data[0]
+    b64 = item.get("b64_json")
+    if b64:
+        return base64.b64decode(b64)
+    url = item.get("url")
+    if url:
+        # 图片托管在服务商那边，取一次。这一跳的超时跟生图请求共用同一个数——
+        # 它本来就在同一段总预算里，单独给它一个更长的超时等于绕开预算闸。
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            return resp.read()
+    raise ImageGenError(
+        f"生图响应既没有 b64_json 也没有 url，拿到的字段是 {sorted(item.keys())}"
+    )
+
+
 def generate_image_png(
     prompt: str,
     *,
@@ -169,8 +226,7 @@ def generate_image_png(
             per_call = resolved.timeout if budget <= 0 else min(resolved.timeout, remaining)
             with urllib.request.urlopen(req, timeout=per_call) as resp:
                 payload = json.loads(resp.read().decode("utf-8"))
-            b64 = payload["data"][0]["b64_json"]
-            return base64.b64decode(b64)
+            return _png_from_payload(payload, timeout=per_call)
         except Exception as exc:  # noqa: BLE001 — 统一走下面的重试/包装逻辑
             last_exc = exc
             if attempt < RETRIES and _transient(exc):

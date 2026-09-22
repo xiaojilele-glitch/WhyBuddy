@@ -114,34 +114,46 @@ def test_enrich_without_sink_leaves_the_model_untouched(monkeypatch):
 
 
 def test_enrich_hands_the_landing_sheet_to_the_sink(monkeypatch):
-    """传了槽就能收到——并且收到的是落地页那一页的。"""
+    """传了槽就能收到——并且收到的是落地页那一页的。
+
+    2026-08-03 起全系统只给**首页**生一张图，所以这里顺带锁死"另一页根本
+    没去生图"：卡片拿到的必须是落地页那张，而不是"碰巧最后一个覆盖上去的"。
+    """
     from services import freeform_block
 
     monkeypatch.setattr(freeform_block, "_supports_image_content_parts", lambda: True)
+    monkeypatch.setattr(freeform_block, "_image_generation_configured", lambda: True)
     monkeypatch.setattr(
         freeform_block, "generate_freeform_block",
         lambda *a, **k: {"root": {"kind": "section", "children": []}},
     )
-    # 两页都是总览页，各出各的图；p0 是落地页
     sheets = {"p_side": PNG_B, "p0": PNG_A}
-    calls = []
+    asked = []
 
     def fake_sheet(design_brief, datamodel, **kwargs):
-        return sheets[calls.pop(0)]
+        # 用页面 id 反查该返回哪张——现在只应该被问一次（落地页那次）
+        return sheets[asked[-1]]
 
     model = _model()
     model["page"]["pages"] = [
         {"id": "p_side", "kind": "monitor", "stats": [{"id": "s", "label": "L", "entityRef": "e0"}]},
         {"id": "p0", "kind": "monitor", "stats": [{"id": "s2", "label": "L2", "entityRef": "e0"}]},
     ]
-    calls[:] = ["p_side", "p0"]
+
+    real_stage = freeform_block._enrich_stage
+
+    def spy_stage(name, **kw):
+        if name == "monitor.sheet" and kw.get("page"):
+            asked.append(kw["page"])
+        return real_stage(name, **kw)
+
+    monkeypatch.setattr(freeform_block, "_enrich_stage", spy_stage)
     monkeypatch.setattr(freeform_block, "_generate_overview_sheet_b64", fake_sheet)
-    # 预算默认可能不够两页，明确放开，让两页都真去"生图"
-    monkeypatch.setenv(freeform_block._ENRICH_MAX_REF_IMAGES_ENV, "5")
 
     sink = OverviewPreviewSink()
     freeform_block.enrich_monitor_page_overviews(model, preview_sink=sink)
     assert sink.page_id == "p0" and sink.png_b64 == PNG_A
+    assert PNG_B != sink.png_b64, "非落地页那张图不该跑到卡片上"
 
 
 # ────────────────────── ② 图不进摘要载荷 ──────────────────────
@@ -180,6 +192,15 @@ def test_preview_roundtrips_as_png_bytes(configured_store):
     """取图接口给的是 PNG 原始字节（路由直接当 image/png 回）。"""
     app_id = store.save_app_or_version(_model(), goal="g", session_id="s3", preview_png_b64=PNG_A)
     assert store.get_app_preview_png(app_id) == base64.b64decode(PNG_A)
+
+
+def test_preview_can_be_resolved_by_session_without_embedding_base64(configured_store):
+    store.save_app_or_version(
+        _model(), goal="g", session_id="hero-session", preview_png_b64=PNG_A
+    )
+
+    assert store.get_session_preview_png("hero-session", source="sheet") == base64.b64decode(PNG_A)
+    assert store.get_session_preview_png("missing-session", source="sheet") is None
 
 
 # ────────────────────── ③ 版本 / fork / 幂等不丢图 ──────────────────────
@@ -304,23 +325,57 @@ def test_preview_tag_changes_when_the_same_source_is_rewritten(configured_store)
     assert after != before, "同来源换图后标签没变，强缓存会钉死在旧图上"
 
 
-def test_new_version_inherits_the_sheet_but_not_the_shot(configured_store):
-    """新版本继承参照板，**但不继承真截图**。
+def test_new_version_inherits_the_shot_too(configured_store):
+    """新版本**两路都继承**，按优先级取最好的那张（shot 优先）。
 
-    继承截图会把自己堵死：一旦继承，"这个应用已经有截图了"就成立，采集端便不会
-    再为它采一张——而新版本恰恰是长得不一样的那个（模型变了才会开新版本），结果
-    是新版永远顶着上一版的实拍图。
+    ⚠ 这条 2026-08-23 反转过。旧版断言的是"继承参照板但不继承真截图"，理由是
+      继承截图会把采集端堵死（app_has_shot 成立 → 不再为它采一张）。那个理由只
+      对**卡片众包补图**成立，而它 2026-08-22 已随卡片活渲染一起删除；现在唯一
+      的采集者是推演收口，一律带 replace=1，堵不住（见
+      test_replace_overwrites_an_inherited_shot）。
 
-    不继承也不会掉回活渲染：参照板继承仍在，卡片始终有图可贴。
+      旧写法留的安全网是"参照板继承仍在，卡片始终有图可贴"。真机打脸：参照板要
+      生图三件套齐全才生得出，线上从没配过——2026-08-23 查线上库 64 个应用，
+      **sheet 数为 0**，20 张图全是 shot。于是每精修/fork 一次就真的掉一次空态。
     """
     v1 = store.save_app_or_version(_model(), goal="g", session_id="e6", preview_png_b64=PNG_A)
     store.save_app_shot(v1, base64.b64decode(PNG_B))
     v2 = store.save_app_or_version(_model(entities=3), goal="g", session_id="e6")
     assert v2 != v1
-    assert store.get_app_preview_png(v2, source="sheet") == base64.b64decode(PNG_A)
-    assert store.get_app_preview_png(v2, source="shot") is None, "新版本不该继承实拍图"
-    # 卡片仍有图可贴，只是暂时是示意图——采集端会据此为它采一张自己的
-    assert store.get_app_preview_png(v2) == base64.b64decode(PNG_A)
+    assert store.get_app_preview_png(v2, source="shot") == base64.b64decode(PNG_B)
+    # 只继承最好的那一张，不把两张都复制过去：每张约 1MB，而"两路并存"是为了
+    # 两条**产图路径**互为退路，继承来的副本不承担那个职责。
+    assert store.get_app_preview_png(v2, source="sheet") is None
+    assert store.get_app_preview_png(v2) == base64.b64decode(PNG_B)
+
+
+def test_fork_inherits_the_shot_when_the_source_has_no_sheet(configured_store):
+    """**线上的真实形态**：源只有实拍图，没有参照板。
+
+    2026-08-23 用户指着一个当天 fork 出来的应用问"这不是今天生成的吗，怎么没
+    图"。真因就在这里：fork 不经过推演收口（没有 running true→false，采集不
+    触发），全指望继承；而旧代码只继承 sheet，线上一个 sheet 都没有，于是继承
+    了个空。
+
+    这条是那次事故的判据——把 _attach_preview 的继承改回"只认 sheet"，它必须变红。
+    """
+    src = store.save_app_or_version(_model(), goal="g", session_id="fk1")
+    store.save_app_shot(src, base64.b64decode(PNG_B))
+    assert store.get_app_preview_png(src, source="sheet") is None, "夹具前提：源没有参照板"
+
+    dup = store.fork_app(src, new_name="园务通 副本")
+    assert dup
+    assert store.get_app_preview_png(dup) == base64.b64decode(PNG_B)
+    assert store.get_app_preview_png(dup, source="shot") == base64.b64decode(PNG_B)
+
+
+def test_fork_without_any_preview_stays_empty(configured_store):
+    """反向：源自己就没图时，别凭空造一张出来——空态是诚实的。"""
+    src = store.save_app_or_version(_model(), goal="g", session_id="fk2")
+    dup = store.fork_app(src, new_name="副本")
+    assert dup and store.get_app_preview_png(dup) is None
+    assert store.get_app_preview_png(dup, source="shot") is None
+    assert store.get_app_preview_png(dup, source="sheet") is None
 
 
 def test_delete_takes_both_sources_with_it(configured_store):
@@ -411,9 +466,17 @@ def api_client(configured_store):
 _PNG = b"\x89PNG\r\n\x1a\n" + b"X" * 64
 
 
+def _public_app(session_id: str, **kw) -> str:
+    """上传夹具走公开应用：新建默认私有，匿名 TestClient 看不见，POST 会 404。
+    众包补图本就只发生在能看见的卡上。"""
+    return store.save_app(
+        _model(), goal="g", session_id=session_id, visibility="public", **kw
+    )
+
+
 def test_upload_stores_the_shot_and_it_wins(api_client):
     """回传的截图存进 shot 槽，并顶掉参照板成为取图默认。"""
-    app_id = store.save_app_or_version(_model(), goal="g", session_id="u1", preview_png_b64=PNG_A)
+    app_id = _public_app("u1", preview_png_b64=PNG_A)
     res = api_client.post(f"/api/sliderule/apps/{app_id}/preview", content=_PNG,
                           headers={"content-type": "image/png"})
     assert res.status_code == 200 and res.json()["stored"] is True
@@ -425,7 +488,7 @@ def test_upload_stores_the_shot_and_it_wins(api_client):
 def test_upload_is_idempotent(api_client):
     """已经有截图就跳过。同一张卡可能被多个标签页/来回滚动重复采集——重复写只是
     白费带宽，还会平白让 immutable 缓存失效一次。"""
-    app_id = store.save_app_or_version(_model(), goal="g", session_id="u2", preview_png_b64=PNG_A)
+    app_id = _public_app("u2", preview_png_b64=PNG_A)
     first = api_client.post(f"/api/sliderule/apps/{app_id}/preview", content=_PNG,
                             headers={"content-type": "image/png"})
     assert first.json()["stored"] is True
@@ -435,10 +498,116 @@ def test_upload_is_idempotent(api_client):
     assert store.get_app_preview_png(app_id) == _PNG, "第二次不该覆盖"
 
 
+def test_upload_replace_without_writer_is_rejected(api_client):
+    """覆盖要写权限。这条夹具里的应用无主，匿名只有读——replace 必须 401，
+    不能因为测试里没登录就把别人的 shot 换掉。
+    真覆盖见 test_replace_overwrites_an_inherited_shot。"""
+    app_id = _public_app("u2b", preview_png_b64=PNG_A)
+    first = api_client.post(
+        f"/api/sliderule/apps/{app_id}/preview",
+        content=_PNG,
+        headers={"content-type": "image/png"},
+    )
+    assert first.json()["stored"] is True
+    nxt = b"\x89PNG\r\n\x1a\n" + b"Y" * 64
+    replaced = api_client.post(
+        f"/api/sliderule/apps/{app_id}/preview?replace=true",
+        content=nxt,
+        headers={"content-type": "image/png"},
+    )
+    assert replaced.status_code == 401
+    assert store.get_app_preview_png(app_id) == _PNG
+
+
+_OWNER_ID = "owner-7"
+
+
+@pytest.fixture
+def owner_client(configured_store):
+    """带写权限的客户端（覆盖 optional_user 注入这条记录的主人）。
+
+    ⚠ 2026-08-23 补：`?replace=1` 那条分支此前**整个 tests/ 里没有一处走过**
+      （grep replace=1 零命中）。而"继承来的 shot 不会堵死收口采集"这个判断
+      正是押在它身上——押在没被任何判据钉过的行为上，等于没押。下面两条把
+      幂等与覆盖两侧都钉住。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from middlewares.current_user import optional_user
+    from routes.sliderule_full import router
+
+    class _Owner:
+        id = _OWNER_ID
+        is_superuser = False
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/sliderule")
+    app.dependency_overrides[optional_user] = lambda: _Owner()
+    return TestClient(app)
+
+
+def test_replace_overwrites_an_inherited_shot(owner_client):
+    """收口采集能换掉继承来的图——这正是"继承不会堵死采集"的判据。
+
+    fork 出来的副本先顶着源那张实拍图；等这个副本自己的推演跑到收口，
+    studio-landing-shot 带 ?replace=1 回传，必须换成它自己的那张。
+    """
+    src = store.save_app(_model(), goal="g", session_id="own1",
+                         owner_id=_OWNER_ID, visibility="public")
+    store.save_app_shot(src, base64.b64decode(PNG_B))
+    dup = store.fork_app(src, owner_id=_OWNER_ID, visibility="public")
+    assert store.get_app_preview_png(dup) == base64.b64decode(PNG_B), "先继承到源那张"
+
+    mine = b"\x89PNG\r\n\x1a\n" + b"Z" * 64
+    res = owner_client.post(
+        f"/api/sliderule/apps/{dup}/preview?replace=1",
+        content=mine,
+        headers={"content-type": "image/png"},
+    )
+    assert res.status_code == 200 and res.json()["stored"] is True
+    assert store.get_app_preview_png(dup) == mine, "继承来的图必须被自己的实拍顶掉"
+
+
+def test_inherited_shot_does_block_a_capture_without_replace(owner_client):
+    """反向：**不带 replace 的采集会被继承来的图挡下**。
+
+    这不是 bug，是继承的已知代价，写在这里是为了让它可见——将来若再加一条
+    "礼让式"采集路径（像 2026-08-22 删掉的卡片众包补图那样先问"有图了吗"），
+    它对 fork/精修出来的应用会一声不吭地什么都不做。要么让它带 replace，
+    要么给继承来的图另立标记。
+    """
+    src = store.save_app(_model(), goal="g", session_id="own2",
+                         owner_id=_OWNER_ID, visibility="public")
+    store.save_app_shot(src, base64.b64decode(PNG_B))
+    dup = store.fork_app(src, owner_id=_OWNER_ID, visibility="public")
+
+    res = owner_client.post(
+        f"/api/sliderule/apps/{dup}/preview",
+        content=b"\x89PNG\r\n\x1a\n" + b"Q" * 64,
+        headers={"content-type": "image/png"},
+    )
+    assert res.status_code == 200 and res.json()["stored"] is False
+    assert res.json()["reason"] == "already_has_shot"
+    assert store.get_app_preview_png(dup) == base64.b64decode(PNG_B)
+
+
+def test_session_generated_app_returns_summary(api_client):
+    """推演收口用 session_id 反查 app_id，不许把 model_json 拖回来。"""
+    app_id = _public_app("hero-session")
+    res = api_client.get("/api/sliderule/sessions/hero-session/generated-app")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["id"] == app_id
+    assert "model_json" not in body and "pages_json" not in body
+    miss = api_client.get("/api/sliderule/sessions/no-such-session/generated-app")
+    assert miss.status_code == 404
+
+
 def test_upload_rejects_non_png(api_client):
     """只认 PNG。取图路由是按 image/png 回的，别的格式进来会让浏览器拿到一个
     声称是 PNG 的 JPEG。"""
-    app_id = store.save_app_or_version(_model(), goal="g", session_id="u3")
+    app_id = _public_app("u3")
     res = api_client.post(f"/api/sliderule/apps/{app_id}/preview", content=b"\xff\xd8\xff" + b"J" * 64,
                           headers={"content-type": "image/png"})
     assert res.status_code == 415
@@ -449,7 +618,7 @@ def test_upload_rejects_oversized(api_client):
     """体积上限：这是一张缩略图，几 MB 的东西进来只会把列表接口和库拖慢。"""
     from routes import sliderule_full
 
-    app_id = store.save_app_or_version(_model(), goal="g", session_id="u4")
+    app_id = _public_app("u4")
     big = b"\x89PNG\r\n\x1a\n" + b"X" * (sliderule_full._MAX_SHOT_BYTES + 1)
     res = api_client.post(f"/api/sliderule/apps/{app_id}/preview", content=big,
                           headers={"content-type": "image/png"})
@@ -465,7 +634,176 @@ def test_upload_rejects_unknown_app(api_client):
 
 
 def test_upload_rejects_empty_body(api_client):
-    app_id = store.save_app_or_version(_model(), goal="g", session_id="u5")
+    app_id = _public_app("u5")
     res = api_client.post(f"/api/sliderule/apps/{app_id}/preview", content=b"",
                           headers={"content-type": "image/png"})
     assert res.status_code == 400
+
+
+# ────────────────────── ⑥ 会话摘要自带封面（2026-08-24）──────────────────────
+
+
+def test_session_covers_maps_sessions_to_their_latest_app(configured_store):
+    """session_id → 它最新那版应用 + 缩略图三件套。
+
+    ## 为什么要有这张索引
+
+    应用中心把「全部会话」和「**一页**应用」合并去重（前端 mergeGalleryItems
+    按 session_id 认领）。会话列表是一次拉全的，应用却是 limit=14 的一页——
+    认不到自己应用的那些会话各摆一张**没有封面**的空卡，滚到下一页才被真应用
+    卡换掉。真机（2026-08-24）：66 张卡只有 14 张有图，而库里 67 张图都在。
+
+    字段名与 _mark_previews 给应用摘要打的完全一致，前端那条 shouldUseSheetThumb
+    因此不用分两套判定。
+    """
+    app_id = store.save_app_or_version(
+        _model(), goal="带图的", session_id="sess-with-cover", preview_png_b64=PNG_A
+    )
+    store.save_app(_model("无图应用"), goal="没图的", session_id="sess-no-cover")
+
+    covers = store.session_covers()
+
+    hit = covers["sess-with-cover"]
+    assert hit["app_id"] == app_id
+    assert hit["has_preview"] is True
+    assert hit["preview_source"] == store.PREVIEW_SOURCE_SHEET
+    assert hit["preview_tag"], "缓存版本位不能是空串，否则前端拼不出 ?v="
+
+    # 反向①：有应用但没图 —— 如实报 false，别让卡片去拉一张不存在的图
+    miss = covers["sess-no-cover"]
+    assert miss["app_id"]
+    assert miss["has_preview"] is False
+    assert miss["preview_tag"] == ""
+
+    # 反向②：没绑应用的会话压根不在表里
+    assert "sess-never-closed" not in covers
+
+    # 反向③：**图本体不许进来**。这张索引跟列表摘要同一条纪律：图一张约 1MB。
+    assert PNG_A not in repr(covers)
+
+
+def test_session_covers_follows_the_latest_version(configured_store):
+    """同一会话多版时取最新那版——口径与 find_latest_by_session 一致。
+
+    两处漂移的现象是：列表里的封面跟点进去看到的版本对不上，而且不报错。
+    """
+    v1 = store.save_app_or_version(
+        _model(), goal="g", session_id="sess-multi", preview_png_b64=PNG_A
+    )
+    v2 = store.save_app_or_version(_model(entities=3), goal="g", session_id="sess-multi")
+    assert v2 != v1
+
+    covers = store.session_covers()
+    assert covers["sess-multi"]["app_id"] == v2
+    assert covers["sess-multi"]["version"] == 2
+    latest = store.get_latest_app_for_session("sess-multi")
+    assert covers["sess-multi"]["app_id"] == latest["id"], "跟单条查询必须同口径"
+
+
+def test_session_covers_is_fail_open(configured_store, monkeypatch):
+    """索引查不到 → 空表，会话照常列得出来。
+
+    缩略图是**增强类**（本仓第七条）：自己炸了不许拖垮主链路。GET /sessions
+    是侧栏和应用中心共用的那条路，把它拖成 500 等于整个工作台白屏。
+    """
+    backend = store.get_backend()
+    real_index = backend.session_app_index
+
+    def boom():
+        raise RuntimeError("索引查询挂了")
+
+    store.save_app_or_version(
+        _model(), goal="g", session_id="sess-half", preview_png_b64=PNG_A
+    )
+
+    # ① 绑定索引整个挂了 → 空表（而不是抛出去把 GET /sessions 变成 500）
+    monkeypatch.setattr(backend, "session_app_index", boom)
+    assert store.session_covers() == {}
+
+    # ② 只有缩略图那半边挂了 → 绑定关系仍要给出来，只是当作没图
+    #
+    # ⚠ 这里**不能**用 monkeypatch.undo()：它会把 configured_store 这个 fixture
+    #   自己打的补丁一起撤掉，后端当场换成另一个空库，现象是 sess-half 凭空消失
+    #   （第一版就是这么写的，KeyError 才发现）。显式还原那一个属性就够了。
+    monkeypatch.setattr(backend, "session_app_index", real_index)
+    monkeypatch.setattr(backend, "preview_sources", boom)
+    covers = store.session_covers()
+    assert covers["sess-half"]["app_id"]
+    assert covers["sess-half"]["has_preview"] is False
+
+
+def test_session_covers_runs_its_two_queries_concurrently(configured_store):
+    """两条索引查询必须并发，不许串行。
+
+    ## 为什么要钉住
+
+    它们互不依赖，各自是一次 HTTPS 网关往返 ~140ms（真机 2026-08-24）。串行
+    277ms、并发 145ms —— GET /sessions 是侧栏和应用中心共用的首屏接口，这是每次
+    开工作台都要付的。改回串行不会报错、不会变红，只是每个人每次都慢 130ms，
+    正是本仓最爱悄悄失效的那一类。
+
+    用真的阻塞时间来判，不 grep 源码：写法可以变（线程池/协程/合并 SQL 都行），
+    "别串行"这件事不变。
+    """
+    import time
+
+    backend = store.get_backend()
+    real_index = backend.session_app_index
+    real_tags = backend.preview_sources
+    DELAY = 0.25
+
+    def slow_index():
+        time.sleep(DELAY)
+        return real_index()
+
+    def slow_tags():
+        time.sleep(DELAY)
+        return real_tags()
+
+    store.save_app_or_version(
+        _model(), goal="g", session_id="sess-timing", preview_png_b64=PNG_A
+    )
+    backend.session_app_index = slow_index  # type: ignore[method-assign]
+    backend.preview_sources = slow_tags  # type: ignore[method-assign]
+    try:
+        started = time.time()
+        covers = store.session_covers()
+        elapsed = time.time() - started
+    finally:
+        backend.session_app_index = real_index  # type: ignore[method-assign]
+        backend.preview_sources = real_tags  # type: ignore[method-assign]
+
+    assert covers["sess-timing"]["has_preview"] is True, "并发不能把结果弄丢"
+    # 串行 ≥ 2×DELAY，并发 ≈ 1×DELAY。取 1.6× 当闸，留足调度抖动。
+    assert elapsed < DELAY * 1.6, (
+        f"两条索引查询看起来是串行的：{elapsed:.2f}s ≥ {DELAY * 1.6:.2f}s"
+    )
+
+
+def test_session_covers_drains_both_futures_even_when_one_fails(configured_store):
+    """一条挂了也要把另一条的结果取走。
+
+    并发化之后新增的一种失败形状：绑定索引挂了就提前 return，另一条查询的异常
+    没人 result()，只在日志里留一行 "exception was never retrieved"——既不影响
+    功能也没人看得见，直到某天它变成真问题。
+    """
+    backend = store.get_backend()
+    real_tags = backend.preview_sources
+    seen = {"tags_called": False}
+
+    def boom_index():
+        raise RuntimeError("绑定索引挂了")
+
+    def counting_tags():
+        seen["tags_called"] = True
+        return real_tags()
+
+    backend.session_app_index = boom_index  # type: ignore[method-assign]
+    backend.preview_sources = counting_tags  # type: ignore[method-assign]
+    try:
+        assert store.session_covers() == {}
+    finally:
+        del backend.session_app_index  # type: ignore[attr-defined]
+        backend.preview_sources = real_tags  # type: ignore[method-assign]
+
+    assert seen["tags_called"], "另一条查询也该被发出去（并发），而不是被短路掉"

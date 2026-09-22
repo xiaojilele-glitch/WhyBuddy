@@ -17,7 +17,7 @@
  */
 
 import React from "react";
-import { CapsuleTabs } from "antd-mobile";
+import { Badge, CapsuleTabs } from "antd-mobile";
 
 export interface PhoneKanbanColumn {
   /** 状态值（enum option 的 id） */
@@ -53,16 +53,7 @@ export default function PhoneKanban({
             title={
               <span data-testid={`phone-kanban-tab-${c.key}`}>
                 {c.label}
-                <span
-                  style={{
-                    marginLeft: 4,
-                    fontSize: 11,
-                    opacity: 0.65,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {c.count}
-                </span>
+                <Badge content={c.count} color="primary" style={{ marginLeft: 4 }} />
               </span>
             }
           />

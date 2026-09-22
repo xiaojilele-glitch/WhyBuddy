@@ -16,6 +16,33 @@ const page = (mobile: boolean) => ({
 });
 
 describe("availableDeviceTiers", () => {
+  it("single-v1 desktop 模型即使残留历史手机布局也只开放桌面档", () => {
+    expect(
+      availableDeviceTiers({
+        identity: { preferredDevice: "desktop", deviceAuthority: "single-v1" },
+        pages: [
+          {
+            ...page(true),
+            layout: {
+              grid: {
+                phone: [{ blockRef: "page-content", x: 0, y: 0, w: 4, h: 2 }],
+              },
+            },
+          },
+        ],
+      })
+    ).toEqual(["desktop"]);
+  });
+
+  it("single-v1 phone 模型只开放手机档", () => {
+    expect(
+      availableDeviceTiers({
+        identity: { preferredDevice: "phone", deviceAuthority: "single-v1" },
+        pages: [page(true)],
+      })
+    ).toEqual(["phone"]);
+  });
+
   it("声明 phone → 只有手机档", () => {
     expect(availableDeviceTiers({ identity: { preferredDevice: "phone" }, pages: [] })).toEqual([
       "phone",
@@ -48,10 +75,19 @@ describe("availableDeviceTiers", () => {
     expect(availableDeviceTiers({ identity: {}, pages: [page(false)] })).toEqual(["desktop"]);
   });
 
-  it("tablet 按未声明处理（平板范式已下架 ADR-0001）", () => {
+    it("声明 tablet → 只有平板档", () => {
     expect(
       availableDeviceTiers({ identity: { preferredDevice: "tablet" }, pages: [page(true)] })
-    ).toEqual(["desktop", "phone"]);
+    ).toEqual(["tablet"]);
+  });
+
+  it("single-v1 tablet 模型只开放平板档", () => {
+    expect(
+      availableDeviceTiers({
+        identity: { preferredDevice: "tablet", deviceAuthority: "single-v1" },
+        pages: [page(true)],
+      })
+    ).toEqual(["tablet"]);
   });
 
   it("空 schema 不炸，退到桌面档", () => {
@@ -63,6 +99,24 @@ describe("availableDeviceTiers", () => {
   it("多页里只要有一页挂了手机设计就算有", () => {
     expect(
       availableDeviceTiers({ identity: {}, pages: [page(false), page(true), page(false)] })
+    ).toEqual(["desktop", "phone"]);
+  });
+
+  it("业务页声明 phone grid 时即使首页只有桌面设计也开放手机档", () => {
+    expect(
+      availableDeviceTiers({
+        identity: { preferredDevice: "desktop" },
+        pages: [
+          {
+            ...page(false),
+            layout: {
+              grid: {
+                phone: [{ blockRef: "page-content", x: 0, y: 0, w: 4, h: 2 }],
+              },
+            },
+          },
+        ],
+      })
     ).toEqual(["desktop", "phone"]);
   });
 });

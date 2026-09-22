@@ -12,6 +12,7 @@ reference），不跑真实 E2B 沙盒/真实 LLM——网关/沙盒都打桩，
 
 import os
 import sys
+import json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -48,12 +49,53 @@ def _valid_design_dump():
 
 def test_render_preview_screenshot_returns_none_when_e2b_unavailable(monkeypatch):
     monkeypatch.setattr(
+        "services.app_screenshot.local_screenshot_available", lambda: False
+    )
+    monkeypatch.setattr(
         "services.app_screenshot.e2b_screenshot_available", lambda: False
     )
     result = _render_preview_screenshot_b64(
         _valid_design_dump(), theme_id="azure", device="desktop", generated_theme=None
     )
     assert result is None
+
+
+def test_render_preview_attaches_the_trusted_hero_to_the_preview_token(monkeypatch):
+    stored = []
+    monkeypatch.setattr("services.app_screenshot.local_screenshot_available", lambda: True)
+    monkeypatch.setattr("services.app_screenshot.e2b_screenshot_available", lambda: False)
+    monkeypatch.setattr(
+        "services.app_screenshot.capture_freeform_preview_screenshot",
+        lambda pid: b"PNG",
+    )
+    monkeypatch.setattr(
+        "services.freeform_preview_store.put_preview",
+        lambda payload: stored.append(payload) or "preview-1",
+    )
+
+    result = _render_preview_screenshot_b64(
+        _valid_design_dump(),
+        theme_id="azure",
+        device="desktop",
+        generated_theme=None,
+        reference_image_b64="SEVSTw==",
+    )
+
+    assert result
+    assert stored[0]["_landingHeroB64"] == "SEVSTw=="
+
+
+def test_preview_media_endpoint_serves_hero_without_embedding_it_in_json():
+    from routes.sliderule_full import get_freeform_preview, get_freeform_preview_media
+    from services.freeform_preview_store import put_preview
+
+    pid = put_preview({"freeformContent": _valid_design_dump(), "_landingHeroB64": "SEVSTw=="})
+    payload_response = get_freeform_preview(pid)
+    media_response = get_freeform_preview_media(pid, "landing-hero")
+
+    assert "_landingHeroB64" not in json.loads(payload_response.body)
+    assert media_response.body == b"HERO"
+    assert media_response.media_type == "image/png"
 
 
 def test_critique_against_reference_keeps_original_when_llm_says_good(monkeypatch):

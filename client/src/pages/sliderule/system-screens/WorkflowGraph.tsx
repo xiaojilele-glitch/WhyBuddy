@@ -29,6 +29,7 @@ import {
   deriveWorkflowGraphData,
   type FiveSystemModel,
   type WfGraphNode,
+  normalizeRoles,
 } from "./five-system-model";
 import { loadRuntimeState, subscribeRuntimeChanged } from "../live-runtime/runtime-persistence";
 import { useContainerSized } from "./use-sized";
@@ -286,7 +287,12 @@ export function WorkflowGraph({
   className?: string;
 }) {
   const data = React.useMemo(() => deriveWorkflowGraphData(model), [model]);
-  const roles = React.useMemo(() => model.rbac?.roles ?? [], [model.rbac?.roles]);
+  // roleColor 按**引用键**在列表里的下标取色，必须传 id，不能传显示名——
+  // 传混了同一个角色在不同屏会拿到不同颜色。
+  const roles = React.useMemo(
+    () => normalizeRoles(model).map(r => r.id),
+    [model]
+  );
 
   // 「试运行」推进实例 → runtime-changed 事件 → 重算各节点停留实例数
   const [runtimeVersion, setRuntimeVersion] = React.useState(0);

@@ -6,7 +6,7 @@ import {
 } from "../persistence/config.js";
 
 describe("persistence config", () => {
-  it("reads MySQL, session, Redis, and queue Redis settings with safe defaults", () => {
+  it("reads MySQL, Redis, and queue Redis settings with safe defaults", () => {
     const config = readPersistenceConfig({
       DATABASE_PROVIDER: "mysql",
       DB_HOST: "db.local",
@@ -15,9 +15,6 @@ describe("persistence config", () => {
       DB_USER: "cube_user",
       DB_PASSWORD: "db-secret",
       DB_POOL_CONNECTION_LIMIT: "12",
-      SESSION_SECRET: "session-secret",
-      SESSION_COOKIE_NAME: "cube_session",
-      SESSION_TTL_DAYS: "45",
       REDIS_HOST: "redis.local",
       REDIS_PORT: "6380",
       REDIS_PASSWORD: "redis-secret",
@@ -34,8 +31,6 @@ describe("persistence config", () => {
     expect(config.database.mysql.port).toBe(3307);
     expect(config.database.mysql.database).toBe("sliderule");
     expect(config.database.mysql.pool.connectionLimit).toBe(12);
-    expect(config.session.cookieName).toBe("cube_session");
-    expect(config.session.ttlDays).toBe(45);
     expect(config.redis.enabled).toBe(false);
     expect(config.redis.keyPrefix).toBe("cube:pets:office:");
     expect(config.queueRedis.enabled).toBe(true);
@@ -43,10 +38,11 @@ describe("persistence config", () => {
     expect(config.queueRedis.db).toBe(3);
   });
 
-  it("redacts passwords and session secrets from loggable config", () => {
+  // 会话配置（SESSION_SECRET / COOKIE_NAME / TTL）随旧账号体系一起删了：
+  // 新的登录令牌由 Python 用 SLIDERULE_AUTH_SECRET 签，不经过这里。
+  it("redacts passwords from loggable config", () => {
     const config = readPersistenceConfig({
       DB_PASSWORD: "db-secret",
-      SESSION_SECRET: "session-secret",
       REDIS_PASSWORD: "redis-secret",
       QUEUE_REDIS_PASSWORD: "queue-secret",
     });
@@ -55,10 +51,8 @@ describe("persistence config", () => {
     const serialized = JSON.stringify(redacted);
 
     expect(serialized).not.toContain("db-secret");
-    expect(serialized).not.toContain("session-secret");
     expect(serialized).not.toContain("redis-secret");
     expect(serialized).not.toContain("queue-secret");
     expect(redacted.database.mysql.password).toBe("[redacted]");
-    expect(redacted.session.secret).toBe("[redacted]");
   });
 });

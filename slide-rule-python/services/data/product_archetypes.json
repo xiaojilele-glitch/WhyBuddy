@@ -1,0 +1,260 @@
+{
+  "$comment": "产品原型账本——「什么算闭环」的单一真相源（2026-08-30）。此前六系统（datamodel/rbac/workflow/page/aigc/appbundle）写死成全局常量，跨两门语言手抄 10 处，等于把『后台管理系统的闭环定义』当成了全局真理。后果不是难看，是结构性封顶：小游戏没有 datamodel/rbac/workflow，按旧闸永远不可能 gate_passed=true——不是生成得不好，是不允许它存在。同一套路参考 five_system_legal.json（E40.1 四本账收一本）。加原型 = 只改这份 JSON；哪一方没消费到，parity 判据当场红。",
+  "version": 1,
+  "$comment_default": "defaultArchetype 是没有显式声明时的兜底。它必须是 wired=true 的，判据 test_默认原型必须是接通的 钉住——否则今天的产品链路会整条 fail-closed。",
+  "defaultArchetype": "business_app",
+  "$comment_wired": "wired=false 表示『契约声明了，但生成侧还产不出这些段』。这类原型**不许被选中**，选中即 fail-closed 并说清原因（第七条：闭环类缺证据就是缺，不许伪造绿灯）。它们留在这里是为了让下一个人知道靶子在哪，不是为了让人以为已经能用了——本仓踩过太多次『写好了、有测试、就是没人调它』。",
+  "archetypes": {
+    "business_app": {
+      "label": "业务 / 后台应用",
+      "wired": true,
+      "$comment": "今天唯一在跑的原型。requiredEvidence 与 closureEdges 逐字等于 2026-08-29 之前写死在 v5_capability_executor 里的那两个常量——这次改造对它必须是零行为变化，由 test_默认原型与历史常量逐字一致 钉住。",
+      "$comment_policy": "政策包抄 Anthropic SKILL.md / Grok Skills 的 frontmatter：name、description、whenToUse、allowedTools。按 原型×设备 加载，不是 TRAE skill_runtime（那条插座流式 driver 不调，禁止接成控制面）。PC / 手机今天同一套公开工具。",
+      "policy": {
+        "name": "business-app",
+        "description": "业务 / 后台应用的推演政策。有数据表、角色、审批流、页面。",
+        "whenToUse": "坐着、长时段、多列对照、批量操作、审批与配置；或同一套业务在手机上现场办理。",
+        "allowedTools": ["spec", "pages", "structure", "bind", "closure"],
+        "devices": {
+          "desktop": { "density": "comfortable" },
+          "phone": { "density": "compact" },
+          "tablet": { "density": "comfortable" }
+        }
+      },
+      "requiredEvidence": [
+        "datamodel",
+        "rbac",
+        "workflow",
+        "page",
+        "aigc",
+        "appbundle"
+      ],
+      "closureEdges": [
+        {
+          "sourceSkill": "datamodel",
+          "targetSkill": "rbac",
+          "state": "allowed",
+          "evidenceKey": "DM_RBAC_FIELD_POLICY_EVIDENCE"
+        },
+        {
+          "sourceSkill": "datamodel",
+          "targetSkill": "page",
+          "state": "allowed",
+          "evidenceKey": "DM_PAGE_BINDING_IMPACT_EVIDENCE"
+        },
+        {
+          "sourceSkill": "rbac",
+          "targetSkill": "workflow",
+          "state": "allowed",
+          "evidenceKey": "RBAC_WORKFLOW_ASSIGNEE_EVIDENCE"
+        },
+        {
+          "sourceSkill": "workflow",
+          "targetSkill": "page",
+          "state": "allowed",
+          "evidenceKey": "WORKFLOW_PAGE_TASK_SURFACE_EVIDENCE"
+        },
+        {
+          "sourceSkill": "page",
+          "targetSkill": "appbundle",
+          "state": "allowed",
+          "evidenceKey": "PAGE_APPBUNDLE_RUNTIME_SURFACE_EVIDENCE"
+        },
+        {
+          "sourceSkill": "aigc",
+          "targetSkill": "appbundle",
+          "state": "allowed",
+          "evidenceKey": "AIGC_APPBUNDLE_RUNTIME_EVIDENCE"
+        }
+      ]
+    },
+    "content_app": {
+      "label": "消费 / 内容应用",
+      "wired": true,
+      "$comment": "2026-08-31 接通。团子的一天 / 杂志 / 天气是 C 端封面：没有 aside、图是一等公民。闭环不问角色权限和审批流——问的是有没有能看的页面、能不能打成应用包。生成侧必须换壳（header 横栏 + main），不许把后台 aside 皮套在内容产品上。选择通道仍是范围卡 productArchetype，不许按话题词分流。",
+      "shell": "content",
+      "policy": {
+        "name": "content-app",
+        "description": "消费 / 内容应用的推演政策。封面、图流、杂志、天气一瞥。图是一等公民，没有后台侧栏。",
+        "whenToUse": "给人看、刷、读：封面、图流、杂志、天气、一日记。坐工位办事的后台不要选这个。",
+        "allowedTools": ["spec", "pages", "structure", "bind", "closure"],
+        "devices": {
+          "desktop": { "density": "comfortable" },
+          "phone": { "density": "compact" },
+          "tablet": { "density": "comfortable" }
+        }
+      },
+      "requiredEvidence": [
+        "page",
+        "appbundle"
+      ],
+      "closureEdges": [
+        {
+          "sourceSkill": "page",
+          "targetSkill": "appbundle",
+          "state": "allowed",
+          "evidenceKey": "PAGE_APPBUNDLE_RUNTIME_SURFACE_EVIDENCE"
+        }
+      ]
+    },
+    "free_app": {
+      "label": "自由类型",
+      "wired": true,
+      "$comment": "2026-08-31 接通。用户圈了空态 Web/应用/平板 下拉要加一档——那是设备轴，自由类型是原型轴，两轴混一颗发送会分不清（composer-device 2026-08-30 已裁过）。空态作曲家原型下拉 + 范围卡都能选。不套后台中台，也不套杂志封面/图流四页；按这一页的活儿自己定。壳与 content 相同（header 横栏、剥 aside），SPEC/密度/绑洞分叉：图流货架至少留 4 张示例图。闭环只要页面和应用包。选择通道仍是 productArchetype，不许按话题词分流。",
+      "shell": "content",
+      "policy": {
+        "name": "free-app",
+        "description": "自由类型的推演政策。不套后台中台，也不套杂志四页。按这一页的活儿自己定版式。",
+        "whenToUse": "不确定是后台还是内容、或一页一种活：有的页是图流，有的页是表单。不要为了选原型硬套。",
+        "allowedTools": ["spec", "pages", "structure", "bind", "closure"],
+        "devices": {
+          "desktop": { "density": "comfortable" },
+          "phone": { "density": "compact" },
+          "tablet": { "density": "comfortable" }
+        }
+      },
+      "requiredEvidence": [
+        "page",
+        "appbundle"
+      ],
+      "closureEdges": [
+        {
+          "sourceSkill": "page",
+          "targetSkill": "appbundle",
+          "state": "allowed",
+          "evidenceKey": "PAGE_APPBUNDLE_RUNTIME_SURFACE_EVIDENCE"
+        }
+      ]
+    },
+    "casual_game": {
+      "label": "小游戏 / 互动玩法",
+      "wired": false,
+      "$comment": "⚠ 契约先立，生成侧未接。小游戏没有实体表、没有角色权限、没有审批流——六系统那套一样也套不上，硬套的结果是三个空段顶着『已闭环』。这里的闭环判据换成玩法自己的：有没有主循环、输入响应、胜负/结束条件、渲染面。**闸一条都没放松**，只是换了该问的问题。接通它要做的事：生成侧产出这五段 _model_section + 结构闸认识这些段。",
+      "policy": {
+        "name": "casual-game",
+        "description": "小游戏 / 互动玩法的推演政策。闭环问主循环、输入、胜负，不套后台六系统。",
+        "whenToUse": "闯关、分数、操作反馈；生成侧未接，选中即 fail-closed。",
+        "allowedTools": ["spec", "pages", "closure"]
+      },
+      "requiredEvidence": [
+        "gameloop",
+        "input",
+        "outcome",
+        "render",
+        "appbundle"
+      ],
+      "closureEdges": [
+        {
+          "sourceSkill": "gameloop",
+          "targetSkill": "outcome",
+          "state": "allowed",
+          "evidenceKey": "LOOP_OUTCOME_TERMINATION_EVIDENCE"
+        },
+        {
+          "sourceSkill": "input",
+          "targetSkill": "gameloop",
+          "state": "allowed",
+          "evidenceKey": "INPUT_LOOP_RESPONSE_EVIDENCE"
+        },
+        {
+          "sourceSkill": "gameloop",
+          "targetSkill": "render",
+          "state": "allowed",
+          "evidenceKey": "LOOP_RENDER_FRAME_EVIDENCE"
+        },
+        {
+          "sourceSkill": "render",
+          "targetSkill": "appbundle",
+          "state": "allowed",
+          "evidenceKey": "RENDER_APPBUNDLE_SURFACE_EVIDENCE"
+        }
+      ]
+    },
+    "glance_app": {
+      "label": "手表 / 一瞥式应用",
+      "wired": false,
+      "$comment": "⚠ 契约先立，生成侧未接。手表表盘的闭环不是『页面之间关联对不对』，是『一瞥能不能读完』：数据源、瞥读面、复杂功能位（complication）。页面导航壳在这里是负资产——glance 面不该有面包屑。接通它要做的事同上。",
+      "policy": {
+        "name": "glance-app",
+        "description": "手表 / 一瞥式应用的推演政策。闭环问数据源、瞥读面、复杂功能位。",
+        "whenToUse": "抬腕两秒读完、几乎不输入；生成侧未接，选中即 fail-closed。",
+        "allowedTools": ["spec", "pages", "closure"]
+      },
+      "requiredEvidence": [
+        "datasource",
+        "glance",
+        "complication",
+        "appbundle"
+      ],
+      "closureEdges": [
+        {
+          "sourceSkill": "datasource",
+          "targetSkill": "glance",
+          "state": "allowed",
+          "evidenceKey": "SOURCE_GLANCE_FRESHNESS_EVIDENCE"
+        },
+        {
+          "sourceSkill": "datasource",
+          "targetSkill": "complication",
+          "state": "allowed",
+          "evidenceKey": "SOURCE_COMPLICATION_BINDING_EVIDENCE"
+        },
+        {
+          "sourceSkill": "glance",
+          "targetSkill": "appbundle",
+          "state": "allowed",
+          "evidenceKey": "GLANCE_APPBUNDLE_SURFACE_EVIDENCE"
+        }
+      ]
+    }
+  },
+  "$comment_devices": "设备形态账本。此前手抄三处、形态各异：v5_model_gate 的 supported_devices（闸的合法域）、intake_judge 的 _VALID_DEVICES（判定输出域，多一个 unspecified 哨兵）、_DEVICE_RUBRIC（提示词里的姿态描述）。加一个 watch 要找齐三处，漏一处 = 生成出来了但闸不认，静默失效（第四条）。posture 是喂给判定 LLM 的中文姿态；postureEn 是生成契约（英文）里的同一条——加设备只改这份 JSON，两侧提示词自动跟上。⚠ rubric 里那五行「容易判错的例子」是**标定过的**，不由账本生成，手写保留在 intake_judge。⚠ 2026-08-30：device_policy / page_reconstruction / intake_judge 的 Literal[\"desktop\",\"phone\"] 已删。合法域只许从本账本派生，不许再手抄一份枚举。",
+  "deviceForms": {
+    "$order": [
+      "phone",
+      "desktop",
+      "tablet"
+    ],
+    "$comment_order": "⚠ 提示词里的条目顺序。phone/desktop 两档顺序是标定过的，只许往后面追加接通的档。改已有顺序 = 改提示词 = 可能改判定结果。",
+    "judgeSentinel": "unspecified",
+    "$comment_sentinel": "判定专用哨兵：『没有姿态信号』。它不是设备，所以不在 forms 里，闸也不接受它。",
+    "sentinelPosture": "**没有姿态信号就必须选这个**。别硬猜。",
+    "forms": {
+      "phone": {
+        "label": "手机",
+        "wired": true,
+        "historicAccepted": true,
+        "viewportCss": { "w": 390, "h": 844 },
+        "posture": "站着、走动、单手、在现场、即时上报：扫码/拍照/打卡/签字/随手记一笔，或者使用者是个人在日常生活里用（记账、日程、情绪、预约、下单）。",
+        "postureEn": "standing, walking, one-handed, on-site, reporting in the moment: scanning, photographing, clocking in, signing, jotting a quick record; or an individual using it in daily life."
+      },
+      "desktop": {
+        "label": "桌面 / PC",
+        "wired": true,
+        "historicAccepted": true,
+        "viewportCss": { "w": 1920, "h": 1080 },
+        "posture": "坐着、长时段、多列对照、批量操作、审批与配置：看板/中台/后台/分析/汇总/对账/排产/关系图/权限分级，使用者是在工位上处理一批事的人。",
+        "postureEn": "seated, long sessions, multi-column comparison, batch operations, approvals and configuration: dashboards, back-office, analysis, reconciliation, scheduling, permission matrices."
+      },
+      "tablet": {
+        "label": "平板",
+        "wired": true,
+        "historicAccepted": true,
+        "posture": "手持或支起、单手点按为主但视野接近桌面：现场演示、点单、查房、巡店，坐站切换。",
+        "postureEn": "held or propped, mostly one-handed taps but a near-desktop field of view: on-site demo, ordering, ward rounds, store inspection; sit/stand switching.",
+        "viewportCss": { "w": 1112, "h": 834 },
+        "$comment": "2026-08-30 接通授予；2026-08-30 夜才接通编译配方。视口 1112×834 对照 iPad Air 横屏 CSS 像素，侧栏对照 ant-design Layout.Sider 默认 200px（w-52），不是桌面 w-64 / 1920×1080。加设备只改账本 + 版式。"
+      },
+      "watch": {
+        "label": "手表 / 一瞥式",
+        "wired": false,
+        "historicAccepted": false,
+        "posture": "抬腕两秒读完、几乎不输入：只看一个数、一个状态、一条提醒。",
+        "postureEn": "wrist-up two-second glance, almost no input: one number, one status, one alert.",
+        "$comment": "⚠ 契约先立，生成侧未接。它必须配 glance_app 原型一起接——页面导航壳在手表上是负资产。historicAccepted=false：宽容闸也不认，手表从未进过生成契约。"
+      }
+    },
+    "defaultDevice": "desktop",
+    "$comment_default": "⚠ 判不出姿态时的兜底档。散落在 device_policy 与 v5_parallel_generate 两处过，一并收进来。"
+  }
+}

@@ -1,0 +1,1927 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ManifestFile": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "title": "Sizebytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "sizeBytes"
+      ],
+      "title": "ManifestFile",
+      "type": "object"
+    },
+    "PreviewDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "project",
+          "default": "project",
+          "title": "Kind",
+          "type": "string"
+        },
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "runtimeId": {
+          "title": "Runtimeid",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "provisioning",
+            "syncing",
+            "installing",
+            "executing",
+            "starting",
+            "ready",
+            "stopping",
+            "stopped",
+            "expired",
+            "failed",
+            "reconciling"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "entryUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entryurl"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expiresat"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "projectId",
+        "runtimeId",
+        "revision",
+        "status"
+      ],
+      "title": "PreviewDescriptor",
+      "type": "object"
+    },
+    "Project": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "sessionId": {
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "ownerId": {
+          "title": "Ownerid",
+          "type": "string"
+        },
+        "runtimeKind": {
+          "const": "project",
+          "default": "project",
+          "title": "Runtimekind",
+          "type": "string"
+        },
+        "currentRevision": {
+          "title": "Currentrevision",
+          "type": "string"
+        },
+        "createdAt": {
+          "title": "Createdat",
+          "type": "string"
+        },
+        "updatedAt": {
+          "title": "Updatedat",
+          "type": "string"
+        },
+        "revisionCount": {
+          "default": 1,
+          "title": "Revisioncount",
+          "type": "integer"
+        },
+        "sourceBytesStored": {
+          "default": 0,
+          "title": "Sourcebytesstored",
+          "type": "integer"
+        },
+        "sourceProjectId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sourceprojectid"
+        },
+        "sourceRevision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sourcerevision"
+        }
+      },
+      "required": [
+        "projectId",
+        "sessionId",
+        "ownerId",
+        "currentRevision",
+        "createdAt",
+        "updatedAt"
+      ],
+      "title": "Project",
+      "type": "object"
+    },
+    "ProjectAcceptanceProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "title": "Profileid",
+          "type": "string"
+        },
+        "suiteVersion": {
+          "title": "Suiteversion",
+          "type": "string"
+        },
+        "requirements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requirements",
+          "type": "array"
+        },
+        "outsideScope": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Outsidescope",
+          "type": "array"
+        },
+        "dataRecovery": {
+          "title": "Datarecovery",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId",
+        "suiteVersion",
+        "requirements",
+        "outsideScope",
+        "dataRecovery"
+      ],
+      "title": "ProjectAcceptanceProfile",
+      "type": "object"
+    },
+    "ProjectDataBackup": {
+      "additionalProperties": false,
+      "properties": {
+        "backupId": {
+          "title": "Backupid",
+          "type": "string"
+        },
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "integer"
+        },
+        "parentBackupId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parentbackupid"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "sourceRevision": {
+          "title": "Sourcerevision",
+          "type": "string"
+        },
+        "dataSchemaVersion": {
+          "const": 1,
+          "title": "Dataschemaversion",
+          "type": "integer"
+        },
+        "createdAt": {
+          "title": "Createdat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "backupId",
+        "projectId",
+        "version",
+        "parentBackupId",
+        "sha256",
+        "sizeBytes",
+        "sourceRevision",
+        "dataSchemaVersion",
+        "createdAt"
+      ],
+      "title": "ProjectDataBackup",
+      "type": "object"
+    },
+    "ProjectDataRestoreResult": {
+      "additionalProperties": false,
+      "properties": {
+        "backup": {
+          "$ref": "#/$defs/ProjectDataBackup"
+        }
+      },
+      "required": [
+        "backup"
+      ],
+      "title": "ProjectDataRestoreResult",
+      "type": "object"
+    },
+    "ProjectDataSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "backup": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectDataBackup"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backups": {
+          "items": {
+            "$ref": "#/$defs/ProjectDataBackup"
+          },
+          "title": "Backups",
+          "type": "array"
+        },
+        "checkpointIntervalSeconds": {
+          "title": "Checkpointintervalseconds",
+          "type": "integer"
+        },
+        "recoveryPolicy": {
+          "const": "last-checkpoint",
+          "title": "Recoverypolicy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "backup",
+        "backups",
+        "checkpointIntervalSeconds",
+        "recoveryPolicy"
+      ],
+      "title": "ProjectDataSnapshot",
+      "type": "object"
+    },
+    "ProjectDeliveryStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "eligible": {
+          "title": "Eligible",
+          "type": "boolean"
+        },
+        "profile": {
+          "$ref": "#/$defs/ProjectAcceptanceProfile"
+        },
+        "blockedReasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blockedreasons",
+          "type": "array"
+        },
+        "verificationId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Verificationid"
+        },
+        "releases": {
+          "items": {
+            "$ref": "#/$defs/ProjectRelease"
+          },
+          "title": "Releases",
+          "type": "array"
+        },
+        "deployment": {
+          "$ref": "#/$defs/ProjectDeploymentStatus"
+        }
+      },
+      "required": [
+        "projectId",
+        "revision",
+        "eligible",
+        "profile",
+        "blockedReasons",
+        "verificationId",
+        "releases",
+        "deployment"
+      ],
+      "title": "ProjectDeliveryStatus",
+      "type": "object"
+    },
+    "ProjectDeploymentStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "not_configured",
+          "default": "not_configured",
+          "title": "Status",
+          "type": "string"
+        },
+        "publicUrl": {
+          "default": null,
+          "title": "Publicurl",
+          "type": "null"
+        }
+      },
+      "title": "ProjectDeploymentStatus",
+      "type": "object"
+    },
+    "ProjectForkResult": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "sessionId": {
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId",
+        "sessionId",
+        "revision"
+      ],
+      "title": "ProjectForkResult",
+      "type": "object"
+    },
+    "ProjectManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "default": 1,
+          "title": "Schemaversion",
+          "type": "integer"
+        },
+        "treeHash": {
+          "title": "Treehash",
+          "type": "string"
+        },
+        "totalBytes": {
+          "title": "Totalbytes",
+          "type": "integer"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/ManifestFile"
+          },
+          "title": "Files",
+          "type": "array"
+        }
+      },
+      "required": [
+        "treeHash",
+        "totalBytes",
+        "files"
+      ],
+      "title": "ProjectManifest",
+      "type": "object"
+    },
+    "ProjectOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "title": "Operationid",
+          "type": "string"
+        },
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "sessionId": {
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "title": "Idempotencykey",
+          "type": "string"
+        },
+        "requestHash": {
+          "title": "Requesthash",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "title": "Expectedrevision",
+          "type": "string"
+        },
+        "approvalRef": {
+          "title": "Approvalref",
+          "type": "string"
+        },
+        "status": {
+          "default": "queued",
+          "enum": [
+            "queued",
+            "running",
+            "waiting_user",
+            "completed",
+            "failed",
+            "cancelling",
+            "cancelled",
+            "interrupted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "input": {
+          "additionalProperties": true,
+          "title": "Input",
+          "type": "object"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        },
+        "leaseGeneration": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Leasegeneration"
+        },
+        "leaseOwner": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Leaseowner"
+        },
+        "cancelRequested": {
+          "default": false,
+          "title": "Cancelrequested",
+          "type": "boolean"
+        },
+        "lastAccessAt": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lastaccessat"
+        },
+        "runtime": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeInstance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stateVersion": {
+          "default": 0,
+          "title": "Stateversion",
+          "type": "integer"
+        },
+        "pendingEvent": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pendingevent"
+        },
+        "createdAt": {
+          "title": "Createdat",
+          "type": "string"
+        },
+        "updatedAt": {
+          "title": "Updatedat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "projectId",
+        "sessionId",
+        "kind",
+        "idempotencyKey",
+        "requestHash",
+        "expectedRevision",
+        "approvalRef",
+        "createdAt",
+        "updatedAt"
+      ],
+      "title": "ProjectOperation",
+      "type": "object"
+    },
+    "ProjectOperationSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "$ref": "#/$defs/ProjectOperationView"
+        },
+        "runtime": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastSeq": {
+          "title": "Lastseq",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "operation",
+        "runtime",
+        "lastSeq"
+      ],
+      "title": "ProjectOperationSnapshot",
+      "type": "object"
+    },
+    "ProjectOperationView": {
+      "additionalProperties": false,
+      "description": "Public operation fields; lease, dispatch and outbox data stay private.",
+      "properties": {
+        "operationId": {
+          "title": "Operationid",
+          "type": "string"
+        },
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "sessionId": {
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "expectedRevision": {
+          "title": "Expectedrevision",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "running",
+            "waiting_user",
+            "completed",
+            "failed",
+            "cancelling",
+            "cancelled",
+            "interrupted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "cancelRequested": {
+          "title": "Cancelrequested",
+          "type": "boolean"
+        },
+        "lastAccessAt": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lastaccessat"
+        },
+        "stateVersion": {
+          "title": "Stateversion",
+          "type": "integer"
+        },
+        "createdAt": {
+          "title": "Createdat",
+          "type": "string"
+        },
+        "updatedAt": {
+          "title": "Updatedat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "projectId",
+        "sessionId",
+        "kind",
+        "expectedRevision",
+        "status",
+        "cancelRequested",
+        "lastAccessAt",
+        "stateVersion",
+        "createdAt",
+        "updatedAt"
+      ],
+      "title": "ProjectOperationView",
+      "type": "object"
+    },
+    "ProjectRelease": {
+      "additionalProperties": false,
+      "properties": {
+        "releaseId": {
+          "title": "Releaseid",
+          "type": "string"
+        },
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "verificationId": {
+          "title": "Verificationid",
+          "type": "string"
+        },
+        "profileId": {
+          "title": "Profileid",
+          "type": "string"
+        },
+        "planRef": {
+          "title": "Planref",
+          "type": "string"
+        },
+        "treeHash": {
+          "title": "Treehash",
+          "type": "string"
+        },
+        "lockfileHash": {
+          "title": "Lockfilehash",
+          "type": "string"
+        },
+        "buildHash": {
+          "title": "Buildhash",
+          "type": "string"
+        },
+        "createdAt": {
+          "title": "Createdat",
+          "type": "string"
+        },
+        "downloadPath": {
+          "title": "Downloadpath",
+          "type": "string"
+        },
+        "deployed": {
+          "const": false,
+          "default": false,
+          "title": "Deployed",
+          "type": "boolean"
+        },
+        "effectiveStatus": {
+          "anyOf": [
+            {
+              "enum": [
+                "ready",
+                "stale"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effectivestatus"
+        }
+      },
+      "required": [
+        "releaseId",
+        "projectId",
+        "revision",
+        "verificationId",
+        "profileId",
+        "planRef",
+        "treeHash",
+        "lockfileHash",
+        "buildHash",
+        "createdAt",
+        "downloadPath"
+      ],
+      "title": "ProjectRelease",
+      "type": "object"
+    },
+    "ProjectReleaseResult": {
+      "additionalProperties": false,
+      "properties": {
+        "release": {
+          "$ref": "#/$defs/ProjectRelease"
+        }
+      },
+      "required": [
+        "release"
+      ],
+      "title": "ProjectReleaseResult",
+      "type": "object"
+    },
+    "ProjectRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "parentRevision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parentrevision"
+        },
+        "treeHash": {
+          "title": "Treehash",
+          "type": "string"
+        },
+        "manifest": {
+          "$ref": "#/$defs/ProjectManifest"
+        },
+        "templateVersion": {
+          "title": "Templateversion",
+          "type": "string"
+        },
+        "planRef": {
+          "title": "Planref",
+          "type": "string"
+        },
+        "specRevision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Specrevision"
+        },
+        "createdAt": {
+          "title": "Createdat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision",
+        "projectId",
+        "treeHash",
+        "manifest",
+        "templateVersion",
+        "planRef",
+        "createdAt"
+      ],
+      "title": "ProjectRevision",
+      "type": "object"
+    },
+    "ProjectRevisionPage": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "currentRevision": {
+          "title": "Currentrevision",
+          "type": "string"
+        },
+        "revisions": {
+          "items": {
+            "$ref": "#/$defs/ProjectRevisionSummary"
+          },
+          "title": "Revisions",
+          "type": "array"
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Nextcursor"
+        }
+      },
+      "required": [
+        "projectId",
+        "currentRevision",
+        "revisions",
+        "nextCursor"
+      ],
+      "title": "ProjectRevisionPage",
+      "type": "object"
+    },
+    "ProjectRevisionSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "parentRevision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parentrevision"
+        },
+        "treeHash": {
+          "title": "Treehash",
+          "type": "string"
+        },
+        "templateVersion": {
+          "title": "Templateversion",
+          "type": "string"
+        },
+        "createdAt": {
+          "title": "Createdat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision",
+        "treeHash",
+        "templateVersion",
+        "createdAt"
+      ],
+      "title": "ProjectRevisionSummary",
+      "type": "object"
+    },
+    "ProjectSourceCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Revision"
+        },
+        "operationId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Operationid"
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "running",
+            "waiting_user",
+            "completed",
+            "failed",
+            "cancelling",
+            "cancelled",
+            "interrupted"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId",
+        "revision",
+        "operationId",
+        "status"
+      ],
+      "title": "ProjectSourceCommand",
+      "type": "object"
+    },
+    "ProjectSourceFile": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId",
+        "revision",
+        "path",
+        "sha256",
+        "content"
+      ],
+      "title": "ProjectSourceFile",
+      "type": "object"
+    },
+    "ProjectSourceIndex": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "currentRevision": {
+          "title": "Currentrevision",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/ManifestFile"
+          },
+          "title": "Files",
+          "type": "array"
+        }
+      },
+      "required": [
+        "projectId",
+        "revision",
+        "currentRevision",
+        "files"
+      ],
+      "title": "ProjectSourceIndex",
+      "type": "object"
+    },
+    "RuntimeEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "default": 1,
+          "title": "Schemaversion",
+          "type": "integer"
+        },
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "sessionId": {
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "operationId": {
+          "title": "Operationid",
+          "type": "string"
+        },
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "timestamp": {
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        }
+      },
+      "required": [
+        "eventId",
+        "sessionId",
+        "projectId",
+        "operationId",
+        "seq",
+        "type",
+        "timestamp"
+      ],
+      "title": "RuntimeEvent",
+      "type": "object"
+    },
+    "RuntimeEventPage": {
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/RuntimeEventView"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "nextSeq": {
+          "title": "Nextseq",
+          "type": "integer"
+        },
+        "hasMore": {
+          "title": "Hasmore",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "events",
+        "nextSeq",
+        "hasMore"
+      ],
+      "title": "RuntimeEventPage",
+      "type": "object"
+    },
+    "RuntimeEventView": {
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "title": "Schemaversion",
+          "type": "integer"
+        },
+        "sessionId": {
+          "title": "Sessionid",
+          "type": "string"
+        },
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "operationId": {
+          "title": "Operationid",
+          "type": "string"
+        },
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "timestamp": {
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sessionId",
+        "projectId",
+        "operationId",
+        "seq",
+        "type",
+        "timestamp",
+        "payload"
+      ],
+      "title": "RuntimeEventView",
+      "type": "object"
+    },
+    "RuntimeInstance": {
+      "additionalProperties": false,
+      "properties": {
+        "runtimeId": {
+          "title": "Runtimeid",
+          "type": "string"
+        },
+        "workspaceId": {
+          "title": "Workspaceid",
+          "type": "string"
+        },
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "provisioning",
+            "syncing",
+            "installing",
+            "executing",
+            "starting",
+            "ready",
+            "stopping",
+            "stopped",
+            "expired",
+            "failed",
+            "reconciling"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "port": {
+          "title": "Port",
+          "type": "integer"
+        },
+        "previewUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Previewurl"
+        },
+        "processId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Processid"
+        },
+        "health": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Health"
+        },
+        "lastHeartbeat": {
+          "title": "Lastheartbeat",
+          "type": "string"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expiresat"
+        },
+        "errorCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Errorcode"
+        }
+      },
+      "required": [
+        "runtimeId",
+        "workspaceId",
+        "projectId",
+        "revision",
+        "status",
+        "port",
+        "lastHeartbeat"
+      ],
+      "title": "RuntimeInstance",
+      "type": "object"
+    },
+    "RuntimeView": {
+      "additionalProperties": false,
+      "properties": {
+        "runtimeId": {
+          "title": "Runtimeid",
+          "type": "string"
+        },
+        "workspaceId": {
+          "title": "Workspaceid",
+          "type": "string"
+        },
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "provisioning",
+            "syncing",
+            "installing",
+            "executing",
+            "starting",
+            "ready",
+            "stopping",
+            "stopped",
+            "expired",
+            "failed",
+            "reconciling"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "port": {
+          "title": "Port",
+          "type": "integer"
+        },
+        "health": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Health"
+        },
+        "lastHeartbeat": {
+          "title": "Lastheartbeat",
+          "type": "string"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expiresat"
+        },
+        "errorCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Errorcode"
+        }
+      },
+      "required": [
+        "runtimeId",
+        "workspaceId",
+        "projectId",
+        "revision",
+        "status",
+        "port",
+        "health",
+        "lastHeartbeat",
+        "expiresAt",
+        "errorCode"
+      ],
+      "title": "RuntimeView",
+      "type": "object"
+    },
+    "VerificationArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifactId": {
+          "title": "Artifactid",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "mediaType": {
+          "const": "image/png",
+          "default": "image/png",
+          "title": "Mediatype",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifactId",
+        "sha256",
+        "sizeBytes",
+        "label"
+      ],
+      "title": "VerificationArtifactRef",
+      "type": "object"
+    },
+    "VerificationAssertion": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "not_run"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "expected": {
+          "anyOf": [
+            {
+              "maxLength": 1200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected"
+        },
+        "actual": {
+          "anyOf": [
+            {
+              "maxLength": 1200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "enum": [
+                "timeout",
+                "assertion",
+                "error"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        }
+      },
+      "required": [
+        "id",
+        "status"
+      ],
+      "title": "VerificationAssertion",
+      "type": "object"
+    },
+    "VerificationBuildEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "production",
+          "default": "production",
+          "title": "Kind",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "treeHash": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Treehash",
+          "type": "string"
+        },
+        "lockfileHash": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Lockfilehash",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "blocked",
+            "cancelled"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "installExitCode": {
+          "anyOf": [
+            {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Installexitcode"
+        },
+        "buildExitCode": {
+          "anyOf": [
+            {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Buildexitcode"
+        },
+        "outputHash": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outputhash"
+        },
+        "outputFileCount": {
+          "default": 0,
+          "maximum": 5000,
+          "minimum": 0,
+          "title": "Outputfilecount",
+          "type": "integer"
+        },
+        "outputBytes": {
+          "default": 0,
+          "maximum": 104857600,
+          "minimum": 0,
+          "title": "Outputbytes",
+          "type": "integer"
+        },
+        "serverKind": {
+          "enum": [
+            "static-dist",
+            "tasks-node"
+          ],
+          "title": "Serverkind",
+          "type": "string"
+        },
+        "startedAt": {
+          "title": "Startedat",
+          "type": "string"
+        },
+        "completedAt": {
+          "title": "Completedat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision",
+        "treeHash",
+        "lockfileHash",
+        "status",
+        "serverKind",
+        "startedAt",
+        "completedAt"
+      ],
+      "title": "VerificationBuildEvidence",
+      "type": "object"
+    },
+    "VerificationRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "verificationId": {
+          "title": "Verificationid",
+          "type": "string"
+        },
+        "operationId": {
+          "title": "Operationid",
+          "type": "string"
+        },
+        "runtimeOperationId": {
+          "title": "Runtimeoperationid",
+          "type": "string"
+        },
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "treeHash": {
+          "title": "Treehash",
+          "type": "string"
+        },
+        "runtimeId": {
+          "title": "Runtimeid",
+          "type": "string"
+        },
+        "specRevision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Specrevision"
+        },
+        "planRef": {
+          "title": "Planref",
+          "type": "string"
+        },
+        "suiteVersion": {
+          "title": "Suiteversion",
+          "type": "string"
+        },
+        "acceptanceRequirements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Acceptancerequirements",
+          "type": "array"
+        },
+        "runnerVersion": {
+          "default": "whybuddy-browser-v1:pw1.61.1",
+          "title": "Runnerversion",
+          "type": "string"
+        },
+        "status": {
+          "default": "running",
+          "enum": [
+            "running",
+            "passed",
+            "failed",
+            "blocked",
+            "cancelled"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "assertions": {
+          "items": {
+            "$ref": "#/$defs/VerificationAssertion"
+          },
+          "title": "Assertions",
+          "type": "array"
+        },
+        "build": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VerificationBuildEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "artifactRefs": {
+          "items": {
+            "$ref": "#/$defs/VerificationArtifactRef"
+          },
+          "title": "Artifactrefs",
+          "type": "array"
+        },
+        "createdAt": {
+          "title": "Createdat",
+          "type": "string"
+        },
+        "startedAt": {
+          "title": "Startedat",
+          "type": "string"
+        },
+        "completedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completedat"
+        },
+        "errorCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Errorcode"
+        }
+      },
+      "required": [
+        "verificationId",
+        "operationId",
+        "runtimeOperationId",
+        "projectId",
+        "revision",
+        "treeHash",
+        "runtimeId",
+        "specRevision",
+        "planRef",
+        "suiteVersion",
+        "createdAt",
+        "startedAt"
+      ],
+      "title": "VerificationRecord",
+      "type": "object"
+    },
+    "VerificationSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "verification": {
+          "$ref": "#/$defs/VerificationRecord"
+        },
+        "effectiveStatus": {
+          "enum": [
+            "running",
+            "passed",
+            "failed",
+            "blocked",
+            "cancelled",
+            "stale"
+          ],
+          "title": "Effectivestatus",
+          "type": "string"
+        },
+        "deliveryEligible": {
+          "default": false,
+          "title": "Deliveryeligible",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "verification",
+        "effectiveStatus"
+      ],
+      "title": "VerificationSnapshot",
+      "type": "object"
+    },
+    "WorkspaceLease": {
+      "additionalProperties": false,
+      "properties": {
+        "workspaceId": {
+          "title": "Workspaceid",
+          "type": "string"
+        },
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "generation": {
+          "title": "Generation",
+          "type": "integer"
+        },
+        "leaseOwner": {
+          "title": "Leaseowner",
+          "type": "string"
+        },
+        "expiresAt": {
+          "title": "Expiresat",
+          "type": "number"
+        },
+        "sandboxId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sandboxid"
+        },
+        "mountedRevision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mountedrevision"
+        },
+        "provider": {
+          "const": "e2b",
+          "default": "e2b",
+          "title": "Provider",
+          "type": "string"
+        },
+        "processRefs": {
+          "additionalProperties": true,
+          "title": "Processrefs",
+          "type": "object"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "projectId",
+        "generation",
+        "leaseOwner",
+        "expiresAt"
+      ],
+      "title": "WorkspaceLease",
+      "type": "object"
+    }
+  }
+}

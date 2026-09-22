@@ -12,14 +12,33 @@ llm_json_fn drives generation with NO key + NO network.
 
 import os
 import sys
+import copy
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+#: 演示域夹具快路径 2026-08-10 起默认关（见 _demo_fixture_enabled 头注）。
+#  这个文件绝大多数用例走的是 LLM 生成路径（新颖意图，_recognize_domain
+#  返回 None，开关与它们无关），只有几条以"确定性域"为题的要显式开回来。
+#  故意逐条标而不是整个文件 pytestmark：这里 LLM 路径才是主角，整个文件
+#  开着会掩盖"用户路径不再走夹具"这件事。
+_deterministic_domain = pytest.mark.usefixtures("demo_fixture_path")
 
 from services.v5_model_gate import validate_five_system_model, DANGLING, MISSING_SECTION
 from services.v5_llm_generate import generate_five_system_model
 from services.v5_capability_executor import _build_per_skill_evidence, REQUIRED_EVIDENCE_KEYS
 from models.v5_state import V5SessionState
+
+
+@pytest.fixture(autouse=True)
+def _this_file_is_the_gen5_socket(monkeypatch):
+    """本文件测的是 GEN5 + 结构闸。spec-first 默认开且失败不再回落，
+    不关掉的话假 LLM 根本走不到这里。"""
+    monkeypatch.setattr(
+        "services.spec_first_pipeline.spec_first_enabled", lambda: False
+    )
 
 
 def _valid_library_model():
@@ -94,6 +113,64 @@ def test_valid_model_passes_gate():
     assert result["findings"] == []
 
 
+def test_generated_model_gate_requires_one_supported_preferred_device():
+    for device in (None, "", "watch"):
+        model = _valid_library_model()
+        if device is not None:
+            model["appbundle"]["preferredDevice"] = device
+
+        result = validate_five_system_model(model, require_preferred_device=True)
+
+        assert result["passed"] is False
+        assert any(
+            finding["path"] == "appbundle.preferredDevice"
+            for finding in result["findings"]
+        )
+
+    for device in ("desktop", "phone", "tablet"):
+        model = _valid_library_model()
+        model["appbundle"]["preferredDevice"] = device
+
+        result = validate_five_system_model(model, require_preferred_device=True)
+
+        assert result["passed"] is True, result["findings"]
+
+
+def test_historic_model_gate_remains_tolerant_of_missing_or_tablet_device():
+    missing = validate_five_system_model(_valid_library_model())
+    tablet_model = _valid_library_model()
+    tablet_model["appbundle"]["preferredDevice"] = "tablet"
+    tablet = validate_five_system_model(tablet_model)
+
+    assert missing["passed"] is True, missing["findings"]
+    assert tablet["passed"] is True, tablet["findings"]
+
+
+def test_marketing_landing_presentation_rejects_dashboard_content():
+    model = _valid_library_model()
+    page = model["page"]["pages"][0]
+    page["presentation"] = "marketing-landing"
+    page["stats"] = [{"id": "count", "name": "数量", "entity": "loan", "metric": "count"}]
+
+    result = validate_five_system_model(model)
+
+    assert result["passed"] is False
+    assert any(
+        f.get("path") == "page.pages[p_apply].presentation" and "stats" in f.get("message", "")
+        for f in result["findings"]
+    )
+
+
+def test_unknown_page_presentation_is_rejected():
+    model = _valid_library_model()
+    model["page"]["pages"][0]["presentation"] = "random-template"
+
+    result = validate_five_system_model(model)
+
+    assert result["passed"] is False
+    assert any(f.get("path") == "page.pages[p_apply].presentation" for f in result["findings"])
+
+
 def test_broken_model_blocked_with_precise_findings():
     result = validate_five_system_model(_broken_model())
     assert result["passed"] is False
@@ -121,6 +198,102 @@ def test_generation_contract_requires_a_real_landing_page():
 
     assert '"landingPageRef": "<page_id shown first when the app opens>"' in _SCHEMA_INSTRUCTION
     assert "appbundle.landingPageRef is REQUIRED" in _SCHEMA_INSTRUCTION
+
+
+def test_generation_contract_requires_exactly_one_supported_device():
+    from services.archetype_legal import device_domain_bar
+    from services.v5_llm_generate import _SCHEMA_INSTRUCTION
+
+    bar = device_domain_bar()
+    assert f'"preferredDevice": "{bar}"' in _SCHEMA_INSTRUCTION
+    assert "preferredDevice is REQUIRED" in _SCHEMA_INSTRUCTION
+    assert "never omit" in _SCHEMA_INSTRUCTION.lower()
+    assert "tablet" in bar
+    assert "watch" not in bar
+    # ⚠ 2026-08-30：不能 `assert "watch" not in _SCHEMA_INSTRUCTION`。
+    # 契约正文有 "actually watches" / "watching live state"，子串会误伤；
+    # 钉的是合法域槽位和带引号的设备词，不是英文单词。
+    assert "'watch'" not in _SCHEMA_INSTRUCTION
+    assert '"watch"' not in _SCHEMA_INSTRUCTION
+
+
+def test_generation_contract_requires_ref_fields_to_name_their_target():
+    """ref 字段必须自带目标实体（2026-08-11）。
+
+    没有这条规则时，前端只能按字段名猜目标（`guessRefEntityId`）。181 份真实
+    模型里 1689 个 ref 字段只猜得出 41%，其余 998 个**退化成让用户手打行 id 的
+    纯文本框**。契约里给了这个键，门禁才有东西可校验
+    （test_v5_field_semantics_gate 里那四条），运行时才有东西可优先采用。
+    """
+    from services.v5_llm_generate import _SCHEMA_INSTRUCTION
+
+    assert '"refEntity"' in _SCHEMA_INSTRUCTION
+    assert "MUST DECLARE ITS TARGET" in _SCHEMA_INSTRUCTION
+
+
+def test_llm_generation_normalizes_device_before_gate_and_visual_enrichment(monkeypatch):
+    from services import app_store, freeform_block, v5_llm_generate
+    from services.v5_capability_executor import _try_llm_generate_evidence
+
+    generated = _valid_library_model()
+    seen = []
+    monkeypatch.setattr(
+        v5_llm_generate,
+        "generate_five_system_model",
+        lambda *args, **kwargs: copy.deepcopy(generated),
+    )
+    monkeypatch.setattr(
+        freeform_block,
+        "enrich_freeform_blocks",
+        lambda model: seen.append(("blocks", copy.deepcopy(model["appbundle"]))) or model,
+    )
+    monkeypatch.setattr(
+        freeform_block,
+        "enrich_monitor_page_overviews",
+        lambda model, **kwargs: seen.append(("monitor", copy.deepcopy(model["appbundle"]))) or model,
+    )
+    monkeypatch.setattr(app_store, "save_app_or_version", lambda *args, **kwargs: None)
+
+    result = _try_llm_generate_evidence("做一个手机图书借阅 App", lambda prompt: {})
+
+    assert result is not None
+    assert [stage for stage, _ in seen] == ["blocks", "monitor"]
+    assert all(bundle["preferredDevice"] == "phone" for _, bundle in seen)
+    assert all(bundle["deviceAuthority"] == "single-v1" for _, bundle in seen)
+
+
+def test_gate_feedback_retry_is_normalized_before_strict_gate(monkeypatch):
+    from services import app_store, freeform_block, v5_llm_generate
+    from services.v5_capability_executor import _try_llm_generate_evidence
+
+    broken = _valid_library_model()
+    del broken["aigc"]
+    repaired_retry = _valid_library_model()
+    generated = iter((copy.deepcopy(broken), copy.deepcopy(repaired_retry)))
+    seen = []
+    monkeypatch.setattr(
+        v5_llm_generate,
+        "generate_five_system_model",
+        lambda *args, **kwargs: next(generated),
+    )
+    monkeypatch.setattr(freeform_block, "enrich_freeform_blocks", lambda model: model)
+    monkeypatch.setattr(
+        freeform_block,
+        "enrich_monitor_page_overviews",
+        lambda model, **kwargs: seen.append(copy.deepcopy(model["appbundle"])) or model,
+    )
+    monkeypatch.setattr(app_store, "save_app_or_version", lambda *args, **kwargs: None)
+
+    result = _try_llm_generate_evidence("做一个 PC 端图书管理网页", lambda prompt: {})
+
+    assert result is not None
+    assert seen == [
+        {
+            **repaired_retry["appbundle"],
+            "preferredDevice": "desktop",
+            "deviceAuthority": "single-v1",
+        }
+    ]
 
 
 def test_missing_section_blocked():
@@ -442,6 +615,7 @@ def test_wiring_novel_intent_fail_closed_with_broken_fake_llm():
     assert all(not per_skill[k]["evidencePresent"] for k in REQUIRED_EVIDENCE_KEYS), per_skill
 
 
+@_deterministic_domain
 def test_wiring_deterministic_domain_unaffected_by_llm():
     # Purchase still closes via fixture WITHOUT calling the LLM at all.
     state = _empty_state("采购审批平台")
@@ -472,9 +646,17 @@ def test_llm_path_per_skill_evidence_carries_model_sections():
     )
     for skill in REQUIRED_EVIDENCE_KEYS:
         assert per_skill[skill]["evidencePresent"] is True
-        assert per_skill[skill]["modelSection"] == model[skill], skill
+        if skill == "appbundle":
+            assert per_skill[skill]["modelSection"] == {
+                **model[skill],
+                "preferredDevice": "desktop",
+                "deviceAuthority": "single-v1",
+            }
+        else:
+            assert per_skill[skill]["modelSection"] == model[skill], skill
 
 
+@_deterministic_domain
 def test_deterministic_domain_carries_builtin_model_section():
     """E35 反转旧设计：演示域现在带冻结的内置模型段（用户实测：闭环后右侧
     必须能长出应用）。模型是 LLM 一次性生成、过门后冻结的夹具——仍然
@@ -559,10 +741,18 @@ def test_stream_skill_result_emits_model_section_for_llm_path(monkeypatch):
     for skill in REQUIRED_EVIDENCE_KEYS:
         event = by_label[skill]
         assert event["evidencePresent"] is True
-        assert event["modelSection"] == model[skill], skill
+        if skill == "appbundle":
+            assert event["modelSection"] == {
+                **model[skill],
+                "preferredDevice": "desktop",
+                "deviceAuthority": "single-v1",
+            }
+        else:
+            assert event["modelSection"] == model[skill], skill
         assert isinstance(event.get("mermaid"), str)  # edge projection still present
 
 
+@_deterministic_domain
 def test_stream_skill_result_model_section_present_for_deterministic_domain():
     """E35：演示域 skill_result 闭 6/6 且 modelSection 为冻结夹具段（dict）。"""
     import asyncio
@@ -618,10 +808,11 @@ def test_blocked_closure_carries_llm_failed_diagnostic(monkeypatch):
     import services.v5_llm_generate as v5_llm_generate
 
     def _boom(goal, llm_json_fn=None):
-        v5_llm_generate.last_generate_diagnostic = {
+        # 请求域 ContextVar，不再是模块属性（2026-08-06）
+        v5_llm_generate.set_generate_diagnostic({
             "outcome": "failed",
             "detail": "LlmError: connection refused to llm host",
-        }
+        })
         return None
 
     monkeypatch.setattr(v5_llm_generate, "generate_five_system_model", _boom)
@@ -631,6 +822,7 @@ def test_blocked_closure_carries_llm_failed_diagnostic(monkeypatch):
     assert "connection refused" in diag["ref"]
 
 
+@_deterministic_domain
 def test_closed_closure_has_no_diagnostic_blocker():
     """确定性域正常闭合 → 无诊断 blocker（诊断只在 blocked 时透出）。"""
     report = _closure_result_for("采购审批平台")
@@ -667,7 +859,7 @@ def test_stream_emits_llm_delta_during_generation(monkeypatch):
     assert len(deltas) >= 1, "generation increments must surface as llm_delta events"
     assert '"datamodel"' in "".join(d["text"] for d in deltas)
     # sink 用完即卸载（不泄漏到后续会话）
-    assert v5_llm_generate._delta_sink is None
+    assert v5_llm_generate._delta_sink_var.get() is None
 
 
 def test_diagnostic_never_affects_closure_hash(monkeypatch):
@@ -826,7 +1018,10 @@ def test_gate_feedback_retry_still_fail_closed_when_both_blocked():
 
     artifacts = _try_llm_generate_evidence("宠物美容预约平台", lambda g: _broken_model())
     assert artifacts is None
-    assert executor._llm_generate_diagnostic["code"] == "MODEL_GATE_BLOCKED"
+    # 2026-08-11：诊断从模块级 dict 改成请求域 ContextVar（并发下 A 的失败原因
+    # 会写进 B 的 blocker）。读法跟着改成访问器——**断言的东西没变**，仍然是
+    # "两版都被门拦下时要留下 MODEL_GATE_BLOCKED 这个原因"。
+    assert executor._diagnostic()["code"] == "MODEL_GATE_BLOCKED"
 
 
 def test_default_llm_fn_appends_gate_feedback_to_prompt(monkeypatch):
@@ -1101,6 +1296,33 @@ def test_page_blocks_fail_gate_with_invalid_type():
     assert any("NonExistentBlockType" in f.get("ref", "") for f in result["findings"])
 
 
+def test_page_surface_accepts_ant_design_pro_workbench_contract():
+    model = _make_model_with_landing()
+    model["page"]["pages"][0]["surface"] = {
+        "type": "split-list",
+        "density": "compact",
+    }
+    from services.v5_model_gate import validate_five_system_model
+
+    result = validate_five_system_model(model)
+    findings = [f for f in result["findings"] if ".surface" in f.get("path", "")]
+    assert findings == []
+
+
+def test_page_surface_rejects_unknown_type_and_density():
+    model = _make_model_with_landing()
+    model["page"]["pages"][0]["surface"] = {
+        "type": "magic-canvas",
+        "density": "huge",
+    }
+    from services.v5_model_gate import validate_five_system_model
+
+    result = validate_five_system_model(model)
+    findings = [f for f in result["findings"] if ".surface" in f.get("path", "")]
+    assert len(findings) == 2
+    assert all(f.get("code") == "PUBLISH_ENUM_VIOLATION" for f in findings)
+
+
 def test_quick_action_panel_passes_gate():
     model = _make_model_with_landing()
     pages = model.get("page", {}).get("pages", [])
@@ -1166,7 +1388,7 @@ def test_layout_valid_block_ref_passes():
     pages = model.get("page", {}).get("pages", [])
     if pages:
         pages[0]["blocks"] = [{"id": "b1", "type": "MetricGrid"}]
-        pages[0]["layout"] = {"summary": ["b1"]}
+        pages[0]["layout"] = {"metrics": ["b1"]}
     from services.v5_model_gate import validate_five_system_model
     result = validate_five_system_model(model, require_landing_page_ref=True)
     layout_findings = [f for f in result["findings"] if "layout" in f.get("path", "")]
@@ -1203,16 +1425,16 @@ def test_layout_block_type_not_allowed_in_slot_fails():
 
 
 def test_layout_block_type_allowed_in_declared_slot_passes():
-    """同一个 RankedList 放进目录允许的 secondary 槽应该干净通过——防止新校验误报。"""
+    """同一个 RankedList 放进目录允许的 aside 区域应该干净通过——防止新校验误报。"""
     model = _make_model_with_landing()
     pages = model.get("page", {}).get("pages", [])
     if pages:
         pages[0]["blocks"] = [{"id": "b1", "type": "RankedList"}]
-        pages[0]["layout"] = {"secondary": ["b1"]}
+        pages[0]["layout"] = {"aside": ["b1"]}
     from services.v5_model_gate import validate_five_system_model
     result = validate_five_system_model(model, require_landing_page_ref=True)
     layout_findings = [f for f in result["findings"] if "layout" in f.get("path", "")]
-    assert len(layout_findings) == 0, f"valid slot placement should pass: {layout_findings}"
+    assert len(layout_findings) == 0, f"valid region placement should pass: {layout_findings}"
 
 
 def test_layout_nested_slots_key_reports_actionable_message():
@@ -1250,6 +1472,55 @@ def test_layout_nested_slots_does_not_swallow_other_slot_errors():
     msgs = [f["message"] for f in result["findings"] if "layout" in f.get("path", "")]
     assert any("must not be nested" in m for m in msgs), msgs
     assert any("bogus_slot" in m for m in msgs), msgs
+
+
+def test_layout_grid_valid_refs_and_page_content_pass():
+    model = _make_model_with_landing()
+    page = model["page"]["pages"][0]
+    page["blocks"] = [{"id": "b1", "type": "MetricGrid"}]
+    page["layout"] = {
+        "grid": {
+            "desktop": [
+                {"blockRef": "b1", "x": 0, "y": 0, "w": 4, "h": 1},
+                {"blockRef": "page-content", "x": 4, "y": 0, "w": 8, "h": 3},
+            ],
+            "phone": [
+                {"blockRef": "b1", "x": 0, "y": 0, "w": 4, "h": 1},
+                {"blockRef": "page-content", "x": 0, "y": 1, "w": 4, "h": 2},
+            ],
+        }
+    }
+    from services.v5_model_gate import validate_five_system_model
+    result = validate_five_system_model(model, require_landing_page_ref=True)
+    findings = [f for f in result["findings"] if ".layout.grid" in f.get("path", "")]
+    assert findings == [], findings
+
+
+def test_layout_grid_rejects_invalid_breakpoint_coordinates_bounds_duplicates_and_refs():
+    model = _make_model_with_landing()
+    page = model["page"]["pages"][0]
+    page["blocks"] = [{"id": "b1", "type": "MetricGrid"}]
+    page["layout"] = {
+        "grid": {
+            "watch": [{"blockRef": "b1", "x": 0, "y": 0, "w": 1, "h": 1}],
+            "desktop": [
+                {"blockRef": "b1", "x": 0.5, "y": 0, "w": 4, "h": 1},
+                {"blockRef": "b1", "x": 0, "y": 1, "w": 4, "h": 1},
+                {"blockRef": "missing", "x": 0, "y": 2, "w": 13, "h": 0},
+            ],
+        }
+    }
+    from services.v5_model_gate import validate_five_system_model
+    result = validate_five_system_model(model, require_landing_page_ref=True)
+    messages = [
+        f["message"] for f in result["findings"]
+        if ".layout.grid" in f.get("path", "")
+    ]
+    assert any("breakpoint" in message for message in messages), messages
+    assert any("integers" in message for message in messages), messages
+    assert any("duplicate" in message for message in messages), messages
+    assert any("not found" in message for message in messages), messages
+    assert any("within 12 columns" in message for message in messages), messages
 
 
 # ---------- WorkflowTimeline（2026-07-23）：props.chainRef 深校验 ----------

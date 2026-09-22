@@ -123,3 +123,57 @@ def test_enabled_by_default(monkeypatch):
     """默认必须开——这个模块存在的理由就是成功路径原本完全静默。"""
     monkeypatch.delenv("SLIDERULE_ENRICH_TIMING", raising=False)
     assert timing_enabled() is True
+
+
+def test_attempts是预算_used才是次数():
+    """两个字段挨着打、名字都像次数，读反过一次，所以钉住语义。
+
+    ## 出处（2026-08-11）
+
+    `stage=model.generate … attempts=2 … used=1` 这行里，`attempts` 是调用方
+    **进入阶段之前**填的重试预算（v5_llm_generate.py：`attempts = 1 if
+    use_parallel else 2`），不管这一趟成功失败都恒等于那个配置值；真正试了几次
+    记在 `used`（成功时写 `attempt + 1`）。
+
+    当时有人（我）连着六趟把 `attempts=2` 读成"每趟都重试了一次"，据此推断
+    "每次生成白花一倍时间"，还论证了"这不是抖动，抖动会有成功有失败"——而同一行
+    的 `used=1` 一直写着答案，七趟全是 1，即每趟都是第一次就成功。结论完全相反。
+
+    注释挡不住下一个人，所以做成用例：**预算 2 而只试了 1 次时，两个字段必须
+    同时出现且不相等**——这正是当时那条日志的形状。
+    """
+    out = _capture(lambda: _run_budget_2_used_1())
+    f = _parse([l for l in out.strip().splitlines() if l][0])
+    assert f["attempts"] == "2", "预算字段没打出来，读日志的人就只能猜了"
+    assert f["used"] == "1", "实际次数字段没打出来"
+    assert f["attempts"] != f["used"], (
+        "这条用例要复现的正是「预算 ≠ 实际」那种行——两个数相等就演示不出区别了"
+    )
+    assert f["ok"] == "1"
+
+
+def _run_budget_2_used_1():
+    # 复刻 v5_llm_generate 的形状：预算在进入时给定，实际次数在成功分支写回
+    with stage("unit.retry", attempts=2) as st:
+        for attempt in range(2):
+            st["used"] = attempt + 1
+            break  # 第一次就成功
+
+
+def test_整段失败时没有used字段_不能当成只试了一次():
+    """`used` 只在成功分支写。缺席意味着"没走到成功"，不是"试了一次"。
+
+    统计重试率时按 `used=` grep，缺席的那些要单独看 `ok=0`——把缺席默认成 1
+    会把彻底失败的那批算成"一次成功"，正好把最该看的样本抹掉。
+    """
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        with pytest.raises(RuntimeError):
+            with stage("unit.retry.fail", attempts=2):
+                raise RuntimeError("boom")
+    f = _parse([l for l in buf.getvalue().strip().splitlines() if l][0])
+    assert f["ok"] == "0"
+    assert f["attempts"] == "2", "预算照打——它跟成败无关"
+    assert "used" not in f, (
+        "整段失败却打出了 used，那会让『试了几次』变得不可信"
+    )

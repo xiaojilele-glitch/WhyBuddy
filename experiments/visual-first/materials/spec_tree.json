@@ -1,0 +1,175 @@
+{
+  "rootNodeId": "n0",
+  "version": 2,
+  "successCriteria": [
+    {
+      "id": "sc1",
+      "text": "销售可在 2 分钟内完成一个新客户创建，并记录首次跟进信息。"
+    },
+    {
+      "id": "sc2",
+      "text": "系统可按今天/逾期/未来分组展示待跟进客户，并支持标记已完成。"
+    },
+    {
+      "id": "sc3",
+      "text": "每个客户都能看到完整跟进历史、当前状态和下一次跟进时间。"
+    },
+    {
+      "id": "sc4",
+      "text": "系统提供基础筛选与搜索，帮助销售在 10 秒内定位目标客户。"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "n0",
+      "parentId": null,
+      "type": "requirement",
+      "title": "提供客户与跟进的日常闭环工作台",
+      "acceptance": "当销售进入系统首页时，系统应展示今日待跟进列表、最近更新客户和快速新建入口。",
+      "coversCriteria": [
+        "sc2"
+      ],
+      "evidenceRefs": [
+        "nE1",
+        "nE2"
+      ]
+    },
+    {
+      "id": "n1",
+      "parentId": "n0",
+      "type": "requirement",
+      "title": "支持快速创建与维护客户档案",
+      "acceptance": "当销售录入客户姓名、联系方式和来源后，系统应在保存后立即生成客户档案并允许补充标签、状态和备注。",
+      "coversCriteria": [
+        "sc1"
+      ],
+      "evidenceRefs": [
+        "nE1",
+        "nE3"
+      ]
+    },
+    {
+      "id": "n2",
+      "parentId": "n0",
+      "type": "requirement",
+      "title": "支持查看完整跟进历史与下次跟进计划",
+      "acceptance": "当销售打开客户详情时，系统应按时间倒序展示跟进记录、当前状态和下一次跟进时间。",
+      "coversCriteria": [
+        "sc3"
+      ],
+      "evidenceRefs": [
+        "nE1",
+        "nE4"
+      ]
+    },
+    {
+      "id": "n3",
+      "parentId": "n0",
+      "type": "requirement",
+      "title": "支持按条件搜索和筛选客户",
+      "acceptance": "当销售输入关键词或切换状态筛选时，系统应在 10 秒内返回匹配客户列表并保留当前筛选条件。",
+      "coversCriteria": [
+        "sc4"
+      ],
+      "evidenceRefs": [
+        "nE1",
+        "nE5"
+      ]
+    },
+    {
+      "id": "n4",
+      "parentId": "n1",
+      "type": "design",
+      "title": "客户创建抽屉表单",
+      "notes": "首页提供快速新建按钮；表单字段分为必填核心字段与可选扩展字段；保存后返回客户详情。",
+      "evidenceRefs": [
+        "nE1",
+        "nE3"
+      ]
+    },
+    {
+      "id": "n5",
+      "parentId": "n2",
+      "type": "design",
+      "title": "客户详情时间轴",
+      "notes": "详情页分为基础信息、跟进时间轴、下一次跟进卡片；支持新增跟进后自动刷新时间轴。",
+      "evidenceRefs": [
+        "nE1",
+        "nE4"
+      ]
+    },
+    {
+      "id": "n6",
+      "parentId": "n3",
+      "type": "design",
+      "title": "客户列表筛选条",
+      "notes": "列表页提供关键词搜索、状态筛选、下次跟进区间和标签筛选；支持清空条件。",
+      "evidenceRefs": [
+        "nE1",
+        "nE5"
+      ]
+    },
+    {
+      "id": "n7",
+      "parentId": "n4",
+      "type": "task",
+      "title": "定义客户数据模型与创建表单字段",
+      "verify": "完成客户创建 API/表单字段映射，并验证保存后可返回详情页。"
+    },
+    {
+      "id": "n8",
+      "parentId": "n5",
+      "type": "task",
+      "title": "实现客户详情与跟进时间轴组件",
+      "verify": "新增跟进后，时间轴按倒序显示，且下次跟进时间同步更新。"
+    },
+    {
+      "id": "n9",
+      "parentId": "n6",
+      "type": "task",
+      "title": "实现客户搜索筛选与待跟进视图",
+      "verify": "输入关键词、切换状态和时间区间时，列表可返回正确结果并保持筛选状态。"
+    },
+    {
+      "id": "nE1",
+      "parentId": "n0",
+      "type": "evidence",
+      "title": "用户要求轻量 CRM 与客户跟进",
+      "source": "user_input:轻量 CRM 客户跟进系统"
+    },
+    {
+      "id": "nE2",
+      "parentId": "n0",
+      "type": "evidence",
+      "title": "首页待跟进闭环来自成功标准",
+      "source": "clarified_brief:successCriteria[sc2]"
+    },
+    {
+      "id": "nE3",
+      "parentId": "n0",
+      "type": "evidence",
+      "title": "快速新建客户来自成功标准",
+      "source": "clarified_brief:successCriteria[sc1]"
+    },
+    {
+      "id": "nE4",
+      "parentId": "n0",
+      "type": "evidence",
+      "title": "客户完整历史来自成功标准",
+      "source": "clarified_brief:successCriteria[sc3]"
+    },
+    {
+      "id": "nE5",
+      "parentId": "n0",
+      "type": "evidence",
+      "title": "搜索筛选来自成功标准",
+      "source": "clarified_brief:successCriteria[sc4]"
+    }
+  ],
+  "provenance": {
+    "generationSource": "llm",
+    "promptId": "whybuddy-crm-mvp-v1",
+    "model": "solo-proprietary",
+    "fingerprint": "crm-followup-spec-20260604"
+  }
+}

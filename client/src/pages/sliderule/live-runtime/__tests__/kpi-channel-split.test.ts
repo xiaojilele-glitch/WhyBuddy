@@ -66,10 +66,57 @@ describe("渲染层硬隔离", () => {
     expect(screenSrc).not.toMatch(/filter\([^)]*b\.type === "DataTable"\s*\)/);
   });
 
+  it("总览页摘掉筛选类积木，判据是 capability 而不是名字", () => {
+    // 2026-08-11：原来写的是 `b.type === "FilterBar"`。理由（筛选状态只到本页
+    // 的表/看板/日历，总览页三者都没有，KPI/图表/积木/设计树全读未筛全量）对
+    // **所有** filter 区块都成立——32 个里 31 个只发 filterChange。按名字挡等于
+    // 只挡了这一族里最出名的那个，SavedViewTabs / TagFilterRow / SearchBox 摆
+    // 上总览页照样上屏、照样按不动。
+    expect(screenSrc).toContain(
+      'EXPERIENCE_BLOCK_CAPABILITY_BY_TYPE[b.type] === "filter"'
+    );
+    // 名字版必须已经删掉，否则等于两条判据并存、以后只会改一条
+    expect(screenSrc).not.toMatch(
+      /OVERVIEW_KINDS\.has\(page\.view\.kind\) && b\.type === "FilterBar"/
+    );
+  });
+
+  it("目录与渲染层同判据：没有筛选类区块还声明允许总览页", () => {
+    // 三处同源：目录 pageKinds、提示词禁令（services/schema_legal.py）、
+    // 上面那条渲染层兜底。目录留着 monitor/dashboard 的话，模型会被条目
+    // 告知"这页可以放"，再被禁令告知"不许放"——同一份提示词自相矛盾。
+    const stray = (catalog as unknown as { blocks: Array<{
+      type: string; generationEnabled: boolean;
+      capability?: string; pageKinds?: string[];
+    }> }).blocks.filter(
+      b =>
+        b.generationEnabled &&
+        b.capability === "filter" &&
+        (b.pageKinds ?? []).some(k => k === "monitor" || k === "dashboard")
+    );
+    expect(stray.map(b => b.type)).toEqual([]);
+  });
+
   it("pageHasKpiBlocks 只看非 legacy 的真区块", () => {
     // _fromLegacy 是转换占位，本来就走旧路径渲染；把它算进来会让固定骨架
     // 被一个"其实还是走固定骨架"的占位区块顶掉，页面直接空一块
     expect(screenSrc).toMatch(/pageHasKpiBlocks[\s\S]{0,400}_fromLegacy/);
+  });
+
+  it("没有 freeform 设计的 dashboard 由业务网格持有主数据且不重复追加表格", () => {
+    expect(screenSrc).toContain("const dashboardUsesBusinessGrid");
+    expect(screenSrc).toMatch(
+      /\(!OVERVIEW_KINDS\.has\(page\.view\.kind\) \|\| dashboardUsesBusinessGrid\)[\s\S]{0,80}businessPageGrid/
+    );
+    expect(screenSrc).toMatch(
+      /OVERVIEW_KINDS\.has\(page\.view\.kind\) && !dashboardUsesBusinessGrid[\s\S]{0,80}blockScaffold/
+    );
+    expect(screenSrc).toContain(
+      "OVERVIEW_KINDS.has(page.view.kind) && !dashboardUsesBusinessGrid &&"
+    );
+    expect(screenSrc).toMatch(
+      /dashboardUsesBusinessGrid[\s\S]{0,80}renderExperienceBlockScaffold\(true, phonePrimaryDataView\)/
+    );
   });
 });
 

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildAiActionInputs,
   deriveAppRuntimeSchema,
+  type AppPageSchema,
 } from "../live-runtime/app-runtime-schema";
 import type { FiveSystemModel } from "../system-screens/five-system-model";
 
@@ -86,6 +87,68 @@ const MODEL: FiveSystemModel = {
 };
 
 describe("deriveAppRuntimeSchema（应用运行 option）", () => {
+  it("projects the single-device authority marker into runtime identity", () => {
+    const model: FiveSystemModel = JSON.parse(JSON.stringify(MODEL));
+    model.appbundle!.preferredDevice = "phone";
+    (model.appbundle as Record<string, unknown>).deviceAuthority = "single-v1";
+
+    const schema = deriveAppRuntimeSchema(model)!;
+
+    expect(schema.identity.preferredDevice).toBe("phone");
+    expect(schema.identity.deviceAuthority).toBe("single-v1");
+  });
+
+  it("preserves a valid Pro workbench surface declaration", () => {
+    const model: FiveSystemModel = JSON.parse(JSON.stringify(MODEL));
+    model.page!.pages![0].surface = {
+      type: "split-list",
+      density: "compact",
+    };
+
+    const schema = deriveAppRuntimeSchema(model)!;
+
+    expect(schema.pages[0].surface).toEqual({
+      type: "split-list",
+      density: "compact",
+      source: "model",
+    });
+  });
+
+  it("deterministically types legacy business pages without another LLM call", () => {
+    const model: FiveSystemModel = JSON.parse(JSON.stringify(MODEL));
+    model.page!.pages = [
+      { ...model.page!.pages![0], id: "members", name: "Member Registry" },
+      { ...model.page!.pages![0], id: "coaches", name: "Coach Management" },
+      { ...model.page!.pages![0], id: "checkins", name: "Check-in Console" },
+      { ...model.page!.pages![0], id: "renewals", name: "Renewal Workbench" },
+    ];
+
+    const schema = deriveAppRuntimeSchema(model)!;
+
+    expect(schema.pages.map(page => page.surface.type)).toEqual([
+      "table",
+      "split-list",
+      "editable-table",
+      "queue",
+    ]);
+    expect(schema.pages.every(page => page.surface.source === "inferred")).toBe(true);
+  });
+
+  it("keeps people-management pages split even when they are workflow-linked", () => {
+    const model: FiveSystemModel = JSON.parse(JSON.stringify(MODEL));
+    model.page!.pages = [
+      { ...model.page!.pages![0], id: "coaches", name: "Coach Management" },
+    ];
+    model.appbundle!.pageBindings = [
+      { pageRef: "coaches", workflowRef: "coach_lifecycle" },
+    ];
+
+    const schema = deriveAppRuntimeSchema(model)!;
+
+    expect(schema.pages[0].workflowLinked).toBe(true);
+    expect(schema.pages[0].surface.type).toBe("split-list");
+  });
+
   it("页面主实体 = fieldBindings 中占多数的实体；表单项 = 绑定字段", () => {
     const schema = deriveAppRuntimeSchema(MODEL, "健身房系统")!;
     expect(schema.appName).toBe("健身房系统");
@@ -214,6 +277,89 @@ describe("deriveAppRuntimeSchema（应用运行 option）", () => {
     const refField = schema.pages[0].columns.find(f => f.id === "coach_ref")!;
     expect(refField.type).toBe("ref");
     expect(refField.refEntityId).toBe("coach");
+  });
+
+  /**
+   * refEntity：模型自己声明关系目标（2026-08-11）。
+   *
+   * 上面那条测的是**猜测**通道——从字段名反推。它在真实数据上只认得出 41%
+   * （181 个存过的模型、1689 个 ref 字段，998 个猜不出来），而猜不出来的代价
+   * 是关系字段退化成纯文本框，用户得手打行 id。所以契约里加了 `refEntity`，
+   * 猜测降级成存量模型的兜底。
+   *
+   * 下面每条都配一句反向断言：不声明的时候现象确实是坏的。否则测试可能只是
+   * 在证明"猜测本来就能猜对"，加不加声明都绿。
+   */
+  describe("refEntity 声明优先，猜测兜底", () => {
+    /** 在 MODEL 的主实体上换一组字段，返回主实体的全字段 schema。 */
+    function fieldsWith(
+      fields: Array<Record<string, unknown>>,
+      extraEntities: Array<Record<string, unknown>> = []
+    ) {
+      const model: FiveSystemModel = JSON.parse(JSON.stringify(MODEL));
+      const entities = model.datamodel!.entities!;
+      entities[0].fields = fields as typeof entities[0]["fields"];
+      entities.push(...(extraEntities as unknown as typeof entities));
+      return deriveAppRuntimeSchema(model)!.pages[0].detailFields;
+    }
+
+    it("声明的目标压过猜测 —— 名字像 coach 也照声明走", () => {
+      const declared = fieldsWith(
+        [{ id: "coach_ref", name: "私教", type: "ref", refEntity: "trainer" }],
+        [{ id: "trainer", name: "教练", fields: [{ id: "name", type: "string" }] }]
+      ).find(f => f.id === "coach_ref")!;
+      expect(declared.refEntityId).toBe("trainer");
+
+      // 反向：去掉声明，猜测会指到 coach——证明这条确实是声明在起作用
+      const guessed = fieldsWith(
+        [{ id: "coach_ref", name: "私教", type: "ref" }],
+        [{ id: "trainer", name: "教练", fields: [{ id: "name", type: "string" }] }]
+      ).find(f => f.id === "coach_ref")!;
+      expect(guessed.refEntityId).toBe("coach");
+    });
+
+    it("名字压根对不上的字段，声明能把它从纯文本框里救回来", () => {
+      // assigned_team → oncall_teams 是真实样本里的失败形态：词干完全不同
+      const declared = fieldsWith(
+        [{ id: "assigned_team", name: "值班组", type: "ref", refEntity: "oncall_teams" }],
+        [{ id: "oncall_teams", name: "值班组", fields: [{ id: "name", type: "string" }] }]
+      ).find(f => f.id === "assigned_team")!;
+      expect(declared.refEntityId).toBe("oncall_teams");
+
+      // 反向：不声明就是 undefined，渲染器拿不到候选行 → 退化成 Input
+      const guessed = fieldsWith(
+        [{ id: "assigned_team", name: "值班组", type: "ref" }],
+        [{ id: "oncall_teams", name: "值班组", fields: [{ id: "name", type: "string" }] }]
+      ).find(f => f.id === "assigned_team")!;
+      expect(guessed.refEntityId).toBeUndefined();
+    });
+
+    it("悬空声明不回落去猜 —— 模型说错了就如实空着，别拿猜测盖掉", () => {
+      const field = fieldsWith([
+        { id: "coach_ref", name: "私教", type: "ref", refEntity: "not_an_entity" },
+      ]).find(f => f.id === "coach_ref")!;
+      // 注意不是 "coach"：猜测能猜对，但声明已经明确指向别处，
+      // 悄悄改成猜出来的目标会让门禁标的红跟界面上的现象对不上
+      expect(field.refEntityId).toBeUndefined();
+    });
+
+    it("声明的自引用要认，猜出来的自引用照旧丢弃", () => {
+      // 指回同一张表是合法的（合卡时的 merged_into 之类）。声明了就认——
+      // 运行时把模型的明确表态偷偷改掉，只会让门禁的绿灯跟界面对不上。
+      const declared = fieldsWith([
+        { id: "id", name: "编号", type: "string" },
+        { id: "merged_into", name: "并入卡", type: "ref", refEntity: "member_card" },
+      ]).find(f => f.id === "merged_into")!;
+      expect(declared.refEntityId).toBe("member_card");
+
+      // 反向：靠猜命中自己身上的（字段 member_card_ref 长在实体 member_card 上）
+      // 多半是命名巧合，仍然丢弃
+      const guessed = fieldsWith([
+        { id: "id", name: "编号", type: "string" },
+        { id: "member_card_ref", name: "上级卡", type: "ref" },
+      ]).find(f => f.id === "member_card_ref")!;
+      expect(guessed.refEntityId).toBeUndefined();
+    });
   });
 
   it("AI 动作：outputField 落在本页主实体的能力进 aiActions；悬空输出不进", () => {
@@ -556,5 +702,21 @@ describe("deriveAppRuntimeSchema（应用运行 option）", () => {
       icon: "heart",
       nav: "top",
     });
+  });
+
+  it("preserves page reconstruction evidence on the derived page schema", () => {
+    const model = structuredClone(MODEL);
+    model.page!.pages![0].pageReconstruction = {
+      version: "page-reconstruction-v1",
+      status: "ready",
+      spec: { device: "desktop", regions: [{ id: "hero" }] },
+      prompt: "PAGE RECONSTRUCTION CONTRACT",
+      diagnostic: "",
+    };
+
+    const page: AppPageSchema = deriveAppRuntimeSchema(model)!.pages[0];
+
+    expect(page.pageReconstruction?.status).toBe("ready");
+    expect(page.pageReconstruction?.prompt).toBe("PAGE RECONSTRUCTION CONTRACT");
   });
 });

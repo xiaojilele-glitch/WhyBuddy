@@ -1,0 +1,383 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elderly_resident",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "gender",
+      "name": "性别",
+      "type": "enum"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "number"
+     },
+     {
+      "id": "health_level",
+      "name": "健康等级",
+      "type": "enum"
+     },
+     {
+      "id": "living_status",
+      "name": "居住状态",
+      "type": "enum"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     },
+     {
+      "id": "recent_service_time",
+      "name": "最近服务时间",
+      "type": "date"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单号",
+      "type": "string"
+     },
+     {
+      "id": "order_type",
+      "name": "紧急求助",
+      "type": "string"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约",
+      "type": "string"
+     },
+     {
+      "id": "resident_ref",
+      "name": "服务对象",
+      "type": "ref",
+      "refEntity": "elderly_resident"
+     }
+    ]
+   },
+   {
+    "id": "financial_settlement",
+    "name": "财务结算单",
+    "fields": [
+     {
+      "id": "settlement_no",
+      "name": "结算单号",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "target",
+      "name": "服务对象",
+      "type": "string"
+     },
+     {
+      "id": "fee_amount",
+      "name": "费用金额 (元)",
+      "type": "number"
+     },
+     {
+      "id": "subsidy_amount",
+      "name": "政府补贴金额 (元)",
+      "type": "number"
+     },
+     {
+      "id": "status",
+      "name": "核销状态",
+      "type": "enum"
+     }
+    ]
+   },
+   {
+    "id": "caregiver",
+    "name": "服务人员",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "状态",
+      "type": "enum"
+     }
+    ]
+   },
+   {
+    "id": "task",
+    "name": "我的任务",
+    "fields": [
+     {
+      "id": "service_time",
+      "name": "服务时间",
+      "type": "string"
+     },
+     {
+      "id": "service_address",
+      "name": "服务地址",
+      "type": "string"
+     },
+     {
+      "id": "service_items",
+      "name": "服务项目清单",
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "r1",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "r2",
+    "name": "服务人员"
+   },
+   {
+    "id": "r3",
+    "name": "运营主管"
+   }
+  ],
+  "permissions": [
+   "elderly_resident:create",
+   "elderly_resident:read",
+   "elderly_resident:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:assign",
+   "task:read",
+   "task:update",
+   "financial_settlement:read",
+   "financial_settlement:approve",
+   "financial_settlement:export"
+  ],
+  "menus": [
+   {
+    "id": "menu_elderly",
+    "label": "老人档案管理",
+    "roleRefs": [
+     "r1"
+    ],
+    "permissionRefs": [
+     "elderly_resident:read"
+    ]
+   },
+   {
+    "id": "menu_dispatch",
+    "label": "工单调度",
+    "roleRefs": [
+     "r2"
+    ],
+    "permissionRefs": [
+     "work_order:assign"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "待派单",
+    "assigneeRole": "r1",
+    "phase": "创建"
+   },
+   {
+    "id": "node_assigned",
+    "name": "服务中",
+    "assigneeRole": "r2",
+    "phase": "执行"
+   },
+   {
+    "id": "node_completed",
+    "name": "已完成",
+    "assigneeRole": "r3",
+    "phase": "结单"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_assigned",
+    "condition": "养老顾问指派服务人员"
+   },
+   {
+    "from": "node_assigned",
+    "to": "node_completed",
+    "condition": "服务人员完成服务并记录"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "elderly_list",
+    "name": "老人档案列表",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elderly_resident.name",
+     "elderly_resident.gender",
+     "elderly_resident.age",
+     "elderly_resident.health_level"
+    ],
+    "actionPermissions": [
+     "elderly_resident:read",
+     "elderly_resident:create",
+     "elderly_resident:update"
+    ]
+   },
+   {
+    "id": "work_order_dispatch",
+    "name": "服务工单调度",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.order_type",
+     "work_order.appointment_time"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:create",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "operation_dashboard",
+    "name": "运营数据总览看板",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "elderly_resident.age"
+    ],
+    "actionPermissions": []
+   },
+   {
+    "id": "financial_report",
+    "name": "财务结算报表",
+    "kind": "workbench",
+    "fieldBindings": [
+     "financial_settlement.settlement_no",
+     "financial_settlement.fee_amount",
+     "financial_settlement.subsidy_amount"
+    ],
+    "actionPermissions": [
+     "financial_settlement:read",
+     "financial_settlement:approve",
+     "financial_settlement:export"
+    ]
+   },
+   {
+    "id": "my_tasks",
+    "name": "我的任务",
+    "kind": "workbench",
+    "fieldBindings": [
+     "task.service_time",
+     "task.service_address",
+     "task.service_items"
+    ],
+    "actionPermissions": [
+     "task:read",
+     "task:update"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_health_assess",
+    "name": "健康状况智能评估",
+    "inputFields": [
+     "elderly_resident.age",
+     "elderly_resident.health_level"
+    ],
+    "outputField": "elderly_resident.living_status",
+    "roleRefs": [
+     "r1"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "elderly_list",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "work_order_dispatch",
+    "workflowRef": "node_created"
+   },
+   {
+    "pageRef": "my_tasks",
+    "workflowRef": "node_assigned"
+   }
+  ],
+  "landingPageRef": "elderly_list",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "r1",
+   "r2",
+   "r3"
+  ],
+  "dataModelRefs": [
+   "elderly_resident",
+   "work_order",
+   "financial_settlement",
+   "caregiver",
+   "task"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_order_resident",
+    "statement": "服务工单必须关联有效的服务对象老人档案",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.resident_ref",
+     "elderly_resident"
+    ]
+   },
+   {
+    "id": "inv_workflow_dispatch",
+    "statement": "服务工单的执行阶段必须由服务人员角色处理",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "node_assigned",
+     "r2"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

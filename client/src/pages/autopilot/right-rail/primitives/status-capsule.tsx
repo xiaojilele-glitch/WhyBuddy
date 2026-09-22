@@ -16,7 +16,7 @@ import type { FC } from "react";
 import type { AppLocale } from "@/lib/locale";
 import { cn } from "@/lib/utils";
 
-import type { SubStageStatus } from "./index";
+import type { SubStageStatus } from "./sub-stage-status";
 
 export interface StatusCapsuleProps {
   status: SubStageStatus;

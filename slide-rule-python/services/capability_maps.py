@@ -322,90 +322,121 @@ def execute_synthesis(state: V5SessionState, cap_id: str, role: str, turn: str, 
         "kind": "synthesis",
     }
 
+def _clarification_context(state: V5SessionState) -> str:
+    """第 1 步的产物：澄清 / 缺口 / 扩展假设那几条能力已经落下的正文。
+
+    spec 刻意**不吃原始那一句话**——直接吃原句等于把「从一句话发明」原样往前
+    挪一格，什么也没改善。吃的是澄清之后的东西：目标用户、假设、约束、
+    已经问出来的缺口。
+    """
+    wanted = {"intent.clarify", "gap.ask", "question.expand", "evidence.search"}
+    stales = set(getattr(state, "staleArtifactIds", []) or [])
+    chunks: List[str] = []
+    for a in (getattr(state, "artifacts", []) or []):
+        art = a if isinstance(a, dict) else getattr(a, "__dict__", {})
+        if str(art.get("id") or "") in stales:
+            continue
+        if str(art.get("capabilityId") or art.get("producedBy") or "") not in wanted:
+            continue
+        body = str(art.get("content") or art.get("summary") or "").strip()
+        if body:
+            chunks.append(body[:1500])
+    return "\n\n".join(chunks[:4])
+
+
 def execute_structure(state: V5SessionState, cap_id: str, role: str, turn: str, inputs: List[str]) -> Dict[str, Any]:
-    # PYTHON_AUTHORITY slice for structure.decompose (CapabilityParity): dedicated structured SPEC tree
-    # with verifiable schema: tree dict containing root + nodes/requirements/risks/deliverables/evidenceRef fields.
-    # Produces explicit kind="spec_tree" + gateResults with G_SCHEMA/G_INV semantics (passed/failed).
-    # Content carries markdown tree + evidenceRef for contract (minChars, ears); no generic _evidence_result free-text.
-    # No Node fallback; Python owns the schema+invariant-gate contract slice for this capability.
+    """起草真 spec（2026-08-13 换掉了原来那份 f-string 占位）。
+
+    ## 换掉的是什么
+
+    原实现是三行 f-string：
+
+        req_text   = f"Implement scoped permission checks for {goal}"
+        risk_text  = f"Privilege escalation via inheritance in {goal}"
+        deliv_text = f"SPEC tree + traceability for {goal} MVP"
+
+    恒定 1 需求 1 风险 1 交付物——**换什么题材，那条唯一的需求都是同一句英文**。
+    底下 G_SCHEMA / G_INV 校验的是**代码上一行刚拼出来的形状**，所以恒过。
+
+    ## 失败为什么不回落占位
+
+    那份最大的问题不是写得糙，是它**永远成功**：一份假树看起来跟真的一样，
+    还能过自己的闸，于是没有任何一处会发现它是假的。所以这里生成失败就
+    如实产出失败态（gateResults 标 failed、summary 说人话），**不再造一个
+    看着像那么回事的空壳**。
+
+    ⚠ 抛不出去：这条能力在推演循环里，异常会拖垮整轮。所以捕获后落成
+    failed 产物，让覆盖率闸按「这条能力没成功」处理——那是它本来就会做的事。
+    """
+    from .spec_tree import SpecGenerationError, generate_spec_tree, spec_to_markdown
+
     goal = _goal_text(state)
     evidence = retrieve_evidence(goal, top_k=6)
-    base = generate_with_rag(f"structure.decompose for {goal}", evidence)
-    ev_block = "\n".join([f"- evidenceRef:{e.get('id','e')} {e.get('content','')} (source:{e.get('source','')})" for e in evidence[:3]])
-    req_text = f"Implement scoped permission checks for {goal}"
-    risk_text = f"Privilege escalation via inheritance in {goal}"
-    deliv_text = f"SPEC tree + traceability for {goal} MVP"
-    structured = (
-        base + "\n\n# SPEC Tree\n"
-        f"Root: {goal}\n\n"
-        "## Requirements\n"
-        f"- id:r1 text:{req_text} (evidenceRef:e1)\n\n"
-        "## Risks\n"
-        f"- id:rsk1 text:{risk_text} (evidenceRef:e2)\n\n"
-        "## Deliverables\n"
-        f"- id:d1 text:{deliv_text} (evidenceRef:e3)\n\n"
-        "## Evidence references\n" + ev_block + "\n"
+    ev_block = "\n".join(
+        f"- {e.get('content','')}（source:{e.get('source','')}）" for e in evidence[:3]
     )
-    tree_schema = {
-        "root": {"id": "root-1", "text": goal, "type": "goal"},
-        "requirements": [{"id": "r1", "text": req_text, "evidenceRef": "e1"}],
-        "risks": [{"id": "rsk1", "text": risk_text, "evidenceRef": "e2"}],
-        "deliverables": [{"id": "d1", "text": deliv_text, "evidenceRef": "e3"}],
-        "evidenceRefs": [e.get("id", "e") for e in evidence[:3]],
-        "nodes": [
-            {"id": "root-1", "type": "goal", "text": goal},
-            {"id": "r1", "type": "requirement", "text": req_text, "evidenceRef": "e1"},
-            {"id": "rsk1", "type": "risk", "text": risk_text, "evidenceRef": "e2"},
-            {"id": "d1", "type": "deliverable", "text": deliv_text, "evidenceRef": "e3"},
-        ],
-    }
-    # Harden: compute G_SCHEMA/G_INV from actual tree + evidenceRefs (not static passed).
-    # Performs shape check, nodes presence, evidenceRef grounding + orphan detection per review finding 2.
-    ev_ids = {str(e.get("id", "")) for e in evidence if e.get("id")}
-    evrefs = tree_schema.get("evidenceRefs", [])
-    reqs = tree_schema.get("requirements", [])
-    risks = tree_schema.get("risks", [])
-    delivs = tree_schema.get("deliverables", [])
-    nodes = tree_schema.get("nodes", [])
-    root = tree_schema.get("root", {})
-    has_core = bool(root.get("id")) and len(reqs) > 0 and len(risks) > 0 and len(delivs) > 0 and len(nodes) > 0
-    nodes_have_ids = all(bool(n.get("id")) for n in nodes) if nodes else False
-    schema_pass = has_core and nodes_have_ids
-    all_refs_grounded = True
-    for item in reqs + risks + delivs:
-        eref = item.get("evidenceRef")
-        if eref and eref not in ev_ids and eref not in evrefs:
-            all_refs_grounded = False
-    node_id_set = {n.get("id") for n in nodes if n.get("id")}
-    structure_ids = {root.get("id")} if root.get("id") else set()
-    for sec in (reqs, risks, delivs):
-        structure_ids.update(i.get("id") for i in sec if i.get("id"))
-    no_orphans = bool(node_id_set) and node_id_set.issubset(structure_ids | set(evrefs)) if node_id_set else True
-    gate_results = {
-        "G_SCHEMA": {
-            "status": "passed" if schema_pass else "failed",
-            "reason": "tree has root + requirements + risks + deliverables + evidenceRef nodes" if schema_pass else "tree schema incomplete or missing required sections/nodes",
-        },
-        "G_INV": {
-            "status": "passed" if (all_refs_grounded and no_orphans) else "failed",
-            "checks": [
-                "requirements grounded in evidence" if all_refs_grounded else "some requirements lack consistent evidenceRef",
-                "no orphan nodes" if no_orphans else "orphan nodes without parent/trace",
-                "deliverables traceable",
-                "risks have mitigations path",
-            ],
-        },
-    }
+    try:
+        spec = generate_spec_tree(
+            goal,
+            clarified=_clarification_context(state),
+            evidence=ev_block,
+        )
+    except SpecGenerationError as exc:
+        reason = str(exc)[:400]
+        print(f"[capability_maps] spec 起草失败：{reason}")
+        return {
+            "title": "SPEC Tree",
+            "summary": f"spec 起草未通过机械校验：{reason}",
+            "content": (
+                "# SPEC Tree\n\n"
+                "本轮未能产出通过校验的规格树。**没有回落成占位内容**——"
+                "一份看起来像那么回事的假 spec 比没有更糟，它会让下游以为上游是厚的。\n\n"
+                f"失败原因：{reason}\n"
+            ),
+            "provenance": "python-spec",
+            "sources": evidence,
+            "kind": "spec_tree",
+            "gateResults": {
+                "G_SCHEMA": {"status": "failed", "reason": reason},
+                "G_INV": {"status": "failed", "checks": ["spec 未生成，无从校验引用完整性"]},
+            },
+        }
+
+    tree = spec.model_dump()
+    covered = {c for n in spec.nodes if n.type == "requirement" for c in n.coversCriteria}
     return {
         "title": "SPEC Tree",
-        "summary": "Decomposed goal into evidence-backed structure",
-        "content": structured,
-        "provenance": "python-rag",
+        "summary": (
+            f"{len(spec.successCriteria)} 条成功判据 · "
+            f"{sum(1 for n in spec.nodes if n.type == 'requirement')} 个需求 · "
+            f"{len(spec.pages)} 页"
+        ),
+        "content": spec_to_markdown(spec),
+        "provenance": "python-spec",
         "sources": evidence,
         "kind": "spec_tree",
-        "tree": tree_schema,
-        "gateResults": gate_results,
+        "tree": tree,
+        # 这两道闸的判据现在**不再是自己刚拼出来的形状**：spec 是模型产出的，
+        # 校验器是独立的，能真失败——失败的那条路在上面的 except 分支里。
+        "gateResults": {
+            "G_SCHEMA": {
+                "status": "passed",
+                "reason": (
+                    f"规格树通过契约校验：{len(spec.nodes)} 个节点、"
+                    f"{len(spec.pages)} 页，引用全部解析得开"
+                ),
+            },
+            "G_INV": {
+                "status": "passed",
+                "checks": [
+                    f"{len(covered)}/{len(spec.successCriteria)} 条成功判据有 requirement 认领",
+                    "parentId / coversCriteria / evidenceRefs 全部解析得开，无环",
+                    "每一页的 coversNodes 都指向 requirement 或 design",
+                ],
+            },
+        },
     }
+
 
 def execute_document(state: V5SessionState, cap_id: str, role: str, turn: str, inputs: List[str]) -> Dict[str, Any]:
     return _evidence_result(

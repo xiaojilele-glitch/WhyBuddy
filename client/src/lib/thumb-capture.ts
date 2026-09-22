@@ -9,19 +9,45 @@
  *   ② sheet —— 生成时给设计 LLM 排版式用的那张首页参照板，是示意图
  *   ③ 活渲染 —— 前两级都没有时，卡片现挂一个真的 AppRuntimeScreen
  *
- * 采集就发生在 ③ 上：**既然那次昂贵的渲染已经发生了，就地把它采下来存住**，
- * 于是「这次活渲染是最后一次」。下次进应用中心，这张卡贴的是图。
+ * 采集发生在两处：
+ *
+ *   · ③ 首页活渲染（有预算）——既然那次昂贵的渲染已经发生了，就地采下来，
+ *     于是「这次活渲染是最后一次」。
+ *   · 推演收口（无预算、可覆盖）——舞台上的落地页已经渲染好了，SnapDOM
+ *     拍同源 iframe 存成 shot。下次进应用中心贴的是图，不再给每张卡挂一个
+ *     Tailwind iframe。
  *
  * 为什么不放在服务端起个无头浏览器去截：那等于把同一个应用再渲染一遍，还要背
  * 上沙盒/容器/浏览器安装那一整套运维面。副作用还是白赚的——**存量应用会被自动
  * 补上**：它们没有会话可供服务端打开（会话不跨重启存活），但只要有人看见过那
  * 张卡，它就有图了。
  *
+ * ## 采集引擎：SnapDOM，不是 html2canvas
+ *
+ * ⚠ 2026-08-20：html2canvas 1.4.1 停在 2022，README 仍写 experimental；它自己
+ * 重画 CSS，Tailwind 的 flex/grid/`::before`/CSS 变量是已知翻车点。我们还曾把
+ * iframe 的 **body** 交给它——页面的 Tailwind Play 样式在 iframe `<head>` 里，
+ * 只克隆 body 等于把样式表丢掉。真机上看得到、截出来是白底或没排版。
+ *
+ * GitHub 上这条链已经踩完了，别再发明：
+ *
+ *   · monday.com 工程博文 / modern-screenshot `clone-iframe.ts`：同源 iframe
+ *     采 `contentDocument.documentElement`，不是 body（head 里的样式才进树）。
+ *   · SnapDOM（`@zumer/snapdom`，LobeHub / 腾讯 tmagic-editor / Trilium 在用）
+ *     对同源 iframe 走 `rasterizeIframe`：内部就是
+ *     `toPng(contentDocument.documentElement)`，并 pin 视口（#449——整页
+ *     scrollHeight 压进卡片会糊成一条）。#371 同样是「拍 body 丢 head 伪元素」。
+ *
+ * 所以这里把 **iframe 元素**交给 snapdom，让它走那条已经修过的路；老区块渲染
+ * 没有 iframe，仍采缩放之前那一层。`embedFonts: false` 跟当年 skipFonts 同一
+ * 取向——中文 webfont 内联会把主线程拖死，缩略图用系统字体即可。
+ *
  * ## 为什么截的是缩放之前那一层
  *
- * 活渲染是把 1440×810（或手机档 390×844）的画布用 CSS transform 缩到 309px
+ * 活渲染是把 1440×810（或手机档 405×720）的画布用 CSS transform 缩到 309px
  * 宽的卡片里。直接截卡片只能得到 309px 宽的糊图；截 transform 之前那一层拿到
- * 的是画布原尺寸，再乘 pixelRatio，才是一张能用的缩略图。
+ * 的是画布原尺寸，再乘 pixelRatio，才是一张能用的缩略图。iframe 用 offsetWidth
+ * （布局尺寸），不受父级 transform 影响。
  *
  * ## 节流的纪律
  *
@@ -32,6 +58,15 @@
  */
 
 import { aspectForDevice } from "./justified-rows";
+
+/** 采集链的去向日志（与 studio-landing-shot 同一个前缀，便于一起 grep）。 */
+function capnote(message: string): void {
+  try {
+    console.info(`[landing-shot] ${message}`);
+  } catch {
+    /* 打日志本身不许成为故障源 */
+  }
+}
 
 /** 目标画幅：跟参照板出图、跟卡片比例三者对齐（见 justified-rows 的 DEVICE_ASPECT）。 */
 const SHOT_CANVAS: Record<string, { w: number; h: number }> = {
@@ -72,10 +107,14 @@ export function captureBudgetLeft(): number {
 /**
  * 把采到的画布按目标画幅裁一刀。
  *
- * 从**左上角**切，不是居中裁：桌面档画布本来就是 16:9，切不切都一样；手机档
- * 画布是 390×844（0.462）比卡片(9:16)更窄长，居中裁会把顶部那条应用标题栏切
- * 掉，而缩略图恰恰要那一截。留头去尾跟活渲染那条路
- * （AppRuntimeScreen 的 scaleFit="width"）看到的是同一块画面。
+ * 从**左上角**切，不是居中裁。
+ *
+ * 2026-08-03 起画布与目标画幅同比（手机档 405×720 与 720×1280 都是 9:16），
+ * 这一刀实际切不掉任何东西。留着不是冗余：
+ *   · 画布尺寸与出图尺寸是两张表，谁先动都可能再次分叉，这里是最后一道兜底；
+ *   · 兜底的方向必须是**留头去尾**——手机档一旦又变窄长，居中裁会把顶部那条
+ *     应用标题栏切掉，而缩略图恰恰要那一截。
+ * 这也跟活渲染那条路（AppRuntimeScreen 的 scaleFit="width"）看到的是同一块画面。
  */
 function cropToAspect(
   src: HTMLCanvasElement,
@@ -138,10 +177,88 @@ function whenIdle(): Promise<void> {
 export interface CaptureRequest {
   /** 落库记录 id——回传按它写。 */
   appId: string;
-  /** 活渲染的外层容器（data-testid="app-thumb-live"）。 */
+  /** 活渲染的外层容器（data-testid="app-thumb-live" / app-thumb-html）。 */
   container: HTMLElement;
   /** 这个应用设计的档位，决定目标画幅。 */
   device?: string | null;
+  /**
+   * 推演刚结束、舞台已经渲染好：这一张必须采，不受 MAX_PER_VISIT 限制。
+   *
+   * 首页那条预算是防「200 张卡齐射」；推演收口只有一张，不该被首页的配额挤掉。
+   */
+  bypassBudget?: boolean;
+  /**
+   * 覆盖已有 shot。推演收口必须换图（这一版跟上一版长得不一样）；
+   * 首页众包补图默认仍幂等——已经有图就别让路过的访客把图改掉。
+   */
+  replace?: boolean;
+}
+
+/** 回传地址。replace 才能覆盖已有 shot，默认路径保持幂等。 */
+export function previewUploadUrl(appId: string, replace?: boolean): string {
+  const base = `/api/sliderule/apps/${encodeURIComponent(appId)}/preview`;
+  return replace ? `${base}?replace=1` : base;
+}
+
+/**
+ * 真正该采的那一层 DOM。
+ *
+ * spec-first 页面跑在同源 iframe 里（html-app-surface）。对着父容器采，框内是
+ * 空白——文档不在那棵树上。把 **iframe 元素**交给 SnapDOM：它内部采
+ * `contentDocument.documentElement`（head 里的 Tailwind 才在树上），并 pin
+ * 视口，不会把整页长滚动压进一张卡。
+ *
+ * 老区块渲染没有 iframe，仍采缩放之前那一层（卡片上的 transform 会把
+ * 1440 画布压成 309px，直接采卡片是糊的）。
+ */
+export function resolveCaptureNode(container: HTMLElement): {
+  kind: "iframe" | "dom";
+  node: HTMLElement;
+  iframe?: HTMLIFrameElement;
+} | null {
+  const iframe = container.querySelector<HTMLIFrameElement>(
+    '[data-testid="html-app-surface"]'
+  );
+  const doc = iframe?.contentDocument ?? null;
+  const body = doc?.body ?? null;
+  const root = doc?.documentElement ?? null;
+  if (
+    iframe &&
+    root &&
+    body &&
+    (body.childElementCount > 0 || Boolean((body.textContent || "").trim())) &&
+    (body.offsetWidth > 0 || body.scrollWidth > 0 || iframe.clientWidth > 0)
+  ) {
+    return { kind: "iframe", node: iframe, iframe };
+  }
+  const scaled = container.querySelector<HTMLElement>("[style*='transform']");
+  const node = (scaled?.firstElementChild as HTMLElement | null) ?? scaled;
+  if (!node || !node.offsetWidth || !node.offsetHeight) return null;
+  return { kind: "dom", node };
+}
+
+/**
+ * 节点 → canvas。**导出给画布档的「导出 PNG」复用**（2026-08-25）。
+ *
+ * ⚠ 别在画布那边另写一份 snapdom 调用：dpr / embedFonts / backgroundColor /
+ *   fast 这四个参数是这个仓踩出来的（见本文件头注里 iframe 那条），
+ *   抄一份过去就是同一件事两套写法，改一处忘一处。要改一起改。
+ */
+export async function captureNodeToCanvas(
+  node: HTMLElement
+): Promise<HTMLCanvasElement> {
+  return nodeToCanvas(node);
+}
+
+async function nodeToCanvas(node: HTMLElement): Promise<HTMLCanvasElement> {
+  const { snapdom } = await import("@zumer/snapdom");
+  const iframe = node.tagName === "IFRAME";
+  return snapdom.toCanvas(node, {
+    dpr: 2,
+    embedFonts: false,
+    backgroundColor: iframe ? "#ffffff" : "#f0f2f5",
+    fast: true,
+  });
 }
 
 /**
@@ -152,49 +269,56 @@ export interface CaptureRequest {
  * 都会返回 false）。
  */
 export function captureAndUpload(req: CaptureRequest): Promise<boolean> {
-  const { appId, container, device } = req;
+  const { appId, container, device, bypassBudget, replace } = req;
   if (!appId || !container) return Promise.resolve(false);
-  if (attempted.has(appId)) return Promise.resolve(false);
-  if (capturedThisVisit >= MAX_PER_VISIT) return Promise.resolve(false);
-  attempted.add(appId);
-  capturedThisVisit += 1;
+  if (!bypassBudget) {
+    if (attempted.has(appId)) return Promise.resolve(false);
+    if (capturedThisVisit >= MAX_PER_VISIT) return Promise.resolve(false);
+    attempted.add(appId);
+    capturedThisVisit += 1;
+  }
 
   const run = chain.then(async () => {
     try {
       await whenIdle();
-      // 缩放之前那一层：外层 transform 把画布压成了卡片大小，这里要原尺寸。
-      const scaled = container.querySelector<HTMLElement>("[style*='transform']");
-      const node = (scaled?.firstElementChild as HTMLElement | null) ?? scaled;
-      if (!node || !node.offsetWidth || !node.offsetHeight) return false;
+      const resolved = resolveCaptureNode(container);
+      if (!resolved) {
+        // iframe 还没编完 / 没内容 / 宽高为 0 都落这里。
+        capnote(`找不到可采的节点（app=${appId}）——画面还没渲染好就来采了`);
+        return false;
+      }
 
-      const { toCanvas } = await import("html-to-image");
-      const canvas = await toCanvas(node, {
-        // 绕开外层那个把它缩进卡片的 transform，按画布原尺寸采
-        width: node.offsetWidth,
-        height: node.offsetHeight,
-        pixelRatio: 2,
-        backgroundColor: "#f0f2f5",
-        style: { transform: "none", transformOrigin: "top left" },
-        // 不去内联远程字体：应用用的是系统中文字体栈，内联一份中文 webfont 是
-        // 几 MB 的下载，而且离线/被 CSP 挡住时会整张失败。实测跳过之后中文照常
-        // 渲染（走系统字体），这是划算的取舍。
-        skipFonts: true,
-      });
-
+      const canvas = await nodeToCanvas(resolved.node);
       const blob = await canvasToBlob(cropToAspect(canvas, device));
-      if (!blob) return false;
+      if (!blob) {
+        capnote(`画布转 blob 失败（app=${appId}）`);
+        return false;
+      }
 
-      const res = await fetch(`/api/sliderule/apps/${encodeURIComponent(appId)}/preview`, {
+      const res = await fetch(previewUploadUrl(appId, replace), {
         method: "POST",
         // 按 blob 实际类型报，不写死——toBlob 不认 webp 时会静默回落成 PNG。
         headers: { "Content-Type": blob.type || "image/webp" },
         body: blob,
       });
-      if (!res.ok) return false;
-      const json = (await res.json().catch(() => null)) as { stored?: boolean } | null;
-      return Boolean(json?.stored);
-    } catch {
-      // 采集是增强项：任何异常都只意味着这张卡这次没补上图。
+      if (!res.ok) {
+        // 403 = 内部 key 没注入；404 = 看不见这个应用（私有/未登录）；
+        // 413 = 图太大；415 = 类型不认。每一种的修法都不一样，必须报出来。
+        capnote(`回传被拒 HTTP ${res.status}（app=${appId}, replace=${Boolean(replace)}）`);
+        return false;
+      }
+      const json = (await res.json().catch(() => null)) as
+        | { stored?: boolean; reason?: string }
+        | null;
+      if (!json?.stored) {
+        capnote(`服务端没存（app=${appId}）：${json?.reason || "未说明"}`);
+        return false;
+      }
+      capnote(`已存入（app=${appId}, ${blob.size} 字节 ${blob.type}）`);
+      return true;
+    } catch (err) {
+      // 采集是增强项：任何异常都只意味着这次没补上图——但不许连原因都不说。
+      capnote(`采集抛异常（app=${appId}）：${String(err).slice(0, 200)}`);
       return false;
     }
   });

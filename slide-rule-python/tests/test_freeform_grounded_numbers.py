@@ -81,6 +81,18 @@ def test_dataref_without_aggregate_does_not_ground_numbers():
         )
 
 
+def test_only_trusted_landing_image_reference_is_accepted():
+    design = _design().model_validate(
+        {"root": {"tag": "div", "imageRef": "landing-hero", "imageAlt": "星空营地"}}
+    )
+    assert design.root.imageRef == "landing-hero"
+
+    with pytest.raises(ValidationError, match="imageRef"):
+        _design().model_validate(
+            {"root": {"tag": "div", "imageRef": "https://example.com/tracker.png"}}
+        )
+
+
 def test_text_without_digits_passes():
     _design().model_validate({"root": {"tag": "div", "text": "订单总量概览"}})
     _design().model_validate({"root": {"tag": "div"}})

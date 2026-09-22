@@ -10,6 +10,8 @@
  */
 
 import React, { useMemo, useState } from "react";
+import { DEFAULT_SESSION_ID } from "@/lib/sliderule-session-id";
+import { Segmented, Tag } from "antd";
 import { MermaidDiagram } from "../MermaidDiagram";
 import type { PublishClosureSummary } from "../derive-cross-runtime-summary";
 import { EvidenceBadges } from "./EvidenceBadges";
@@ -23,6 +25,7 @@ import {
   resolveRoleRef,
   edgesForSkill,
   crossSkillEdgesToMermaid,
+  normalizeRoles,
 } from "./five-system-model";
 
 interface WorkflowScreenProps {
@@ -60,7 +63,7 @@ export function WorkflowScreen({
   mermaidSource,
   model,
   skillRuntimeGraph,
-  sessionId = "sliderule-v51-product",
+  sessionId = DEFAULT_SESSION_ID,
   isActive = false,
   className = "",
 }: WorkflowScreenProps) {
@@ -125,7 +128,7 @@ export function WorkflowScreen({
 
   // 图例条数据：按角色聚合（color 与图上节点色条一致）
   const roleLegend = useMemo(() => {
-    const declaredRoles = model?.rbac?.roles ?? [];
+    const declaredRoles = normalizeRoles(model).map(r => r.id);
     const byRole = new Map<string, { role: string; resolved: boolean; count: number; color: string }>();
     for (const { role } of roleResolutions) {
       if (!role.ref) continue;
@@ -172,29 +175,19 @@ export function WorkflowScreen({
             </span>
           )}
           {sourceKind === "model" && nodes.length > 0 && (
-            <div
-              className="flex items-center gap-0.5 rounded-full bg-[#e9edf2] p-0.5 ring-1 ring-[#e5e7eb]/80"
+            <Segmented
+              size="small"
               data-testid="workflow-mode-toggle"
-            >
-              {([
+              value={screenMode}
+              onChange={value => setScreenMode(value as "diagram" | "runtime")}
+              options={[
                 { id: "diagram" as const, label: "流程图" },
                 { id: "runtime" as const, label: "试运行" },
-              ]).map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  data-testid={`workflow-mode-${id}`}
-                  onClick={() => setScreenMode(id)}
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                    screenMode === id
-                      ? "bg-white text-stone-800 shadow-sm"
-                      : "text-stone-500 hover:text-stone-700"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+              ].map(({ id, label }) => ({
+                value: id,
+                label: <span data-testid={`workflow-mode-${id}`}>{label}</span>,
+              }))}
+            />
           )}
           <EvidenceBadges evidence={evidence} />
         </div>
@@ -211,33 +204,22 @@ export function WorkflowScreen({
             data-testid="workflow-chain-tabs"
           >
             <span className="text-[10px] text-stone-400">业务链路</span>
-            {[
-              { key: "primary", label: workflow?.name || "主链路", kind: "" },
-              ...chains.map((c) => ({
-                key: c.id || c.name || "",
-                label: c.name || c.id || "未命名链路",
-                kind: c.kind ? CHAIN_KIND_LABEL[c.kind] ?? c.kind : "",
-              })),
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                data-testid={`workflow-chain-${tab.key}`}
-                onClick={() => setChainId(tab.key)}
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 transition-colors ${
-                  chainId === tab.key
-                    ? "bg-violet-50 text-violet-700 ring-violet-200"
-                    : "bg-white text-stone-500 ring-[#e5e7eb] hover:text-stone-700"
-                }`}
-              >
-                {tab.label}
-                {tab.kind && (
-                  <span className={chainId === tab.key ? "text-violet-400" : "text-stone-300"}>
-                    {tab.kind}
-                  </span>
-                )}
-              </button>
-            ))}
+            <Segmented
+              size="small"
+              value={chainId}
+              onChange={value => setChainId(String(value))}
+              options={[
+                { key: "primary", label: workflow?.name || "主链路", kind: "" },
+                ...chains.map((c) => ({
+                  key: c.id || c.name || "",
+                  label: c.name || c.id || "未命名链路",
+                  kind: c.kind ? CHAIN_KIND_LABEL[c.kind] ?? c.kind : "",
+                })),
+              ].map(tab => ({
+                value: tab.key,
+                label: <span data-testid={`workflow-chain-${tab.key}`}>{tab.label}{tab.kind && <Tag bordered={false}>{tab.kind}</Tag>}</span>,
+              }))}
+            />
           </div>
         )}
 

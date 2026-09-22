@@ -1,0 +1,284 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elderly",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "id_card",
+      "name": "身份证号",
+      "type": "string"
+     },
+     {
+      "id": "gender",
+      "name": "性别",
+      "type": "enum"
+     },
+     {
+      "id": "birth_date",
+      "name": "出生日期",
+      "type": "date"
+     },
+     {
+      "id": "address",
+      "name": "详细居住地址",
+      "type": "string"
+     },
+     {
+      "id": "care_level",
+      "name": "护理等级",
+      "type": "enum"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "enum"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "urgency",
+      "name": "紧急度",
+      "type": "enum"
+     },
+     {
+      "id": "elderly_ref",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elderly"
+     },
+     {
+      "id": "service_log",
+      "name": "服务日志与身体状况记录",
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "r1",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "r2",
+    "name": "上门服务人员"
+   }
+  ],
+  "permissions": [
+   "elderly:create",
+   "elderly:read",
+   "elderly:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign"
+  ],
+  "menus": [
+   {
+    "id": "menu_1",
+    "label": "老人档案",
+    "roleRefs": [
+     "r1"
+    ],
+    "permissionRefs": [
+     "elderly:read"
+    ]
+   },
+   {
+    "id": "menu_2",
+    "label": "应急指挥",
+    "roleRefs": [
+     "r2"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "待派单",
+    "assigneeRole": "r1",
+    "phase": "创建"
+   },
+   {
+    "id": "node_dispatched",
+    "name": "服务中",
+    "assigneeRole": "r2",
+    "phase": "执行"
+   },
+   {
+    "id": "node_completed",
+    "name": "已完成",
+    "assigneeRole": "r2",
+    "phase": "结案"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_dispatched",
+    "condition": "系统自动匹配就近服务人员并推送工单"
+   },
+   {
+    "from": "node_dispatched",
+    "to": "node_completed",
+    "condition": "服务人员提交服务日志及电子签名"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elderly.name",
+     "elderly.id_card",
+     "elderly.gender",
+     "elderly.birth_date",
+     "elderly.address",
+     "elderly.care_level",
+     "elderly.emergency_contact",
+     "elderly.status"
+    ],
+    "actionPermissions": [
+     "elderly:create",
+     "elderly:read",
+     "elderly:update"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "应急指挥大屏与工单派发页",
+    "kind": "monitor",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.urgency",
+     "work_order.elderly_ref"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:assign",
+     "work_order:create"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "移动端服务执行页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_log"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_care_eval",
+    "name": "护理等级智能评估",
+    "inputFields": [
+     "elderly.birth_date",
+     "elderly.gender"
+    ],
+    "outputField": "elderly.care_level",
+    "roleRefs": [
+     "r1",
+     "r2"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p1",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "node_dispatched"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "node_completed"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "r1",
+   "r2"
+  ],
+  "dataModelRefs": [
+   "elderly",
+   "work_order"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_1",
+    "statement": "应急呼叫生成的工单必须关联具体的老人档案",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.elderly_ref",
+     "elderly"
+    ]
+   },
+   {
+    "id": "inv_2",
+    "statement": "工单流转至已完成状态时必须包含服务日志记录",
+    "systems": [
+     "workflow",
+     "datamodel"
+    ],
+    "refs": [
+     "node_completed",
+     "work_order.service_log"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

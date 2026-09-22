@@ -1,0 +1,7053 @@
+{
+  "model": "gpt-5.6-luna",
+  "kinds": [
+    "workbench",
+    "wizard",
+    "kanban",
+    "calendar",
+    "monitor",
+    "dashboard"
+  ],
+  "pageKindFacts": {
+    "workbench": "主实体的表（可筛、可选行、可行内操作）+ 全部 12 个区域；声明了积木就由积木画版面，没声明才回落内置 ProTable",
+    "wizard": "主实体的表 + 一条流程步骤条（来自 workflow.nodes）；主列通常被分步表单占住，附属内容走 aside/supplement/footerBar；KPI/趋势走 MetricGrid/TrendChart 积木（page.stats 在这种页上只有桌面渲染、手机不出，所以归积木）",
+    "kanban": "主实体的看板（按 statusFieldId 分列，缺这个字段就回落成表）；右栏比别的页型窄一格（3/12），因为棋盘吃宽度；KPI/趋势走 MetricGrid/TrendChart 积木（同 wizard）",
+    "calendar": "主实体的月历（按 dateFieldId 排，缺这个字段就回落成表）；右栏同样窄一格；KPI/趋势走 MetricGrid/TrendChart 积木（同 wizard）",
+    "monitor": "**没有逐行视图**。KPI 与图表走 page.stats / page.charts，由 freeformOverview 现场设计整页版式；积木走 blockScaffold，排在设计版式后面",
+    "dashboard": "同 monitor（没有逐行视图）；没有 freeformOverview 时退回业务网格"
+  },
+  "blocks": {
+    "MetricGrid": {
+      "current": [
+        "calendar",
+        "kanban",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "硬判据：硬④ pageKindPresets 在 workbench 页上用了它，这条组合已自检通过",
+        "wizard": "可用统计积木展示关键指标",
+        "kanban": "看板可承载关键指标",
+        "calendar": "页面明确支持指标卡",
+        "monitor": "硬判据：硬② 总览页的 KPI/图表归 page.stats/charts，这里会画两遍",
+        "dashboard": "硬判据：硬② 总览页的 KPI/图表归 page.stats/charts，这里会画两遍"
+      }
+    },
+    "TrendChart": {
+      "current": [
+        "calendar",
+        "kanban",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "缺少趋势序列能力，非表格必需",
+        "wizard": "可用趋势积木展示流程变化",
+        "kanban": "看板可承载趋势分析",
+        "calendar": "页面明确支持趋势图",
+        "monitor": "硬判据：硬② 总览页的 KPI/图表归 page.stats/charts，这里会画两遍",
+        "dashboard": "硬判据：硬② 总览页的 KPI/图表归 page.stats/charts，这里会画两遍"
+      }
+    },
+    "ProportionPie": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "缺少构成分析数据，非工作台必需",
+        "wizard": "构成分析不是流程页核心",
+        "kanban": "构成分析非看板核心",
+        "calendar": "日历页不承担构成分析",
+        "monitor": "图表区可直接展示构成占比",
+        "dashboard": "适合展示业务构成概览"
+      }
+    },
+    "RankedList": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "排行不是主表的必要呈现",
+        "wizard": "业务排行不属于流程表单",
+        "kanban": "排行与状态分列重复",
+        "calendar": "没有排行展示需求",
+        "monitor": "依赖逐项选择，页面无逐行视图",
+        "dashboard": "硬判据：硬④ pageKindPresets 在 dashboard 页上用了它，这条组合已自检通过"
+      }
+    },
+    "ActivityFeed": {
+      "current": [
+        "calendar",
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "硬判据：硬④ pageKindPresets 在 workbench 页上用了它，这条组合已自检通过",
+        "wizard": "动态流不等同于流程时间线",
+        "kanban": "硬判据：硬④ pageKindPresets 在 kanban 页上用了它，这条组合已自检通过",
+        "calendar": "动态流不是日历核心内容",
+        "monitor": "硬判据：硬④ pageKindPresets 在 monitor 页上用了它，这条组合已自检通过",
+        "dashboard": "动态提醒是常见仪表盘信息"
+      }
+    },
+    "DataTable": {
+      "current": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "硬判据：硬④ pageKindPresets 在 workbench 页上用了它，这条组合已自检通过",
+        "wizard": "页面提供主实体表和行操作",
+        "kanban": "无状态字段时可回落表格",
+        "calendar": "无日期字段可回落表格",
+        "monitor": "实体表格与行级操作无承载处",
+        "dashboard": "依赖逐行选择和行级操作"
+      }
+    },
+    "CardGridList": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：主实体列表，适合替代表格",
+        "wizard": "主实体通常用表而非卡片",
+        "kanban": "替代视图并非看板所需",
+        "calendar": "主视图不适合卡片网格",
+        "monitor": "卡片记录依赖实体逐项展示",
+        "dashboard": "记录卡片不是常规概览内容"
+      }
+    },
+    "StandardListRows": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：主实体列表且支持行操作",
+        "wizard": "标准列表不是向导核心视图",
+        "kanban": "替代视图并非看板所需",
+        "calendar": "主视图不适合标准列表",
+        "monitor": "列表行需要实体记录视图",
+        "dashboard": "实体列表不属常规仪表盘"
+      }
+    },
+    "QuickActionPanel": {
+      "current": [
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "快捷入口更适合首页工作台",
+        "wizard": "快捷入口更适合工作台首页",
+        "kanban": "快捷动作非看板核心",
+        "calendar": "不是工作台快捷入口",
+        "monitor": "偏工作台快捷操作，非监控核心",
+        "dashboard": "适合作为常用动作入口"
+      }
+    },
+    "FilterBar": {
+      "current": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "硬判据：硬③ 筛选类必须至少有一种带逐行视图的页，否则无处可去；硬④ pageKindPresets 在 workbench 页上用了它，这条组合已自检通过",
+        "wizard": "全局经营筛选不是向导必需",
+        "kanban": "硬判据：硬④ pageKindPresets 在 kanban 页上用了它，这条组合已自检通过",
+        "calendar": "可筛选日历记录",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "TagFilterRow": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可筛选主表记录",
+        "wizard": "标签筛选不属于流程核心",
+        "kanban": "可按维度筛选看板记录",
+        "calendar": "标签筛选不是必需内容",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "SearchBox": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "支持主表关键词检索",
+        "wizard": "关键词搜索不是向导必需",
+        "kanban": "可搜索并收窄看板记录",
+        "calendar": "关键词搜索偏列表页",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "WorkflowTimeline": {
+      "current": [
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "monitor",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "页面未提供流程链能力",
+        "wizard": "硬判据：硬④ pageKindPresets 在 wizard 页上用了它，这条组合已自检通过",
+        "kanban": "看板本身已表达流程阶段",
+        "calendar": "流程阶段不是日历内容",
+        "monitor": "硬判据：硬④ pageKindPresets 在 monitor 页上用了它，这条组合已自检通过",
+        "dashboard": "流程看板需专门工作流场景"
+      }
+    },
+    "RecordForm": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "工作台不承担内嵌表单录入",
+        "wizard": "硬判据：硬④ pageKindPresets 在 wizard 页上用了它，这条组合已自检通过",
+        "kanban": "看板不承担独立表单流程",
+        "calendar": "表单不是日历主任务",
+        "monitor": "记录表单不属于监控页内容",
+        "dashboard": "单条表单不属仪表盘内容"
+      }
+    },
+    "RecordFormDialog": {
+      "current": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "硬判据：硬④ pageKindPresets 在 workbench 页上用了它，这条组合已自检通过",
+        "wizard": "向导已有主流程表单",
+        "kanban": "硬判据：硬④ pageKindPresets 在 kanban 页上用了它，这条组合已自检通过",
+        "calendar": "硬判据：硬④ pageKindPresets 在 calendar 页上用了它，这条组合已自检通过",
+        "monitor": "弹窗表单与监控展示无关",
+        "dashboard": "硬判据：硬④ pageKindPresets 在 dashboard 页上用了它，这条组合已自检通过"
+      }
+    },
+    "RecordDetail": {
+      "current": [
+        "calendar",
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "硬判据：硬④ pageKindPresets 在 workbench 页上用了它，这条组合已自检通过",
+        "wizard": "可在旁栏展示当前实体明细",
+        "kanban": "硬判据：硬④ pageKindPresets 在 kanban 页上用了它，这条组合已自检通过",
+        "calendar": "硬判据：硬④ pageKindPresets 在 calendar 页上用了它，这条组合已自检通过",
+        "monitor": "需要选定实体查看详情",
+        "dashboard": "依赖选中记录才能展示"
+      }
+    },
+    "StepsForm": {
+      "current": [
+        "wizard"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "分步表单不属于工作台",
+        "wizard": "硬判据：硬④ pageKindPresets 在 wizard 页上用了它，这条组合已自检通过",
+        "kanban": "看板不适合分步录入",
+        "calendar": "分步表单不适合日历页",
+        "monitor": "分步录入不属于监控页",
+        "dashboard": "分步表单应放向导页"
+      }
+    },
+    "SectionedForm": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "长表单应放表单页",
+        "wizard": "兜底强制选：分步录入与提交校验",
+        "kanban": "长表单不属于看板内容",
+        "calendar": "长表单不适合日历页",
+        "monitor": "长表单不属于监控页",
+        "dashboard": "长表单不属仪表盘"
+      }
+    },
+    "EditableSubTable": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "明细子表依附于表单",
+        "wizard": "适合作为表单中的明细子表",
+        "kanban": "明细子表属于表单场景",
+        "calendar": "明细子表不属于日历任务",
+        "monitor": "明细编辑需要表单上下文",
+        "dashboard": "明细子表依赖表单上下文"
+      }
+    },
+    "ContentCard": {
+      "current": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "容器不是工作台必需内容",
+        "wizard": "通用容器不是页面必需内容",
+        "kanban": "看板无需额外容器分组",
+        "calendar": "容器本身不提供日历价值",
+        "monitor": "可组织同类监控区块",
+        "dashboard": "可组织仪表盘相关内容"
+      }
+    },
+    "PageHeader": {
+      "current": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "工作台需要说明与主操作",
+        "wizard": "页面需要标题说明和主要动作",
+        "kanban": "页面需要标题与主要动作",
+        "calendar": "页面需要标题和主要操作",
+        "monitor": "交代监控主题与主要动作",
+        "dashboard": "用于说明页面和主要动作"
+      }
+    },
+    "ResultPanel": {
+      "current": [
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "结果页不属于工作台",
+        "wizard": "兜底强制选：流程结束或异常结果页",
+        "kanban": "结果页不是看板常态",
+        "calendar": "这是结果反馈页组件",
+        "monitor": "仅适用于操作结果或错误页",
+        "dashboard": "兜底强制选：流程结束或异常结果页"
+      }
+    },
+    "StatusTabs": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "状态页签可收窄主表",
+        "wizard": "状态页签属于列表页交互",
+        "kanban": "状态列已替代状态页签",
+        "calendar": "状态页签偏列表页",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "BatchActionBar": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖行选择，适合批量操作",
+        "wizard": "批量操作不是单条流程核心",
+        "kanban": "看板不提供逐行勾选",
+        "calendar": "日历没有逐行勾选",
+        "monitor": "依赖逐行勾选和批量操作",
+        "dashboard": "依赖表格勾选记录"
+      }
+    },
+    "ColumnSettingPanel": {
+      "current": [
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "主表常需列显示配置",
+        "wizard": "列设置不是向导必需能力",
+        "kanban": "看板没有表格列设置",
+        "calendar": "仅适用于表格列管理",
+        "monitor": "依赖字段繁多的数据表格",
+        "dashboard": "仅适用于字段较多的表格"
+      }
+    },
+    "AttachmentPanel": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "附件不是普通工作台必需内容",
+        "wizard": "流程表单常需维护附件",
+        "kanban": "附件面板非看板常规内容",
+        "calendar": "附件不是日历核心内容",
+        "monitor": "附件管理不是监控页核心内容",
+        "dashboard": "附件管理不是仪表盘重点"
+      }
+    },
+    "CommentThread": {
+      "current": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "讨论线程非普通工作台内容",
+        "wizard": "流程处理中常需讨论和回复",
+        "kanban": "讨论线程不属看板主体",
+        "calendar": "讨论线程不是日历必需",
+        "monitor": "讨论线程不是常规监控内容",
+        "dashboard": "讨论线程需专门协作场景"
+      }
+    },
+    "RecordPicker": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "选择器是独立选择任务",
+        "wizard": "可作为向导中的选择步骤",
+        "kanban": "记录选择任务不属看板",
+        "calendar": "不是记录选择任务",
+        "monitor": "记录选择任务无页面承载",
+        "dashboard": "选择任务不属仪表盘概览"
+      }
+    },
+    "KanbanBoard": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "kanban"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "看板属于另一种主视图",
+        "wizard": "状态看板不适合步骤表单页",
+        "kanban": "看板核心就是状态分列",
+        "calendar": "看板与月历视图冲突",
+        "monitor": "看板依赖实体记录与移动操作",
+        "dashboard": "看板需明确的流程操作场景"
+      }
+    },
+    "ScheduleCalendar": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "calendar"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "日历属于另一种主视图",
+        "wizard": "日程视图不是流程向导核心",
+        "kanban": "日程视图与状态看板无关",
+        "calendar": "正是日历页的主视图",
+        "monitor": "日程视图不属于常规监控页",
+        "dashboard": "日程应放日历或工作台页"
+      }
+    },
+    "NotificationInbox": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可作为通知处理工作台",
+        "wizard": "通知收件箱属于消息中心",
+        "kanban": "通知收件箱不是业务看板",
+        "calendar": "通知收件箱不是日历内容",
+        "monitor": "通知收件箱不是监控主视图",
+        "dashboard": "完整通知收件箱应独立呈现"
+      }
+    },
+    "TreeNavigator": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：实体树导航与节点选择",
+        "wizard": "层级导航不是向导主要内容",
+        "kanban": "层级导航不是看板需求",
+        "calendar": "层级导航不属于日历主任务",
+        "monitor": "层级导航与监控指标无关",
+        "dashboard": "层级导航不是仪表盘内容"
+      }
+    },
+    "ApprovalQueue": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "审批处理天然适合工作台",
+        "wizard": "审批队列是任务列表而非单条向导",
+        "kanban": "审批队列是专用任务页",
+        "calendar": "需逐行审批，月历不适合",
+        "monitor": "审批队列需要待办逐项处理",
+        "dashboard": "审批操作依赖任务逐项处理"
+      }
+    },
+    "AuditTrail": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "审计记录适合表格工作台查看",
+        "wizard": "流程页常需查看审计变更",
+        "kanban": "审计记录不属看板主体",
+        "calendar": "审计记录应按时间明细查看",
+        "monitor": "审计展开依赖逐条记录交互",
+        "dashboard": "审计记录应放审计页面"
+      }
+    },
+    "DataImportWizard": {
+      "current": [
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "导入向导不是工作台常规内容",
+        "wizard": "本身就是分步导入流程",
+        "kanban": "导入向导不是看板核心操作",
+        "calendar": "导入向导非日历页面职责",
+        "monitor": "导入向导不属于监控展示",
+        "dashboard": "导入向导不属仪表盘"
+      }
+    },
+    "AsyncTaskMonitor": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "kanban",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "任务状态监控适合工作台",
+        "wizard": "可承载异步流程状态与重试",
+        "kanban": "任务状态适合按列展示和监控",
+        "calendar": "任务监控不属于月历内容",
+        "monitor": "依赖任务实体与逐项操作",
+        "dashboard": "监控异步任务正是仪表盘用途"
+      }
+    },
+    "PermissionMatrix": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可基于实体行配置并提交权限变更",
+        "wizard": "权限矩阵不是常规流程内容",
+        "kanban": "权限配置需要矩阵而非看板",
+        "calendar": "权限配置与日历无关",
+        "monitor": "权限配置不是监控页职责",
+        "dashboard": "权限配置应放管理配置页"
+      }
+    },
+    "DataExportPanel": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "支持全量或选中行导出",
+        "wizard": "缺少逐行选择事件支持",
+        "kanban": "导出依赖逐行选择记录",
+        "calendar": "导出需选择记录，月历不适合",
+        "monitor": "导出依赖实体记录或选中项",
+        "dashboard": "导出面板不是常规概览内容"
+      }
+    },
+    "BulkEditPanel": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可使用已选行批量提交修改",
+        "wizard": "批量编辑依赖已选记录",
+        "kanban": "批量编辑依赖逐行选择记录",
+        "calendar": "批量编辑需逐行选择记录",
+        "monitor": "需要逐行选择记录",
+        "dashboard": "批量编辑不属于监控看板核心操作"
+      }
+    },
+    "MemberAssignment": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可围绕成员行完成增删分配",
+        "wizard": "成员配置适合分步提交",
+        "kanban": "缺少当前成员对象上下文",
+        "calendar": "成员分配不是日历职责",
+        "monitor": "需要逐行管理成员",
+        "dashboard": "缺少当前记录上下文"
+      }
+    },
+    "ContextBreadcrumb": {
+      "current": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "列表工作台通常需要层级导航",
+        "wizard": "流程页需要业务层级路径",
+        "kanban": "层级路径是页面通用导航",
+        "calendar": "页面层级路径适合放在页头",
+        "monitor": "适合作为页面上下文导航",
+        "dashboard": "看板需要展示业务导航层级"
+      }
+    },
+    "LiveRefreshControl": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可控制表格数据刷新与轮询",
+        "wizard": "刷新轮询不是向导核心内容",
+        "kanban": "看板需要刷新和轮询控制",
+        "calendar": "月历数据适合手动或定时刷新",
+        "monitor": "监控页需要刷新与轮询控制",
+        "dashboard": "监控看板应支持刷新与轮询"
+      }
+    },
+    "ActiveFilterSummary": {
+      "current": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可回显并撤销当前筛选条件",
+        "wizard": "向导通常不承载筛选摘要",
+        "kanban": "看板筛选后应回显生效条件",
+        "calendar": "可回显并撤销当前筛选条件",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "AnalyticsDateScope": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "偏分析看板，非工作台常规条件",
+        "wizard": "分析时间口径不属流程内容",
+        "kanban": "可统一驱动看板配套指标趋势",
+        "calendar": "可统一驱动日历及分析时间范围",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "HeaderEntitySummary": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "工作台面向多行，不是单实体详情",
+        "wizard": "分步操作前需明确当前实体",
+        "kanban": "看板没有单一当前实体",
+        "calendar": "月历展示集合而非单个实体",
+        "monitor": "需要当前聚焦业务对象",
+        "dashboard": "看板没有单一当前实体"
+      }
+    },
+    "HeaderProgressSummary": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "需要单对象流程进度上下文",
+        "wizard": "直接对应流程节点进度",
+        "kanban": "看板没有单一当前对象",
+        "calendar": "月历不是单对象流程摘要页",
+        "monitor": "需要当前聚焦业务对象",
+        "dashboard": "看板没有单一业务对象进度"
+      }
+    },
+    "WorkspaceTabs": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：承载多工作对象上下文",
+        "wizard": "多对象页签不属向导结构",
+        "kanban": "多对象工作页签非看板所需",
+        "calendar": "月历不负责多对象工作区管理",
+        "monitor": "不属于监控页核心内容",
+        "dashboard": "兜底强制选：承载多工作对象上下文"
+      }
+    },
+    "SavedViewTabs": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "表格工作台适合复用查询视图",
+        "wizard": "保存查询视图不适合流程页",
+        "kanban": "保存视图适合复用看板筛选",
+        "calendar": "可保存和切换常用日历查询",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "AdvancedFilterBuilder": {
+      "current": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可构建并驱动表格复合筛选",
+        "wizard": "条件构建器不是向导主体",
+        "kanban": "看板可提供复杂条件筛选",
+        "calendar": "月历可按复杂条件筛选记录",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "FacetedFilterPanel": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可基于实体行提供分面筛选",
+        "wizard": "分面筛选不属流程操作",
+        "kanban": "分面筛选可过滤看板卡片",
+        "calendar": "多维筛选适合缩小日历记录范围",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "WizardNavigationBar": {
+      "current": [
+        "wizard"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "工作台不是分步向导页面",
+        "wizard": "向导必需的步骤导航提交",
+        "kanban": "看板不是步骤向导",
+        "calendar": "月历不是分步向导",
+        "monitor": "监控页不是步骤向导",
+        "dashboard": "看板不承担向导步骤流转"
+      }
+    },
+    "ApprovalDecisionBar": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "选中任务后可执行审批决策",
+        "wizard": "审批流程需要当前决策操作",
+        "kanban": "缺少聚焦任务的决策上下文",
+        "calendar": "审批需聚焦具体任务逐行操作",
+        "monitor": "需要聚焦任务与审批上下文",
+        "dashboard": "缺少聚焦审批任务上下文"
+      }
+    },
+    "CheckoutSummaryBar": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：依赖选中行并提交结算",
+        "wizard": "兜底强制选：依赖选中行并提交结算",
+        "kanban": "结算依赖逐行选择记录",
+        "calendar": "结算依赖选择行与金额汇总",
+        "monitor": "需要真实选择行与结算场景",
+        "dashboard": "结算操作不属于看板"
+      }
+    },
+    "RecordLifecycleBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "选中记录即可执行生命周期操作",
+        "wizard": "当前实体常需生命周期操作",
+        "kanban": "生命周期操作需明确当前记录",
+        "calendar": "需聚焦单条记录执行生命周期",
+        "monitor": "需要当前聚焦记录",
+        "dashboard": "缺少当前记录生命周期上下文"
+      }
+    },
+    "WaterfallChart": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "工作台不提供series分析数据",
+        "wizard": "分析图不是向导常规内容",
+        "kanban": "看板不提供瀑布图能力",
+        "calendar": "月历不承载瀑布分析",
+        "monitor": "适合监控页的分析图表",
+        "dashboard": "适合看板中的结果构成分析"
+      }
+    },
+    "FunnelChart": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "转化分析不是主实体表常规内容",
+        "wizard": "转化分析不属流程操作",
+        "kanban": "看板不提供漏斗图能力",
+        "calendar": "转化漏斗不是日历页面核心图表",
+        "monitor": "适合监控阶段转化分析",
+        "dashboard": "适合展示阶段转化概览"
+      }
+    },
+    "DistributionHistogram": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "分布分析缺少series数据能力",
+        "wizard": "分布分析不属向导主体",
+        "kanban": "看板不提供分布图能力",
+        "calendar": "分布直方图不属于日历核心视图",
+        "monitor": "适合监控数值分布",
+        "dashboard": "适合展示数值分布概览"
+      }
+    },
+    "HeatmapMatrix": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "矩阵分析不属于常规工作台内容",
+        "wizard": "交叉分析不属流程操作",
+        "kanban": "看板不提供热力矩阵能力",
+        "calendar": "热力矩阵与月历用途重复且不必要",
+        "monitor": "适合监控维度交叉分布",
+        "dashboard": "适合展示维度交叉分析"
+      }
+    },
+    "TreemapBreakdown": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "层级构成图超出工作台主职责",
+        "wizard": "层级构成图不属向导内容",
+        "kanban": "看板不提供层级构成图",
+        "calendar": "层级构成图不属于日历核心视图",
+        "monitor": "适合监控层级构成",
+        "dashboard": "适合展示层级构成分析"
+      }
+    },
+    "GaugeProgress": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "单目标仪表不是常规工作台内容",
+        "wizard": "目标仪表不是流程必需信息",
+        "kanban": "看板指标不包含目标仪表盘",
+        "calendar": "目标仪表不属于日历页面核心内容",
+        "monitor": "适合展示监控目标进度",
+        "dashboard": "适合展示单项目标完成度"
+      }
+    },
+    "AlertTriagePanel": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "告警可作为实体行聚焦和处置",
+        "wizard": "告警分诊不是常规向导内容",
+        "kanban": "告警状态适合分列分诊处理",
+        "calendar": "告警分诊需逐条聚焦和处置",
+        "monitor": "需要逐行告警聚焦列表",
+        "dashboard": "监控看板应支持告警分诊"
+      }
+    },
+    "AlertSilenceForm": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可对选中告警提交静默表单",
+        "wizard": "告警静默不属通用流程",
+        "kanban": "可对聚焦告警提交静默表单",
+        "calendar": "静默表单需围绕当前告警操作",
+        "monitor": "需要当前聚焦告警",
+        "dashboard": "可由告警分诊打开静默表单"
+      }
+    },
+    "AlertRoutingPolicy": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "策略节点可作为实体行编辑",
+        "wizard": "告警路由策略不属向导主体",
+        "kanban": "路由策略需要父子树结构",
+        "calendar": "策略树管理不属于月历页面",
+        "monitor": "需要逐行策略节点管理",
+        "dashboard": "策略维护不属于监控看板"
+      }
+    },
+    "DeletedRecordsRecovery": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可列表展示并恢复已删除记录",
+        "wizard": "不是向导流程核心",
+        "kanban": "回收记录通常需要列表管理",
+        "calendar": "恢复列表不属于月历场景",
+        "monitor": "需要逐行记录列表",
+        "dashboard": "回收站管理不属于看板"
+      }
+    },
+    "RevisionHistoryPanel": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：侧栏展示版本时间线",
+        "wizard": "兜底强制选：侧栏展示版本时间线",
+        "kanban": "看板不提供版本历史上下文",
+        "calendar": "版本时间线不是月历内容",
+        "monitor": "需要逐行版本历史",
+        "dashboard": "历史修订需要记录上下文"
+      }
+    },
+    "RecordComparePanel": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "支持选中两行并提交对比基准",
+        "wizard": "双记录对比非流程必需",
+        "kanban": "看板不支持恰好两条对比选择",
+        "calendar": "需要逐行选择两条记录",
+        "monitor": "需要选择两条记录",
+        "dashboard": "对比操作需要记录选择上下文"
+      }
+    },
+    "GanttSchedule": {
+      "current": [
+        "calendar",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "工作台核心是表格，甘特非必需",
+        "wizard": "排期图表非向导内容",
+        "kanban": "甘特图不是看板应有视图",
+        "calendar": "甘特图不是月历页应有视图",
+        "monitor": "适合监控任务排期状态",
+        "dashboard": "适合展示任务时间排期"
+      }
+    },
+    "SankeyFlow": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "关系流向图不属于常规工作台",
+        "wizard": "流向图表非向导内容",
+        "kanban": "流向图与看板任务不匹配",
+        "calendar": "流向分析与日期月历无关",
+        "monitor": "适合监控关系流向",
+        "dashboard": "适合展示业务关系流向"
+      }
+    },
+    "BoxPlotDistribution": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "分布图表不是工作台核心内容",
+        "wizard": "分布图表非向导内容",
+        "kanban": "分布图不是看板核心内容",
+        "calendar": "分布统计不是月历页核心内容",
+        "monitor": "适合监控分类离散程度",
+        "dashboard": "适合展示分类数值分布"
+      }
+    },
+    "RadarComparison": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "多维雷达图不符合常规预期",
+        "wizard": "多维图表非向导内容",
+        "kanban": "雷达对比不是看板核心内容",
+        "calendar": "多维雷达对比不属于月历",
+        "monitor": "适合监控多维指标对比",
+        "dashboard": "适合展示多维指标对比"
+      }
+    },
+    "AlertRuleEditor": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可基于行数据弹窗编辑规则",
+        "wizard": "规则编辑适合分步配置",
+        "kanban": "规则编辑不属于看板职责",
+        "calendar": "告警规则编辑不属于月历",
+        "monitor": "属于告警配置而非监控展示",
+        "dashboard": "告警规则编辑属于配置页"
+      }
+    },
+    "MuteTimingSchedule": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合在表格中管理时段记录",
+        "wizard": "静默计划是独立管理页",
+        "kanban": "静默计划不属于看板职责",
+        "calendar": "静默策略管理不是月历核心",
+        "monitor": "属于静默配置管理",
+        "dashboard": "静默计划维护属于配置页"
+      }
+    },
+    "ContactPointManager": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "支持联络点列表及行级操作",
+        "wizard": "联络点是独立管理页",
+        "kanban": "联络点管理不属于看板职责",
+        "calendar": "联络点管理不属于月历",
+        "monitor": "属于通知配置管理",
+        "dashboard": "联络点管理属于配置页"
+      }
+    },
+    "ReferenceManyManager": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可围绕选中记录维护关联",
+        "wizard": "可作为表单关联步骤",
+        "kanban": "关联管理需稳定的当前记录",
+        "calendar": "需要当前记录逐项管理关联",
+        "monitor": "需逐行记录进行关联操作",
+        "dashboard": "需管理关联关系，非总览核心"
+      }
+    },
+    "GlobalSearchPalette": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "全局搜索不属于页面工作区职责",
+        "wizard": "全局搜索不属于流程",
+        "kanban": "全局搜索不是看板应有区块",
+        "calendar": "可搜索并跳转月历记录",
+        "monitor": "全局检索不是监控页核心内容",
+        "dashboard": "全局检索适合总览入口"
+      }
+    },
+    "LiveChangeReview": {
+      "current": [
+        "calendar",
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：接收并审查实体变更",
+        "wizard": "远端变更审查非必需",
+        "kanban": "远端变更审查非看板核心",
+        "calendar": "远端变更审查不是月历内容",
+        "monitor": "兜底强制选：接收并审查实体变更",
+        "dashboard": "变更审查不是总览核心"
+      }
+    },
+    "AvailabilityPlanner": {
+      "current": [
+        "calendar",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合管理可用时间记录",
+        "wizard": "可用时间是独立管理页",
+        "kanban": "可用时间管理不属于看板",
+        "calendar": "可按日期呈现可预约时间",
+        "monitor": "属于计划配置，不是监控内容",
+        "dashboard": "排期编辑适合计划详情页"
+      }
+    },
+    "BookingSlotPicker": {
+      "current": [
+        "calendar",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "预约选择是独立流程而非工作台",
+        "wizard": "预约选择天然适合分步",
+        "kanban": "预约选时不属于看板职责",
+        "calendar": "月历适合选择预约日期时段",
+        "monitor": "预约选择不属于监控页",
+        "dashboard": "预约选择适合预约流程页"
+      }
+    },
+    "ScheduleConflictResolver": {
+      "current": [
+        "calendar",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可基于选中资源处理冲突",
+        "wizard": "排期流程需要冲突处理",
+        "kanban": "冲突处理需成对记录上下文",
+        "calendar": "月历可展示并处理时间冲突",
+        "monitor": "冲突处理依赖具体排期记录",
+        "dashboard": "冲突处理适合排期页面"
+      }
+    },
+    "StackTracePanel": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "选中问题后可查看堆栈详情",
+        "wizard": "异常详情不属于向导",
+        "kanban": "堆栈诊断不属于看板内容",
+        "calendar": "异常堆栈与月历场景无关",
+        "monitor": "异常详情应在问题详情页查看",
+        "dashboard": "堆栈诊断需要异常详情"
+      }
+    },
+    "EventBreadcrumbTimeline": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "事件时间线适合作为详情区域",
+        "wizard": "事件轨迹非向导必需",
+        "kanban": "事件轨迹已有活动流覆盖",
+        "calendar": "事件轨迹不是月历主内容",
+        "monitor": "属于单次问题诊断上下文",
+        "dashboard": "事件面包屑偏问题详情"
+      }
+    },
+    "SuspectCommitPanel": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可辅助定位选中问题根因",
+        "wizard": "提交定位不属于流程",
+        "kanban": "提交归因不属于看板职责",
+        "calendar": "提交定位不属于月历",
+        "monitor": "根因提交分析不是监控核心",
+        "dashboard": "根因定位适合异常详情"
+      }
+    },
+    "ConnectionTimeline": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "任务列表可展示连接运行轨迹",
+        "wizard": "连接任务应在监控页展示",
+        "kanban": "连接任务时间线不属于看板",
+        "calendar": "连接任务时间线不属于月历",
+        "monitor": "可监控连接任务及失败重试",
+        "dashboard": "任务时间线偏连接详情页"
+      }
+    },
+    "SchemaChangeReview": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可审查选中连接的结构变更",
+        "wizard": "Schema审查适合作为步骤",
+        "kanban": "Schema审查不属于看板职责",
+        "calendar": "Schema审查与月历无关",
+        "monitor": "Schema 审查属于配置变更页",
+        "dashboard": "Schema审查适合配置详情页"
+      }
+    },
+    "StreamStatusMonitor": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合按流展示运行状态",
+        "wizard": "数据监控非向导内容",
+        "kanban": "数据流监控需专门监控页面",
+        "calendar": "数据流监控不是月历内容",
+        "monitor": "逐流展示依赖逐行视图",
+        "dashboard": "数据流状态适合看板监控"
+      }
+    },
+    "ConnectionMappingPanel": {
+      "current": [
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可编辑选中连接的字段映射",
+        "wizard": "字段映射适合作为步骤",
+        "kanban": "字段映射编辑不属于看板",
+        "calendar": "字段映射不属于月历",
+        "monitor": "字段映射属于连接配置页",
+        "dashboard": "字段映射适合连接配置页"
+      }
+    },
+    "IssueCommandHeader": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "页头可操作当前选中问题",
+        "wizard": "问题操作页头非向导核心",
+        "kanban": "看板没有稳定的当前问题页头",
+        "calendar": "问题操作页头不属于月历",
+        "monitor": "问题操作应在问题详情页",
+        "dashboard": "问题操作需当前问题详情"
+      }
+    },
+    "ConnectionControlHeader": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "页头适合执行连接控制动作",
+        "wizard": "连接控制不属于向导",
+        "kanban": "连接控制不属于看板职责",
+        "calendar": "连接控制页头不属于月历",
+        "monitor": "连接控制属于连接详情页",
+        "dashboard": "连接控制偏连接详情页"
+      }
+    },
+    "EventUserCountMetrics": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "问题工作台需要核心事件指标",
+        "wizard": "指标应使用指标积木",
+        "kanban": "可作为看板顶部KPI展示",
+        "calendar": "问题指标不是月历页指标",
+        "monitor": "监控页适合展示事件核心指标",
+        "dashboard": "问题指标偏问题详情页"
+      }
+    },
+    "JobRunMetrics": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "连接工作台需要运行汇总指标",
+        "wizard": "指标应使用指标积木",
+        "kanban": "可作为看板顶部KPI展示",
+        "calendar": "任务指标不是月历页指标",
+        "monitor": "可概览任务运行关键指标",
+        "dashboard": "运行指标偏任务详情页"
+      }
+    },
+    "OccurrenceEvidenceSummary": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可在页头展示问题证据摘要",
+        "wizard": "问题证据摘要非向导内容",
+        "kanban": "需当前问题详情上下文",
+        "calendar": "问题证据摘要不属于月历",
+        "monitor": "属于单个问题的证据详情",
+        "dashboard": "证据摘要需当前问题上下文"
+      }
+    },
+    "ConnectionRouteSummary": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可在页头展示连接路径",
+        "wizard": "连接路线摘要非流程核心",
+        "kanban": "需当前连接详情上下文",
+        "calendar": "连接路径摘要不属于月历",
+        "monitor": "连接路径摘要不属监控核心",
+        "dashboard": "连接路径偏连接详情页"
+      }
+    },
+    "InspectorModeTabs": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可切换当前对象的诊断视图",
+        "wizard": "需当前对象诊断视图，向导不提供",
+        "kanban": "诊断模式切换不属于看板",
+        "calendar": "检查器模式不属于月历",
+        "monitor": "诊断模式切换需要对象检查器",
+        "dashboard": "诊断模式切换需要对象详情"
+      }
+    },
+    "IssueEventFilter": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "工作台需要按条件筛选问题",
+        "wizard": "调试筛选不属于流程向导",
+        "kanban": "调试事件筛选非看板核心需求",
+        "calendar": "可按环境时间和字段筛选事件",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "TimelineFilterBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可筛选连接任务时间线",
+        "wizard": "时间线筛选不属于步骤表单",
+        "kanban": "时间线筛选不适配看板",
+        "calendar": "可筛选日历事件类型和日期",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "UnsavedChangesBar": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "表单编辑可提供脏状态与保存交互",
+        "wizard": "向导需要处理脏字段与提交",
+        "kanban": "看板不提供表单脏状态",
+        "calendar": "月历不是表单编辑页",
+        "monitor": "保存变更属于编辑流程",
+        "dashboard": "总览页通常没有待保存表单"
+      }
+    },
+    "RunningJobControlBar": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "任务表可选中运行任务并执行控制",
+        "wizard": "流程向导可承载任务取消与重试",
+        "kanban": "缺少运行任务选中上下文",
+        "calendar": "运行任务控制不属日历职责",
+        "monitor": "可管理监控中的运行任务",
+        "dashboard": "任务控制栏偏任务详情页"
+      }
+    },
+    "BookingCommandHeader": {
+      "current": [
+        "calendar",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖单个预约上下文，表页不具备",
+        "wizard": "兜底强制选：预约确认是流程操作",
+        "kanban": "预约详情动作不适合看板页头",
+        "calendar": "需选中预约后才能执行操作",
+        "monitor": "预约状态操作不属于监控页",
+        "dashboard": "预约操作需当前预约详情"
+      }
+    },
+    "AlertRuleCommandHeader": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖单条告警规则上下文",
+        "wizard": "告警管理动作不属于向导流程",
+        "kanban": "规则详情操作不适合看板页头",
+        "calendar": "告警规则操作不属月历职责",
+        "monitor": "兜底强制选：告警状态与控制操作",
+        "dashboard": "规则操作偏规则详情页"
+      }
+    },
+    "AlertStateMetrics": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "dashboard",
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "告警规则工作台可展示状态汇总",
+        "wizard": "告警指标非向导必需内容",
+        "kanban": "告警看板可展示状态聚合指标",
+        "calendar": "告警指标不属于通常日历信息",
+        "monitor": "适合概览告警规则与实例状态",
+        "dashboard": "告警聚合指标适合看板"
+      }
+    },
+    "BookingCapacityMetrics": {
+      "current": [
+        "calendar",
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "预约工作台可展示容量概览",
+        "wizard": "容量指标非向导必需内容",
+        "kanban": "预约看板可展示容量概览",
+        "calendar": "预约日历适合展示容量指标",
+        "monitor": "可概览预约容量与占用情况",
+        "dashboard": "容量聚合指标适合看板"
+      }
+    },
+    "BookingContextSummary": {
+      "current": [
+        "calendar",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "属于单个预约详情摘要",
+        "wizard": "兜底强制选：预约流程需要上下文摘要",
+        "kanban": "看板没有单条预约上下文",
+        "calendar": "预约详情摘要需选中具体预约",
+        "monitor": "预约上下文属于预约详情页",
+        "dashboard": "预约上下文需当前预约详情"
+      }
+    },
+    "AlertInstanceSummary": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "属于单个告警实例详情",
+        "wizard": "告警实例摘要非流程必需内容",
+        "kanban": "看板没有单个告警实例上下文",
+        "calendar": "告警实例摘要需选中实例",
+        "monitor": "兜底强制选：告警实例监控摘要",
+        "dashboard": "告警实例摘要需实例详情"
+      }
+    },
+    "BookingStatusTabs": {
+      "current": [
+        "calendar",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合预约表按生命周期切换",
+        "wizard": "生命周期页签不同于流程步骤",
+        "kanban": "生命周期页签与看板列重复",
+        "calendar": "可按预约生命周期切换日历内容",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "ValidatedFormTabs": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "属于多分区表单而非表页导航",
+        "wizard": "兜底强制选：表单分区需参与整体验证",
+        "kanban": "看板不承载分区表单",
+        "calendar": "表单校验页签不属于月历",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "AlertMatcherFilter": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可筛选告警规则标签匹配条件",
+        "wizard": "告警匹配筛选不属于向导",
+        "kanban": "可按告警标签筛选看板卡片",
+        "calendar": "可按告警标签筛选日历事件",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "BookingDirectoryFilter": {
+      "current": [
+        "calendar",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合预约目录的组合筛选",
+        "wizard": "目录筛选不属于流程向导",
+        "kanban": "可按预约维度筛选看板卡片",
+        "calendar": "预约日历需要目录和日期筛选",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "BookingDecisionBar": {
+      "current": [
+        "calendar",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可对选中的待确认预约执行决策",
+        "wizard": "确认决策适合放在向导底部",
+        "kanban": "缺少待确认预约选中上下文",
+        "calendar": "决策栏需选中预约并处理详情",
+        "monitor": "预约决策属于预约处理流程",
+        "dashboard": "预约决策需当前预约详情"
+      }
+    },
+    "DashboardSaveBar": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "dashboard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "Dashboard编辑页非实体工作台",
+        "wizard": "Dashboard保存不属于通用向导",
+        "kanban": "看板不是Dashboard编辑页",
+        "calendar": "Dashboard保存不属于月历",
+        "monitor": "监控页不承担仪表盘保存",
+        "dashboard": "仪表盘编辑保存的核心操作"
+      }
+    },
+    "WorkItemCommandHeader": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：工作项状态驱动操作",
+        "wizard": "兜底强制选：工作项状态驱动操作",
+        "kanban": "工作项操作需单项详情上下文",
+        "calendar": "工作项命令不属于通用月历",
+        "monitor": "属于工作项详情操作",
+        "dashboard": "工作项详情操作，不属仪表盘"
+      }
+    },
+    "DocumentCommandHeader": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖单个文档编辑上下文",
+        "wizard": "兜底强制选：文档编辑发布流程",
+        "kanban": "看板不承载文档发布流程",
+        "calendar": "文档发布操作不属于月历",
+        "monitor": "属于文档编辑操作",
+        "dashboard": "文档编辑操作，不属仪表盘"
+      }
+    },
+    "EnvironmentStatusStrip": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "环境工作台可展示并聚焦环境状态",
+        "wizard": "多环境状态不是向导必需内容",
+        "kanban": "环境聚焦条与看板主体重复",
+        "calendar": "多环境状态不属于月历核心信息",
+        "monitor": "环境健康状态适合监控总览",
+        "dashboard": "适合展示多环境监控状态"
+      }
+    },
+    "DataFreshnessIndicator": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "表格数据可展示更新时间与延迟状态",
+        "wizard": "数据新鲜度不是向导核心内容",
+        "kanban": "刷新状态非看板核心内容",
+        "calendar": "新鲜度不是月历必需信息",
+        "monitor": "监控页需要数据新鲜度",
+        "dashboard": "仪表盘应提供数据新鲜度"
+      }
+    },
+    "WorkItemContextSummary": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：工作项主实体上下文",
+        "wizard": "兜底强制选：工作项主实体上下文",
+        "kanban": "看板没有单个工作项上下文",
+        "calendar": "工作项摘要需具体工作项上下文",
+        "monitor": "属于工作项详情上下文",
+        "dashboard": "依赖具体工作项上下文"
+      }
+    },
+    "DashboardParameterBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "dashboard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖Dashboard参数编辑上下文",
+        "wizard": "Dashboard参数栏不是向导步骤",
+        "kanban": "参数栏属于Dashboard查询页",
+        "calendar": "Dashboard参数栏不属于月历",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "兜底强制选：集中驱动仪表盘查询"
+      }
+    },
+    "CycleHealthMetrics": {
+      "current": [
+        "dashboard",
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "周期工作台可展示工作项健康指标",
+        "wizard": "周期指标非向导必需内容",
+        "kanban": "工作项看板可展示周期健康指标",
+        "calendar": "周期健康指标不属于通常月历",
+        "monitor": "周期健康指标可作为监控KPI",
+        "dashboard": "周期健康指标适合概览监控"
+      }
+    },
+    "QueryExecutionMetrics": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "查询结果工作台可展示执行指标",
+        "wizard": "查询执行指标非向导必需内容",
+        "kanban": "查询执行指标不属于看板核心",
+        "calendar": "查询执行指标不属于月历",
+        "monitor": "执行指标适合监控分析",
+        "dashboard": "依赖具体查询执行上下文"
+      }
+    },
+    "BulkSelectionBar": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "页面明确提供真实行选择集",
+        "wizard": "批量选择属于列表页操作",
+        "kanban": "看板缺少逐行真实选择集",
+        "calendar": "月历没有逐行选择集",
+        "monitor": "批量选择依赖逐行视图",
+        "dashboard": "仪表盘没有逐行选择集"
+      }
+    },
+    "DraftPublishBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖文档草稿发布编辑流程",
+        "wizard": "表单流程需要保存与发布",
+        "kanban": "看板不承载草稿发布流程",
+        "calendar": "日历页不承担草稿发布",
+        "monitor": "属于文档发布流程",
+        "dashboard": "文档草稿发布操作"
+      }
+    },
+    "QuestionCommandHeader": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖单个问题的保存状态",
+        "wizard": "页头操作非向导核心",
+        "kanban": "面向问题详情操作，非看板操作",
+        "calendar": "仅适用于问题操作页",
+        "monitor": "属于问题详情操作",
+        "dashboard": "兜底强制选：问题分析页的操作入口"
+      }
+    },
+    "CatalogEntityCommandHeader": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "dashboard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖单个目录实体上下文",
+        "wizard": "目录页头操作非向导核心",
+        "kanban": "面向目录实体详情，非看板",
+        "calendar": "仅适用于目录实体页",
+        "monitor": "属于目录实体详情操作",
+        "dashboard": "兜底强制选：目录实体概览与操作"
+      }
+    },
+    "CollaboratorPresenceStrip": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "缺少协同编辑上下文",
+        "wizard": "兜底强制选：协作状态需置于上下文头部",
+        "kanban": "在线协作不是看板必需信息",
+        "calendar": "日历页通常无需协作者状态",
+        "monitor": "协作在线状态非监控重点",
+        "dashboard": "兜底强制选：协作状态需置于上下文头部"
+      }
+    },
+    "QueryRunStatusStrip": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "查询工作台需展示运行状态",
+        "wizard": "查询运行状态非向导核心",
+        "kanban": "查询运行状态与看板无关",
+        "calendar": "仅适用于查询运行页",
+        "monitor": "单次查询运行控制非总览内容",
+        "dashboard": "依赖当前查询运行上下文"
+      }
+    },
+    "EntityOwnershipSummary": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "dashboard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "属于单实体详情摘要",
+        "wizard": "实体摘要不属向导主内容",
+        "kanban": "单实体所有权摘要不适合看板",
+        "calendar": "日历页不展示实体所有权",
+        "monitor": "属于实体详情上下文",
+        "dashboard": "兜底强制选：实体概览需自由布局"
+      }
+    },
+    "QueryDataSourceSummary": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "属于单查询详情摘要",
+        "wizard": "数据源摘要非向导必需",
+        "kanban": "查询数据源摘要不适合看板",
+        "calendar": "仅适用于查询数据源上下文",
+        "monitor": "属于查询详情上下文",
+        "dashboard": "兜底强制选：查询分析页展示数据来源"
+      }
+    },
+    "QueryClauseFilterBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "查询工作台需要条件筛选",
+        "wizard": "查询筛选非向导内容",
+        "kanban": "查询条件依赖查询编辑上下文",
+        "calendar": "结构化查询条件不适用",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "MetadataQualityMetrics": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖单数据集字段快照",
+        "wizard": "质量指标非向导必需",
+        "kanban": "可展示实体质量聚合指标",
+        "calendar": "日历页可展示质量指标",
+        "monitor": "质量覆盖率适合作为监控KPI",
+        "dashboard": "依赖具体数据集元数据"
+      }
+    },
+    "QuestionExecutionBar": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "查询执行是工作台核心操作",
+        "wizard": "查询执行不是向导核心",
+        "kanban": "查询执行操作不属于看板",
+        "calendar": "仅适用于查询执行页",
+        "monitor": "查询执行操作不属监控总览",
+        "dashboard": "查询执行栏，不属仪表盘"
+      }
+    },
+    "CycleCommandHeader": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：周期实体的状态管理",
+        "wizard": "页头操作非向导核心",
+        "kanban": "周期详情操作页头不属于看板",
+        "calendar": "仅适用于周期详情操作",
+        "monitor": "属于周期详情操作",
+        "dashboard": "周期详情操作，不属仪表盘"
+      }
+    },
+    "AlertGroupCommandHeader": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：支持页头动作与实体上下文",
+        "wizard": "规则组操作非向导核心",
+        "kanban": "规则组详情操作不属于看板",
+        "calendar": "仅适用于告警规则组",
+        "monitor": "规则组操作不属监控总览",
+        "dashboard": "规则组详情操作，不属仪表盘"
+      }
+    },
+    "IncidentOwnershipStrip": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "事故工作台需突出归属状态",
+        "wizard": "事故归属非向导必需",
+        "kanban": "事故归属不属于看板通用信息",
+        "calendar": "事故归属不属于日历页",
+        "monitor": "事故归属更适合事故详情",
+        "dashboard": "依赖当前事故实体上下文"
+      }
+    },
+    "SyncScheduleStrip": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "同步工作台需展示计划状态",
+        "wizard": "同步状态非向导核心",
+        "kanban": "同步计划状态不属于看板",
+        "calendar": "同步计划不属于日历页",
+        "monitor": "单个同步计划属于详情页",
+        "dashboard": "依赖单个同步计划上下文"
+      }
+    },
+    "CycleFilterBar": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "周期工作台需要组合筛选",
+        "wizard": "筛选栏不适合分步表单",
+        "kanban": "可按周期属性筛选看板内容",
+        "calendar": "周期日历可按状态和日期筛选",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "AlertRuleFilterBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "告警规则工作台需要筛选",
+        "wizard": "规则筛选非向导内容",
+        "kanban": "仅支持列表或分组视图",
+        "calendar": "规则视图切换不符合月历能力",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "SyncReliabilityMetrics": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "同步工作台需展示可靠性指标",
+        "wizard": "可靠性指标非向导必需",
+        "kanban": "看板可展示同步可靠性指标",
+        "calendar": "日历页可展示同步可靠性指标",
+        "monitor": "同步可靠性是监控核心指标",
+        "dashboard": "可靠性指标可独立展示于看板"
+      }
+    },
+    "RuleEvaluationMetrics": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "规则工作台需展示评估指标",
+        "wizard": "评估指标非向导必需",
+        "kanban": "看板可展示规则评估指标",
+        "calendar": "日历页可展示规则评估指标",
+        "monitor": "规则评估状态适合监控",
+        "dashboard": "规则指标可独立展示于看板"
+      }
+    },
+    "EventTypePublishBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "发布栏属于事件类型编辑页",
+        "wizard": "配置向导需要保存与发布",
+        "kanban": "事件类型发布操作不属于看板",
+        "calendar": "事件类型发布不属于日历页",
+        "monitor": "发布操作不属于监控页",
+        "dashboard": "发布操作依赖事件类型实体"
+      }
+    },
+    "ConversationCommandHeader": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：支持页头会话操作",
+        "wizard": "会话操作非向导核心",
+        "kanban": "会话详情操作不属于看板",
+        "calendar": "需选中会话才能操作",
+        "monitor": "会话处置操作不属于监控",
+        "dashboard": "会话操作需选中具体会话"
+      }
+    },
+    "UserCommandHeader": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "用户管理操作偏用户详情",
+        "wizard": "页头操作适配向导上下文",
+        "kanban": "用户管理操作不属于看板",
+        "calendar": "需选中用户才能操作",
+        "monitor": "用户管理操作不属于监控",
+        "dashboard": "用户管理操作需具体用户"
+      }
+    },
+    "ConversationAssignmentStrip": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "会话工作台需支持分配状态",
+        "wizard": "分配状态适合流程处理",
+        "kanban": "需选中会话，棋盘无逐行视图",
+        "calendar": "需逐行会话分配上下文",
+        "monitor": "会话分配不属于监控页",
+        "dashboard": "分配状态需选中具体会话"
+      }
+    },
+    "RealmStatusStrip": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "Realm状态偏管理详情页",
+        "wizard": "Realm状态适合作为流程上下文",
+        "kanban": "Realm管理不属于看板核心场景",
+        "calendar": "需Realm详情上下文",
+        "monitor": "Realm设置状态不属于监控",
+        "dashboard": "Realm状态需具体Realm实体"
+      }
+    },
+    "UserDirectoryFilter": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合用户目录筛选",
+        "wizard": "向导页不是用户目录",
+        "kanban": "用户目录通常不是状态看板",
+        "calendar": "页面未提供目录筛选",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "ConversationSlaMetrics": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可汇总会话 SLA",
+        "wizard": "SLA指标可作为附属指标",
+        "kanban": "会话看板可配SLA核心指标",
+        "calendar": "可放右栏指标区",
+        "monitor": "SLA指标适合监控展示",
+        "dashboard": "SLA指标适合作为看板概览"
+      }
+    },
+    "ConversationReplyBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖会话详情回复",
+        "wizard": "回复操作适合底部操作栏",
+        "kanban": "回复需选中具体会话",
+        "calendar": "需选中会话才能回复",
+        "monitor": "回复操作不属于监控页",
+        "dashboard": "回复操作需选中具体会话"
+      }
+    },
+    "UserAccessBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "属于单用户安全操作",
+        "wizard": "访问控制适合底部操作栏",
+        "kanban": "访问控制需选中具体用户",
+        "calendar": "需选中用户才能控制",
+        "monitor": "访问控制操作不属于监控",
+        "dashboard": "访问控制需具体用户上下文"
+      }
+    },
+    "TimeSeriesAnomalyChart": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "monitor",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "更适合监控分析页",
+        "wizard": "异常趋势可作为附属图表",
+        "kanban": "异常分析图偏监控分析页",
+        "calendar": "属于可用的时序趋势",
+        "monitor": "异常时序图适合监控",
+        "dashboard": "时序图是看板典型可视化"
+      }
+    },
+    "CohortRetentionChart": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "更适合留存分析页",
+        "wizard": "留存趋势可作为附属图表",
+        "kanban": "留存队列图偏报表分析页",
+        "calendar": "队列矩阵不是日历趋势",
+        "monitor": "留存趋势适合监控分析",
+        "dashboard": "留存矩阵适合看板分析"
+      }
+    },
+    "UptimeStatusTimeline": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "更适合可用性监控页",
+        "wizard": "可用性趋势适合作为附属图表",
+        "kanban": "健康时间线不是看板必需内容",
+        "calendar": "状态时间线非标准趋势",
+        "monitor": "可用性时间线适合监控",
+        "dashboard": "可用性时间线适合监控看板"
+      }
+    },
+    "PercentileBandChart": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "monitor",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "更适合性能分析页",
+        "wizard": "分位趋势可作为附属图表",
+        "kanban": "分位带图偏问题分析场景",
+        "calendar": "属于可用的趋势图",
+        "monitor": "分位趋势适合监控分析",
+        "dashboard": "分位趋势适合看板监测"
+      }
+    },
+    "ConnectionFleetMetrics": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可汇总连接群组状态",
+        "wizard": "连接状态指标适合作为附属内容",
+        "kanban": "连接看板适合展示群组状态指标",
+        "calendar": "依赖页面筛选交互",
+        "monitor": "连接群组状态适合监控",
+        "dashboard": "连接群组指标适合看板监控"
+      }
+    },
+    "IssueImpactMetrics": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖单问题影响范围",
+        "wizard": "问题影响指标适合作为附属内容",
+        "kanban": "问题看板可展示影响范围指标",
+        "calendar": "可放右栏指标区",
+        "monitor": "问题影响指标适合监控",
+        "dashboard": "问题影响指标可独立概览"
+      }
+    },
+    "ReleaseHealthStrip": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "属于发布详情状态",
+        "wizard": "发布健康状态适合流程上下文",
+        "kanban": "发布健康条需具体发布上下文",
+        "calendar": "发布状态非日历核心内容",
+        "monitor": "发布状态条依赖详情上下文",
+        "dashboard": "发布状态需具体发布上下文"
+      }
+    },
+    "DashboardCommandHeader": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "属于 Dashboard 操作页头",
+        "wizard": "仪表盘操作适合页头",
+        "kanban": "仪表盘操作页头不是看板内容",
+        "calendar": "需仪表盘操作上下文",
+        "monitor": "仪表盘操作页头适合监控页",
+        "dashboard": "仪表盘需要统一操作页头"
+      }
+    },
+    "DeploymentLatencyChart": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "更适合部署分析页",
+        "wizard": "部署趋势可作为附属图表",
+        "kanban": "部署看板可配延迟趋势",
+        "calendar": "属于可用的延迟趋势",
+        "monitor": "部署趋势图适合监控页",
+        "dashboard": "适合展示部署趋势"
+      }
+    },
+    "ReleaseAdoptionTrendChart": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "更适合发布分析页",
+        "wizard": "发布趋势可作为附属图表",
+        "kanban": "发布看板可配采用趋势",
+        "calendar": "属于可用的采用趋势",
+        "monitor": "发布趋势图适合监控页",
+        "dashboard": "适合展示发布趋势"
+      }
+    },
+    "DeploymentRolloutMetrics": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖单部署工作负载",
+        "wizard": "滚动指标适合作为附属指标",
+        "kanban": "部署看板适合展示滚动指标",
+        "calendar": "月历可配套展示部署指标",
+        "monitor": "部署状态指标适合监控页",
+        "dashboard": "适合展示部署状态指标"
+      }
+    },
+    "ReleaseAdoptionMetrics": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "属于发布详情指标",
+        "wizard": "向导不应承载发布指标",
+        "kanban": "发布看板可展示采用核心指标",
+        "calendar": "月历可配套展示发布指标",
+        "monitor": "发布状态指标适合监控页",
+        "dashboard": "适合展示发布采用指标"
+      }
+    },
+    "ClusterHealthStrip": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "monitor",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "属于集群详情状态",
+        "wizard": "可展示当前集群健康上下文",
+        "kanban": "面向单一集群，不是看板级信息",
+        "calendar": "可作为日历页头状态",
+        "monitor": "集群健康是监控页常见状态",
+        "dashboard": "仪表盘应展示集群健康"
+      }
+    },
+    "ReleaseEnvironmentStrip": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "monitor",
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "属于发布详情状态",
+        "wizard": "可展示发布环境状态",
+        "kanban": "发布快照不适合看板总览",
+        "calendar": "可作为日历页头状态",
+        "monitor": "发布环境状态适合监控页",
+        "dashboard": "适合展示发布环境状态"
+      }
+    },
+    "DeploymentCommandHeader": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可对选中部署执行操作",
+        "wizard": "可提供部署相关操作",
+        "kanban": "操作对象需单一部署上下文",
+        "calendar": "页头可承载部署操作",
+        "monitor": "操作需部署详情上下文",
+        "dashboard": "部署操作属于实体详情页"
+      }
+    },
+    "FeatureFlagCommandHeader": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可对选中标记执行操作",
+        "wizard": "可提供功能开关操作",
+        "kanban": "操作对象需单一功能开关",
+        "calendar": "页头可承载开关操作",
+        "monitor": "操作需具体旗标上下文",
+        "dashboard": "Flag操作不属于通用仪表盘"
+      }
+    },
+    "DeploymentScaleBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可提交选中部署扩缩容",
+        "wizard": "适合作为向导提交动作",
+        "kanban": "扩缩容需选定单个工作负载",
+        "calendar": "月历无适合的底部提交栏",
+        "monitor": "扩缩容需选定部署对象",
+        "dashboard": "扩缩容需明确部署对象"
+      }
+    },
+    "ReleaseRolloutBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可控制选中发布灰度",
+        "wizard": "适合作为发布流程控制",
+        "kanban": "灰度操作需单一发布对象",
+        "calendar": "月历无适合的底部提交栏",
+        "monitor": "灰度操作需发布详情上下文",
+        "dashboard": "灰度操作需明确发布对象"
+      }
+    },
+    "CumulativeFlowChart": {
+      "current": [
+        "dashboard",
+        "kanban"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "工作台可展示流动趋势",
+        "wizard": "趋势图不属于向导主任务",
+        "kanban": "直接展示看板工作项流动",
+        "calendar": "趋势图可放入日历页",
+        "monitor": "流动趋势适合监控页",
+        "dashboard": "适合展示工作流趋势"
+      }
+    },
+    "BookingDemandChart": {
+      "current": [
+        "calendar",
+        "dashboard"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "工作台可展示预约趋势",
+        "wizard": "需求趋势不属于向导内容",
+        "kanban": "趋势不是预约看板核心内容",
+        "calendar": "预约趋势与月历高度相关",
+        "monitor": "预约趋势适合监控页",
+        "dashboard": "适合展示预约需求趋势"
+      }
+    },
+    "CycleRiskStrip": {
+      "current": [
+        "dashboard",
+        "kanban"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可展示选中周期风险",
+        "wizard": "可展示当前周期风险",
+        "kanban": "周期快照不是看板通用信息",
+        "calendar": "可作为周期日历状态",
+        "monitor": "周期风险是监控页状态",
+        "dashboard": "适合展示周期风险状态"
+      }
+    },
+    "WorkItemMoveDrawer": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可移动选中工作项",
+        "wizard": "移动抽屉不是向导常规内容",
+        "kanban": "移动卡片是看板核心交互",
+        "calendar": "选中日历项后可移动",
+        "monitor": "移动操作需选定工作项",
+        "dashboard": "移动操作需选定工作项"
+      }
+    },
+    "BookingConflictDrawer": {
+      "current": [
+        "calendar",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可处理选中预约冲突",
+        "wizard": "冲突抽屉非向导必需内容",
+        "kanban": "冲突处理需单条预约上下文",
+        "calendar": "冲突处理是预约日历常见操作",
+        "monitor": "冲突处理需具体预约上下文",
+        "dashboard": "冲突处理需选定预约"
+      }
+    },
+    "WorkflowDurationChart": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合展示执行耗时趋势",
+        "wizard": "耗时趋势不属于向导",
+        "kanban": "执行耗时不属于看板核心分析",
+        "calendar": "趋势图可放入日历页",
+        "monitor": "执行耗时适合监控页",
+        "dashboard": "适合展示耗时趋势"
+      }
+    },
+    "WorkflowOutcomeMetrics": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合展示执行结果指标",
+        "wizard": "结果指标不属于向导",
+        "kanban": "执行结果指标不是看板重点",
+        "calendar": "可作为日历页KPI",
+        "monitor": "执行结果指标适合监控页",
+        "dashboard": "适合展示执行结果指标"
+      }
+    },
+    "WorkflowVersionStrip": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可展示选中工作流版本",
+        "wizard": "可展示工作流版本状态",
+        "kanban": "版本状态针对单一工作流",
+        "calendar": "可作为日历页头状态",
+        "monitor": "工作流状态适合监控页",
+        "dashboard": "适合展示工作流版本状态"
+      }
+    },
+    "WorkflowFailureDrawer": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可诊断选中执行失败",
+        "wizard": "失败诊断非向导常规内容",
+        "kanban": "失败诊断需选定执行记录",
+        "calendar": "选中执行后可诊断失败",
+        "monitor": "失败重试需选定执行对象",
+        "dashboard": "失败诊断需选定执行记录"
+      }
+    },
+    "WorkflowCommandHeader": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可操作选中工作流",
+        "wizard": "可提供工作流操作入口",
+        "kanban": "工作流命令需单一工作流",
+        "calendar": "页头可承载工作流操作",
+        "monitor": "操作页头不属于监控概览",
+        "dashboard": "工作流详情页操作，不是仪表盘内容"
+      }
+    },
+    "WorkflowControlBar": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可控制选中工作流执行",
+        "wizard": "适合作为流程控制栏",
+        "kanban": "控制动作需选定单次执行",
+        "calendar": "日历页无适配的工作流选中上下文",
+        "monitor": "依赖选中项且属执行控制",
+        "dashboard": "取消重试依赖具体执行项"
+      }
+    },
+    "RealmCommandHeader": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可操作选中Realm",
+        "wizard": "页头操作可驱动向导流程",
+        "kanban": "Realm命令不属于看板内容",
+        "calendar": "Realm管理操作非日历页常规内容",
+        "monitor": "Realm管理操作不属监控页",
+        "dashboard": "Realm 管理页操作，不是仪表盘内容"
+      }
+    },
+    "CredentialLifecycleBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可基于选中记录执行凭据操作",
+        "wizard": "底部可承载凭据操作",
+        "kanban": "凭据操作非看板常规能力",
+        "calendar": "凭据操作不属于日历页常规功能",
+        "monitor": "凭据操作不属监控概览",
+        "dashboard": "凭据管理操作不属仪表盘"
+      }
+    },
+    "PanelQueryLatencyChart": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可作为面板数据分析补充",
+        "wizard": "可作为查询流程的趋势积木",
+        "kanban": "看板支持趋势图积木",
+        "calendar": "时间趋势可作为日历页趋势补充",
+        "monitor": "延迟趋势是典型监控图表",
+        "dashboard": "延迟趋势是典型监控图表"
+      }
+    },
+    "SyncVolumeTrendChart": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可展示同步结果趋势",
+        "wizard": "可作为同步流程的趋势积木",
+        "kanban": "看板支持趋势图积木",
+        "calendar": "同步趋势可作为日历页趋势补充",
+        "monitor": "同步量趋势适合监控图表",
+        "dashboard": "同步量趋势适合仪表盘监控"
+      }
+    },
+    "DatasourceQueryMetrics": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合作为数据源概览指标",
+        "wizard": "可展示查询流程关键指标",
+        "kanban": "看板支持指标积木",
+        "calendar": "查询指标可用MetricGrid呈现",
+        "monitor": "查询指标适合监控页展示",
+        "dashboard": "查询指标适合监控面板"
+      }
+    },
+    "StreamFreshnessMetrics": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合作为数据流概览指标",
+        "wizard": "可展示同步流程关键指标",
+        "kanban": "看板支持指标积木",
+        "calendar": "新鲜度指标可用MetricGrid呈现",
+        "monitor": "新鲜度指标是监控核心",
+        "dashboard": "新鲜度指标适合监控面板"
+      }
+    },
+    "PanelCommandHeader": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合面板工作台页头操作",
+        "wizard": "页头操作可驱动面板流程",
+        "kanban": "面板命令上下文不匹配",
+        "calendar": "面板操作页头不属于日历页",
+        "monitor": "面板编辑操作不属监控概览",
+        "dashboard": "面板编辑操作不属仪表盘"
+      }
+    },
+    "ExploreQueryControlBar": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可承载查询运行控制",
+        "wizard": "底部可控制查询步骤",
+        "kanban": "看板不提供查询执行上下文",
+        "calendar": "Explore查询控制不属于日历页",
+        "monitor": "查询控制依赖交互操作",
+        "dashboard": "查询执行控制依赖具体查询"
+      }
+    },
+    "QueryErrorDrawer": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可从查询记录处理错误",
+        "wizard": "可处理流程中的查询错误",
+        "kanban": "看板不提供查询错误上下文",
+        "calendar": "查询错误抽屉非日历页常规内容",
+        "monitor": "错误抽屉属查询处理交互",
+        "dashboard": "错误抽屉依赖具体查询上下文"
+      }
+    },
+    "SchemaConflictDrawer": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可从记录处理 Schema 冲突",
+        "wizard": "可处理流程中的 Schema 冲突",
+        "kanban": "看板不提供Schema审查任务",
+        "calendar": "Schema冲突审查不属于日历页",
+        "monitor": "冲突审查属Schema管理",
+        "dashboard": "冲突审查依赖具体数据流"
+      }
+    },
+    "SwimlaneKanban": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：看板承载状态列与泳道积木",
+        "wizard": "泳道看板不适合作为向导主区",
+        "kanban": "兜底强制选：看板承载状态列与泳道积木",
+        "calendar": "日历不提供泳道和列式工作流",
+        "monitor": "泳道看板需要逐项操作",
+        "dashboard": "泳道看板需要专用工作流视图"
+      }
+    },
+    "WipLimitBoard": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "kanban"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "看板布局不符合主表工作台",
+        "wizard": "在制品看板不适合作为向导主区",
+        "kanban": "状态列可执行限额校验",
+        "calendar": "日历不支持状态列和在制品限制",
+        "monitor": "在制品看板不属监控概览",
+        "dashboard": "在制品看板不属常规仪表盘"
+      }
+    },
+    "DependencyKanban": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "kanban"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "看板布局不符合主表工作台",
+        "wizard": "依赖看板不适合作为向导主区",
+        "kanban": "可按依赖校验状态推进",
+        "calendar": "日历不支持依赖列推进",
+        "monitor": "依赖看板需要逐项推进",
+        "dashboard": "依赖推进需要看板交互"
+      }
+    },
+    "ContentPipelineBoard": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "kanban"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "看板布局不符合主表工作台",
+        "wizard": "内容看板不适合作为向导主区",
+        "kanban": "内容阶段正是看板用途",
+        "calendar": "阶段看板不属于月历",
+        "monitor": "内容流转看板不属监控页",
+        "dashboard": "内容流转需要专用看板"
+      }
+    },
+    "IncidentResponseBoard": {
+      "current": [
+        "kanban",
+        "monitor"
+      ],
+      "derived": [
+        "kanban"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "看板布局不符合主表工作台",
+        "wizard": "响应看板不属于向导主流程",
+        "kanban": "按事件阶段分列，符合看板主用途",
+        "calendar": "响应阶段看板不属于月历",
+        "monitor": "依赖逐行视图与选中行",
+        "dashboard": "依赖事件逐行处置"
+      }
+    },
+    "PortfolioKanban": {
+      "current": [
+        "dashboard",
+        "kanban"
+      ],
+      "derived": [
+        "kanban"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "看板替代表格，不是工作台常规视图",
+        "wizard": "项目看板不属于向导主流程",
+        "kanban": "项目按治理阶段组织，符合看板用途",
+        "calendar": "治理看板不属于月历",
+        "monitor": "依赖逐行视图与选中行",
+        "dashboard": "项目治理看板非仪表盘常规内容"
+      }
+    },
+    "SavedViewManager": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合管理和复用筛选视图",
+        "wizard": "保存视图管理不是向导必需内容",
+        "kanban": "可管理并复用看板筛选视图",
+        "calendar": "保存视图非月历核心内容",
+        "monitor": "属于视图管理，不是监控内容",
+        "dashboard": "可在仪表盘管理已保存视图"
+      }
+    },
+    "ColumnChooserDrawer": {
+      "current": [
+        "dashboard",
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "表格列管理是常规工作台能力",
+        "wizard": "向导主区不是可配置列表",
+        "kanban": "可见列配置更适合表格，不是看板核心",
+        "calendar": "列选择不适配月历视图",
+        "monitor": "依赖列配置与逐行视图",
+        "dashboard": "业务网格常需列设置"
+      }
+    },
+    "ActivityContextDrawer": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可查看当前行的活动记录",
+        "wizard": "活动抽屉不是向导必需内容",
+        "kanban": "选中卡片后可查看实体活动",
+        "calendar": "页面未提供时间线能力",
+        "monitor": "需要当前选中实体",
+        "dashboard": "需要当前实体逐行上下文"
+      }
+    },
+    "BulkActionTray": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "工作台支持选行和批量操作",
+        "wizard": "向导通常不存在批量选中操作",
+        "kanban": "看板未明确提供完整多选记录集合",
+        "calendar": "月历不提供批量选中能力",
+        "monitor": "没有逐行选择可供批量操作",
+        "dashboard": "依赖选择记录，页无逐行视图"
+      }
+    },
+    "OnboardingChecklistWizard": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "向导流程不是工作台常规内容",
+        "wizard": "分步表单正是wizard主内容",
+        "kanban": "多步骤表单不是看板内容",
+        "calendar": "多步骤向导不属于月历",
+        "monitor": "属于流程配置，不是监控内容",
+        "dashboard": "多步骤业务向导不属常规仪表盘"
+      }
+    },
+    "ImportMappingWizard": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "导入向导不属于主实体工作台",
+        "wizard": "字段映射适合按步骤校验推进",
+        "kanban": "字段映射向导不属于看板",
+        "calendar": "导入映射不属于月历",
+        "monitor": "属于导入配置，不是监控内容",
+        "dashboard": "导入流程应在专用页面完成"
+      }
+    },
+    "ResourceBookingCalendar": {
+      "current": [
+        "calendar",
+        "workbench"
+      ],
+      "derived": [
+        "calendar"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "预约日历替代表格主视图",
+        "wizard": "日历预约不属于向导主流程",
+        "kanban": "预约按日期资源展示，应使用日历",
+        "calendar": "预约按资源和日期展示",
+        "monitor": "依赖实体行与预约交互",
+        "dashboard": "预约日历应使用专用排期页"
+      }
+    },
+    "DeadlineAgenda": {
+      "current": [
+        "calendar",
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：日历适合按截止日期呈现",
+        "wizard": "截止事项清单不属于向导内容",
+        "kanban": "截止时间排序属于议程视图",
+        "calendar": "兜底强制选：日历适合按截止日期呈现",
+        "monitor": "非通用监控核心内容",
+        "dashboard": "时间线视图不在该页提供能力内"
+      }
+    },
+    "BookingConflictPanel": {
+      "current": [
+        "calendar",
+        "workbench"
+      ],
+      "derived": [
+        "calendar"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "冲突处理应依附预约专用页面",
+        "wizard": "冲突面板不是通用向导内容",
+        "kanban": "冲突列表与解决动作不是看板核心",
+        "calendar": "冲突可依赖选中预约处理",
+        "monitor": "冲突处理不属通用监控",
+        "dashboard": "冲突处理依赖具体预约上下文"
+      }
+    },
+    "ScheduleCapacityHeatmap": {
+      "current": [
+        "calendar",
+        "dashboard"
+      ],
+      "derived": [
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "容量热力图不属于表格工作台",
+        "wizard": "容量热力图不是向导必需信息",
+        "kanban": "容量比较需要图表热力图",
+        "calendar": "页面图表仅支持指标趋势",
+        "monitor": "图表可承载容量监控",
+        "dashboard": "需图表概览，当前退回业务网格"
+      }
+    },
+    "EventRsvpPanel": {
+      "current": [
+        "calendar",
+        "workbench"
+      ],
+      "derived": [
+        "calendar"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "活动响应面板缺少常规工作台语境",
+        "wizard": "报名面板不是向导核心内容",
+        "kanban": "活动参与响应不是看板核心",
+        "calendar": "活动日历可处理报名确认",
+        "monitor": "活动确认不属通用监控",
+        "dashboard": "依赖活动上下文与参与人操作"
+      }
+    },
+    "RecurrenceEditor": {
+      "current": [
+        "calendar",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "calendar"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "重复计划编辑器属于专用表单",
+        "wizard": "重复计划编辑器不是完整向导",
+        "kanban": "重复计划编辑属于表单",
+        "calendar": "重复计划是日历核心配置",
+        "monitor": "属于重复计划配置",
+        "dashboard": "重复计划编辑应使用表单页"
+      }
+    },
+    "DeploymentWizard": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "部署流程应使用专门向导页面",
+        "wizard": "部署检查与确认天然适配流程向导",
+        "kanban": "部署步骤链不是看板内容",
+        "calendar": "部署状态链不属于月历",
+        "monitor": "属于部署操作流程",
+        "dashboard": "部署链路应在专用向导中完成"
+      }
+    },
+    "OnCallScheduleCalendar": {
+      "current": [
+        "calendar",
+        "monitor"
+      ],
+      "derived": [
+        "calendar",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可用实体行驱动值班排期",
+        "wizard": "值班排期不是向导核心内容",
+        "kanban": "值班排期应使用日历页",
+        "calendar": "值班安排适合排期日历",
+        "monitor": "无逐行视图，无法选中值班记录",
+        "dashboard": "值班排期应放在排班页面"
+      }
+    },
+    "AppointmentWaitlistPanel": {
+      "current": [
+        "calendar",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "实体行可支持候补确认",
+        "wizard": "候补队列不属于常规向导内容",
+        "kanban": "候补队列不是看板核心内容",
+        "calendar": "预约日历可联动候补队列",
+        "monitor": "候补队列需要逐行记录交互",
+        "dashboard": "确认候补需要逐行选择"
+      }
+    },
+    "AvailabilityOverridePanel": {
+      "current": [
+        "calendar",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "表单可编辑并提交覆盖规则",
+        "wizard": "可作为向导中的规则表单步骤",
+        "kanban": "例外规则应在配置表单中维护",
+        "calendar": "排期页可编辑例外时段",
+        "monitor": "监控页不承担排期规则编辑",
+        "dashboard": "规则编辑不属于仪表盘内容"
+      }
+    },
+    "TimezoneOverlapPanel": {
+      "current": [
+        "calendar",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可基于成员实体行比较时区",
+        "wizard": "时区分析不是常规向导内容",
+        "kanban": "时区重叠不属于看板信息",
+        "calendar": "排期页可展示时区重叠",
+        "monitor": "时区比较属于排期配置场景",
+        "dashboard": "时区排班分析不属于仪表盘"
+      }
+    },
+    "SchedulePublishBar": {
+      "current": [
+        "calendar",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可在页脚执行排期发布",
+        "wizard": "发布动作适合放在流程底部",
+        "kanban": "排期发布不属于看板上下文",
+        "calendar": "排期页需要发布操作",
+        "monitor": "发布排期不是监控页职责",
+        "dashboard": "仪表盘没有排期发布上下文"
+      }
+    },
+    "RescheduleRequestDrawer": {
+      "current": [
+        "calendar",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可基于选中记录发起改期",
+        "wizard": "改期确认可作为流程动作",
+        "kanban": "改期确认应在预约上下文中",
+        "calendar": "可基于选中安排发起改期",
+        "monitor": "改期审批属于预约流程页面",
+        "dashboard": "改期确认依赖逐行选择"
+      }
+    },
+    "KeyboardCommandPalette": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：提供全局覆盖层与命令动作",
+        "wizard": "命令面板并非向导必需",
+        "kanban": "命令面板非看板必备内容",
+        "calendar": "命令面板非日历核心需求",
+        "monitor": "命令面板是全局工具而非监控内容",
+        "dashboard": "命令面板属于全局应用能力"
+      }
+    },
+    "ExportJobDrawer": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "表格工作台常需异步导出",
+        "wizard": "导出任务不是向导核心内容",
+        "kanban": "可导出看板中的主实体数据",
+        "calendar": "导出不是日历必需能力",
+        "monitor": "导出任务不是监控页核心内容",
+        "dashboard": "导出任务不是仪表盘核心内容"
+      }
+    },
+    "CompareSelectionTray": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：支持底部选择与对比动作",
+        "wizard": "兜底强制选：支持底部选择与对比动作",
+        "kanban": "看板未保证双选对比能力",
+        "calendar": "日历未提供多选能力",
+        "monitor": "需要选择两条记录，页面不提供逐行视图",
+        "dashboard": "对比需要选择两条记录"
+      }
+    },
+    "DetailInspectorDrawer": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "选中记录可打开详情检查",
+        "wizard": "详情检查会偏离当前步骤",
+        "kanban": "可从选中卡片打开详情",
+        "calendar": "可基于选中记录查看详情",
+        "monitor": "详情检查依赖当前选中记录",
+        "dashboard": "详情检查依赖当前行选择"
+      }
+    },
+    "HelpContextPanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：支持侧栏上下文帮助",
+        "wizard": "兜底强制选：支持侧栏上下文帮助",
+        "kanban": "帮助内容不是看板必备",
+        "calendar": "帮助面板非日历必需内容",
+        "monitor": "帮助面板不是监控页专属内容",
+        "dashboard": "帮助面板不是仪表盘必备内容"
+      }
+    },
+    "AuditDiffDrawer": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：支持覆盖层审计详情",
+        "wizard": "审计差异不是流程步骤内容",
+        "kanban": "审计时间线不是看板核心视图",
+        "calendar": "审计时间线不属日历主任务",
+        "monitor": "审计差异查看不属于常规监控内容",
+        "dashboard": "审计差异需要时间线视图"
+      }
+    },
+    "SavedSearchPanel": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "保存搜索适配筛选工作流",
+        "wizard": "保存搜索不是向导核心内容",
+        "kanban": "可保存并复用看板筛选",
+        "calendar": "页面未提供保存搜索能力",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "RecentItemsPanel": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：适合侧栏最近项目列表",
+        "wizard": "兜底强制选：适合侧栏最近项目列表",
+        "kanban": "最近项目不是看板必需信息",
+        "calendar": "最近项目与日历任务无关",
+        "monitor": "最近项目依赖项目记录选择",
+        "dashboard": "最近项目选择需要逐行视图"
+      }
+    },
+    "RelatedEntityPanel": {
+      "current": [
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "选中记录可展示关联实体",
+        "wizard": "关联实体不是向导必需内容",
+        "kanban": "关联实体不是看板必备内容",
+        "calendar": "可查看选中记录的关联实体",
+        "monitor": "关联实体依赖逐行实体上下文",
+        "dashboard": "关联实体缺少当前实体上下文"
+      }
+    },
+    "PermissionSummaryPanel": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：支持侧栏权限摘要与申请",
+        "wizard": "兜底强制选：支持侧栏权限摘要与申请",
+        "kanban": "权限汇总不属于看板主任务",
+        "calendar": "权限汇总非日历核心内容",
+        "monitor": "权限申请不属于监控页核心内容",
+        "dashboard": "权限申请不是仪表盘核心内容"
+      }
+    },
+    "SelectionInspector": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可汇总当前表格选择",
+        "wizard": "向导不以多选检查为核心",
+        "kanban": "看板未保证多选汇总能力",
+        "calendar": "日历不提供多选聚合",
+        "monitor": "汇总当前选择但页面无法提供选择",
+        "dashboard": "汇总选择依赖逐行选择"
+      }
+    },
+    "ValidationIssuePanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "表单提交可展示校验结果",
+        "wizard": "校验问题直接服务步骤提交",
+        "kanban": "看板不提供提交校验上下文",
+        "calendar": "日历页不负责表单校验",
+        "monitor": "校验问题面板依赖表单提交场景",
+        "dashboard": "仪表盘没有表单校验上下文"
+      }
+    },
+    "ContextHelpDrawer": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：支持覆盖层帮助搜索",
+        "wizard": "帮助抽屉不是向导必需内容",
+        "kanban": "帮助抽屉不是看板必备",
+        "calendar": "帮助搜索非日历核心需求",
+        "monitor": "帮助搜索是全局辅助能力",
+        "dashboard": "上下文帮助属于通用辅助能力"
+      }
+    },
+    "ChangeImpactPanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "影响评估不是常规工作台内容",
+        "wizard": "高风险变更适合流程确认",
+        "kanban": "缺少变更影响评估上下文",
+        "calendar": "日历页无变更影响确认场景",
+        "monitor": "影响确认属于变更流程页面",
+        "dashboard": "影响确认需要具体变更上下文"
+      }
+    },
+    "BulkOperationWizard": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可基于选中行执行批量操作",
+        "wizard": "嵌套批量向导造成流程重复",
+        "kanban": "看板未保证批量选择能力",
+        "calendar": "需逐行选择，日历页不提供",
+        "monitor": "批量操作依赖记录选择与提交",
+        "dashboard": "批量操作依赖可选中的记录"
+      }
+    },
+    "ApprovalRoutingWizard": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "审批路由配置需专用配置页",
+        "wizard": "分步表单正是wizard主流程",
+        "kanban": "看板不承载审批路由配置",
+        "calendar": "审批路由配置与日历无关",
+        "monitor": "监控页不承载流程配置",
+        "dashboard": "审批规则配置不属于看板"
+      }
+    },
+    "DataRetentionWizard": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "保留策略向导不属于工作台",
+        "wizard": "分步表单正是wizard主流程",
+        "kanban": "看板不承载保留策略配置",
+        "calendar": "数据保留配置不是日历内容",
+        "monitor": "监控页不承载留存配置",
+        "dashboard": "保留策略配置不属于看板"
+      }
+    },
+    "RecoveryPlanWizard": {
+      "current": [
+        "monitor",
+        "wizard"
+      ],
+      "derived": [
+        "wizard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "恢复计划需专用灾备流程页",
+        "wizard": "分步表单正是wizard主流程",
+        "kanban": "看板不承载恢复计划流程",
+        "calendar": "恢复计划不属于日历页",
+        "monitor": "监控页不承载恢复计划",
+        "dashboard": "恢复计划核对不属于看板"
+      }
+    },
+    "MentionComposer": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：适合实体详情中的编辑提交",
+        "wizard": "正文编辑不是向导页常规内容",
+        "kanban": "看板缺少正文编辑语境",
+        "calendar": "缺少当前记录上下文",
+        "monitor": "监控页不承载内容发布",
+        "dashboard": "正文编辑依赖内容详情上下文"
+      }
+    },
+    "ReactionSummary": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：适合实体回应汇总与操作",
+        "wizard": "回应汇总不属于向导流程",
+        "kanban": "看板不应默认展示回应汇总",
+        "calendar": "日历页无回应对象上下文",
+        "monitor": "监控页不需要回应操作",
+        "dashboard": "回应切换依赖具体内容上下文"
+      }
+    },
+    "ThreadResolutionBar": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：流程底栏适合状态推进",
+        "wizard": "兜底强制选：流程底栏适合状态推进",
+        "kanban": "看板不应默认承载讨论解决",
+        "calendar": "缺少讨论线程上下文",
+        "monitor": "监控页不承载讨论处置",
+        "dashboard": "讨论解决依赖具体线程上下文"
+      }
+    },
+    "DocumentOutlinePanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：适合作为侧栏章节导航",
+        "wizard": "兜底强制选：适合作为侧栏章节导航",
+        "kanban": "看板不提供文档章节语境",
+        "calendar": "无当前文档可供定位",
+        "monitor": "无逐行视图，无法定位章节",
+        "dashboard": "章节定位需要文档逐项视图"
+      }
+    },
+    "VersionComparePanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：支持选择与对比的实体操作",
+        "wizard": "版本对比不是向导页常规附属",
+        "kanban": "看板缺少版本选择语境",
+        "calendar": "需选定版本所属记录",
+        "monitor": "无逐行视图，无法选择版本",
+        "dashboard": "版本选择需要具体实体上下文"
+      }
+    },
+    "ApprovalCommentPanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：审批决策天然对应流程页",
+        "wizard": "兜底强制选：审批决策天然对应流程页",
+        "kanban": "看板不应默认承载审批评论",
+        "calendar": "需审批记录上下文",
+        "monitor": "监控页不承载审批决策",
+        "dashboard": "审批评论依赖具体审批对象"
+      }
+    },
+    "KnowledgeBacklinkPanel": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：适合侧栏展示关联条目",
+        "wizard": "兜底强制选：适合侧栏展示关联条目",
+        "kanban": "看板不提供知识引用语境",
+        "calendar": "无当前知识内容上下文",
+        "monitor": "无逐行视图，无法定位引用",
+        "dashboard": "反向链接依赖具体内容上下文"
+      }
+    },
+    "PresenceRosterPanel": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：协作成员属于实体上下文",
+        "wizard": "协作成员不是向导页必需内容",
+        "kanban": "看板不需默认展示协作成员",
+        "calendar": "协作成员不是日历页常规内容",
+        "monitor": "协作成员不是监控核心内容",
+        "dashboard": "协作成员不是看板核心内容"
+      }
+    },
+    "AssignmentQueuePanel": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "队列筛选与分配正适合工作台",
+        "wizard": "分配队列应独立呈现",
+        "kanban": "分配动作与状态看板直接匹配",
+        "calendar": "需选中记录执行分配",
+        "monitor": "监控页不承载分配操作",
+        "dashboard": "分配操作需要具体队列条目"
+      }
+    },
+    "EscalationPolicyPanel": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：升级顺序符合流程式展示",
+        "wizard": "兜底强制选：升级顺序符合流程式展示",
+        "kanban": "看板不提供升级时间线",
+        "calendar": "升级策略不属于日历页",
+        "monitor": "升级策略不是监控核心内容",
+        "dashboard": "升级策略属于配置详情内容"
+      }
+    },
+    "OwnershipTransferPanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "选中实体后转移责任可直接操作",
+        "wizard": "责任转移不属通用向导内容",
+        "kanban": "责任转移不是看板常规内容",
+        "calendar": "需当前记录的所有权上下文",
+        "monitor": "监控页不承载责任转移",
+        "dashboard": "责任转移依赖具体实体"
+      }
+    },
+    "WatcherManagerPanel": {
+      "current": [
+        "dashboard",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "兜底强制选：适合实体关注者管理",
+        "wizard": "关注管理不是向导页必需内容",
+        "kanban": "关注管理不是看板常规内容",
+        "calendar": "需当前记录上下文",
+        "monitor": "监控页不承载关注管理",
+        "dashboard": "关注管理依赖具体实体上下文"
+      }
+    },
+    "FunnelConversionChart": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "漏斗分析更属于报表分析页",
+        "wizard": "漏斗分析不是向导流程所需",
+        "kanban": "看板图表位仅支持指标趋势",
+        "calendar": "日历页不提供漏斗图能力",
+        "monitor": "图表适合监控阶段转化",
+        "dashboard": "阶段聚合转化率适合看板"
+      }
+    },
+    "HistogramDistributionChart": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "分布直方图不是工作台常规内容",
+        "wizard": "分布图不是向导流程所需",
+        "kanban": "看板图表位仅支持指标趋势",
+        "calendar": "日历页不提供直方图能力",
+        "monitor": "图表适合监控数值分布",
+        "dashboard": "数值分布图适合监控看板"
+      }
+    },
+    "ScatterCorrelationChart": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "相关性散点图更适合分析页",
+        "wizard": "散点分析不是向导流程所需",
+        "kanban": "看板图表位仅支持指标趋势",
+        "calendar": "散点分析非月历页面常见内容",
+        "monitor": "图表适合监控相关性",
+        "dashboard": "相关性散点图适合看板分析"
+      }
+    },
+    "BoxPlotDistributionChart": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "箱线图属于专业统计分析内容",
+        "wizard": "向导不应承载分布分析图",
+        "kanban": "看板图表位仅支持指标趋势",
+        "calendar": "分布统计非月历页面常见内容",
+        "monitor": "图表适合监控分类分布",
+        "dashboard": "分类分布图适合看板分析"
+      }
+    },
+    "WaterfallVarianceChart": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "瀑布图更适合财务分析页",
+        "wizard": "向导不应承载瀑布分析图",
+        "kanban": "看板不提供瀑布图所需指标",
+        "calendar": "瀑布差异图非月历页面内容",
+        "monitor": "图表适合监控增减波动",
+        "dashboard": "分类增减汇总适合看板监控"
+      }
+    },
+    "ForecastConfidenceChart": {
+      "current": [
+        "dashboard",
+        "monitor"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "预测置信图更适合报表分析页",
+        "wizard": "向导不应承载预测趋势图",
+        "kanban": "预测序列不是看板核心内容",
+        "calendar": "趋势应使用标准趋势积木",
+        "monitor": "时间序列图表适合监控",
+        "dashboard": "时间序列图适合监控概览"
+      }
+    },
+    "BurnupChart": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "项目趋势图更适合分析页",
+        "wizard": "向导不应承载燃尽分析图",
+        "kanban": "项目燃尽图应使用趋势积木",
+        "calendar": "项目燃尽图非月历页面内容",
+        "monitor": "项目进度图非监控核心",
+        "dashboard": "项目进度趋势是常见概览"
+      }
+    },
+    "BurndownChart": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "项目趋势图更适合分析页",
+        "wizard": "向导不应承载燃尽分析图",
+        "kanban": "项目燃尽图应使用趋势积木",
+        "calendar": "项目燃尽图非月历页面内容",
+        "monitor": "项目进度图非监控核心",
+        "dashboard": "剩余工作趋势适合进度监控"
+      }
+    },
+    "ErrorBudgetGauge": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "观测指标不属于常规工作台",
+        "wizard": "错误预算不是向导核心内容",
+        "kanban": "错误预算不属于看板常规指标",
+        "calendar": "预算仪表盘非月历页面内容",
+        "monitor": "错误预算是典型监控指标",
+        "dashboard": "预算消耗是关键监控指标"
+      }
+    },
+    "ServiceMapPanel": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "服务拓扑更适合观测详情页",
+        "wizard": "服务拓扑不是向导核心内容",
+        "kanban": "服务拓扑不是看板提供的数据",
+        "calendar": "服务关系图非月历页面内容",
+        "monitor": "服务拓扑是监控常见视图",
+        "dashboard": "服务拓扑适合运行概览"
+      }
+    },
+    "DependencyGraphPanel": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "依赖关系图不属常规工作台",
+        "wizard": "依赖关系图不是向导核心内容",
+        "kanban": "依赖关系图不是看板内容",
+        "calendar": "依赖关系图非月历页面内容",
+        "monitor": "依赖关系图可辅助监控",
+        "dashboard": "依赖关系图可用于系统监控"
+      }
+    },
+    "QueryResultPivot": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "透视分析更适合查询分析页",
+        "wizard": "透视分析不是向导核心内容",
+        "kanban": "透视聚合不是看板交互",
+        "calendar": "透视聚合非月历页面核心需求",
+        "monitor": "兜底强制选：适合查询结果的分析透视",
+        "dashboard": "兜底强制选：适合查询结果的分析透视"
+      }
+    },
+    "MetricComparisonPanel": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "dashboard",
+        "monitor"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "指标对比更适合分析页",
+        "wizard": "向导不应承载指标对比",
+        "kanban": "多指标比较应使用趋势积木",
+        "calendar": "指标比较应使用标准指标积木",
+        "monitor": "指标对比适合监控看板",
+        "dashboard": "多指标对比适合仪表盘"
+      }
+    },
+    "SchemaMappingPanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "支持选中记录后编辑并提交",
+        "wizard": "字段映射适合作为向导步骤",
+        "kanban": "字段映射表单不属于看板工作流",
+        "calendar": "字段映射表单非月历页面内容",
+        "monitor": "字段映射表单不适合监控",
+        "dashboard": "字段映射编辑应在专用流程页"
+      }
+    },
+    "FieldTransformPanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "支持编辑记录并预览保存",
+        "wizard": "转换编辑适合作为向导步骤",
+        "kanban": "转换表达式不是看板操作",
+        "calendar": "字段转换表单非月历页面内容",
+        "monitor": "转换编辑不属监控职责",
+        "dashboard": "转换编辑与预览不属概览"
+      }
+    },
+    "ImportValidationPanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合导入记录的校验流程",
+        "wizard": "导入校验是流程必要步骤",
+        "kanban": "导入校验不属于看板职责",
+        "calendar": "导入校验非月历页面内容",
+        "monitor": "导入校验不属监控页面",
+        "dashboard": "导入校验属于导入流程"
+      }
+    },
+    "DuplicateResolutionPanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "支持选择记录并提交去重",
+        "wizard": "去重决策适合流程中提交",
+        "kanban": "去重方案需独立数据操作流程",
+        "calendar": "去重操作非月历页面内容",
+        "monitor": "去重操作不属监控页面",
+        "dashboard": "去重处理需要专用操作页"
+      }
+    },
+    "MergePreviewPanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合确认并提交合并结果",
+        "wizard": "合并预览适合向导确认",
+        "kanban": "合并预览不是看板常规内容",
+        "calendar": "合并预览非月历页面内容",
+        "monitor": "合并提交不属监控职责",
+        "dashboard": "合并确认属于业务操作流程"
+      }
+    },
+    "SyncCheckpointPanel": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可展示并操作同步任务状态",
+        "wizard": "检查点续跑是流程步骤",
+        "kanban": "同步检查点不是看板数据",
+        "calendar": "同步检查点非月历页面内容",
+        "monitor": "依赖逐行检查点视图",
+        "dashboard": "检查点续传需专用流程交互"
+      }
+    },
+    "RetryQueuePanel": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "支持对失败记录执行重试",
+        "wizard": "失败项重试符合流程收尾",
+        "kanban": "重试队列不是看板核心操作",
+        "calendar": "重试队列非月历页面内容",
+        "monitor": "重试队列需逐行操作",
+        "dashboard": "重试失败项需逐项操作"
+      }
+    },
+    "JobRunHistoryPanel": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合查看任务运行记录",
+        "wizard": "运行历史非向导必需内容",
+        "kanban": "任务运行历史不属于看板",
+        "calendar": "任务运行历史非月历页面内容",
+        "monitor": "运行记录需逐行视图",
+        "dashboard": "依赖逐行选择但页面无行视图"
+      }
+    },
+    "DataLineagePanel": {
+      "current": [
+        "dashboard",
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可作为记录关联来源视图",
+        "wizard": "数据血缘非向导核心内容",
+        "kanban": "数据血缘需要关系视图",
+        "calendar": "数据血缘非月历页面内容",
+        "monitor": "血缘视图需实体列表交互",
+        "dashboard": "依赖逐行选择但页面无行视图"
+      }
+    },
+    "RecordChangePreview": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "支持预览并提交记录变更",
+        "wizard": "变更预览适合提交前确认",
+        "kanban": "变更预览需独立详情流程",
+        "calendar": "变更预览缺少选中记录能力",
+        "monitor": "变更提交不属监控职责",
+        "dashboard": "变更提交应在记录操作页"
+      }
+    },
+    "PermissionMatrixPanel": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合编辑权限申请草稿",
+        "wizard": "权限申请适合作为向导流程",
+        "kanban": "权限申请不是看板常规操作",
+        "calendar": "权限编辑非月历页面内容",
+        "monitor": "权限编辑不属监控页面",
+        "dashboard": "权限编辑申请不属监控概览"
+      }
+    },
+    "WebhookDeliveryPanel": {
+      "current": [
+        "monitor",
+        "workbench"
+      ],
+      "derived": [
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "支持查看并重试失败投递",
+        "wizard": "投递运维面板非向导必需",
+        "kanban": "投递重试不属于看板职责",
+        "calendar": "投递重试非月历页面内容",
+        "monitor": "投递重试需逐行操作",
+        "dashboard": "重试记录需逐项操作"
+      }
+    },
+    "HierarchicalCategoryPicker": {
+      "current": [
+        "kanban",
+        "workbench"
+      ],
+      "derived": [
+        "calendar",
+        "kanban",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "可作为表格筛选条件",
+        "wizard": "筛选器不是向导核心内容",
+        "kanban": "可作为筛选器收窄看板卡片",
+        "calendar": "可按分类筛选月历记录",
+        "monitor": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件",
+        "dashboard": "硬判据：硬① 总览页没有逐行视图，filterChange 够不到任何东西，是死控件"
+      }
+    },
+    "OrgTreeSelector": {
+      "current": [
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合选择范围并提交授权",
+        "wizard": "授权范围选择适合作为步骤",
+        "kanban": "授权申请不是看板常规交互",
+        "calendar": "组织授权表单非月历页面内容",
+        "monitor": "组织授权表单不适合监控",
+        "dashboard": "组织授权应在专用表单页"
+      }
+    },
+    "AssignmentTransfer": {
+      "current": [
+        "kanban",
+        "wizard",
+        "workbench"
+      ],
+      "derived": [
+        "wizard",
+        "workbench"
+      ],
+      "asked": [
+        "calendar",
+        "dashboard",
+        "kanban",
+        "monitor",
+        "wizard",
+        "workbench"
+      ],
+      "why": {
+        "workbench": "适合分配记录并提交差集",
+        "wizard": "分配差集提交适合向导",
+        "kanban": "分配差集面板不是看板必需内容",
+        "calendar": "分配操作非月历页面内容",
+        "monitor": "分配表单不适合监控",
+        "dashboard": "分配搬运应在专用表单页"
+      }
+    }
+  }
+}

@@ -1,0 +1,325 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder_profile",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "gender_age",
+      "name": "性别 / 年龄",
+      "type": "string"
+     },
+     {
+      "id": "health_level",
+      "name": "健康状况评级",
+      "type": "string"
+     },
+     {
+      "id": "phone",
+      "name": "联系电话",
+      "type": "string"
+     },
+     {
+      "id": "staff",
+      "name": "负责护理员",
+      "type": "ref",
+      "refEntity": "service_staff"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "ref",
+      "refEntity": "elder_profile"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约时间",
+      "type": "date"
+     },
+     {
+      "id": "assigned_staff",
+      "name": "指派人员",
+      "type": "ref",
+      "refEntity": "service_staff"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "service_staff",
+    "name": "服务人员",
+    "fields": [
+     {
+      "id": "staff_name",
+      "name": "人员/机构名称",
+      "type": "string"
+     },
+     {
+      "id": "work_hours",
+      "name": "有效服务工时",
+      "type": "number"
+     },
+     {
+      "id": "completed_orders",
+      "name": "完成工单量",
+      "type": "number"
+     },
+     {
+      "id": "base_salary",
+      "name": "基础服务薪酬",
+      "type": "number"
+     },
+     {
+      "id": "subsidy",
+      "name": "政府补贴明细",
+      "type": "number"
+     },
+     {
+      "id": "total_amount",
+      "name": "实结总额",
+      "type": "number"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "consultant",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "staff",
+    "name": "服务人员"
+   },
+   {
+    "id": "supervisor",
+    "name": "运营主管"
+   }
+  ],
+  "permissions": [
+   "elder_profile:create",
+   "elder_profile:read",
+   "elder_profile:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "service_staff:read",
+   "service_staff:manage",
+   "service_staff:export"
+  ],
+  "menus": [
+   {
+    "id": "menu_workbench",
+    "label": "工作台",
+    "roleRefs": [
+     "staff",
+     "supervisor"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "待派单",
+    "assigneeRole": "consultant",
+    "phase": "待处理"
+   },
+   {
+    "id": "node_executing",
+    "name": "服务中",
+    "assigneeRole": "staff",
+    "phase": "执行中"
+   },
+   {
+    "id": "node_completed",
+    "name": "已完成",
+    "assigneeRole": "supervisor",
+    "phase": "已结束"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_executing",
+    "condition": "顾问指派服务人员并完成派单"
+   },
+   {
+    "from": "node_executing",
+    "to": "node_completed",
+    "condition": "服务人员在移动端完成任务并提交"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "工作台首页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder_profile.name",
+     "elder_profile.phone"
+    ],
+    "actionPermissions": [
+     "elder_profile:read",
+     "elder_profile:create"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "服务工单中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_type"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:update"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "移动端任务执行页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.status",
+     "work_order.assigned_staff"
+    ],
+    "actionPermissions": [
+     "work_order:update"
+    ]
+   },
+   {
+    "id": "p5",
+    "name": "财务结算管理页",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "service_staff.total_amount",
+     "service_staff.base_salary"
+    ],
+    "actionPermissions": [
+     "service_staff:export"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_dispatch",
+    "name": "智能派单推荐",
+    "inputFields": [
+     "elder_profile.health_level"
+    ],
+    "outputField": "work_order.assigned_staff",
+    "roleRefs": [
+     "supervisor"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p3",
+    "workflowRef": "node_created"
+   },
+   {
+    "pageRef": "p4",
+    "workflowRef": "node_executing"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "consultant",
+   "staff",
+   "supervisor"
+  ],
+  "dataModelRefs": [
+   "elder_profile",
+   "work_order",
+   "service_staff"
+  ],
+  "appIdentity": {
+   "appName": "安颐通"
+  },
+  "invariants": [
+   {
+    "id": "inv_order_assignment",
+    "statement": "工单在待派单节点流转时必须指定指派人员",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.assigned_staff",
+     "node_created"
+    ]
+   },
+   {
+    "id": "inv_staff_execution",
+    "statement": "只有服务人员角色才能在服务中节点执行工单并推进状态",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "staff",
+     "node_executing",
+     "node_completed"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

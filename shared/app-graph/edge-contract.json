@@ -1,0 +1,84 @@
+{
+  "version": "app-graph-edges-v1",
+  "why": [
+    "那张网（数据模型/权限/工作流伸进页面每一处）此前在两个运行时里各推一遍：",
+    "client/src/pages/sliderule/system-screens/sandbox-graph.ts 画沙盘+断线体检，",
+    "slide-rule-python/services/app_graph.py 在生成链路上算影响面。",
+    "两份实现是有理由的（用途和运行时都不同），但**边的词汇表不能各定一套**——",
+    "同一份模型在前端画出来是通的、后端算影响面时却是断的，而这种不一致不会报错。",
+    "本文件是那份词汇表：谁连谁、叫什么、以哪份数据为准。两边各自实现提取逻辑，",
+    "但都必须覆盖这里列的每一种边，且不许产出这里没有的边。"
+  ],
+  "edges": [
+    {
+      "kind": "page-entity",
+      "displayLabel": "页面 → 实体（字段绑定）",
+      "from": "page",
+      "to": "datamodel",
+      "source": "page.pages[].fieldBindings",
+      "pythonLabels": ["binds_field", "belongs_to"],
+      "granularityNote": "TS 聚合到实体（防止架构图糊成毛线团）；Python 细到字段，page→field→entity 两跳。影响分析必须细到字段，否则「改了 order.amount」会被放大成「改了 order 整张表」。"
+    },
+    {
+      "kind": "page-workflow",
+      "displayLabel": "页面 → 流程（应用装配）",
+      "from": "page",
+      "to": "workflow",
+      "source": "appbundle.pageBindings[].workflowRef",
+      "pythonLabels": ["drives_workflow"],
+      "granularityNote": "两边同粒度。"
+    },
+    {
+      "kind": "node-role",
+      "displayLabel": "流程节点 → 审批角色",
+      "from": "workflow",
+      "to": "rbac",
+      "source": "workflow.nodes[].assigneeRole",
+      "pythonLabels": ["assigned_to"],
+      "granularityNote": "两边同粒度。"
+    },
+    {
+      "kind": "role-page",
+      "displayLabel": "角色 → 页面（可进入）",
+      "from": "rbac",
+      "to": "page",
+      "source": "rule:role-perms-intersect-page-actions",
+      "pythonLabels": ["can_enter"],
+      "granularityNote": "**推导边，不是字面引用。** 判据：页面声明的 actionPermissions ∩ 角色持有的权限 ≠ ∅。公共页（未声明 actionPermissions）两边都不画——那是人人可进，画出来是角色×页面全连接，信息量为零还会把闭包撑爆。"
+    },
+    {
+      "kind": "aigc-entity",
+      "displayLabel": "AIGC → 输出实体",
+      "from": "aigc",
+      "to": "datamodel",
+      "source": "aigc.capabilities[].inputFields / outputField",
+      "pythonLabels": ["reads_field", "writes_field"],
+      "granularityNote": "TS 聚合到实体；Python 分读/写两种标签并细到字段。"
+    },
+    {
+      "kind": "aigc-role",
+      "displayLabel": "AIGC → 可用角色",
+      "from": "aigc",
+      "to": "rbac",
+      "source": "aigc.capabilities[].roleRefs",
+      "pythonLabels": ["for_role"],
+      "granularityNote": "两边同粒度。"
+    }
+  ],
+  "pythonOnlyLabels": {
+    "needs_perm": "page → perm。TS 侧不画这条（权限节点不在沙盘上，它把权限折进 role-page 的判据里）。影响分析需要它：「改了这一页要的权限」得能定位到具体权限节点。",
+    "on_entity": "perm → entity。同上，权限节点是 Python 侧独有的中间层。"
+  },
+  "rules": {
+    "role-perms-intersect-page-actions": {
+      "roleHeldPermissions": {
+        "authoritative": "rbac.menus[].roleRefs × rbac.menus[].permissionRefs",
+        "fallbackOnly": "rbac.rolePermissions",
+        "note": "⚠ 模型里同一件事有两份数据。2026-08-17 拿仓里四份真机模型验过：rolePermissions **全是空的**，真实数据一条不落全在 menus 里。Python 第一版读 rolePermissions，于是这条边在真机上一条都产不出来，而判据全绿（fixture 是自己编的、带着 rolePermissions）。以 menus 为准，rolePermissions 仅在 menus 缺席时兜底。",
+        "cleanupTodo": "「同一件事两份数据」本身该清理：rolePermissions 由第 5 步产出，活不到第 6 步之后。清理不归图这一层做，但别再多出第三种口径。"
+      },
+      "pageDeclaredPermissions": "page.pages[].actionPermissions",
+      "publicPage": "actionPermissions 为空 = 公共页，两边都不画边"
+    }
+  }
+}

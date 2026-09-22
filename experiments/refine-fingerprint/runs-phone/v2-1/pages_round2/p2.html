@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="zh-CN" class="w-full h-full overflow-hidden">
+<head><style id="sliderule-phone-fill">html,body{margin:0!important;width:100%!important;height:100%!important;min-height:100%!important;max-width:none!important;overflow:hidden!important;background:#fff!important}body{display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important}body>*{width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important;box-sizing:border-box!important}body>div[class*="min-h-screen"],body>div[class*="justify-center"]{display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important;min-height:0!important;flex:1 1 auto!important;height:100%!important;width:100%!important;overflow:hidden!important}header{position:static!important;flex:0 0 auto!important;width:100%!important;padding-top:12px!important}main{flex:1 1 auto!important;min-height:0!important;width:100%!important;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch}main.pt-10,main.pt-12,main.pt-14,main.pt-16,main.pt-20,main.pt-24,main.pt-28,main.pt-32{padding-top:0!important}main.pb-20,main.pb-24,main.pb-28,main.pb-32,main.pb-36{padding-bottom:0!important}body>nav,body>div[class*="min-h-screen"]>nav,body>div[class*="justify-center"]>nav,nav.fixed,nav[class*="bottom-0"]{position:static!important;display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;justify-content:space-around!important;align-items:stretch!important;flex:0 0 auto!important;width:100%!important;min-height:56px!important;padding-top:6px!important;padding-bottom:16px!important}body>nav>a,body>div[class*="min-h-screen"]>nav>a,body>div[class*="justify-center"]>nav>a,nav.fixed>a,nav[class*="bottom-0"]>a{flex:1 1 0!important;min-width:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;white-space:nowrap!important;font-size:10px!important;line-height:1.2!important;text-align:center!important;padding:4px 8px!important}body>nav>a span,body>div[class*="min-h-screen"]>nav>a span,body>div[class*="justify-center"]>nav>a span,nav.fixed>a span,nav[class*="bottom-0"]>a span{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;max-width:100%!important;font-size:10px!important;line-height:15px!important}</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>铁人打卡 - 记录</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        lava: '#FF4500',
+                        speedGreen: '#00E676',
+                        darkBg: '#121212',
+                        cardBg: '#1E1E1E',
+                        borderCol: '#2C2C2C',
+                        textSub: '#9CA3AF'
+                    }
+                }
+            }
+        }
+    </script>
+<style id="sliderule-theme">:root{--background:#fff2ee;--foreground:#0f172a;--chrome:#fffbf9;--chrome-fg:#0f172a;--card:#ffffff;--card-fg:#0f172a;--primary:#ff4500;--primary-fg:#0f172a;--muted:#ffe9e3;--border:#f1d8d1;--radius:8px;}html,body{background-color:var(--background)!important;color:var(--foreground)!important}header,aside,nav.fixed{background-color:var(--chrome)!important;color:var(--chrome-fg)!important}html[data-theme="light"] main .bg-black,html[data-theme="light"] main .bg-slate-800,html[data-theme="light"] main .bg-slate-900,html[data-theme="light"] main .bg-slate-950,html[data-theme="light"] main .bg-gray-800,html[data-theme="light"] main .bg-gray-900,html[data-theme="light"] main .bg-gray-950,html[data-theme="light"] main .bg-zinc-800,html[data-theme="light"] main .bg-zinc-900,html[data-theme="light"] main .bg-zinc-950,html[data-theme="light"] main .bg-neutral-800,html[data-theme="light"] main .bg-neutral-900,html[data-theme="light"] main .bg-neutral-950,html[data-theme="light"] main .bg-stone-800,html[data-theme="light"] main .bg-stone-900,html[data-theme="light"] main .bg-stone-950{background-color:var(--card)!important;color:var(--card-fg)!important;border-color:var(--border)!important}html[data-theme="light"] header .text-white,html[data-theme="light"] header .text-slate-100,html[data-theme="light"] header .text-slate-200,html[data-theme="light"] header .text-gray-100,html[data-theme="light"] aside .text-white,html[data-theme="light"] aside .text-slate-100,html[data-theme="light"] aside .text-slate-200,html[data-theme="light"] aside .text-gray-100{color:var(--chrome-fg,#0f172a)!important}html[data-theme="light"] header .bg-black,html[data-theme="light"] header .bg-slate-800,html[data-theme="light"] header .bg-slate-900,html[data-theme="light"] header .bg-slate-950,html[data-theme="light"] header .bg-gray-800,html[data-theme="light"] header .bg-gray-900,html[data-theme="light"] header .bg-gray-950,html[data-theme="light"] header .bg-zinc-800,html[data-theme="light"] header .bg-zinc-900,html[data-theme="light"] header .bg-zinc-950,html[data-theme="light"] header .bg-neutral-800,html[data-theme="light"] header .bg-neutral-900,html[data-theme="light"] header .bg-neutral-950,html[data-theme="light"] header .bg-stone-800,html[data-theme="light"] header .bg-stone-900,html[data-theme="light"] header .bg-stone-950{background-color:var(--muted)!important;color:var(--chrome-fg,#0f172a)!important}aside nav a{box-sizing:border-box;width:100%;display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside>:first-child:not(nav):not(:has(nav)){display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside :is(img,svg){flex-shrink:0}aside:has(nav a){min-width:16rem!important;box-sizing:border-box}aside[class*="fixed"]:has(nav a),aside[class*="absolute"]:has(nav a){width:16rem!important}aside[class*="fixed"]:has(nav a)~*,aside[class*="absolute"]:has(nav a)~*{margin-left:16rem!important}aside [aria-current="page"]{background-color:color-mix(in srgb,var(--primary,currentColor) 16%,var(--chrome,transparent))!important;color:var(--chrome-fg,inherit)!important;font-weight:600}header nav[aria-label="Breadcrumb"] [aria-current="page"],header nav[aria-label="breadcrumb"] [aria-current="page"]{background-color:transparent!important;color:var(--chrome-fg,inherit)!important;font-weight:600}</style><script>
+/* sliderule-theme-tokens */
+tailwind.config = { theme: { extend: { colors: {
+  background: '#fff2ee',
+  foreground: '#0f172a',
+  chrome: '#fffbf9',
+  card: '#ffffff',
+  primary: '#ff4500',
+  muted: '#ffe9e3',
+  border: '#f1d8d1'
+} } } };
+</script></head>
+<body class="w-full h-full overflow-hidden flex flex-col bg-[#121212] text-white font-sans">
+
+    <!-- 顶部 Header -->
+    <header class="flex-shrink-0 bg-darkBg border-b border-borderCol px-4 py-3 flex items-center justify-between z-10">
+    <div class="flex items-center space-x-2">
+      <div class="w-8 h-8 rounded-lg bg-brand flex items-center justify-center font-bold text-white text-lg tracking-wider">铁</div>
+      <span class="font-bold text-lg tracking-wide text-white">铁人打卡</span>
+    </div>
+    <div class="flex items-center space-x-2 bg-cardBg px-3 py-1.5 rounded-full border border-borderCol">
+      <div class="w-2 h-2 rounded-full bg-success animate-pulse"></div>
+      <span class="text-xs text-gray-300">健身学员</span>
+    </div>
+  </header>
+
+    <!-- 中间主内容区 (可滚动) -->
+    <main class="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
+        
+        <!-- 区块1：顶部近期训练指标卡区 (左右并排 2 张卡片) -->
+        <div class="grid grid-cols-2 gap-3">
+            <!-- 卡片1：本周打卡总次数 -->
+            <div class="bg-[#1E1E1E] border border-[#2C2C2C] rounded-xl p-3.5 flex flex-col justify-between">
+                <div class="text-xs text-[#9CA3AF] flex items-center justify-between">
+                    <span>本周打卡总次数</span>
+                    <span class="text-speedGreen text-[10px] bg-[#00E676]/10 px-1.5 py-0.5 rounded font-medium">+20%</span>
+                </div>
+                <div class="mt-2 flex items-baseline space-x-1">
+                    <span class="text-2xl font-black text-white" data-value="checkin_record" data-aggregate="count">5</span>
+                    <span class="text-xs text-[#9CA3AF]">次</span>
+                </div>
+                <!-- 迷你趋势图表内联 SVG -->
+                <div class="mt-2 h-6 w-full">
+                    <svg class="w-full h-full overflow-visible" viewBox="0 0 100 24">
+                        <path d="M0 20 L20 15 L40 18 L60 8 L80 12 L100 4" fill="none" stroke="#FF4500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="100" cy="4" r="2.5" fill="#FF4500" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- 卡片2：累计训练时长 -->
+            <div class="bg-[#1E1E1E] border border-[#2C2C2C] rounded-xl p-3.5 flex flex-col justify-between">
+                <div class="text-xs text-[#9CA3AF] flex items-center justify-between">
+                    <span>累计训练时长</span>
+                    <span class="text-speedGreen text-[10px] bg-[#00E676]/10 px-1.5 py-0.5 rounded font-medium">达标</span>
+                </div>
+                <div class="mt-2 flex items-baseline space-x-1">
+                    <span class="text-2xl font-black text-white" data-value="checkin_record" data-aggregate="sum:record_duration">325</span>
+                    <span class="text-xs text-[#9CA3AF]">分钟</span>
+                </div>
+                <!-- 迷你趋势图表内联 SVG -->
+                <div class="mt-2 h-6 w-full">
+                    <svg class="w-full h-full overflow-visible" viewBox="0 0 100 24">
+                        <path d="M0 18 L20 12 L40 16 L60 10 L80 6 L100 8" fill="none" stroke="#00E676" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="100" cy="8" r="2.5" fill="#00E676" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- 区块2：快捷筛选标签栏 -->
+        <div class="flex items-center space-x-2 overflow-x-auto pb-1 text-xs no-scrollbar">
+            <button class="flex-shrink-0 px-3.5 py-1.5 rounded-lg bg-lava text-white font-medium transition-colors">全部项目</button>
+            <button class="flex-shrink-0 px-3.5 py-1.5 rounded-lg bg-[#1E1E1E] border border-[#2C2C2C] text-[#9CA3AF] hover:text-white transition-colors">力量举</button>
+            <button class="flex-shrink-0 px-3.5 py-1.5 rounded-lg bg-[#1E1E1E] border border-[#2C2C2C] text-[#9CA3AF] hover:text-white transition-colors">高强度间歇(HIIT)</button>
+            <button class="flex-shrink-0 px-3.5 py-1.5 rounded-lg bg-[#1E1E1E] border border-[#2C2C2C] text-[#9CA3AF] hover:text-white transition-colors">核心稳定</button>
+            <button class="flex-shrink-0 px-3.5 py-1.5 rounded-lg bg-[#1E1E1E] border border-[#2C2C2C] text-[#9CA3AF] hover:text-white transition-colors">有氧耐力</button>
+        </div>
+
+        <!-- 区块3：历史打卡记录主列表 (垂直卡片流) -->
+        <div class="space-y-3" data-rows="checkin_record" data-sort="record_date" data-order="desc" data-limit="8">
+            <div class="text-xs text-[#9CA3AF] font-medium px-1">2023-10月 训练明细</div>
+
+            <!-- 列表项 1 -->
+            <div class="bg-[#1E1E1E] border border-[#2C2C2C] rounded-xl p-3 flex items-center justify-between transition-all hover:border-lava/50">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-lg bg-lava/10 border border-lava/30 flex items-center justify-center text-lava font-bold">
+                        💪
+                    </div>
+                    <div>
+                        <div class="text-sm font-semibold text-white" data-field="record_title">硬拉极限突破训练</div>
+                        <div class="text-xs text-[#9CA3AF] mt-0.5"><span data-field="record_date">2023-10-24</span> · 耗时 <span data-field="record_duration">65</span>分钟</div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-end space-y-1">
+                    <span class="px-2 py-0.5 rounded-full text-[10px] bg-speedGreen/10 text-speedGreen border border-speedGreen/20 font-medium" data-field="record_result">
+                        打卡成功
+                    </span>
+                    <button class="text-[10px] text-[#9CA3AF]" data-action="submitWorkflow" data-entity="checkin_record">提交审批</button>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <nav class="flex justify-around items-center py-2 bg-darkBg border-t border-borderCol/50">
+<a data-page-id="p1" href="#" class="flex flex-col items-center"><svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 4.86 4.86 6.29 6.29 4.86 7.71 3.43 6.31 2 7.74 5.57 11.3 2 14.86 3.43 16.29 4.86 14.86 6.29 16.29 7.71 14.86 9.14 16.29 10.57 14.86 12 18.43 15.57 14.86 19.14 16.29 20.57 14.86z"/></svg><span>训练</span></a>
+<a aria-current="page" data-page-id="p2" href="#" class="flex flex-col items-center text-brand"><svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg><span>记录</span></a>
+<a data-page-id="p3" href="#" class="flex flex-col items-center"><svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span>招募报名</span></a>
+</nav>
+
+</body>
+</html>

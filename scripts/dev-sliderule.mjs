@@ -14,6 +14,8 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 
+import { buildPythonUvicornArgs, pythonStdioEnv } from "./dev-all.mjs";
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const children = [];
@@ -87,11 +89,29 @@ function run(name, command, args = [], options = {}) {
   return child;
 }
 
+function terminateChild(child) {
+  if (!child.pid) return;
+
+  if (process.platform === "win32") {
+    spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    return;
+  }
+
+  try {
+    child.kill("SIGTERM");
+  } catch {
+    // Ignore shutdown races
+  }
+}
+
 function shutdown(code = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
   for (const child of children) {
-    if (!child.killed) child.kill("SIGTERM");
+    terminateChild(child);
   }
   setTimeout(() => process.exit(code), 500);
 }
@@ -99,32 +119,53 @@ function shutdown(code = 0) {
 process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
-console.log("[dev:sliderule] Starting Vite + Python backend only. No Node server.");
-console.log("[dev:sliderule] /api/sliderule and /api/agent-loop proxy directly to :9700");
+async function main() {
+  console.log("[dev:sliderule] Starting Python first, then Vite. No Node server.");
+  console.log("[dev:sliderule] /api/sliderule and /api/agent-loop proxy directly to :9700");
 
-run("vite", process.platform === "win32" ? "npm.cmd" : "npm", ["run", "dev"], {
-  portGuard: Number(process.env.VITE_PORT || 3000),
-});
+  const pythonDir = resolve(root, "slide-rule-python");
+  const pythonExe = process.platform === "win32"
+    ? resolve(pythonDir, ".venv", "Scripts", "python.exe")
+    : resolve(pythonDir, ".venv", "bin", "python");
 
-const pythonDir = resolve(root, "slide-rule-python");
-const pythonExe = process.platform === "win32"
-  ? resolve(pythonDir, ".venv", "Scripts", "python.exe")
-  : resolve(pythonDir, ".venv", "bin", "python");
+  if (existsSync(pythonExe)) {
+    const port = process.env.SLIDE_RULE_PYTHON_PORT || "9700";
+    console.log(`[dev:sliderule] Starting slide-rule-python on :${port}`);
+    run("python", pythonExe, buildPythonUvicornArgs(pythonDir, port), {
+      cwd: pythonDir,
+      portGuard: Number(port),
+      env: {
+        ...pythonStdioEnv(process.env),
+        AGENT_LOOP_RUNS_DIR:
+          process.env.AGENT_LOOP_RUNS_DIR ?? resolve(root, ".agent-loop", "runs"),
+        AGENT_LOOP_EVENTS_DIR:
+          process.env.AGENT_LOOP_EVENTS_DIR ?? resolve(root, ".agent-loop", "events"),
+      },
+    });
+    // ⚠ 2026-08-19：原先 Vite 先起、Python 后起。Vite 默认把 /api/sliderule
+    // 打到 :9700，首屏就是 ECONNREFUSED。等端口起来再开 Vite。
+    const up = await waitForPortListening(Number(port), { timeoutMs: 60000 });
+    if (!up) {
+      console.warn(
+        `[dev:sliderule] slide-rule-python :${port} did not listen within 60s. Starting Vite anyway.`
+      );
+    }
+  } else {
+    console.warn("[dev:sliderule] Python venv not found. Start uvicorn manually if needed:");
+    console.warn("  cd slide-rule-python && .venv/bin/python -m uvicorn app:app --port 9700 --reload");
+  }
 
-if (existsSync(pythonExe)) {
-  const port = process.env.SLIDE_RULE_PYTHON_PORT || "9700";
-  console.log(`[dev:sliderule] Starting slide-rule-python on :${port}`);
-  run("python", pythonExe, [
-    "-m", "uvicorn",
-    "app:app",
-    "--host", "127.0.0.1",
-    "--port", port,
-    "--reload",
-  ], { cwd: pythonDir, portGuard: Number(port) });
-} else {
-  console.warn("[dev:sliderule] Python venv not found. Start uvicorn manually if needed:");
-  console.warn("  cd slide-rule-python && .venv/bin/python -m uvicorn app:app --port 9700 --reload");
+  run("vite", process.platform === "win32" ? "npm.cmd" : "npm", ["run", "dev"], {
+    portGuard: Number(process.env.VITE_PORT || 3000),
+  });
+
+  console.log("\n[dev:sliderule] Ready. Visit http://localhost:3000/agent-loop/sliderule");
+  console.log("API calls go straight to Python (no Node proxy process).");
 }
 
-console.log("\n[dev:sliderule] Ready. Visit http://localhost:3000/agent-loop/sliderule");
-console.log("API calls go straight to Python (no Node proxy process).");
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(`[dev:sliderule] ${error?.stack || error}`);
+    process.exitCode = 1;
+  });
+}

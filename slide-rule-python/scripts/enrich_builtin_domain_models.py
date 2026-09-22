@@ -32,12 +32,28 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(ROOT.parent / ".env")
 load_dotenv(ROOT / ".env")
 
-from services.builtin_examples import _EXAMPLE_META  # noqa: E402
 from services.freeform_block import enrich_monitor_page_overviews  # noqa: E402
 from services.identity_theme_gen import enrich_identity_theme  # noqa: E402
 from services.v5_model_gate import validate_five_system_model  # noqa: E402
 
 FIXTURE = ROOT / "services" / "data" / "builtin_domain_models.json"
+
+# 各域起手意图（原 services/builtin_examples._EXAMPLE_META；E41 官方示例库
+# 2026-08-14 下架后该模块删除，这份文案只剩本脚本在用，就地冻结）。
+_EXAMPLE_META = {
+    "purchase_approval": {
+        "intent": "设计一个采购审批系统，包含采购申请、部门审批和供应商管理",
+    },
+    "leave_approval": {
+        "intent": "设计一个请假审批系统，包含请假申请、主管审批和假期额度管理",
+    },
+    "service_ticket": {
+        "intent": "我们客服团队需要一个服务工单系统，支持工单流转、SLA 升级和客服绩效",
+    },
+    "employee_onboarding": {
+        "intent": "设计一个员工入职系统，包含入职流程、部门分配和 HR 权限管理",
+    },
+}
 
 # 各域预设主题 → 色相锚点提示。纯文字取色时四个域容易收敛到同一色系
 # （实测全部落青蓝），比原先四套不同预设还"千人一面"——把每个域自己

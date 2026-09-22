@@ -1,0 +1,309 @@
+[
+ {
+  "user": "「居民平时怎么订餐，现场取餐时配餐员怎么核验？」答：手机端自主预订 + 现场扫核销码/报手机号核销\n「这套系统主要在什么设备上运行？」答：纯移动端（居民微信预订 + 食堂员工用手机/平板核销与看单）\n「预订时是否需要在线收钱或扣减社区助餐补贴？」答：轻量台账：仅统计份数与到取状态，不涉及线上资金结算（现场付款/记账）",
+  "steps": [
+   {
+    "capabilityId": "intent.parse",
+    "label": "指令已接收 · 启动推理"
+   }
+  ]
+ },
+ {
+  "user": "打造社区食堂每日菜单发布与就餐预订台账：居民端手机查看每日菜谱并提前预订餐次；食堂端实时汇总统计划备餐份数，现场支持扫码或手机号快速核验就餐，并可一键筛查“未取餐”居民名单以便提醒或处理；轻量化台账运营，不涉及线上资金交易。",
+  "steps": [
+   {
+    "capabilityId": "intent.parse",
+    "label": "指令已接收 · 启动推理"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "编排 spec → pages → structure → bind"
+   },
+   {
+    "capabilityId": "planning",
+    "label": "第 1 轮 · 正在执行 planning"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "编排 spec → pages → structure → bind"
+   },
+   {
+    "capabilityId": "evidence.search",
+    "label": "第 1 轮 · ⚡ 正在全网检索外部证据"
+   },
+   {
+    "capabilityId": "risk.analyze",
+    "label": "第 1 轮 · 正在分析风险"
+   },
+   {
+    "capabilityId": "critique.generate",
+    "label": "第 1 轮 · 正在自我挑刺"
+   },
+   {
+    "capabilityId": "report.write",
+    "label": "第 1 轮 · 正在撰写可行性报告"
+   },
+   {
+    "capabilityId": "appbundle.runtimeClosure",
+    "label": "第 1 轮 · 正在执行 appbundle.runtimeClosure"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖋 LLM 正在全网检索外部证据（实时输出见下方）..."
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖋 LLM 正在自我挑刺（实时输出见下方）..."
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖋 LLM 正在分析风险（实时输出见下方）..."
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖋 LLM 正在撰写可行性报告（实时输出见下方）..."
+   },
+   {
+    "capabilityId": "specfirst.spec",
+    "label": "起草规格：成功判据、需求节点与页面清单"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖋 LLM 正在起草规格：成功判据、需求节点与页面清单（实时输出见下方）..."
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "SPEC 已经起草，页面还没有。"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "SPEC 已经起草。下一跳请调 pages，或告诉用户为什么先停。"
+   }
+  ]
+ },
+ {
+  "user": "假设已确认。继续画页面。",
+  "steps": [
+   {
+    "capabilityId": "intent.parse",
+    "label": "指令已接收 · 启动推理"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "编排 pages → structure → bind"
+   },
+   {
+    "capabilityId": "planning",
+    "label": "第 1 轮 · 正在执行 planning"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "编排 pages"
+   },
+   {
+    "capabilityId": "factory.pages",
+    "label": "第 1 轮 · 逐页画界面（并发）"
+   },
+   {
+    "capabilityId": "factory.structure",
+    "label": "第 1 轮 · 从界面反推数据模型与关联关系"
+   },
+   {
+    "capabilityId": "factory.bind",
+    "label": "第 1 轮 · 给界面接上数据"
+   },
+   {
+    "capabilityId": "specfirst.design",
+    "label": "定这个应用的设计语言"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖋 LLM 正在定这个应用的设计语言（实时输出见下方）..."
+   },
+   {
+    "capabilityId": "specfirst.pages",
+    "label": "逐页画界面（并发）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p5（1/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p2（2/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p1（3/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p3（4/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p4（5/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p5（1/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p2（2/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p1（3/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p3（4/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p4（5/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p5：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p2：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p1：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p3：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p4：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "specfirst.pages",
+    "label": "逐页画界面（并发）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p2（1/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p4（2/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p1（3/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p5（4/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p3（5/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p2（1/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p4（2/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p1（3/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p5（4/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p3（5/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p2：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p4：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p1：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p5：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p3：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "specfirst.pages",
+    "label": "逐页画界面（并发）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p3（2/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p1（3/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p2（4/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p4（5/5）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p3（1/4）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p1（2/4）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p2（3/4）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "🖼 界面已出：p4（4/4）"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p3：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p1：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p2：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "页面 p4：浅字浅底，对比可能不够"
+   },
+   {
+    "capabilityId": "intent.parse",
+    "label": "已经出过 4 页。"
+   }
+  ]
+ }
+]

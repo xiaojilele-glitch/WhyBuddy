@@ -1,0 +1,319 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "string"
+     },
+     {
+      "id": "care_level",
+      "name": "照护等级",
+      "type": "enum"
+     },
+     {
+      "id": "health_status",
+      "name": "健康状态",
+      "type": "string"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约时间",
+      "type": "date"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "enum"
+     }
+    ]
+   },
+   {
+    "id": "staff",
+    "name": "服务人员",
+    "fields": [
+     {
+      "id": "name",
+      "name": "服务人员",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_specialist",
+    "name": "社区养老专员"
+   },
+   {
+    "id": "role_family",
+    "name": "家属"
+   },
+   {
+    "id": "role_staff",
+    "name": "服务人员"
+   }
+  ],
+  "permissions": [
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "staff:read",
+   "elder:delete"
+  ],
+  "menus": [
+   {
+    "id": "m1",
+    "label": "工作台菜单",
+    "roleRefs": [
+     "role_specialist"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "工单发起",
+    "assigneeRole": "role_specialist",
+    "phase": "created"
+   },
+   {
+    "id": "node_assigned",
+    "name": "已派单",
+    "assigneeRole": "role_specialist",
+    "phase": "processing"
+   },
+   {
+    "id": "node_executing",
+    "name": "服务执行中",
+    "assigneeRole": "role_staff",
+    "phase": "processing"
+   },
+   {
+    "id": "node_completed",
+    "name": "服务完成",
+    "assigneeRole": "role_staff",
+    "phase": "finished"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_assigned",
+    "condition": "专员选择服务人员并完成派单"
+   },
+   {
+    "from": "node_assigned",
+    "to": "node_executing",
+    "condition": "服务人员接单并开始提供服务"
+   },
+   {
+    "from": "node_executing",
+    "to": "node_completed",
+    "condition": "服务人员记录服务结果并提交完成"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "工作台首页",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.age",
+     "elder.care_level",
+     "elder.health_status",
+     "elder.emergency_contact"
+    ],
+    "actionPermissions": [
+     "elder:read",
+     "elder:create",
+     "elder:update",
+     "elder:delete"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "工单调度中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_ref",
+     "work_order.service_type",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:create",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "家属服务门户",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "work_order.order_no",
+     "work_order.appointment_time",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "elder:read",
+     "work_order:create",
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "p5",
+    "name": "服务执行端",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_type",
+     "work_order.appointment_time",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_1",
+    "name": "健康评估助手",
+    "inputFields": [
+     "elder.age",
+     "elder.health_status"
+    ],
+    "outputField": "elder.care_level",
+    "roleRefs": [
+     "role_specialist"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p3",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "node_created"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "node_assigned"
+   },
+   {
+    "pageRef": "p5",
+    "workflowRef": "node_executing"
+   },
+   {
+    "pageRef": "p5",
+    "workflowRef": "node_completed"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_specialist",
+   "role_family",
+   "role_staff"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "work_order",
+   "staff"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_work_order_status",
+    "statement": "工单的当前状态必须与工作流节点保持一致",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order.status",
+     "node_created",
+     "node_completed"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

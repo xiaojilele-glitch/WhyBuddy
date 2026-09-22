@@ -1,0 +1,340 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "长者",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约时间",
+      "type": "date"
+     },
+     {
+      "id": "service_staff",
+      "name": "服务人员",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "elder",
+    "name": "长者档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "gender",
+      "name": "性别",
+      "type": "string"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "string"
+     },
+     {
+      "id": "community",
+      "name": "居住社区",
+      "type": "string"
+     },
+     {
+      "id": "care_level",
+      "name": "照护等级",
+      "type": "string"
+     },
+     {
+      "id": "health_status",
+      "name": "健康状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "emergency_rescue",
+    "name": "紧急救援",
+    "fields": [
+     {
+      "id": "rescue_time",
+      "name": "求助时间",
+      "type": "date"
+     },
+     {
+      "id": "elder_ref",
+      "name": "长者",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "location",
+      "name": "定位地址",
+      "type": "string"
+     },
+     {
+      "id": "rescue_type",
+      "name": "求助类型",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_staff",
+    "name": "社区养老专员"
+   },
+   {
+    "id": "role_elder",
+    "name": "长者及家属"
+   }
+  ],
+  "permissions": [
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "emergency_rescue:create",
+   "emergency_rescue:read",
+   "emergency_rescue:update"
+  ],
+  "menus": [
+   {
+    "id": "menu_work_order",
+    "label": "服务工单",
+    "roleRefs": [
+     "role_staff"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "menu_elder",
+    "label": "老人档案",
+    "roleRefs": [
+     "role_staff"
+    ],
+    "permissionRefs": [
+     "elder:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_incoming",
+    "name": "发起求助",
+    "assigneeRole": "role_elder",
+    "phase": "求助阶段"
+   },
+   {
+    "id": "node_processing",
+    "name": "专员处理",
+    "assigneeRole": "role_staff",
+    "phase": "救援阶段"
+   },
+   {
+    "id": "node_closed",
+    "name": "救援完成",
+    "assigneeRole": "role_staff",
+    "phase": "结案阶段"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_incoming",
+    "to": "node_processing",
+    "condition": "长者发起紧急求助并进入监控队列"
+   },
+   {
+    "from": "node_processing",
+    "to": "node_closed",
+    "condition": "社区养老专员完成救援处置"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "工作台首页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.status",
+     "elder.name"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "elder:read",
+     "emergency_rescue:read"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "服务工单中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_type",
+     "work_order.elder_ref",
+     "work_order.appointment_time",
+     "work_order.service_staff",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:read",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.gender",
+     "elder.age",
+     "elder.community",
+     "elder.care_level",
+     "elder.health_status"
+    ],
+    "actionPermissions": [
+     "elder:create",
+     "elder:read",
+     "elder:update"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "紧急救援监控页",
+    "kind": "monitor",
+    "fieldBindings": [
+     "emergency_rescue.rescue_time",
+     "emergency_rescue.elder_ref",
+     "emergency_rescue.location",
+     "emergency_rescue.rescue_type",
+     "emergency_rescue.status"
+    ],
+    "actionPermissions": [
+     "emergency_rescue:create",
+     "emergency_rescue:read",
+     "emergency_rescue:update"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_care_assessment",
+    "name": "护理等级智能评估",
+    "inputFields": [
+     "elder.health_status",
+     "elder.age"
+    ],
+    "outputField": "elder.care_level",
+    "roleRefs": [
+     "role_staff"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p2",
+    "workflowRef": "node_incoming"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "node_processing"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "node_closed"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_staff",
+   "role_elder"
+  ],
+  "dataModelRefs": [
+   "work_order",
+   "elder",
+   "emergency_rescue"
+  ],
+  "appIdentity": {
+   "appName": "安欣养老通"
+  },
+  "invariants": [
+   {
+    "id": "inv_1",
+    "statement": "紧急救援记录必须关联长者档案",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "emergency_rescue",
+     "emergency_rescue.elder_ref"
+    ]
+   },
+   {
+    "id": "inv_2",
+    "statement": "服务工单必须记录工单编号与当前状态",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.order_no",
+     "work_order.status",
+     "node_incoming"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

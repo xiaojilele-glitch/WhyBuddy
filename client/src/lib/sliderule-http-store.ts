@@ -105,6 +105,7 @@ export class HttpSlideRuleSessionStore implements SlideRuleSessionStore {
     const res = await fetch(this.url(`/sessions/${encodeURIComponent(sid)}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      credentials: "include",
       body: JSON.stringify(state),
     });
     if (!res.ok) {

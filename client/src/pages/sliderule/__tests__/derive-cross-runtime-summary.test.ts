@@ -113,6 +113,38 @@ describe("deriveCrossRuntimeGraphSummary", () => {
     });
   });
 
+  it("passes refinePaintNote through for the chat bubble", () => {
+    const summary = derivePublishClosureSummary({
+      blocked: false,
+      blockers: [],
+      perSkillEvidence: { page: { evidencePresent: true } } as any,
+      runtimeClosure: {
+        skillsChecked: ["page"],
+        versionPinsChecked: true,
+        perSkill: {} as any,
+      },
+      refinePaintNote: "这一处没画上：结构闸说臆造字段",
+    });
+    expect(summary?.refinePaintNote).toBe("这一处没画上：结构闸说臆造字段");
+  });
+
+  it("passes refineReuseNote through for the left-rail header", () => {
+    const summary = derivePublishClosureSummary({
+      blocked: false,
+      blockers: [],
+      perSkillEvidence: { page: { evidencePresent: true } } as any,
+      runtimeClosure: {
+        skillsChecked: ["page"],
+        versionPinsChecked: true,
+        perSkill: {} as any,
+      },
+      refineReuseNote: "改了 异常条目（p3） · 沿用 3 页 · 规格、权限、流程沿用",
+    });
+    expect(summary?.refineReuseNote).toBe(
+      "改了 异常条目（p3） · 沿用 3 页 · 规格、权限、流程沿用"
+    );
+  });
+
   it("surfaces AppBundle closure digest and tier counts for the page", () => {
     expect(
       derivePublishClosureSummary(

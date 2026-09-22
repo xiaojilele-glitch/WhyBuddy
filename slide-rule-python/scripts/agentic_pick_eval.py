@@ -30,6 +30,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from sliderule_llm.config import default_max_tokens  # noqa: E402
+
 # 会话存储隔离（必须在导入 services 前设好——persistence 读 env 定位存储；
 # 子进程模式下会被 _spawn_case 的独立路径覆盖）
 _TMP = tempfile.mkdtemp(prefix="agentic-pick-eval-")
@@ -153,9 +155,11 @@ def _simulated_owner_answer(topic: str, questions: list[str], closing: bool) -> 
                 },
             ],
             temperature=0.4,
-            max_tokens=2000,
+            max_tokens=default_max_tokens(),
             max_attempts=1,
-            reasoning_effort="low",
+            # 档位走 .env（见 config.py 那块墓碑）。评测尤其不该自己定档：
+            # 模拟用户和被评测的产品链路必须在同一份配置下跑，否则测出来的数
+            # 和线上不是一回事。
         )
         answer = str(parsed.get("answer") or "").strip()
         if len(answer) >= 14:

@@ -1,0 +1,85 @@
+{
+  "note": "应用级模板骨架的初始种子（2026-08-11）。四条全部从 builtin_domain_models.json 的四个内置演示域抠出来，抠的是骨架，扔掉的是实体和字段。逐字段的来源：id/name/pages[].id/pages[].kind 原样搬；pages[].purpose 取演示域页面的 name；roleShape 取 rbac.menus[].label（那是各类角色各自的入口名，比 rbac.roles 里的英文 id 更能被相关性尺子量到）；workflowShape.steps 取 workflow.nodes 的条数、phases 取节点的 phase 去重。industry 与 when 是手写的判断，不是抽出来的——演示域里没有这两样。pages[].blocks 一律缺省：那四个演示域是 page.blocks 上线之前冻结的，页面里连 blocks 这个键都没有，抽不出来。每页该摆什么版式交给已经接进提示词的 pageKindPresets，不在这里替模型定。以后从真实发布的应用攒模板时，那些是带 blocks 的。",
+  "templates": [
+    {
+      "id": "purchase_approval",
+      "name": "采购申请与审批",
+      "industry": "采购",
+      "when": "员工提采购需求、经理审批、财务确认付款——「申请 → 审批 → 执行」这一类单据流，并且需要按供应商归档",
+      "roleShape": ["采购申请", "经理审批", "财务确认", "采购管理"],
+      "workflowShape": {
+        "steps": 7,
+        "hasApproval": true,
+        "phases": ["申请", "审批", "确认", "完成", "归档"]
+      },
+      "pages": [
+        { "id": "purchase_workbench", "kind": "workbench", "purpose": "采购申请工作台" },
+        { "id": "approval_kanban", "kind": "kanban", "purpose": "经理审批看板" },
+        { "id": "finance_dashboard", "kind": "dashboard", "purpose": "财务确认总览" },
+        { "id": "supplier_directory", "kind": "workbench", "purpose": "供应商目录" }
+      ],
+      "source": "builtin"
+    },
+    {
+      "id": "leave_approval",
+      "name": "请假申请与审批",
+      "industry": "人事",
+      "when": "本人提申请、主管审批、HR 备案，并且需要按人和按时间看谁不在岗、余额还剩多少",
+      "roleShape": ["我的请假", "主管审批", "HR备案", "假期余额管理"],
+      "workflowShape": {
+        "steps": 7,
+        "hasApproval": true,
+        "phases": ["申请", "审核", "备案", "完成"]
+      },
+      "pages": [
+        { "id": "my_leave_workbench", "kind": "workbench", "purpose": "我的请假单" },
+        { "id": "manager_leave_kanban", "kind": "kanban", "purpose": "主管审批看板" },
+        { "id": "leave_calendar", "kind": "calendar", "purpose": "团队请假日历" },
+        { "id": "hr_leave_dashboard", "kind": "dashboard", "purpose": "HR假勤概览" },
+        { "id": "approval_audit_page", "kind": "workbench", "purpose": "审批记录" }
+      ],
+      "source": "builtin"
+    },
+    {
+      "id": "service_ticket",
+      "name": "服务工单与派单",
+      "industry": "客户服务",
+      "when": "用户报问题、客服分派处理、有时限要求、超时要升级——问题从报到关闭走一条有时效约束的流转",
+      "roleShape": ["客户服务中心", "客服工单工作台", "主管升级与分派", "SLA管理", "系统管理"],
+      "workflowShape": {
+        "steps": 8,
+        "hasApproval": true,
+        "phases": ["提交", "审核", "分派", "处理", "确认", "关闭"]
+      },
+      "pages": [
+        { "id": "customer_ticket_submit", "kind": "workbench", "purpose": "提交服务工单" },
+        { "id": "agent_ticket_kanban", "kind": "kanban", "purpose": "客服处理看板" },
+        { "id": "supervisor_escalation_workbench", "kind": "workbench", "purpose": "主管升级流转" },
+        { "id": "sla_calendar", "kind": "calendar", "purpose": "SLA到期日历" },
+        { "id": "service_dashboard", "kind": "dashboard", "purpose": "客户服务运营看板" }
+      ],
+      "source": "builtin"
+    },
+    {
+      "id": "employee_onboarding",
+      "name": "入职办理与任务跟进",
+      "industry": "人事",
+      "when": "一个人入职/入场要跑完多个部门的任务清单，有排期、有材料核验、有权限开通",
+      "roleShape": ["员工入职填报", "HR入职工作台", "部门分配确认", "HR权限管理", "IT入职任务", "入职数据看板"],
+      "workflowShape": {
+        "steps": 7,
+        "hasApproval": true,
+        "phases": ["建档", "申请", "审核", "分配", "执行", "完成"]
+      },
+      "pages": [
+        { "id": "onboarding_workbench", "kind": "kanban", "purpose": "入职工作台" },
+        { "id": "onboarding_calendar", "kind": "calendar", "purpose": "入职排期日历" },
+        { "id": "onboarding_dashboard", "kind": "dashboard", "purpose": "入职运营看板" },
+        { "id": "onboarding_document_workbench", "kind": "workbench", "purpose": "入职材料核验" },
+        { "id": "hr_role_management", "kind": "workbench", "purpose": "HR权限管理" },
+        { "id": "onboarding_task_workbench", "kind": "workbench", "purpose": "入职任务执行" }
+      ],
+      "source": "builtin"
+    }
+  ]
+}

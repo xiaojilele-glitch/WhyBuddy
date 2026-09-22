@@ -419,8 +419,10 @@ describe("browser smoke: closure visibility after /agent-loop/sliderule (python 
     // pass-through from python publishClosure via sessionState seeds initial state visible at root entry
     expect(html).toContain('data-runtime-publish-closure="present"');
     expect(html).toContain('data-runtime-skill-graph="present"');
-    // default rail screen = AppBundle evidence board fed by the python closure
-    expect(html).toContain("发布证据看板");
+    // default rail = 接线沙盘；Checks 吃 python closure 的 6/6
+    expect(html).toContain('data-testid="sliderule-architecture-stage"');
+    expect(html).toContain("Checks 6/6");
+    expect(html).not.toContain("发布证据看板");
     // 「推演过程」右栏标签页已删（左栏对话流即实时推演过程）：右栏只有系统画面
     expect(html).not.toContain('data-testid="sliderule-rail-tab-process"');
     expect(html).not.toContain('data-testid="sliderule-rail-tab-screens"');

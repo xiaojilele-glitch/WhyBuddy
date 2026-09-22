@@ -1,7 +1,9 @@
 /**
  * EchartsChart — ECharts 薄包装（图表基建统一入口）。
  *
- * - 按需注册：echarts/core + Bar/Line/Pie + Grid/Tooltip/Dataset，不引全量包；
+ * - 按需注册：只登记目录真实使用的 Bar/Line/Pie/Funnel/Gauge/Heatmap/Treemap、
+ *   Custom/Sankey/Boxplot/Radar，再配 Grid/Tooltip/Dataset/VisualMap/Radar，
+ *   不引全量包；
  * - 本组件只经 React.lazy 引入（见 AppRuntimeScreen）——echarts 独立成 chunk，
  *   不进主 bundle（GitHub Pages 演示站首屏不背这个包）；
  * - ResizeObserver 跟随容器尺寸；option 变更 setOption(true) 全量替换。
@@ -9,18 +11,41 @@
 
 import React from "react";
 import * as echarts from "echarts/core";
-import { BarChart, LineChart, PieChart } from "echarts/charts";
-import { GridComponent, TooltipComponent, DatasetComponent, TitleComponent } from "echarts/components";
+import {
+  BarChart,
+  BoxplotChart,
+  CustomChart,
+  FunnelChart,
+  GaugeChart,
+  HeatmapChart,
+  LineChart,
+  PieChart,
+  RadarChart,
+  SankeyChart,
+  TreemapChart,
+} from "echarts/charts";
+import { GridComponent, TooltipComponent, DatasetComponent, TitleComponent, VisualMapComponent, RadarComponent, LegendComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 
 echarts.use([
   BarChart,
+  BoxplotChart,
+  CustomChart,
+  FunnelChart,
+  GaugeChart,
+  HeatmapChart,
   LineChart,
   PieChart,
+  RadarChart,
+  SankeyChart,
+  TreemapChart,
   GridComponent,
   TooltipComponent,
   DatasetComponent,
   TitleComponent,
+  VisualMapComponent,
+  RadarComponent,
+  LegendComponent,
   CanvasRenderer,
 ]);
 

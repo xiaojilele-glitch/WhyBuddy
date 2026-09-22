@@ -1,0 +1,5 @@
+# 参照图不进仓库：4 张 ~4MB 的 PNG，15MB 常驻代价太大。
+# 复现物是 materials/previews/provenance.json —— 它带完整提示词 + 模型 + 时间戳，
+# 图随时可重生。真要原图，见 whybuddy CRM 交付包。
+materials/previews/*.png
+runs/

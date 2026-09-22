@@ -160,6 +160,27 @@ def test_call_llm_json_reports_length_truncation(monkeypatch):
         call_llm_json([{"role": "user", "content": "hi"}], max_tokens=128)
 
 
+def test_call_llm_json_repairs_trailing_comma(monkeypatch):
+    """过夜首轮：模型吐了能修的烂 JSON，不该整条打回 GEN5。
+
+    截断不当修（上一条）；这里是收得完整、只多数了个逗号。
+    """
+    from sliderule_llm.client import call_llm_json
+
+    def fake_retry(messages, **kwargs):
+        return LlmResult(
+            content='{"rootNodeId": "n0",}',
+            usage={"total_tokens": 1},
+            finish_reason="stop",
+            model="fake",
+            latency_ms=1,
+        )
+
+    monkeypatch.setattr("sliderule_llm.client.call_llm_with_retry", fake_retry)
+    parsed, _ = call_llm_json([{"role": "user", "content": "hi"}])
+    assert parsed["rootNodeId"] == "n0"
+
+
 def test_build_provider_configs_includes_fallback_provider(monkeypatch):
     from sliderule_llm.client import build_provider_configs
     from sliderule_llm.config import FallbackLlmConfig

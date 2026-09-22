@@ -1,0 +1,87 @@
+{
+  "$comment": "设计系统清单：前后端同读这一处。前端用 seed 派生真正渲染的 12 个字段（identity-palette.ts / MCU HCT），Python 用同一个 seed 拼进生成提示词并产出 DESIGN.md。两边各写一份的话，提示词说的颜色和实际渲染的颜色会悄悄分叉——identity_theme_presets.json 的 brandSeed 注释里已经把这个坑写过一遍了，别再踩。改这个文件之后跑 pnpm designmd:generate。 reference/donts 两个字段按 DESIGN.md 官方 PHILOSOPHY 写：具体参照胜过形容词堆（'Adjectives describe a region. A specific reference describes a point.'），负向约束定义性格。",
+  "version": 1,
+  "defaultId": "miantuan",
+  "systems": [
+    {
+      "id": "miantuan",
+      "label": "面团 · 品牌",
+      "description": "默认设计系统。种子色取自面团标识渐变的中段，与 identity_theme_presets.json 的 brandSeed 同值——换掉它等于换掉全站默认配色。",
+      "seed": "#3B82F6",
+      "headlineFont": "Inter",
+      "bodyFont": "Inter",
+      "radius": "md",
+      "dark": false,
+      "reference": "一套企业内部工具的默认外观：白底、克制的蓝、信息优先，像一份排版良好的后台报表，不像一个营销落地页。",
+      "donts": [
+        "不要渐变背景、玻璃拟态、发光边框",
+        "不要把主色铺满页头或侧栏",
+        "不要装饰性插画占位"
+      ]
+    },
+    {
+      "id": "forest",
+      "label": "森野",
+      "description": "低饱和绿。适合养护、农业、环保、医疗这类需要「稳」的业务。",
+      "seed": "#2F855A",
+      "headlineFont": "Inter",
+      "bodyFont": "Inter",
+      "radius": "md",
+      "dark": false,
+      "reference": "县域农技站的纸质台账被搬上屏幕：米白纸感、墨绿油墨、表格线细而实，重要的是数字看得清，不是好看。",
+      "donts": [
+        "不要深色底",
+        "不要圆润的卡通图标",
+        "不要用绿色表示'成功'以外的任何含义"
+      ]
+    },
+    {
+      "id": "ember",
+      "label": "炉火",
+      "description": "暖橙。适合零售、餐饮、活动这类要推动用户下一步动作的业务。",
+      "seed": "#DD6B20",
+      "headlineFont": "Inter",
+      "bodyFont": "Inter",
+      "radius": "lg",
+      "dark": false,
+      "reference": "连锁餐饮门店的收银台屏幕：高对比、按钮大而明确、一眼能看到下一步该点哪里，在嘈杂环境里也不会点错。",
+      "donts": [
+        "不要低对比度的浅灰文字",
+        "不要把主操作按钮做成幽灵按钮",
+        "不要多于两级的信息层次"
+      ]
+    },
+    {
+      "id": "ink",
+      "label": "墨线",
+      "description": "近中性的深蓝灰，主色克制。适合审批、合规、审计这类不该有情绪的业务。",
+      "seed": "#3D4A5C",
+      "headlineFont": "Inter",
+      "bodyFont": "Inter",
+      "radius": "sm",
+      "dark": false,
+      "reference": "政府审批窗口的受理系统：几乎没有颜色，靠字重和留白分层，任何一处高饱和色出现都意味着'这里出了问题'。",
+      "donts": [
+        "不要用彩色区分普通状态",
+        "不要圆角大于 4px",
+        "不要任何动效"
+      ]
+    },
+    {
+      "id": "violet",
+      "label": "夜航",
+      "description": "紫。深色底，适合数据看板、监控台这类长时间盯屏的场景。",
+      "seed": "#7C3AED",
+      "headlineFont": "Inter",
+      "bodyFont": "Inter",
+      "radius": "md",
+      "dark": true,
+      "reference": "值班室的大屏监控台：深色底减少长时间盯屏的疲劳，亮色只给需要立刻被看到的异常，其余一律压暗。",
+      "donts": [
+        "不要浅色底",
+        "不要大面积高亮",
+        "不要让常态数据比异常数据更醒目"
+      ]
+    }
+  ]
+}

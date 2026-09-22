@@ -57,6 +57,10 @@ describe("D1 dialogue execute-capability", () => {
 
   beforeEach(async () => {
     vi.restoreAllMocks();
+    // 本文件 mock 的是 Node 侧 llm-client / blueprint 生成器，测的是 Node 兼容路径。
+    // 默认后端是 python，会把 execute-capability 委托给 Python，mock 完全不生效，
+    // Python 再去打真网关 → 502。显式选 legacy 才能测到这些 mock 想覆盖的分支。
+    vi.stubEnv("SLIDERULE_V5_BACKEND", "legacy");
     vi.stubEnv("SLIDERULE_CAPABILITY_POOL_ENABLED", "0");
     vi.stubEnv("BLUEPRINT_SPEC_DOCS_LLM_POOL_KEYS", "");
     resetSlideRuleCapabilityPoolCache();

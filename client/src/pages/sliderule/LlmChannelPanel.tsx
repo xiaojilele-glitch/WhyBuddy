@@ -9,6 +9,13 @@
 
 import React from "react";
 import { toast } from "sonner";
+import {
+  SETTINGS_GHOST_BTN,
+  SETTINGS_INPUT_CLASS,
+  SETTINGS_PRIMARY_BTN,
+  SettingsRow,
+  SettingsSection,
+} from "./settings-ui";
 
 interface ChannelStatus {
   baseUrl: string;
@@ -119,125 +126,150 @@ export function LlmChannelPanel() {
     }
   };
 
-  const inputClass =
-    "w-full rounded border border-[#e5e7eb] bg-white px-3 py-2 font-mono text-[13px] text-stone-800 outline-none transition focus:border-[#1677ff] focus:ring-2 focus:ring-[#F3DCD0]";
-  const labelClass = "mb-1.5 block text-[12px] font-semibold text-stone-600";
+  const fieldInputClass = `${SETTINGS_INPUT_CLASS} w-[280px] font-mono`;
 
   if (loadError) {
     return (
-      <div className="p-6" data-testid="llm-channel-panel">
-        <div className="rounded-md border border-red-200 bg-red-50/60 px-4 py-3 text-[12px] text-red-600">
-          无法读取服务端通道配置：{loadError}
-          <div className="mt-1 text-stone-500">python 服务（:9700）未启动时此面板不可用——如实不可用，不显示假配置。</div>
-        </div>
+      <div data-testid="llm-channel-panel">
+        <SettingsSection>
+          <p className="px-4 py-3.5 text-[12px] leading-5 text-red-600">
+            无法读取服务端通道配置：{loadError}
+            <span className="mt-1 block text-[#737373]">
+              python 服务（:9700）未启动时此面板不可用——如实不可用，不显示假配置。
+            </span>
+          </p>
+        </SettingsSection>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl space-y-5 overflow-y-auto p-6" data-testid="llm-channel-panel">
-      <div className="rounded-md bg-[#e6f4ff]/70 px-4 py-3 text-[12px] leading-5 text-[#0958d9] ring-1 ring-[#bae0ff]">
-        这是<strong>服务端真通道</strong>——五系统生成、LLM 评审、运行应用的 AI 写回全走这一条。
+    <div className="space-y-8" data-testid="llm-channel-panel">
+      <p className="text-[13px] leading-5 text-[#737373]">
+        这是服务端真通道——五系统生成、LLM 评审、运行应用的 AI 写回全走这一条。
         密钥仅保存在服务端本机（gitignored 覆盖文件），页面只显示掩码，明文不回传。
-      </div>
+      </p>
 
       {!status ? (
-        <div className="animate-pulse space-y-3">
-          <div className="h-9 rounded bg-[#e9edf2]" />
-          <div className="h-9 rounded bg-[#e9edf2]" />
-          <div className="h-9 rounded bg-[#e9edf2]" />
-        </div>
+        <SettingsSection>
+          <div className="space-y-3 px-4 py-4">
+            <div className="h-8 animate-pulse rounded-md bg-black/[0.04]" />
+            <div className="h-8 animate-pulse rounded-md bg-black/[0.04]" />
+            <div className="h-8 animate-pulse rounded-md bg-black/[0.04]" />
+          </div>
+        </SettingsSection>
       ) : (
         <>
-          {/* 当前状态 */}
-          <div className="flex flex-wrap items-center gap-2 text-[12px]" data-testid="llm-channel-status">
-            <span className={`rounded-full px-2.5 py-1 font-medium ring-1 ${status.keyPresent ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-600 ring-red-200"}`}>
-              {status.keyPresent ? `密钥 ${status.keyMasked}` : "未配置密钥"}
-            </span>
-            <span className="rounded-full bg-[#eef0f4] px-2.5 py-1 font-mono text-stone-600 ring-1 ring-[#e5e7eb]">
-              {status.provider || "未知提供方"}
-            </span>
-            <span className="rounded-full bg-[#eef0f4] px-2.5 py-1 font-mono text-stone-600 ring-1 ring-[#e5e7eb]">
-              {status.model}
-            </span>
-            {status.overriddenFields.map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => clearOverride(f)}
-                title="点击清除覆盖，回退 .env 值"
-                className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 ring-1 ring-amber-200 transition hover:bg-amber-100"
+          <SettingsSection title="状态">
+            <div
+              className="flex flex-wrap items-center gap-2 px-4 py-3.5 text-[12px]"
+              data-testid="llm-channel-status"
+            >
+              <span
+                className={`rounded-md px-2 py-0.5 font-medium ${
+                  status.keyPresent
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-red-50 text-red-600"
+                }`}
               >
-                覆盖中：{FIELD_LABEL[f] ?? f} ×
+                {status.keyPresent ? `密钥 ${status.keyMasked}` : "未配置密钥"}
+              </span>
+              <span className="rounded-md bg-black/[0.04] px-2 py-0.5 font-mono text-[#52525b]">
+                {status.provider || "未知提供方"}
+              </span>
+              <span className="rounded-md bg-black/[0.04] px-2 py-0.5 font-mono text-[#52525b]">
+                {status.model}
+              </span>
+              {status.overriddenFields.map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => clearOverride(f)}
+                  title="点击清除覆盖，回退 .env 值"
+                  className="rounded-md bg-amber-50 px-2 py-0.5 text-amber-700 transition hover:bg-amber-100"
+                >
+                  覆盖中：{FIELD_LABEL[f] ?? f} ×
+                </button>
+              ))}
+            </div>
+          </SettingsSection>
+
+          <SettingsSection title="连接">
+            <SettingsRow title="Base URL">
+              <input
+                className={fieldInputClass}
+                value={baseUrl}
+                onChange={e => setBaseUrl(e.target.value)}
+                placeholder="https://api.openai.com/v1"
+                data-testid="llm-channel-baseurl"
+              />
+            </SettingsRow>
+            <SettingsRow title="模型">
+              <input
+                className={fieldInputClass}
+                value={model}
+                onChange={e => setModel(e.target.value)}
+                placeholder="gpt-4o-mini"
+                data-testid="llm-channel-model"
+              />
+            </SettingsRow>
+            <SettingsRow
+              title="API 密钥"
+              description={
+                status.keyPresent
+                  ? `留空 = 保持现有密钥（${status.keyMasked}）`
+                  : "粘贴密钥"
+              }
+            >
+              <input
+                className={fieldInputClass}
+                type="password"
+                value={apiKey}
+                onChange={e => setApiKey(e.target.value)}
+                placeholder={status.keyPresent ? status.keyMasked : "粘贴密钥"}
+                data-testid="llm-channel-key"
+              />
+            </SettingsRow>
+            <div className="flex items-center gap-2 px-4 py-3">
+              <button
+                type="button"
+                onClick={save}
+                disabled={saving}
+                className={SETTINGS_PRIMARY_BTN}
+                data-testid="llm-channel-save"
+              >
+                {saving ? "保存中…" : "保存并生效"}
               </button>
-            ))}
-          </div>
-
-          {/* 编辑表单 */}
-          <div>
-            <label className={labelClass}>Base URL</label>
-            <input
-              className={inputClass}
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.openai.com/v1"
-              data-testid="llm-channel-baseurl"
-            />
-          </div>
-          <div>
-            <label className={labelClass}>模型</label>
-            <input
-              className={inputClass}
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="gpt-4o-mini"
-              data-testid="llm-channel-model"
-            />
-          </div>
-          <div>
-            <label className={labelClass}>API 密钥</label>
-            <input
-              className={inputClass}
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={status.keyPresent ? `留空 = 保持现有密钥（${status.keyMasked}）` : "粘贴密钥"}
-              data-testid="llm-channel-key"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={save}
-              disabled={saving}
-              className="rounded bg-[#1677ff] px-5 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#0958d9] disabled:opacity-50"
-              data-testid="llm-channel-save"
-            >
-              {saving ? "保存中…" : "保存并生效"}
-            </button>
-            <button
-              type="button"
-              onClick={runTest}
-              disabled={testing}
-              className="rounded border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-semibold text-stone-600 transition hover:bg-[#eef0f4] disabled:opacity-50"
-              data-testid="llm-channel-test"
-            >
-              {testing ? "真连测试中…" : "⚡ 测试连接"}
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={runTest}
+                disabled={testing}
+                className={SETTINGS_GHOST_BTN}
+                data-testid="llm-channel-test"
+              >
+                {testing ? "真连测试中…" : "测试连接"}
+              </button>
+            </div>
+          </SettingsSection>
 
           {testResult && testResult.ok && (
-            <div className="rounded-md bg-emerald-50 px-4 py-3 text-[12px] text-emerald-700 ring-1 ring-emerald-200" data-testid="llm-channel-test-ok">
-              连接正常 · 模型 <span className="font-mono">{testResult.model}</span> · 往返{" "}
+            <p
+              className="text-[12px] text-emerald-700"
+              data-testid="llm-channel-test-ok"
+            >
+              连接正常 · 模型{" "}
+              <span className="font-mono">{testResult.model}</span> · 往返{" "}
               {((testResult.latencyMs ?? 0) / 1000).toFixed(1)}s（真实请求，非 mock）
-            </div>
+            </p>
           )}
           {testResult && !testResult.ok && (
-            <div className="rounded-md border border-red-200 bg-red-50/60 px-4 py-3 text-[12px] text-red-600" data-testid="llm-channel-test-fail">
-              <span className="rounded bg-red-100 px-1.5 py-0.5 font-mono font-medium">{testResult.code}</span>
+            <p
+              className="text-[12px] text-red-600"
+              data-testid="llm-channel-test-fail"
+            >
+              <span className="font-mono font-medium">{testResult.code}</span>
               <span className="ml-2">{testResult.detail}</span>
-            </div>
+            </p>
           )}
         </>
       )}

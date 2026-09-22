@@ -22,11 +22,28 @@ from services.rag_service import (
     RAG_QUERY_BACKEND,
 )
 
+from fastapi import Depends
+
+from middlewares.auth import verify_internal_key
+
+# ── 谁能调这些接口（2026-08-04 补）────────────────────────────────
+#
+# 这个路由此前**两种守卫都没有**。它跟 agent_loop 不同：浏览器和 Node 都没有
+# 任何调用点（全仓搜过 `/api/rag/`，只有测试和 Python 内部 service 引用），
+# 它是 Node 那套 `/api/rag/search` 被 Python 接管后留下的**服务间**接口。
+#
+# 所以补的是**内部密钥**而不是用户身份：调用方是程序不是人，走的是同一条
+# x-internal-key 通道（跟 permissions / tasks / blueprint 那几个路由一致）。
+# 读接口 /health 不加——它只回一个可用性布尔，是给探活用的。
+#
+# ⚠️ ingest 是**写向量库**的接口。不加守卫的话，任何能连上端口的人都能往
+# 检索库里灌内容，而检索结果会进推演的证据链——那是投毒面，不只是写坏数据。
+
 router = APIRouter()
 
 
 @router.post("/search")
-def search_rag(body: Dict[str, Any]) -> Dict[str, Any]:
+def search_rag(body: Dict[str, Any], _: bool = Depends(verify_internal_key)) -> Dict[str, Any]:
     """POST /api/rag/search
 
     Body may be { "query": "...", "options": { ... } } or wrapped.
@@ -45,7 +62,7 @@ def search_rag(body: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.post("/ingest")
-def ingest_rag(body: Dict[str, Any]) -> Dict[str, Any]:
+def ingest_rag(body: Dict[str, Any], _: bool = Depends(verify_internal_key)) -> Dict[str, Any]:
     """POST /api/rag/ingest (compat for delegate)
 
     Accepts { "payload": <IngestionPayload> } or direct.
@@ -68,7 +85,7 @@ def ingest_rag(body: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.post("/ingest/batch")
-def ingest_batch(body: Dict[str, Any]) -> Dict[str, Any]:
+def ingest_batch(body: Dict[str, Any], _: bool = Depends(verify_internal_key)) -> Dict[str, Any]:
     payloads = body.get("payloads") or []
     if not isinstance(payloads, list):
         return {"error": "payloads must be an array", "provenance": RAG_QUERY_PROVENANCE, "backend": RAG_QUERY_BACKEND, "source": "python"}

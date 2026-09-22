@@ -1,0 +1,729 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elderly",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "phone",
+      "name": "联系电话",
+      "type": "string",
+      "format": "masked"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "number"
+     },
+     {
+      "id": "care_level",
+      "name": "护理等级",
+      "type": "enum",
+      "options": [
+       {
+        "id": "level_1",
+        "label": "自理",
+        "tone": "success"
+       },
+       {
+        "id": "level_2",
+        "label": "半失能",
+        "tone": "warning"
+       },
+       {
+        "id": "level_3",
+        "label": "失能",
+        "tone": "danger"
+       }
+      ]
+     },
+     {
+      "id": "address",
+      "name": "居住地址",
+      "type": "string"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "在册状态",
+      "type": "enum",
+      "options": [
+       {
+        "id": "active",
+        "label": "在册",
+        "tone": "success"
+       },
+       {
+        "id": "discharged",
+        "label": "退住",
+        "tone": "default"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "service_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elderly_ref",
+      "name": "关联老人",
+      "type": "ref",
+      "refEntity": "elderly"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "enum",
+      "options": [
+       {
+        "id": "daily",
+        "label": "日间照料",
+        "tone": "default"
+       },
+       {
+        "id": "medical",
+        "label": "医疗护理",
+        "tone": "processing"
+       },
+       {
+        "id": "comfort",
+        "label": "精神慰藉",
+        "tone": "success"
+       },
+       {
+        "id": "meal",
+        "label": "助餐服务",
+        "tone": "warning"
+       }
+      ]
+     },
+     {
+      "id": "assignee_name",
+      "name": "护理员姓名",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "工单状态",
+      "type": "enum",
+      "options": [
+       {
+        "id": "pending",
+        "label": "待派单",
+        "tone": "default"
+       },
+       {
+        "id": "in_progress",
+        "label": "进行中",
+        "tone": "processing"
+       },
+       {
+        "id": "inspection",
+        "label": "待验收",
+        "tone": "warning"
+       },
+       {
+        "id": "completed",
+        "label": "已完成",
+        "tone": "success"
+       },
+       {
+        "id": "rejected",
+        "label": "已驳回",
+        "tone": "danger"
+       }
+      ]
+     },
+     {
+      "id": "cost",
+      "name": "服务费用",
+      "type": "number",
+      "format": "money"
+     },
+     {
+      "id": "create_date",
+      "name": "创建日期",
+      "type": "date"
+     }
+    ]
+   },
+   {
+    "id": "subsidy_claim",
+    "name": "补贴报销",
+    "fields": [
+     {
+      "id": "claim_no",
+      "name": "报销单号",
+      "type": "string"
+     },
+     {
+      "id": "elderly_ref",
+      "name": "关联老人",
+      "type": "ref",
+      "refEntity": "elderly"
+     },
+     {
+      "id": "amount",
+      "name": "报销金额",
+      "type": "number",
+      "format": "money"
+     },
+     {
+      "id": "status",
+      "name": "报销状态",
+      "type": "enum",
+      "options": [
+       {
+        "id": "pending",
+        "label": "待审核",
+        "tone": "warning"
+       },
+       {
+        "id": "approved",
+        "label": "已核销",
+        "tone": "success"
+       },
+       {
+        "id": "rejected",
+        "label": "已驳回",
+        "tone": "danger"
+       }
+      ]
+     },
+     {
+      "id": "submit_date",
+      "name": "提交日期",
+      "type": "date"
+     }
+    ]
+   },
+   {
+    "id": "care_schedule",
+    "name": "护理排期",
+    "fields": [
+     {
+      "id": "schedule_date",
+      "name": "排期日期",
+      "type": "date"
+     },
+     {
+      "id": "worker_name",
+      "name": "工作人员",
+      "type": "string"
+     },
+     {
+      "id": "shift_time",
+      "name": "服务时段",
+      "type": "string"
+     },
+     {
+      "id": "elderly_ref",
+      "name": "服务老人",
+      "type": "ref",
+      "refEntity": "elderly"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "community_admin",
+    "name": "社区管理员"
+   },
+   {
+    "id": "care_worker",
+    "name": "护理员"
+   },
+   {
+    "id": "finance_officer",
+    "name": "财务人员"
+   },
+   {
+    "id": "family_member",
+    "name": "家属"
+   }
+  ],
+  "permissions": [
+   "elderly:read",
+   "elderly:write",
+   "order:read",
+   "order:write",
+   "claim:read",
+   "claim:write",
+   "schedule:read",
+   "schedule:write"
+  ],
+  "menus": [
+   {
+    "id": "menu_monitor",
+    "label": "总览大盘",
+    "roleRefs": [
+     "community_admin",
+     "finance_officer"
+    ],
+    "permissionRefs": [
+     "order:read",
+     "claim:read"
+    ]
+   },
+   {
+    "id": "menu_elderly",
+    "label": "老人档案",
+    "roleRefs": [
+     "community_admin",
+     "care_worker"
+    ],
+    "permissionRefs": [
+     "elderly:read",
+     "elderly:write"
+    ]
+   },
+   {
+    "id": "menu_order",
+    "label": "服务工单",
+    "roleRefs": [
+     "community_admin",
+     "care_worker"
+    ],
+    "permissionRefs": [
+     "order:read",
+     "order:write"
+    ]
+   },
+   {
+    "id": "menu_claim",
+    "label": "财务报销",
+    "roleRefs": [
+     "community_admin",
+     "finance_officer"
+    ],
+    "permissionRefs": [
+     "claim:read",
+     "claim:write"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "service_lifecycle",
+  "name": "服务工单生命周期",
+  "nodes": [
+   {
+    "id": "pending_node",
+    "name": "待派单",
+    "assigneeRole": "community_admin",
+    "phase": "申请"
+   },
+   {
+    "id": "progress_node",
+    "name": "进行中",
+    "assigneeRole": "care_worker",
+    "phase": "执行"
+   },
+   {
+    "id": "inspection_node",
+    "name": "待验收",
+    "assigneeRole": "community_admin",
+    "phase": "验收"
+   },
+   {
+    "id": "completed_node",
+    "name": "已完成",
+    "assigneeRole": "community_admin",
+    "phase": "归档"
+   },
+   {
+    "id": "rejected_node",
+    "name": "已驳回",
+    "assigneeRole": "community_admin",
+    "phase": "归档"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "pending_node",
+    "to": "progress_node",
+    "condition": "已指派护理人员"
+   },
+   {
+    "from": "progress_node",
+    "to": "inspection_node",
+    "condition": "服务完成提交验收"
+   },
+   {
+    "from": "inspection_node",
+    "to": "completed_node",
+    "condition": "验收合格"
+   },
+   {
+    "from": "inspection_node",
+    "to": "rejected_node",
+    "condition": "验收不合格"
+   },
+   {
+    "from": "rejected_node",
+    "to": "pending_node",
+    "condition": "重新调整派单"
+   }
+  ],
+  "chains": [
+   {
+    "id": "money_chain",
+    "name": "补贴核销流程",
+    "kind": "money",
+    "nodes": [
+     {
+      "id": "claim_submit",
+      "name": "提交报销",
+      "assigneeRole": "community_admin",
+      "phase": "申请"
+     },
+     {
+      "id": "claim_audit",
+      "name": "财务审核",
+      "assigneeRole": "finance_officer",
+      "phase": "审核"
+     },
+     {
+      "id": "claim_payout",
+      "name": "完成核销",
+      "assigneeRole": "finance_officer",
+      "phase": "执行"
+     }
+    ],
+    "transitions": [
+     {
+      "from": "claim_submit",
+      "to": "claim_audit"
+     },
+     {
+      "from": "claim_audit",
+      "to": "claim_payout",
+      "condition": "审核通过"
+     }
+    ]
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "monitor_home",
+    "name": "社区养老总览",
+    "kind": "monitor",
+    "presentation": "application",
+    "surface": {
+     "type": "queue",
+     "density": "comfortable"
+    },
+    "fieldBindings": [
+     "service_order.order_no",
+     "service_order.cost",
+     "subsidy_claim.amount"
+    ],
+    "actionPermissions": [
+     "order:read",
+     "claim:read"
+    ],
+    "stats": [
+     {
+      "id": "total_orders",
+      "name": "总服务工单",
+      "entity": "service_order",
+      "metric": "count",
+      "format": "number"
+     },
+     {
+      "id": "total_cost",
+      "name": "本月服务总额",
+      "entity": "service_order",
+      "metric": "sum:service_order.cost",
+      "format": "money"
+     }
+    ],
+    "charts": [
+     {
+      "id": "service_type_pie",
+      "name": "服务类型占比",
+      "type": "donut",
+      "dimension": "service_order.service_type",
+      "metric": "count"
+     }
+    ],
+    "rankings": [],
+    "feeds": [
+     {
+      "id": "order_feed",
+      "name": "最新工单动态",
+      "entity": "service_order",
+      "timeField": "service_order.create_date",
+      "levelField": "service_order.status"
+     }
+    ],
+    "blocks": [
+     {
+      "id": "timeline_block",
+      "type": "WorkflowTimeline",
+      "props": {
+       "title": "服务执行链"
+      },
+      "binding": {}
+     }
+    ],
+    "freeformOverviewStatus": "failed",
+    "pageReconstruction": {
+     "version": "page-reconstruction-v1",
+     "status": "skipped",
+     "spec": null,
+     "prompt": "",
+     "diagnostic": "reference image unavailable"
+    }
+   },
+   {
+    "id": "elderly_page",
+    "name": "老人档案管理",
+    "kind": "workbench",
+    "presentation": "application",
+    "surface": {
+     "type": "table",
+     "density": "default"
+    },
+    "fieldBindings": [
+     "elderly.name",
+     "elderly.phone",
+     "elderly.age",
+     "elderly.care_level",
+     "elderly.status"
+    ],
+    "actionPermissions": [
+     "elderly:read",
+     "elderly:write"
+    ],
+    "blocks": [
+     {
+      "id": "elderly_table",
+      "type": "DataTable",
+      "props": {
+       "title": "老人档案列表"
+      },
+      "binding": {
+       "entityRef": "elderly"
+      }
+     }
+    ]
+   },
+   {
+    "id": "order_kanban_page",
+    "name": "服务工单看板",
+    "kind": "kanban",
+    "presentation": "application",
+    "surface": {
+     "type": "queue",
+     "density": "default"
+    },
+    "statusField": "service_order.status",
+    "fieldBindings": [
+     "service_order.order_no",
+     "service_order.service_type",
+     "service_order.status"
+    ],
+    "actionPermissions": [
+     "order:read",
+     "order:write"
+    ],
+    "blocks": [
+     {
+      "id": "kanban_board",
+      "type": "KanbanBoard",
+      "props": {
+       "title": "工单状态流转看板"
+      },
+      "binding": {
+       "entityRef": "service_order",
+       "titleFieldRef": "order_no",
+       "statusFieldRef": "status"
+      }
+     }
+    ]
+   },
+   {
+    "id": "claim_page",
+    "name": "财务报销管理",
+    "kind": "workbench",
+    "presentation": "application",
+    "surface": {
+     "type": "table",
+     "density": "compact"
+    },
+    "fieldBindings": [
+     "subsidy_claim.claim_no",
+     "subsidy_claim.amount",
+     "subsidy_claim.status",
+     "subsidy_claim.submit_date"
+    ],
+    "actionPermissions": [
+     "claim:read",
+     "claim:write"
+    ],
+    "blocks": [
+     {
+      "id": "claim_table",
+      "type": "DataTable",
+      "props": {
+       "title": "补贴报销列表"
+      },
+      "binding": {
+       "entityRef": "subsidy_claim"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "assess_needs",
+    "name": "智能护理评估",
+    "inputFields": [
+     "elderly.age",
+     "elderly.address"
+    ],
+    "outputField": "elderly.care_level",
+    "roleRefs": [
+     "community_admin"
+    ]
+   },
+   {
+    "id": "auto_schedule",
+    "name": "智能排班生成",
+    "inputFields": [
+     "elderly.care_level"
+    ],
+    "outputField": "care_schedule.shift_time",
+    "roleRefs": [
+     "community_admin",
+     "care_worker"
+    ]
+   }
+  ],
+  "pipelines": [
+   {
+    "id": "care_pipeline",
+    "name": "评估与排班流",
+    "steps": [
+     "assess_needs",
+     "auto_schedule"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "order_kanban_page",
+    "workflowRef": "service_lifecycle"
+   }
+  ],
+  "landingPageRef": "monitor_home",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "community_admin",
+   "care_worker",
+   "finance_officer"
+  ],
+  "dataModelRefs": [
+   "elderly",
+   "service_order",
+   "subsidy_claim",
+   "care_schedule"
+  ],
+  "appIdentity": {
+   "productName": "颐养通",
+   "theme": "forest",
+   "icon": "users",
+   "nav": "side"
+  },
+  "invariants": [
+   {
+    "id": "inv_service_cost",
+    "statement": "每笔服务工单必须包含明确的费用金额并完成财务核销校验",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "service_order.cost",
+     "money_chain"
+    ]
+   },
+   {
+    "id": "inv_care_level",
+    "statement": "失能老人的服务派单必须由社区管理员进行专属审核",
+    "systems": [
+     "rbac",
+     "workflow"
+    ],
+    "refs": [
+     "community_admin",
+     "pending_node"
+    ]
+   },
+   {
+    "id": "inv_claim_status",
+    "statement": "报销状态仅在财务审核通过后变更为已核销",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "subsidy_claim.status",
+     "claim_audit"
+    ]
+   },
+   {
+    "id": "inv_schedule_binding",
+    "statement": "排班记录必须关联有效的在册老人档案",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "care_schedule.elderly_ref",
+     "elderly"
+    ]
+   },
+   {
+    "id": "inv_order_rejection",
+    "statement": "工单验收不合格时必须流转回待派单状态重新调整",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "inspection_node",
+     "rejected_node",
+     "pending_node"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

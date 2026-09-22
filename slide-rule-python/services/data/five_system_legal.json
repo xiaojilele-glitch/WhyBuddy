@@ -39,6 +39,21 @@
     "wizard",
     "monitor"
   ],
+  "pagePresentations": [
+    "application",
+    "marketing-landing"
+  ],
+  "pageSurfaceTypes": [
+    "table",
+    "editable-table",
+    "split-list",
+    "queue"
+  ],
+  "pageSurfaceDensities": [
+    "compact",
+    "default",
+    "comfortable"
+  ],
   "chartTypes": [
     "bar",
     "line",

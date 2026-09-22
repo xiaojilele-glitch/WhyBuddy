@@ -46,11 +46,30 @@ function loadDevDotenv() {
 }
 
 export function resolvePythonReloadArgs(pythonDir, env = process.env) {
-  const raw = String(env.SLIDE_RULE_PYTHON_RELOAD ?? env.PYTHON_BACKEND_RELOAD ?? "1").trim().toLowerCase();
+  // ⚠ 2026-08-19：Windows 默认关 --reload。WatchFiles 先起 reloader 再起
+  // worker，等于 import 两遍；再叠会话 load_all，dev:all 就会在
+  // Application startup complete 前空等。要热重载显式 SLIDE_RULE_PYTHON_RELOAD=1。
+  const fallback = process.platform === "win32" ? "0" : "1";
+  const raw = String(
+    env.SLIDE_RULE_PYTHON_RELOAD ?? env.PYTHON_BACKEND_RELOAD ?? fallback
+  )
+    .trim()
+    .toLowerCase();
   if (["0", "false", "no", "off"].includes(raw)) {
     return [];
   }
   return ["--reload", "--reload-dir", pythonDir];
+}
+
+export function pythonStdioEnv(env = process.env) {
+  // CPython：Windows 对 pipe（非控制台）用 ANSI 代码页。dev:all 等就绪时
+  // stdout/stderr 就是 pipe，print(⚠) → UnicodeEncodeError，被当成推演失败。
+  // 标准答案是 PYTHONIOENCODING=utf-8:replace（sys.stdout 文档）+ PYTHONUTF8=1
+  // （PEP 540）。用户显式设过的不覆盖。
+  return {
+    PYTHONIOENCODING: env.PYTHONIOENCODING || "utf-8:replace",
+    PYTHONUTF8: env.PYTHONUTF8 || "1",
+  };
 }
 
 export function buildPythonUvicornArgs(pythonDir, pythonPort, env = process.env) {
@@ -82,6 +101,43 @@ function quoteShellArg(value) {
   }
 
   return `"${value.replace(/"/g, '\\"')}"`;
+}
+
+/** Hostname of a URL or bare host. Empty / garbage → "". */
+export function hostnameFromMaybeUrl(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  try {
+    return new URL(s.includes("://") ? s : `https://${s}`).hostname;
+  } catch {
+    return s.replace(/^https?:\/\//i, "").split("/")[0].split(":")[0];
+  }
+}
+
+/**
+ * Hosts that must bypass Clash when `dev:all` injects HTTP_PROXY.
+ *
+ * ⚠ 2026-08-19：名单原先只有 `LLM_API_BASE` / `OPENAI_BASE_URL`，**漏了
+ * 真正在用的 `LLM_BASE_URL`**。换 grok（hello.vangularcode.asia）后面
+ * NO_PROXY 还是 api.rcouyi.com，Python httpx 把长请求送进 7890，画页/打孔
+ * 502/503/504。硬编码旧网关救不了换供应商。
+ */
+export function collectLlmBypassHosts(env = process.env) {
+  const fromEnv = [
+    env.LLM_BASE_URL,
+    env.LLM_API_BASE,
+    env.LLM_HOST,
+    env.OPENAI_API_BASE,
+    env.OPENAI_BASE_URL,
+    env.FALLBACK_LLM_BASE_URL,
+    env.APP_STORE_HTTP_API_URL,
+    env.APP_STORE_DATABASE_URL,
+  ]
+    .map(hostnameFromMaybeUrl)
+    .filter(Boolean);
+  return Array.from(
+    new Set([...fromEnv, "blackaicoding.com", "api.rcouyi.com", "www.su8.codes", "miantuan.ai"])
+  );
 }
 
 function defaultDockerHost() {
@@ -150,7 +206,15 @@ function resolveV4AlignmentGates() {
 async function isDockerReachable(dockerHost) {
   try {
     const docker = new Dockerode(parseDockerOptions(dockerHost));
-    await docker.ping();
+    // ⚠ 2026-08-19：本机没 Docker 时 npipe 常见立刻 ENOENT（1ms），但部分
+    // Windows 上 named pipe connect 会挂到几十秒。dev:stop 之后马上
+    // dev:all，这段会变成「清完场却半天没输出」。800ms 内必须给结论。
+    await Promise.race([
+      docker.ping(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("docker ping timeout")), 800)
+      ),
+    ]);
     return true;
   } catch {
     return false;
@@ -228,21 +292,10 @@ async function resolveProxyEnvironment() {
 
   // Robust NO_PROXY construction (V5.3 audit fix for blackaicoding.com / custom LLM):
   // 1. Prefer explicit read from .env (now with override above).
-  // 2. Always merge localhost + any LLM host hints from env (LLM_API_BASE, OPENAI_BASE etc.).
+  // 2. Always merge localhost + LLM hosts from env (LLM_BASE_URL is the live knob).
   // 3. Append known custom domains if present in .env or process.
   const envNoProxy = readNoProxyFromEnvFile() || process.env.NO_PROXY || process.env.no_proxy || "";
-  const llmHosts = [
-    process.env.LLM_API_BASE,
-    process.env.LLM_HOST,
-    process.env.OPENAI_API_BASE,
-    process.env.OPENAI_BASE_URL,
-    // common custom hosts seen in this repo (su8 is current primary + pool host)
-    "blackaicoding.com",
-    "api.rcouyi.com",
-    "www.su8.codes",
-  ].filter(Boolean).map(h => {
-    try { return new URL(h).hostname; } catch { return h.replace(/^https?:\/\//, "").split("/")[0]; }
-  });
+  const llmHosts = collectLlmBypassHosts(process.env);
   const base = "localhost,127.0.0.1,::1";
   const merged = [envNoProxy, base, ...llmHosts]
     .filter(Boolean)
@@ -294,7 +347,11 @@ async function resolveDevEnvironment() {
     process.env.LOBSTER_DOCKER_HOST ||
     process.env.DOCKER_HOST ||
     defaultDockerHost();
+  const dockerProbeStarted = Date.now();
   const dockerReachable = await isDockerReachable(dockerHost);
+  console.log(
+    `[dev:all] docker probe ${Date.now() - dockerProbeStarted}ms at "${dockerHost}" (${dockerReachable ? "up" : "unavailable"})`
+  );
 
   if (dockerReachable) {
     return {
@@ -520,18 +577,38 @@ process.on("SIGTERM", () => shutdown(0));
  * "重启"排查了半天）：先自动跑一遍 dev:stop 清场，复查仍被占则拒绝启动
  * （DEV_ALL_ALLOW_BUSY_PORTS=1 可强行放行）。
  */
-async function preflightDevPorts() {
-  const ports = [
+function devPortEntries() {
+  return [
     { port: Number(process.env.VITE_PORT || 3000), name: "vite" },
     { port: 3001, name: "node server" },
     { port: Number(process.env.SLIDE_RULE_PYTHON_PORT || 9700), name: "slide-rule-python" },
     { port: Number(process.env.LOBSTER_EXECUTOR_PORT || 3031), name: "lobster-executor" },
   ];
+}
+
+/** One-shot listen probe. Do NOT use waitForPortListening here — that helper
+ *  polls until timeout, so four free ports after `dev:stop` cost ~1.7s. */
+async function listBusyDevPorts() {
   const busy = [];
-  for (const entry of ports) {
-    if (await waitForPortListening(entry.port, { timeoutMs: 350 })) busy.push(entry);
+  for (const entry of devPortEntries()) {
+    if (await canConnectToLocalPort(entry.port)) busy.push(entry);
   }
-  if (!busy.length) return;
+  return busy;
+}
+
+async function preflightDevPorts() {
+  const started = Date.now();
+  let busy = await listBusyDevPorts();
+  if (busy.length) {
+    // ⚠ 2026-08-19：刚跑完 dev:stop，监听套接字常还挂 200~800ms。
+    // 立刻再跑一遍 Get-CimInstance 等于把 stop 付了两次。短等再探一次。
+    await new Promise((r) => setTimeout(r, 400));
+    busy = await listBusyDevPorts();
+  }
+  if (!busy.length) {
+    console.log(`[dev:all] preflight ${Date.now() - started}ms (ports free)`);
+    return;
+  }
 
   const busyLabel = busy.map(({ port, name }) => `${port} (${name})`).join(", ");
   console.warn(
@@ -553,10 +630,10 @@ async function preflightDevPorts() {
   await new Promise((r) => setTimeout(r, 600));
   const still = [];
   for (const entry of busy) {
-    if (await waitForPortListening(entry.port, { timeoutMs: 350 })) still.push(entry);
+    if (await canConnectToLocalPort(entry.port)) still.push(entry);
   }
   if (!still.length) {
-    console.log("[dev:all] ports cleared - starting fresh stack.");
+    console.log(`[dev:all] ports cleared in ${Date.now() - started}ms - starting fresh stack.`);
     return;
   }
 
@@ -591,6 +668,55 @@ class PreflightAbort extends Error {
   }
 }
 
+function startPythonBackend(sharedDevEnv) {
+  const pythonDir = resolve(__projectRoot, "slide-rule-python");
+  const pythonExe =
+    process.platform === "win32"
+      ? resolve(pythonDir, ".venv", "Scripts", "python.exe")
+      : resolve(pythonDir, ".venv", "bin", "python");
+
+  if (!existsSync(pythonExe)) {
+    console.warn(
+      `[dev:all] slide-rule-python venv not found at ${pythonExe}. ` +
+        `Skipping Python backend. Run "cd slide-rule-python && python -m venv .venv && pip install -r requirements.txt" to set it up.`
+    );
+    return null;
+  }
+
+  const pythonPort = process.env.SLIDE_RULE_PYTHON_PORT ?? "9700";
+  // The backend defaults its runs/events roots to the RELATIVE `.agent-loop/*`,
+  // resolved against the process cwd. Since we launch uvicorn with cwd set to the
+  // python package dir (so `app:app` imports), pin these to the repo-root absolute
+  // paths — otherwise the AgentLoop page reads an empty `slide-rule-python/.agent-loop`
+  // and shows zero runs. A user-set value always wins.
+  const pythonEnv = {
+    ...sharedDevEnv,
+    ...pythonStdioEnv(sharedDevEnv),
+    AGENT_LOOP_RUNS_DIR:
+      process.env.AGENT_LOOP_RUNS_DIR ??
+      resolve(__projectRoot, ".agent-loop", "runs"),
+    AGENT_LOOP_EVENTS_DIR:
+      process.env.AGENT_LOOP_EVENTS_DIR ??
+      resolve(__projectRoot, ".agent-loop", "events"),
+  };
+  return run(
+    "slide-rule-python",
+    pythonExe,
+    buildPythonUvicornArgs(pythonDir, pythonPort),
+    pythonEnv,
+    {
+      cwd: pythonDir,
+      portGuard: Number(pythonPort),
+      waitForReady: true,
+      // uvicorn prints its readiness banner on stderr, so match there.
+      readyText: "Application startup complete.",
+      matchStderr: true,
+      // Optional backend: if it crashes or never boots, keep the rest of the stack alive.
+      critical: false,
+    }
+  );
+}
+
 async function main() {
   loadDevDotenv();
   await preflightDevPorts();
@@ -618,6 +744,10 @@ async function main() {
       readyText: "Server running on http://localhost:3001/",
     }
   );
+  // Start Python while Node is still booting. Vite proxies /api/sliderule and
+  // /api/agent-loop to :9700 when VITE_PYTHON_FIRST_API=true — spawning Vite
+  // first is a guaranteed ECONNREFUSED on the first page load.
+  const python = startPythonBackend(sharedDevEnv);
 
   try {
     await Promise.race([
@@ -640,6 +770,33 @@ async function main() {
     return;
   }
 
+  // ⚠ 2026-08-19：注释写着「等 uvicorn 起来再开 Vite」，实现却是
+  // Promise.race(...).catch(warn) 不等待。Vite 先 ready、Python 还在
+  // “Waiting for application startup”，页面一开 /api/sliderule/* 全是
+  // ECONNREFUSED。--reload 下 reloader+worker 更慢。慢启动只警告、不拆栈。
+  if (python) {
+    const pythonWaitStarted = Date.now();
+    try {
+      await Promise.race([
+        python.readyPromise,
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("readiness banner timeout")),
+            60000
+          )
+        ),
+      ]);
+      console.log(`[dev:all] python ready after ${Date.now() - pythonWaitStarted}ms`);
+    } catch (error) {
+      if (!shuttingDown) {
+        console.warn(
+          `[dev:all] slide-rule-python did not report ready (${error instanceof Error ? error.message : String(error)}). ` +
+            `Continuing; the AgentLoop page may show errors until the Python backend is up.`
+        );
+      }
+    }
+  }
+
   run("client", "npm", ["run", "dev"], sharedDevEnv);
   run(
     "executor",
@@ -654,71 +811,6 @@ async function main() {
       portGuard: Number(process.env.LOBSTER_EXECUTOR_PORT ?? 3031),
     }
   );
-
-  const pythonDir = resolve(__projectRoot, "slide-rule-python");
-  const pythonExe =
-    process.platform === "win32"
-      ? resolve(pythonDir, ".venv", "Scripts", "python.exe")
-      : resolve(pythonDir, ".venv", "bin", "python");
-
-  if (existsSync(pythonExe)) {
-    const pythonPort = process.env.SLIDE_RULE_PYTHON_PORT ?? "9700";
-    // The backend defaults its runs/events roots to the RELATIVE `.agent-loop/*`,
-    // resolved against the process cwd. Since we launch uvicorn with cwd set to the
-    // python package dir (so `app:app` imports), pin these to the repo-root absolute
-    // paths — otherwise the AgentLoop page reads an empty `slide-rule-python/.agent-loop`
-    // and shows zero runs. A user-set value always wins.
-    const pythonEnv = {
-      ...sharedDevEnv,
-      AGENT_LOOP_RUNS_DIR:
-        process.env.AGENT_LOOP_RUNS_DIR ??
-        resolve(__projectRoot, ".agent-loop", "runs"),
-      AGENT_LOOP_EVENTS_DIR:
-        process.env.AGENT_LOOP_EVENTS_DIR ??
-        resolve(__projectRoot, ".agent-loop", "events"),
-    };
-    const python = run(
-      "slide-rule-python",
-      pythonExe,
-      buildPythonUvicornArgs(pythonDir, pythonPort),
-      pythonEnv,
-      {
-        cwd: pythonDir,
-        portGuard: Number(pythonPort),
-        waitForReady: true,
-        // uvicorn prints its readiness banner on stderr, so match there.
-        readyText: "Application startup complete.",
-        matchStderr: true,
-        // Optional backend: if it crashes or never boots, keep the rest of the stack alive.
-        critical: false,
-      }
-    );
-
-    // Wait for uvicorn to bind 9700 so the Vite `/api/agent-loop` proxy does not race
-    // an unstarted backend. Unlike the Node server, a slow/failed Python boot must NOT
-    // tear down the whole stack — the backend is optional for most of the dev flow, so
-    // we only warn and keep going (consistent with the venv-missing branch above).
-    Promise.race([
-      python.readyPromise,
-      new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error("readiness banner timeout")),
-          60000
-        )
-      ),
-    ]).catch(error => {
-      if (shuttingDown) return;
-      console.warn(
-        `[dev:all] slide-rule-python did not report ready (${error instanceof Error ? error.message : String(error)}). ` +
-          `Continuing; the AgentLoop page may show errors until the Python backend on ${pythonPort} is up.`
-      );
-    });
-  } else {
-    console.warn(
-      `[dev:all] slide-rule-python venv not found at ${pythonExe}. ` +
-        `Skipping Python backend. Run "cd slide-rule-python && python -m venv .venv && pip install -r requirements.txt" to set it up.`
-    );
-  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

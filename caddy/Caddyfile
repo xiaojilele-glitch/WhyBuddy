@@ -1,0 +1,72 @@
+{
+	email admin@miantuan.ai
+	on_demand_tls {
+		ask http://127.0.0.1:2020/check
+	}
+}
+
+http://127.0.0.1:2020 {
+	@preview expression `{query.domain}.endsWith(".preview.miantuan.ai") || {query.domain}.endsWith(".preview.156.239.47.108.sslip.io")`
+	handle @preview {
+		respond 200
+	}
+	respond 400
+}
+
+miantuan.ai {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+
+	handle /pgadmin* {
+		reverse_proxy pgadmin:80 {
+			header_up X-Script-Name /pgadmin
+			header_up X-Scheme {scheme}
+		}
+	}
+
+	handle_path /db-api* {
+		reverse_proxy local-db-api:8000
+	}
+
+	handle {
+		reverse_proxy app:3001
+	}
+}
+
+www.miantuan.ai {
+	redir https://miantuan.ai{uri} permanent
+}
+
+whybuddy.156.239.47.108.sslip.io {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy app:3001
+}
+
+# Isolated project preview. Each runtime is one hostname label so cookies
+# and storage never share an origin with the workbench or each other.
+# Do not put this under miantuan.ai — the workbench already owns that host.
+#
+# ⚠ 2026-09-16 改：原来反代的是 `172.18.0.1:3002`（宿主网桥网关），
+#   配套说法是「反向 SSH 隧道把开发机的预览进程绑上去」。实测那条路是断的：
+#       https://rt-probe.preview.156.239.47.108.sslip.io/  → 502
+#   通配符 DNS、on-demand TLS、vhost 路由全都通了（502 恰恰证明这三件事，
+#   它是给一个从没见过的子域当场签了证书之后才反代失败的），
+#   只是那个地址上从来没有东西在听。
+#
+#   而 `docker-compose.project.yml` 里的 project-preview 发布在
+#   `127.0.0.1:3002` —— **宿主回环上的监听收不到从网桥网关来的流量**，
+#   两套拓扑并存、哪套都不成立。现在统一成 compose 服务：同一个 default
+#   网络里按服务名直连，不再经过宿主，也不需要任何隧道。
+#
+#   ⚠ 这要求部署时三份一起上：
+#       -f docker-compose.prod.yml -f docker-compose.https.yml -f docker-compose.project.yml
+#     少带 project 那份，这里会解析不到服务名 → 仍然 502（和改之前一样，不会更糟）。
+*.preview.miantuan.ai, *.preview.156.239.47.108.sslip.io {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	tls {
+		on_demand
+	}
+	reverse_proxy project-preview:3002
+}

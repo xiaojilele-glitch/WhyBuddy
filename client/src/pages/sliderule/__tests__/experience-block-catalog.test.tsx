@@ -10,7 +10,7 @@ import {
 
 describe("Experience Block Catalog（二阶段目录骨架）", () => {
   it("目录中的 type/rendererKey 唯一，且所有引用都在目录合法域中", () => {
-    const { blocks, allowedSlots, dataKinds, eventTypes } =
+    const { blocks, pageRegions, dataKinds, eventTypes } =
       EXPERIENCE_BLOCK_CATALOG;
     expect(new Set(blocks.map(block => block.type)).size).toBe(blocks.length);
     expect(new Set(blocks.map(block => block.rendererKey)).size).toBe(
@@ -22,7 +22,7 @@ describe("Experience Block Catalog（二阶段目录骨架）", () => {
         true
       );
       expect(
-        block.allowedSlots.every(value => allowedSlots.includes(value))
+        block.allowedRegions.every((value: string) => Object.hasOwn(pageRegions, value))
       ).toBe(true);
       expect(block.events.every(value => eventTypes.includes(value))).toBe(
         true

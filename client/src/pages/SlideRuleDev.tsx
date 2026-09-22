@@ -15,6 +15,7 @@
  * 参考：@docs/SlideRuleV5闭环总图_完整版_修复闭环.md
  */
 
+import { BRAND_NAME_FULL } from "@shared/brand";
 import React, { useState, useMemo } from "react";
 import { ReasoningFlowSurface } from "@/components/autopilot/ReasoningFlowSurface";
 import { REASONING_GRAPH_FIXTURE } from "@/dev-harness/reasoning-graph-fixture";
@@ -78,7 +79,7 @@ export default function SlideRuleDev() {
   // V5: ensure clean product identity, no old autopilot title leaking
   React.useEffect(() => {
     const prevTitle = document.title;
-    document.title = "SlideRule Dev · V5 Engineering Cockpit";
+    document.title = `${BRAND_NAME_FULL} Dev · V5 Engineering Cockpit`;
     return () => { document.title = prevTitle; };
   }, []);
   const [goal, setGoal] = useState("做一个权限管理系统（支持 RBAC + 数据范围）");
@@ -114,6 +115,7 @@ export default function SlideRuleDev() {
   const availableCapabilities = useMemo(() => ALL_V5_CAPABILITIES, []);
 
   // Knife 8: decision challenge handler (single door, re-uses existing intake/orch/markAwait flow)
+  // legacy：Dev 页保留 window.prompt；产品面质疑必须走作曲家（M5 / PR-1）。
   const challengeDecision = async (decId: string) => {
     const text = window.prompt('质疑这条调度决策的原因？', '质疑这条调度决策，请重新考虑') || '质疑这条调度决策，请重新考虑';
     const turnId = `turn-ch-${Date.now()}`;
@@ -562,7 +564,7 @@ export default function SlideRuleDev() {
           <div className="flex-1 overflow-auto p-4 space-y-4 text-sm">
             {chatTurns.length === 0 && (
               <div className="text-center text-zinc-500 mt-10">
-                欢迎来到 SlideRule V5。<br />
+                欢迎来到面团 AI V5。<br />
                 在下方输入你的目标或质疑，系统会从丰富的能力池中动态挑选 (capability × role) 进行推演。<br />
                 没有固定阶段，一切由当前状态和你的输入驱动。
               </div>

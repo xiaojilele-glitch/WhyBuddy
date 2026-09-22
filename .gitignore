@@ -1,6 +1,9 @@
 # Dependencies
 **/node_modules
 .pnpm-store/
+**/__pycache__/
+*.pyc
+*.pyo
 
 # Build outputs
 dist/
@@ -10,6 +13,7 @@ build/
 # Environment variables
 .env
 .env.local
+.env.preview
 .env.development.local
 .env.test.local
 .env.production.local
@@ -53,6 +57,7 @@ $null
 test-results/
 tmp/
 .tmp/
+.tmp-oss/
 
 # Agent / IDE session caches (never part of product source)
 .codex-logs/
@@ -158,6 +163,10 @@ data/agents/*/HEARTBEAT.md
 data/audit/
 
 # SlideRule V5 durable pilot runtime artifacts (explicitly ignored; smoke intentionally creates them)
+# 每轮推演的崩溃恢复检查点（services/checkpoint_store 写的，一次真机烟测就多几个目录）。
+# 跟上面那几条同一类：跑出来的运行时状态，不是源码。2026-08-27 补——它一直没进
+# 名单，于是每跑一次真实话题 E2E 就多一批 untracked 文件挂在那儿。
+data/checkpoints/
 data/sliderule-sessions.json
 data/sliderule-sessions.json.tmp
 data/slide_rule_sessions.json
@@ -167,6 +176,11 @@ data/agent-loop-settings.json.tmp
 # legacy pre-rename runtime file kept for rollback during the migration window
 data/whybuddy-sessions.json
 data/whybuddy-sessions.json.tmp
+# 每个存档旁边的时间戳边车（persistence.py:319 —— <store>.meta.json，
+# 记 sessionId → lastActive/createdAt）。上面逐个点名了主文件和 .tmp，唯独
+# 漏了这一个，于是本机跑一趟推演就会冒出个未跟踪文件。它是纯运行期状态，
+# 跟 .tmp 同性质，不该进版本库。
+data/*.json.meta.json
 
 # Local debug artifacts
 .manus-logs/
@@ -181,6 +195,7 @@ client/public/__manus__/version.json
 
 # Local verification artifacts
 tmp-server-*.log
+artifacts/
 
 # Grok local tool config, caches, MCP state and temporary artifacts (tooling only).
 # These are per-workspace session files for the Grok Build TUI/CLI (e.g. .grok/config.toml, caches).
@@ -206,3 +221,18 @@ docs/skills-triage.partial.jsonl
 .probe.mjs
 .gen-*.mjs
 .dbg.mjs
+purge-result.json
+
+# 图钩实验的产物：HTML/PNG 每轮重生成，几 MB，不进仓
+experiments/visual-first/runs/
+data/gate-health.jsonl
+
+# CodeGraph 的本地索引库（codegraph init 建在仓根）。324MB 的 SQLite，
+# 每次建索引重生成、只对**当前这棵工作树**有意义，不进仓。
+# ⚠ 2026-09-17 评测记录：装它 4 秒、索 4697 文件 9.7 秒，callers 查询准且
+#   认得未提交的改动——当"带调用索引的 grep"用是划算的。但两条别指望：
+#   · affected 在本仓给出 2101/2200 = 95.5% 的测试单，等于没答；
+#   · server/index.ts 的 __import__("services.web_aigc_" + adapter + "_adapter")
+#     它照样看不见（callers 只返回测试文件）——§30 那条"零入度≠没人用"
+#     的坑它填不上，照它清理一样会删掉产线代码。
+.codegraph/

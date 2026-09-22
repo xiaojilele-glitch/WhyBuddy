@@ -1,0 +1,158 @@
+{
+  "$comment": "由 scripts/generate-device-presets.mjs 从 playwright-core 的设备表生成，请勿手改。改清单去改那个脚本。",
+  "generatorVersion": 1,
+  "playwrightTest": "1.61.1",
+  "defaultPresetId": "iphone-14",
+  "presets": [
+    {
+      "id": "iphone-se",
+      "label": "iPhone SE",
+      "deviceClass": "phone",
+      "width": 320,
+      "height": 568,
+      "deviceScaleFactor": 2,
+      "source": "iPhone SE",
+      "frame": {
+        "bezel": 12,
+        "bezelBottom": 20,
+        "radius": 40,
+        "innerRadius": 28
+      }
+    },
+    {
+      "id": "iphone-12-mini",
+      "label": "iPhone 12 mini",
+      "deviceClass": "phone",
+      "width": 375,
+      "height": 812,
+      "deviceScaleFactor": 3,
+      "source": "iPhone 12 Mini",
+      "frame": {
+        "bezel": 12,
+        "bezelBottom": 20,
+        "radius": 40,
+        "innerRadius": 28
+      }
+    },
+    {
+      "id": "iphone-14",
+      "label": "iPhone 12/13/14",
+      "deviceClass": "phone",
+      "width": 390,
+      "height": 844,
+      "deviceScaleFactor": 3,
+      "source": "iPhone 14",
+      "frame": {
+        "bezel": 12,
+        "bezelBottom": 20,
+        "radius": 40,
+        "innerRadius": 28
+      }
+    },
+    {
+      "id": "iphone-15-pro",
+      "label": "iPhone 15/16 Pro",
+      "deviceClass": "phone",
+      "width": 393,
+      "height": 852,
+      "deviceScaleFactor": 3,
+      "source": "iPhone 15 Pro",
+      "frame": {
+        "bezel": 12,
+        "bezelBottom": 20,
+        "radius": 40,
+        "innerRadius": 28
+      }
+    },
+    {
+      "id": "iphone-15-pro-max",
+      "label": "iPhone 15/16 Pro Max",
+      "deviceClass": "phone",
+      "width": 430,
+      "height": 932,
+      "deviceScaleFactor": 3,
+      "source": "iPhone 15 Pro Max",
+      "frame": {
+        "bezel": 12,
+        "bezelBottom": 20,
+        "radius": 40,
+        "innerRadius": 28
+      }
+    },
+    {
+      "id": "galaxy-s24",
+      "label": "Galaxy S24",
+      "deviceClass": "phone",
+      "width": 360,
+      "height": 780,
+      "deviceScaleFactor": 3,
+      "source": "Galaxy S24",
+      "frame": {
+        "bezel": 12,
+        "bezelBottom": 20,
+        "radius": 40,
+        "innerRadius": 28
+      }
+    },
+    {
+      "id": "pixel-7",
+      "label": "Pixel 7",
+      "deviceClass": "phone",
+      "width": 412,
+      "height": 915,
+      "deviceScaleFactor": 2.625,
+      "source": "Pixel 7",
+      "frame": {
+        "bezel": 12,
+        "bezelBottom": 20,
+        "radius": 40,
+        "innerRadius": 28
+      }
+    },
+    {
+      "id": "galaxy-z-fold-7",
+      "label": "Galaxy Z Fold 7（展开）",
+      "deviceClass": "tablet",
+      "width": 984,
+      "height": 1092,
+      "deviceScaleFactor": 2,
+      "source": "Galaxy Z Fold 7",
+      "frame": {
+        "bezel": 14,
+        "bezelBottom": 18,
+        "radius": 24,
+        "innerRadius": 12
+      }
+    },
+    {
+      "id": "ipad-mini",
+      "label": "iPad mini",
+      "deviceClass": "tablet",
+      "width": 768,
+      "height": 1024,
+      "deviceScaleFactor": 2,
+      "source": "iPad Mini",
+      "frame": {
+        "bezel": 14,
+        "bezelBottom": 18,
+        "radius": 24,
+        "innerRadius": 12
+      }
+    },
+    {
+      "id": "ipad-pro-11",
+      "label": "iPad Pro 11\"",
+      "deviceClass": "tablet",
+      "width": 834,
+      "height": 1194,
+      "deviceScaleFactor": 2,
+      "source": "iPad Pro 11",
+      "frame": {
+        "bezel": 14,
+        "bezelBottom": 18,
+        "radius": 24,
+        "innerRadius": 12
+      }
+    }
+  ]
+}

@@ -1,0 +1,361 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "gender",
+      "name": "性别",
+      "type": "string"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "string"
+     },
+     {
+      "id": "address",
+      "name": "居住地址",
+      "type": "string"
+     },
+     {
+      "id": "care_level",
+      "name": "护理等级",
+      "type": "string"
+     },
+     {
+      "id": "health_status",
+      "name": "健康状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "上门工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单号",
+      "type": "string"
+     },
+     {
+      "id": "service_content",
+      "name": "服务内容",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elder"
+     }
+    ]
+   },
+   {
+    "id": "staff",
+    "name": "服务人员",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "title",
+      "name": "职称",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "service_report",
+    "name": "服务报表",
+    "fields": [
+     {
+      "id": "category",
+      "name": "服务大类",
+      "type": "string"
+     },
+     {
+      "id": "total_count",
+      "name": "服务总次数",
+      "type": "number"
+     },
+     {
+      "id": "completion_rate",
+      "name": "完成率",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "r1",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "r2",
+    "name": "服务人员"
+   },
+   {
+    "id": "r3",
+    "name": "运营主管"
+   }
+  ],
+  "permissions": [
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "elder:delete",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "staff:read",
+   "service_report:read",
+   "service_report:export"
+  ],
+  "menus": [
+   {
+    "id": "m1",
+    "label": "运营驾驶舱",
+    "roleRefs": [
+     "r1",
+     "r2"
+    ],
+    "permissionRefs": [
+     "service_report:read"
+    ]
+   },
+   {
+    "id": "m2",
+    "label": "老人档案管理",
+    "roleRefs": [
+     "r1",
+     "r2"
+    ],
+    "permissionRefs": [
+     "elder:read"
+    ]
+   },
+   {
+    "id": "m3",
+    "label": "服务派单中心",
+    "roleRefs": [
+     "r1",
+     "r2"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "m4",
+    "label": "移动端服务",
+    "roleRefs": [
+     "r3"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "待派单与响应",
+    "assigneeRole": "r1",
+    "phase": "init"
+   },
+   {
+    "id": "node_executing",
+    "name": "服务执行与打卡",
+    "assigneeRole": "r2",
+    "phase": "processing"
+   },
+   {
+    "id": "node_completed",
+    "name": "服务已完成",
+    "assigneeRole": "r2",
+    "phase": "finished"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_executing",
+    "condition": "顾问完成派单且服务人员接单"
+   },
+   {
+    "from": "node_executing",
+    "to": "node_completed",
+    "condition": "服务人员现场打卡并完成服务反馈"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "运营数据驾驶舱",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "service_report.category",
+     "service_report.total_count",
+     "service_report.completion_rate"
+    ],
+    "actionPermissions": [
+     "service_report:read",
+     "service_report:export"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.gender",
+     "elder.age",
+     "elder.address",
+     "elder.care_level",
+     "elder.health_status"
+    ],
+    "actionPermissions": [
+     "elder:create",
+     "elder:read",
+     "elder:update",
+     "elder:delete"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "服务派单中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_content",
+     "work_order.elder_ref",
+     "staff.name"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:read",
+     "work_order:update",
+     "work_order:assign",
+     "staff:read"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "移动端服务执行页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_content",
+     "staff.name",
+     "staff.status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_1",
+    "name": "健康状况智能评估",
+    "inputFields": [
+     "elder.age",
+     "elder.health_status"
+    ],
+    "outputField": "elder.care_level",
+    "roleRefs": [
+     "r1",
+     "r2"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p3",
+    "workflowRef": "node_created"
+   },
+   {
+    "pageRef": "p4",
+    "workflowRef": "node_executing"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "node_completed"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "r1",
+   "r2",
+   "r3"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "work_order",
+   "staff",
+   "service_report"
+  ],
+  "appIdentity": {
+   "appName": "安颐通"
+  },
+  "invariants": [
+   {
+    "id": "inv_1",
+    "statement": "上门工单必须关联一个有效的的老人档案",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.elder_ref",
+     "elder"
+    ]
+   },
+   {
+    "id": "inv_2",
+    "statement": "服务执行打卡只能在工单处于执行状态时进行",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "node_executing"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

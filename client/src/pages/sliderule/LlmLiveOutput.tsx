@@ -1,22 +1,19 @@
 /**
- * LlmLiveOutput — Claude 式 LLM 实时输出（2026-07-10 两轮用户裁决）。
+ * LlmLiveOutput — LLM 输出的活动行。
  *
- * Claude 的真实分工（第二轮用户观察修正）：
- * - 自然语言的思考/叙事流 **自由流动**——不装窗、不折叠，像正文一样
- *   随对话生长（外层聊天列贴底跟随负责滚动）；
- * - 被折叠成一行摘要的是 **工具活动/代码**——五系统 JSON 起草属于这类：
- *   默认收成摘要行（脉冲点 + 标题 + 字符数），点开是代码块面板
- *   （圆角浅底 + mono + 轻量语法高亮 + 260px 尾窗）。
+ * 2026-08-18：摘要行改成和步骤同一套 Cursor 语法（勾/转圈 + 动词 + N 字），
+ * 不再写「标题 · N 字符」配一个脉冲点。JSON / 看起来像 JSON 的默认折叠。
  *
- * 尾窗内贴底跟随 + 用户接管：在底部才跟随最新输出；上滚即停、可自由
- * 回看，右下角「↓ 最新」胶囊一键回底（JSON 面板专属；纯文字流不需要）。
+ * 尾窗内贴底跟随 + 用户接管：在底部才跟随最新输出；上滚即停。
  */
 
 import React from "react";
-import { ArrowDown, ChevronDown } from "lucide-react";
+import { ArrowDown } from "lucide-react";
 import { repairPartialJson } from "./system-screens/five-system-model";
 import { Response } from "@/components/ai/response";
 import { useSmoothText } from "./use-smooth-text";
+import { compactVerb, formatCharMeta } from "./activity-rows";
+import { ActivityToggleRow } from "./ActivityList";
 
 /** 轻量 JSON 高亮：按 token 切成着色 span（不引编辑器，流式高频更新便宜）。 */
 const JSON_TOKEN_RE =
@@ -59,6 +56,7 @@ function highlightJson(pretty: string): React.ReactNode[] {
 export function LlmLiveOutput({
   title,
   text,
+  chars,
   formatJson = false,
   done = false,
   className = "",
@@ -66,6 +64,12 @@ export function LlmLiveOutput({
   /** 来源标题（"正在分析风险" / "五系统模型起草中"…） */
   title: string;
   text: string;
+  /**
+   * 真实字数。**留档回放必须传**——`text` 那时是被落库瘦身截过的，
+   * 数它得到的恒是 1201（1200 上限 + 省略号），一排步骤会写着同一个数
+   * （用户 2026-08-23 报的就是这个）。直播时不用传：那时 text 就是全文。
+   */
+  chars?: number;
   /** true = 流式 JSON（五系统起草）：容错解析美化 + 代码块外观 + 高亮 */
   formatJson?: boolean;
   /** true = 归档态（推演结束后的留档）：灰点无光标，默认折叠（Claude
@@ -73,9 +77,11 @@ export function LlmLiveOutput({
   done?: boolean;
   className?: string;
 }) {
-  // Claude 分工：代码/JSON 默认收成摘要行（点开看面板）；纯文字流默认展开；
-  // 归档态一律默认折叠
-  const [collapsed, setCollapsed] = React.useState(done || formatJson);
+  const looksJson = formatJson || /^\s*[{[]/.test(text);
+  // 2026-08-27 PR-2：轨迹默认折叠。点开才见 risk.analyze 原文——
+  // 进度看推演钟，不靠散文。此前流式纯文字默认展开，用户要读完想法
+  // 才知道「现在在哪一步」。
+  const [collapsed, setCollapsed] = React.useState(true);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   // 贴底跟随：用户在底部才跟随；往上滚即接管（followRef 存意图，state 控胶囊）
   const followRef = React.useRef(true);
@@ -87,16 +93,17 @@ export function LlmLiveOutput({
   // 流式 JSON 美化：每 +200 字符重解一次（容错解析未收尾 JSON）。
   // 只有"美化/高亮结果"走节流 memo；原文本身必须每帧跟随平滑流——
   // 否则非 JSON 流会冻结在第一帧（曾踩过：正文停住、字符数还在涨）。
-  const formatKey = formatJson ? Math.floor(smooth.length / 200) : -1;
+  const treatAsJson = formatJson || looksJson;
+  const formatKey = treatAsJson ? Math.floor(smooth.length / 200) : -1;
   const prettyNodes = React.useMemo(() => {
-    if (!formatJson || !smooth) return null;
+    if (!treatAsJson || !smooth) return null;
     const parsed = repairPartialJson(smooth);
     if (parsed === null) return null;
     return highlightJson(JSON.stringify(parsed, null, 2));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 按长度桶节流重解
-  }, [formatJson, formatKey]);
+  }, [treatAsJson, formatKey]);
   const body: React.ReactNode =
-    formatJson && prettyNodes !== null ? prettyNodes : smooth;
+    treatAsJson && prettyNodes !== null ? prettyNodes : smooth;
 
   // 新内容到达：仅当用户在底部时窗口内贴底（Claude/终端行为）
   React.useEffect(() => {
@@ -122,28 +129,16 @@ export function LlmLiveOutput({
 
   return (
     <div data-testid="sliderule-llm-draft" className={`min-w-0 ${className}`}>
-      <button
-        type="button"
+      <ActivityToggleRow
+        status={done ? "done" : "running"}
+        verb={compactVerb(title)}
+        meta={formatCharMeta(chars ?? text.length)}
+        open={!collapsed}
+        testId="sliderule-llm-draft-toggle"
         onClick={() => setCollapsed(v => !v)}
-        data-testid="sliderule-llm-draft-toggle"
-        className="flex items-center gap-2 text-left text-[11px] font-medium text-stone-400 transition-colors hover:text-stone-600"
-      >
-        <span
-          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-            done ? "bg-stone-300" : "animate-pulse bg-[#1677ff]"
-          }`}
-        />
-        <span className="min-w-0 truncate">
-          {title} · {text.length} 字符
-        </span>
-        <ChevronDown
-          className={`h-3.5 w-3.5 shrink-0 transition-transform ${collapsed ? "-rotate-90" : ""}`}
-        />
-      </button>
-      {/* 纯文字思考流：自由流动，不装窗不折叠（Claude 的正文行为；
-          滚动与贴底跟随由外层聊天列统一负责）。E16：streamdown 渲染
-          markdown（未闭合语法容错 + 按块记忆化，选区不被打断） */}
-      {!collapsed && !formatJson && (
+      />
+      {/* 点开后的纯文字思考流。默认折叠（PR-2）；滚动由外层聊天列负责。 */}
+      {!collapsed && !treatAsJson && (
         <div
           data-testid="sliderule-llm-draft-body"
           aria-live="polite"
@@ -155,7 +150,7 @@ export function LlmLiveOutput({
         </div>
       )}
       {/* 代码/JSON 面板：代码块外观 + 260px 尾窗（Claude 的工具活动行为） */}
-      {!collapsed && formatJson && (
+      {!collapsed && treatAsJson && (
         <div className="relative mt-1.5 overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#fafbfc]">
           <div
             ref={scrollRef}

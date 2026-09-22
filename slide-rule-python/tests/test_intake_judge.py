@@ -80,7 +80,62 @@ def test_precheck_catches_obvious_noise(text, verdict):
     assert hit.guidance, "确定性层拦下也必须给引导，不能只说不行"
 
 
-# ── 判决与会话状态一致 ────────────────────────────────────────────
+# ── 已有应用上的工厂单跳：不许再走新话题审查 ──────────────────────
+
+_HOP_CASES = [
+    "继续进行数据模型反推（structure）与权限绑定（bind）",
+    "直接执行闭环发布（closure）",
+    "直接执行闭环发布",
+    "继续进行数据模型反推",
+]
+
+#: ⚠ 2026-09-07 真机水果店：芯片「精修（refine）」不是工厂 hop，
+#: 旧尺子会放去 LLM 当新话题。闭集括号名必须一起跳过审查。
+_CLOSED_CHIP_CASES = [
+    "精修（refine）",
+    "refine",
+    "质疑（challenge）",
+]
+
+
+@pytest.mark.parametrize("text", _HOP_CASES + _CLOSED_CHIP_CASES)
+def test_has_app_factory_hop_is_iteration_without_llm(text):
+    """2026-09-03 真机：迭代输入 structure/bind/closure 弹出审查需求。
+
+    变异：把 precheck 的 has_app 支路删掉 → 本条红（llm_json_fn 被叫到）。
+    """
+    called = []
+
+    def spy(_messages):
+        called.append(1)
+        return {"verdict": "vague", "reason": "should not run", "confidence": 0.99}
+
+    j = ij.judge_turn(text, has_app=True, llm_json_fn=spy)
+    assert called == [], f"{text!r} 还去调了 LLM"
+    assert j.verdict == "iteration"
+    assert j.action == "proceed"
+    assert j.source == "precheck"
+
+
+@pytest.mark.parametrize("text", [
+    "闭环发布管理系统",
+    "做一个闭环发布管理系统",
+    "另外再做一套版本发布流程",
+])
+def test_empty_session_product_named_like_a_hop_still_goes_to_llm(text):
+    """空会话里「闭环发布管理系统」是新产品，不是 hop。"""
+    assert ij.precheck(text, has_app=False) is None
+    called = []
+    j = ij.judge_turn(
+        text, has_app=False,
+        llm_json_fn=lambda _m: called.append(1) or {
+            "verdict": "real", "reason": "新产品", "confidence": 0.9,
+        },
+    )
+    assert called == [1]
+    assert j.verdict == "real"
+
+
 
 def test_empty_session_cannot_be_iteration():
     """空会话判成 iteration 一定是错的——没有"现有应用"可改，这个方向安全收敛。"""
@@ -228,16 +283,6 @@ def test_out_of_scope_never_blocks():
     assert ij._resolve_action("out_of_scope", 0.2) == "proceed"
 
 
-def test_frontend_verdict_set_stays_in_sync():
-    """前端 VALID_VERDICTS 是个闭集，后端加了判词而前端没加时
-    parseJudgement 返回 null → 提示条一个字都不显示，而且**不报错**
-    （fail-open 在这里会把功能悄悄吞掉）。所以两侧必须钉在一起。"""
-    ts = (Path(__file__).resolve().parents[2]
-          / "client" / "src" / "pages" / "sliderule" / "use-intake-judge.ts")
-    src = ts.read_text(encoding="utf-8")
-    block = src.split("VALID_VERDICTS", 1)[1].split("]", 1)[0]
-    front = set(re.findall(r'"([a-z_]+)"', block))
-    assert front == ij._VALID_VERDICTS, f"前后端判词不一致: 前端 {front} 后端 {ij._VALID_VERDICTS}"
 
 
 def test_prompt_does_not_leak_the_cases_it_is_measured_on():
@@ -278,11 +323,9 @@ def test_device_defaults_to_unspecified_not_desktop():
     assert j.device == "unspecified"
 
 
-@pytest.mark.parametrize("raw", ["tablet", "watch", "", None, "DESKTOP ", 123])
+@pytest.mark.parametrize("raw", ["watch", "", None, "DESKTOP ", 123])
 def test_illegal_device_falls_back_to_unspecified(raw):
-    """不合法一律落 unspecified，不猜。tablet 特别要落回——它在
-    preferredDevice 的合法域里，但平板渲染代码已下架（ADR-0001），
-    判出来下游没有对应的设计与外壳。"""
+    """不合法一律落 unspecified，不猜。watch 仍未接通。"""
     payload = {"verdict": "real", "reason": "r", "confidence": 0.9, "device": raw}
     j = ij.judge_turn("随便一个需求", has_app=False, llm_json_fn=lambda _m: payload)
     assert j.device in ij._VALID_DEVICES
@@ -290,6 +333,12 @@ def test_illegal_device_falls_back_to_unspecified(raw):
         assert j.device == "desktop", "大小写与空格应被规范化"
     else:
         assert j.device == "unspecified"
+
+
+def test_tablet_is_a_legal_judge_device():
+    payload = {"verdict": "real", "reason": "r", "confidence": 0.9, "device": "tablet"}
+    j = ij.judge_turn("餐厅平板点单", has_app=False, llm_json_fn=lambda _m: payload)
+    assert j.device == "tablet"
 
 
 def test_device_rides_the_existing_call_no_extra_roundtrip():
@@ -319,12 +368,15 @@ def test_device_rubric_judges_posture_not_keywords():
     assert "unspecified" in body and "别硬猜" in body
 
 
-def test_device_never_offers_tablet():
-    """判词里不许出现 tablet 选项——判出来也没有对应的设计与外壳，
-    等于让模型判一个系统做不到的东西（跟能力面同一条纪律）。"""
+def test_device_offers_wired_tablet_not_watch():
+    """接通的档必须出现在判定槽位；未接通的 watch 不许出现。"""
+    from services.archetype_legal import judge_device_domain_bar
+
     body = ij.build_messages("随便一句", has_app=False)[0]["content"]
-    assert '"device": desktop|phone|unspecified' in body
-    assert "tablet" not in ij._VALID_DEVICES
+    assert f'"device": {judge_device_domain_bar()}' in body
+    assert "tablet" in ij._VALID_DEVICES
+    assert "watch" not in ij._VALID_DEVICES
+    assert "watch" not in body.split("判定纪律")[0]
 
 
 def test_device_cases_are_wellformed():

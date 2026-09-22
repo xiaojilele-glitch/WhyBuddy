@@ -15,6 +15,9 @@ from sliderule_llm.config import (  # noqa: E402
     get_llm_config,
     get_fallback_llm_config,
     get_pool_config,
+    llm_bypass_hosts,
+    hostname_from_maybe_url,
+    ensure_llm_proxy_bypass,
 )
 
 CONFIG_ENV_KEYS = (
@@ -234,6 +237,46 @@ def test_pool_labels_default_when_mismatched():
     os.environ["BLUEPRINT_SPEC_DOCS_LLM_POOL_LABELS"] = "only-one"
     pc = get_pool_config()
     assert pc.labels == ("key-1", "key-2")
+
+
+def test_hostname_from_maybe_url_strips_path():
+    assert hostname_from_maybe_url("https://api.rcouyi.com/v1") == "api.rcouyi.com"
+    assert hostname_from_maybe_url("api.example.test") == "api.example.test"
+    assert hostname_from_maybe_url("") == ""
+
+
+def test_llm_bypass_hosts_includes_live_base_url():
+    """漏 LLM_BASE_URL = 2026-08-19 那次：NO_PROXY 还是旧网关。"""
+    old = os.environ.get("LLM_BASE_URL")
+    os.environ["LLM_BASE_URL"] = "https://gw.example-bypass.test/v1"
+    try:
+        hosts = llm_bypass_hosts()
+        assert "gw.example-bypass.test" in hosts
+        assert "api.rcouyi.com" in hosts
+    finally:
+        if old is None:
+            os.environ.pop("LLM_BASE_URL", None)
+        else:
+            os.environ["LLM_BASE_URL"] = old
+
+
+def test_ensure_llm_proxy_bypass_writes_noproxy():
+    keys = ("NO_PROXY", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "LLM_BASE_URL")
+    saved = {k: os.environ.get(k) for k in keys}
+    try:
+        os.environ["LLM_BASE_URL"] = "https://gw.example-bypass.test/v1"
+        os.environ["NO_PROXY"] = "localhost"
+        ensure_llm_proxy_bypass()
+        blob = os.environ.get("NO_PROXY") or ""
+        assert "gw.example-bypass.test" in blob
+        assert "api.rcouyi.com" in blob
+        assert "localhost" in blob
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 # Minimal runner so this file works even where pytest isn't installed.

@@ -1,28 +1,42 @@
 /**
- * identity-themes — 应用身份段的颜色解析（E40.2，2026-07-30 起改为路线丙）。
+ * identity-themes — 应用身份段的颜色解析。
  *
- * 千人千面的第一层：同一套运行时组件，换一个种子色 = 完全不同的产品气质。
- * 此前是 8 套手写死板token（数值来自 tweakcn 预设 + 人工调校，2026-07-26
- * 起改成同读 identity_theme_presets.json 但仍是 96 个手挑色值）；2026-07-30
- * 起彻底改路：手工色值总数收到 1 个（见 ../../../lib/identity-palette.ts 的
- * FALLBACK_SEED），其余全部由 LLM 选的种子色经 material-color-utilities 的
- * HCT 算法（vendored 于 lib/mcu/）派生。
+ * ## 现在的规则：全站一个颜色（2026-08-03，用户裁决）
  *
- * appbundle.appIdentity.theme 那个 8 选 1 的分类字段（合法域在 @legal 的
- * identityThemes）仍然存在、仍然被 gate/repair 校验——那是没有改的另一套
- * 机制（分类标签，不是颜色来源）。但它不再对应任何色板：颜色只有两个
- * 来源，appIdentity.generatedTheme.seed（LLM 选的），或者两者都没有时的
- * FALLBACK_SEED。
+ * 所有生成应用共用 BRAND_SEED 派生的同一套色板，菜单与 Header 是白的。
+ * 主色只出现在选中态、按钮、图表这些该被看见的地方——Ant Design Pro 那种形态。
+ *
+ * ## 走到这一步的路径
+ *
+ * 最早是 8 套手写死的 token（96 个手挑色值）。2026-07-30 改成"LLM 选一个
+ * 种子色 + MCU 的 HCT 算法派生其余 11 个字段"，手工色值降到 1 个——算法
+ * 那部分是好的，保留至今（见 lib/identity-palette）。
+ *
+ * 换掉的是**种子色的来源**：为了让 LLM 选这一个色值，链路上要先花 ~74s
+ * 生一张参照图再喂给视觉模型取色，而那张图从不展示给任何人。用一次生图
+ * 换一个色值，是整条链路上性价比最低的一步，已整段移除。
+ *
+ * appbundle.appIdentity.theme 那个 8 选 1 的分类字段仍然存在、仍然被
+ * gate/repair 校验——那是分类标签，从 2026-07-30 起就不是颜色来源了。
  */
 
 import legalDomains from "@legal";
 import themePresets from "@identity-themes";
 
-import {
-  deriveIdentityPalette,
-  fallbackIdentityPalette,
-  type IdentityPalette,
-} from "@/lib/identity-palette";
+import { deriveIdentityPalette, type IdentityPalette } from "@/lib/identity-palette";
+
+/**
+ * 全站唯一的品牌种子色，与 Python 同读 identity_theme_presets.json。
+ *
+ * **不在这里写死。** Python 用同一个值拼生成提示词里的"运行时已经按这套
+ * 渲染了"那句色板事实；两边各写一份的话，提示词说的颜色和实际渲染的颜色
+ * 会悄悄分叉，而这种分叉只有肉眼比对才看得出来。
+ *
+ * 只有这一个色值是手挑的，其余 11 个字段全部由 MCU 的 HCT 算法派生
+ * （见 lib/identity-palette）。
+ */
+const BRAND_SEED: string = themePresets.brandSeed.seed;
+const BRAND_LABEL: string = themePresets.brandSeed.label;
 
 export type IdentityTheme = IdentityPalette;
 
@@ -30,57 +44,61 @@ export type IdentityTheme = IdentityPalette;
  * 合法值集合，颜色解析不再读它，只在别处（生成契约/门/修复器）继续使用。 */
 export const LEGAL_THEME_IDS: readonly string[] = legalDomains.identityThemes;
 
-// 生成主题合格契约——与 Python identity_theme_gen.py（格式正则）、
-// freeform_block.is_valid_generated_theme（使用判定）同读 presets JSON 里的
-// generatedThemeContract，判定规则只此一处，不存在两端标准打架的窗口。
-// 2026-07-30 起契约只剩 seed 一个必填字段。
-const THEME_CONTRACT = themePresets.generatedThemeContract;
-const HEX_RE = new RegExp(THEME_CONTRACT.hexPattern);
-
-/** 生成的身份主题——LLM 只给种子色 + 气质标签，不再是 11 个字段。 */
+/**
+ * 存量数据里的 generatedTheme 形状。
+ *
+ * 2026-08-03 起不再生成、也不再被读取（颜色统一走 BRAND_SEED），但库里
+ * 还有历史应用带着这个字段。类型留着是为了那些地方读到时仍有形状可依，
+ * 不是活跃契约。
+ */
 export type GeneratedIdentityTheme = { label?: unknown; seed?: unknown };
 
 /**
- * 从生成主题里取出可用的种子色。
+ * 解析主题：**全站一个颜色**（2026-08-03，用户裁决）。
  *
- * 除了读新契约的 seed 字段，还兼容一种旧数据：2026-07-30 之前生成的会话
- * 里，generatedTheme 是完整的 11 字段主题（没有 seed 字段，只有 primary）。
- * 这不是专门写的兼容层——deriveIdentityPalette 本身的定义就是"primary
- * 字段 = 原样保留的种子色"（见 identity-palette.ts），所以拿旧主题的
- * primary 当新种子色，语义上就是同一件事，不需要为存量会话写迁移脚本。
- */
-function extractSeed(v: unknown): string | undefined {
-  if (!v || typeof v !== "object") return undefined;
-  const t = v as Record<string, unknown>;
-  if (typeof t.seed === "string" && HEX_RE.test(t.seed)) return t.seed;
-  if (typeof t.primary === "string" && HEX_RE.test(t.primary)) return t.primary;
-  return undefined;
-}
-
-function extractLabel(v: unknown): string {
-  if (!v || typeof v !== "object") return "";
-  const label = (v as Record<string, unknown>).label;
-  return typeof label === "string" ? label : "";
-}
-
-/**
- * 解析主题：generatedTheme 里能读出合法种子色就用它派生；读不出来（缺失/
- * 格式不对/生成失败后压根没写这个字段）就落回 FALLBACK_SEED 派生的中性
- * 色板。themeId（8 选 1 分类字段）不参与颜色决定——保留参数只是不动调用
- * 方的签名，函数体内不读它。
+ * ## 之前是什么样、为什么改
+ *
+ * 每个应用由 LLM 单独选一个种子色。为了选这一个色值，链路上要先花 ~74s
+ * 生一张参照图、再喂给视觉 LLM 取色——那张图从不展示给任何人。整条链路
+ * 上性价比最低的一步，已经整段移除（见 Python 侧 identity_theme_gen）。
+ *
+ * 现在所有生成应用共用 BRAND_SEED 派生的同一套色板。菜单与 Header 是白的
+ * （见 identity-palette 的 TONE.sidebarBg），主色只出现在选中态、按钮、
+ * 图表这些该被看见的地方——Ant Design Pro 那种形态。
+ *
+ * ## 参数为什么还留着
+ *
+ * `themeId` 与 `generatedTheme` 都不再参与颜色决定，但签名保持不变：
+ * 调用点有十几处，且**存量应用的库里仍然存着 generatedTheme 字段**。
+ * 保留参数意味着老数据不需要迁移脚本——读进来直接被忽略，不会报错，
+ * 也不会有半套新半套旧的中间态。
  */
 export function resolveIdentityTheme(
   _themeId?: string,
-  generatedTheme?: unknown
+  _generatedTheme?: unknown,
+  /**
+   * 图表配色的挑选键（2026-08-04）。传一个**每个应用稳定且互不相同**的值
+   * （产品名 / appId 都行），这个应用就固定拿到账本里 8 套已验证色序中的一套。
+   *
+   * 只影响 charts 这一个字段——外壳（主色、菜单白、Header 白）仍然全站统一，
+   * 那是另一条裁决管的事。不传就退回老行为，十几个调用点一个都不用改。
+   */
+  chartVariantKey?: string,
+  /**
+   * 这个应用参照图上读出来的图表色（2026-08-04，`appIdentity.chartColors`）。
+   *
+   * 验得过就直接用，chartVariantKey 那套账本色序退为兜底——账本那 8 套是同一条
+   * ramp 的 8 个旋转，不同应用摆在一起仍然像同一套色；参照图那份才是**为这个
+   * 应用画的**。校验在 identity-palette 里做（形状不可信，见那边的说明）。
+   */
+  extractedCharts?: unknown
 ): IdentityTheme {
-  const seed = extractSeed(generatedTheme);
-  if (seed) {
-    return deriveIdentityPalette(seed, {
-      id: "generated",
-      label: extractLabel(generatedTheme) || "自定义主题",
-    });
-  }
-  return fallbackIdentityPalette();
+  return deriveIdentityPalette(BRAND_SEED, {
+    id: "brand",
+    label: BRAND_LABEL,
+    chartVariantKey,
+    extractedCharts,
+  });
 }
 
 /** 6 位十六进制转 rgba() 字符串——菜单 hover 态要跟主色调一层半透明叠色，

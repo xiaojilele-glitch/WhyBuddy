@@ -2,15 +2,35 @@
  * SlideRule product view (/sliderule): ONE unified surface (studio skeleton).
  *
  * - Single header row: brand/topic + STATUS summary + actions (交付物/重置会话/Dev)
- * - Left column: conversation (single empty state: logo watermark + hero + chips)
- * - Right rail: SkillThumbnailBar + system screens ⟷ 推演过程 (execution timeline + skill linkage)
- * - Bottom center: single ComposerDock (+ 实用动作菜单 / ✨优化提示词), clarification cards above it
+ * - Left column: conversation; composer sits under the thread (not a page-wide overlay)
+ * - Right rail: ArchitectureStage (sandbox / C4) + drawer inspector / Checks
  *
  * The old chat/reasoning/studio surface toggle was removed (2026-07): one page,
  * one mental model. The v4 pan/zoom reasoning canvas is gone from this page;
  * ?im=dev still opens the split engineering cockpit with the flow canvas.
  */
 
+import { BRAND_NAME_FULL } from "@shared/brand";
+import {
+  DEFAULT_SESSION_ID,
+  applySessionToHistory,
+  hrefFromWindow,
+  resolveActiveSessionId,
+  sessionIdFromHref,
+} from "@/lib/sliderule-session-id";
+import { quietHint } from "./sliderule/quiet-time";
+import { TurnResultCard } from "./sliderule/TurnResultCard";
+import { useProjectThumbnail } from "./sliderule/project-runtime/useProjectThumbnail";
+import { NextStepSuggestions } from "./sliderule/NextStepSuggestions";
+import { PlanTodoDock } from "./sliderule/PlanTodoDock";
+import { deriveProjectActivity } from "./sliderule/project-activity";
+import { isOfficeFileDeliverable, latestPlanDeliverableKind, planWrittenHasDeliverableKind } from "./sliderule/deliverable-kind";
+import { useOfficeArtifactPresent } from "./sliderule/project-runtime/office-artifacts-client";
+import {
+  shouldAutoCreateProject,
+  shouldShowProjectComputer,
+} from "./sliderule/project-computer-view";
+import { useAuth } from "@/lib/use-auth";
 import React, {
   useCallback,
   useEffect,
@@ -26,21 +46,7 @@ import {
   useMessage,
   type ThreadMessageLike,
 } from "@assistant-ui/react";
-import {
-  ArrowDown,
-  Check,
-  ChevronRight,
-  LoaderCircle,
-  ShoppingCart,
-  UserPlus,
-  Users,
-} from "lucide-react";
-import {
-  ChainOfThought,
-  ChainOfThoughtHeader,
-  ChainOfThoughtContent,
-  ChainOfThoughtStep,
-} from "@/components/ai/chain-of-thought";
+import { ArrowDown, Plus } from "lucide-react";
 import type { BrainstormReasoningNode } from "@shared/blueprint";
 import { ReasoningFlowSurface } from "@/components/autopilot/ReasoningFlowSurface";
 import { useSlideRuleSession } from "./sliderule/useSlideRuleSession";
@@ -49,6 +55,15 @@ import type { LiveAction } from "@shared/blueprint/capability-process-labels";
 import { CAPABILITY_PROCESS_LABELS } from "@shared/blueprint/capability-process-labels";
 import { LlmLiveOutput } from "./sliderule/LlmLiveOutput";
 import { RollingText } from "./sliderule/RollingText";
+import { ThinkingOrbMark } from "./sliderule/ThinkingOrbMark";
+import { turnTimelineHeader } from "./sliderule/activity-rows";
+import { ActivityList } from "./sliderule/ActivityList";
+import { deriveStageBands } from "./sliderule/stage-authority";
+import {
+  foldContinuationTurns,
+  turnHasContinuationMark,
+  turnIsContinuation,
+} from "./sliderule/turn-continuation";
 
 /** llm_delta 来源标签 → 实时块标题（能力 id / "five-system-model" / "closure.summary"）。 */
 function llmDraftTitle(label: string | null | undefined): string {
@@ -65,7 +80,6 @@ function llmDraftTitle(label: string | null | undefined): string {
 }
 import { narrationFallbackHint } from "@/lib/sliderule-narrator";
 import { TurnRouteTimeline } from "./sliderule/TurnRouteTimeline";
-import { finalNarrationStep } from "./sliderule/turn-route-steps";
 import { deriveSlideRuleReasoningViewModel } from "./sliderule/derive-reasoning-view-model";
 import {
   deriveCrossRuntimeGraphSummary,
@@ -75,24 +89,48 @@ import {
   type PublishClosureSummary,
 } from "./sliderule/derive-cross-runtime-summary";
 import { resolveImSurfaceMode } from "./sliderule/im-surface-mode";
+import { deriveSettledFiveSystemModel } from "./sliderule/system-screens/five-system-model";
 import {
-  deriveSettledFiveSystemModel,
-  parseFiveSystemModelFromPerSkillEvidence,
-  summarizeClosureForChat,
-} from "./sliderule/system-screens/five-system-model";
+  assistantTextForTurn,
+  turnDidFactoryWork,
+} from "./sliderule/assistant-text-for-turn";
+import {
+  answerAlreadySpoken,
+  renderableModelSpeech,
+} from "./sliderule/model-speech";
+import { ensureReadableChatMarkdown } from "./sliderule/readable-chat-markdown";
 import { SlideRuleStatusBar } from "./sliderule/SlideRuleStatusBar";
-import { SlideRuleTopHud } from "./sliderule/SlideRuleTopHud";
-import { SESSION_CHANGED_EVENT } from "./agent-loop/dashboard/SidebarSessions";
+import {
+  deriveStatusBarFacts,
+  idleRehearsalCursor,
+  type ContextHudFacts,
+  type RehearsalClockCursor,
+  type RehearsalClockView,
+} from "./sliderule/derive-status-bar";
+import type { FactoryDecisionView } from "./sliderule/derive-factory-decision";
+import {
+  PreviewChromeLayoutButtons,
+  SlideRuleResetSessionButton,
+} from "./sliderule/SlideRuleTopHud";
+import { StudioLayoutProvider } from "./sliderule/StudioLayoutContext";
+import { isStudioChromeShown } from "./sliderule/studio-layout";
+import {
+  ACTIVE_SESSION_KEY,
+  SESSION_CHANGED_EVENT,
+} from "./agent-loop/dashboard/SidebarSessions";
 import {
   ClarificationCard,
   type ClarificationItem,
 } from "./sliderule/ClarificationCard";
 import { DeliverablesPanel } from "./sliderule/DeliverablesPanel";
 import { ComposerDock } from "./sliderule/ComposerDock";
+import { dispatchChallengePrefill } from "./sliderule/challenge-composer";
+import { HomeInspiration } from "./sliderule/home-inspiration";
+import { composerEnterHintLabel } from "./sliderule/user-prefs";
 import { EXAMPLE_INTENT_TEXTS } from "./sliderule/example-intents";
-import { deriveComposerHintChips } from "./sliderule/derive-composer-hints";
 import type { UiTurn } from "./sliderule/types";
 import { IS_GITHUB_PAGES } from "@/lib/deploy-target";
+import { rememberActiveProjectId } from "@/lib/skill-store-client";
 import {
   GITHUB_PAGES_DEMO_SESSION_ID,
   GITHUB_PAGES_DEMO_GOAL,
@@ -103,9 +141,15 @@ import {
   graphNodeIdForArtifact,
 } from "./sliderule/derive-lineage-highlight";
 
-import { downloadSlideRuleDeliveryMd } from "./sliderule/serialize-sliderule-delivery-md";
-import { deriveLatestTurnFromState } from "./sliderule/derive-persisted-turn";
-import { deriveTurnPhases } from "./sliderule/derive-turn-phases";
+import {
+  downloadSlideRuleDeliveryMd,
+  serializeSlideRuleDeliveryMd,
+} from "./sliderule/serialize-sliderule-delivery-md";
+import { downloadSlideRuleDeliveryHtml } from "./sliderule/serialize-sliderule-delivery-html";
+import {
+  deriveLatestTurnFromState,
+  deriveTurnsFromState,
+} from "./sliderule/derive-persisted-turn";
 import {
   PROJECTION_DENSITY_STORAGE_KEY,
   SLIDERULE_TERMINAL_NODE_ID,
@@ -121,7 +165,7 @@ import { deriveApplication, slideRule } from "@/lib/skills/slideRule";
 import { Spin } from "antd";
 import { SlideRuleStudio } from "./sliderule/SlideRuleStudio";
 import { Response } from "@/components/ai/response";
-import { Shimmer } from "@/components/ai/shimmer";
+import { SessionStory } from "./sliderule/SessionStory";
 
 // Python full-path E2E wiring (105): /agent-loop/sliderule and /sliderule
 // render this component, while turn/evidence/report calls surface Python
@@ -146,10 +190,8 @@ function LiveActionIndicator({ liveAction }: { liveAction: LiveAction }) {
       }
     >
       {!liveAction.external && (
-        <span className="mr-2 inline-flex gap-1 align-middle">
-          <span className="size-1.5 animate-pulse rounded-full bg-stone-400" />
-          <span className="size-1.5 animate-pulse rounded-full bg-stone-400 [animation-delay:120ms]" />
-          <span className="size-1.5 animate-pulse rounded-full bg-stone-400 [animation-delay:240ms]" />
+        <span className="mr-2 inline-flex align-middle" aria-hidden>
+          <ThinkingOrbMark label={liveAction.label} size={20} />
         </span>
       )}
       {liveAction.label}
@@ -183,6 +225,7 @@ function TurnFootnote({
       <button
         key="challenge"
         type="button"
+        data-testid="sliderule-challenge-turn"
         onClick={() => onChallenge(turn.main!.artifactId)}
         className="text-stone-500 hover:text-stone-700 hover:underline"
       >
@@ -230,45 +273,37 @@ function textFromStep(
   return "";
 }
 
-function assistantTextForTurn(
-  turn: UiTurn,
-  publishClosure?: PublishClosureSummary | null,
-  goalText?: string
-): string {
-  const assistant = turn.assistant?.trim();
-  if (assistant) return assistant;
-  const finalStepText = finalNarrationStep(turn.steps)?.text?.trim();
-  if (finalStepText) return finalStepText;
-  // 不再回退到最后一枚过程 chip（会把「指令已接收 · 启动推理」当成回答复读）；
-  // 过程细节由 TurnPhaseTimeline 分阶段折叠承载，这里给零 LLM 模板总结（方案 A）：
-  // 事实全部来自五系统模型 + 闭环证据，替换旧的机械状态行。
-  if (publishClosure) {
-    // 方案 B 优先：python 真 LLM 收口总结（结合推演全程上下文）；
-    // 缺失（未配通道/上游失败）回落零 LLM 模板 A——总结永远有，但从不编造。
-    if (publishClosure.chatSummary?.trim())
-      return publishClosure.chatSummary.trim();
-    const model = parseFiveSystemModelFromPerSkillEvidence(
-      publishClosure.perSkillEvidence as Parameters<
-        typeof parseFiveSystemModelFromPerSkillEvidence
-      >[0]
-    );
-    return summarizeClosureForChat(model, {
-      goalText: turn.user || goalText,
-      blocked: !!publishClosure.blocked,
-      evidencePresentCount: publishClosure.evidencePresentCount ?? 0,
-      skillCount: publishClosure.skillCount ?? 6,
-      versionPinsChecked: !!publishClosure.versionPinsChecked,
-    });
-  }
-  return turn.status === "streaming"
-    ? "正在整理推演结果..."
-    : "本轮已完成，但还没有生成可展示的回答。";
+/**
+ * ModelSpeechBlocks — 模型动手之前对用户说的那几段话。
+ *
+ * 排在活动列表**上面**：先说「我要做什么、为什么」，再铺机械步骤——对照
+ * Manus 的那一列。不是芯片、不进时间线，理由见 `model-speech.ts` 头注。
+ */
+function ModelSpeechBlocks({ turn }: { turn: UiTurn }) {
+  const speech = React.useMemo(() => renderableModelSpeech(turn), [turn.steps]);
+  if (speech.length === 0) return null;
+  return (
+    <div
+      className="min-w-0 space-y-2 text-[14px] leading-[1.7] text-[#171717]"
+      data-testid="sliderule-model-speech"
+      data-speech-count={speech.length}
+    >
+      {speech.map(item => (
+        <p
+          key={item.id}
+          className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]"
+        >
+          {item.text}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 /**
- * TurnPhaseTimeline — Claude 式分阶段过程叙事（V5.2 闭环的阶段结构）。
- * 运行中：已完成阶段折叠成 ✓ 标题行，当前阶段展开、实时流出步骤；
- * 完成后：整体折叠为一行「推演过程 · M 阶段 · N 步」，点开按阶段回放。
+ * TurnPhaseTimeline — 左栏活动列表。
+ * 权属分带（选材 / 画应用 / 闸），对照 BettaFish「阶段 ≠ 正文」，
+ * 不装论坛。运行中铺最近动作；完成后收成「N 步 · Ns」。
  */
 function TurnPhaseTimeline({
   turn,
@@ -280,230 +315,185 @@ function TurnPhaseTimeline({
   publishClosure?: PublishClosureSummary | null;
 }) {
   const streaming = turn.status === "streaming";
-  const [expanded, setExpanded] = React.useState(false);
-  // 手动展开的已完成阶段（运行中默认只展开当前阶段）
-  const [openPhases, setOpenPhases] = React.useState<Record<string, boolean>>(
-    {}
-  );
-  const stepTexts = turn.steps.map(textFromStep).filter(Boolean);
-  const phases = React.useMemo(
+  const extraTexts: string[] = [];
+  if (llmDraft)
+    extraTexts.push(`最新定义：起草中 · 已产出 ${llmDraft.length} 字符`);
+  if (publishClosure && !streaming) {
+    extraTexts.push(
+      publishClosure.blocked
+        ? `blocked ${publishClosure.evidencePresentCount}/${publishClosure.skillCount}`
+        : `closed ${publishClosure.evidencePresentCount}/${publishClosure.skillCount}`
+    );
+  }
+  const groups = React.useMemo(
     () =>
-      deriveTurnPhases({
-        stepTexts,
+      deriveStageBands({
+        steps: turn.steps,
         streaming,
-        llmDraft,
-        closure: publishClosure
-          ? {
-              blocked: !!publishClosure.blocked,
-              evidencePresentCount: publishClosure.evidencePresentCount ?? 0,
-              skillCount: publishClosure.skillCount ?? 6,
-            }
-          : null,
+        planSource: turn.routeFacts.planSource,
+        extraTexts,
+        // 续跑轮不重演开场（接收意图 / 编排 / planning）——见
+        // turn-continuation 头注：一跳一件是有意的，重画开场不是。
+        continuation: turnIsContinuation(turn),
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [stepTexts.join("\n"), streaming, llmDraft, publishClosure]
+    [
+      turn.steps.map(textFromStep).join("\n"),
+      streaming,
+      llmDraft,
+      publishClosure,
+      turn.routeFacts.planSource,
+      // ⚠ 少一条依赖 = 续跑轮切换时不重算，左栏还是旧的那份。
+      turn.user,
+      // ⚠ 2026-09-13：自动续跑认的是 `continuation_mark` step，而上面那条
+      //   `turn.steps.map(textFromStep)` 对这个 kind 返回空串（textFromStep
+      //   不认它，那是有意的——标记不是一步动作）。只加函数不加依赖，标记
+      //   到达时 memo 不重算，折叠**静默不生效**：又是「改了一半」。
+      turnHasContinuationMark(turn),
+    ]
   );
-  if (phases.length === 0) return null;
+  const stepTexts = turn.steps.map(textFromStep).filter(Boolean);
+  if (groups.length === 0) return null;
 
-  const totalSteps = stepTexts.length;
-
-  // E16b：换装 ai-elements ChainOfThought（连接线 + 状态图标 + 开合动画）。
-  // 逻辑保持原样：流式恒展开、完成后折叠成收口句、已完成阶段点击展开。
   return (
-    <ChainOfThought
-      className="mt-1 max-w-none space-y-2"
-      data-testid="sliderule-turn-phases"
-      open={streaming || expanded}
-      onOpenChange={next => {
-        if (!streaming) setExpanded(next);
-      }}
-    >
-      {!streaming && (
-        <ChainOfThoughtHeader
-          className="text-xs text-stone-400 hover:text-stone-600"
-          data-testid="sliderule-turn-steps-toggle"
-        >
-          {/* E16 收口句：带量词（Claude 的"Thought for Xs"语感），时长来自
-              本轮真实计时，没有就不编 */}
-          推演过程 · {phases.length} 阶段 · {totalSteps} 步
-          {turn.durationMs
-            ? ` · 用时 ${Math.max(1, Math.round(turn.durationMs / 1000))}s`
-            : ""}
-        </ChainOfThoughtHeader>
-      )}
-      <ChainOfThoughtContent className="mt-1.5 space-y-2.5">
-        {phases.map(phase => {
-          const running = phase.status === "running";
-          const open =
-            running || !!openPhases[phase.id] || (!streaming && expanded);
-          return (
-            <ChainOfThoughtStep
-              key={phase.id}
-              data-testid={`sliderule-phase-${phase.id}`}
-              icon={running ? LoaderCircle : Check}
-              status={running ? "active" : "complete"}
-              className={
-                running
-                  ? "[&>div:first-child>svg]:animate-spin [&>div:first-child>svg]:text-[#1677ff]"
-                  : "[&>div:first-child>svg]:text-emerald-500"
-              }
-              label={
-                <button
-                  type="button"
-                  onClick={() =>
-                    setOpenPhases(prev => ({ ...prev, [phase.id]: !open }))
-                  }
-                  className="flex cursor-pointer items-center gap-2 rounded text-xs transition-colors hover:text-stone-700"
-                >
-                  {/* E16 微动效纪律：只动"正在发生"的——进行中标题走
-                      shimmer 微光，完成态纯静止 */}
-                  {running ? (
-                    <Shimmer as="span" className="text-xs font-medium">
-                      {phase.title}
-                    </Shimmer>
-                  ) : (
-                    <span className="text-stone-500">{phase.title}</span>
-                  )}
-                  <span className="text-[10px] text-stone-300">
-                    {phase.lines.length} 步
-                  </span>
-                  {/* 可展开暗示（用户反馈：完成阶段看不出能点开）——箭头随展开态旋转 */}
-                  {!running && phase.lines.length > 0 && (
-                    <ChevronRight
-                      className={`h-2.5 w-2.5 shrink-0 text-stone-300 transition-transform ${open ? "rotate-90" : ""}`}
-                    />
-                  )}
-                </button>
-              }
-            >
-              {open && phase.lines.length > 0 && (
-                <div className="space-y-1">
-                  {(running ? phase.lines.slice(-4) : phase.lines).map(
-                    (t, i) => (
-                      <div key={i} className="text-xs leading-5 text-stone-400">
-                        {/* 「最新定义」是原位持续更替的语义槽 → 翻滚过渡 */}
-                        {t.startsWith("最新定义：") ? (
-                          <RollingText text={t} className="max-w-full" />
-                        ) : (
-                          t
-                        )}
-                      </div>
-                    )
-                  )}
-                </div>
-              )}
-            </ChainOfThoughtStep>
-          );
-        })}
-      </ChainOfThoughtContent>
-    </ChainOfThought>
+    <ActivityList
+      groups={groups}
+      streaming={streaming}
+      header={turnTimelineHeader({
+        stepCount: stepTexts.length,
+        durationMs: turn.durationMs,
+        refineReuseNote: publishClosure?.refineReuseNote,
+      })}
+      closureMeta={
+        publishClosure
+          ? `${publishClosure.evidencePresentCount}/${publishClosure.skillCount}`
+          : null
+      }
+    />
   );
 }
 
-// E39 快速开始 chips（用户简约稿）：三个完整场景，点击把完整意图填进输入框
-// （fill-prompt 机制不变）。上传需求文档的路径收进输入框的「上传资料」按钮，
-// 不再单列 chip——右侧密度做减法（E34 模式卡同轮裁决移除）。
+// 快速开始：三个完整场景，点击把意图填进输入框（fill-prompt 不变）。
+// 2026-08-20 空态输入对照 Cursor / Continue：圆角卡片 + 字在上工具在下，
+// 不要 Stitch 粉紫光晕。底部灵感仍是一句导去应用中心 Fork，不画卡。
+// 上一版 Cursor 新会话太瘦；再上一版 logo + 主张句 + 投影卡又太像落地页
+// （测试仍禁止那些旧文案）。
 const QUICK_STARTS: ReadonlyArray<{
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
   fill: string;
 }> = [
-  { label: "采购审批应用", icon: ShoppingCart, fill: EXAMPLE_INTENT_TEXTS[0] },
-  { label: "员工入职流程", icon: UserPlus, fill: EXAMPLE_INTENT_TEXTS[1] },
+  { label: "采购审批应用", fill: EXAMPLE_INTENT_TEXTS[0] },
+  { label: "员工入职流程", fill: EXAMPLE_INTENT_TEXTS[1] },
   {
     label: "客户管理系统",
-    icon: Users,
     fill: "做一个客户管理系统，包含客户档案、跟进记录、销售漏斗和分级权限",
   },
 ];
 
-/** E39 空态首页（用户简约稿）：主张标题 + hero 大输入框 + 三个快速开始
- *  chips 居中 + 回车提示。模式模板卡按用户裁决整块移除（密度做减法）。 */
+function fillPrompt(text: string) {
+  window.dispatchEvent(
+    new CustomEvent("sliderule:fill-prompt", { detail: { text } })
+  );
+}
+
 function HomeEmptyState({
   isRunning,
   composerSlot,
+  clarifySlot,
+  todoSlot,
+  runtimeKind,
 }: {
   isRunning: boolean;
-  /** 空态时唯一的 ComposerDock 挪进首页流（开聊后回底部停靠，二选一渲染） */
+  /** 空态时唯一的 ComposerDock 挪进首页流（开聊后贴在会话流底部，二选一渲染） */
   composerSlot?: React.ReactNode;
+  /** 澄清卡叠在输入框上方（absolute），不能当 flex 孩子——会把输入顶走 */
+  clarifySlot?: React.ReactNode;
+  /** 待办卡跟输入条走；空清单时组件自己不画 */
+  todoSlot?: React.ReactNode;
+  runtimeKind?: "html-prototype" | "project";
 }) {
-  const fillPrompt = (text: string) => {
-    window.dispatchEvent(
-      new CustomEvent("sliderule:fill-prompt", { detail: { text } })
-    );
-  };
-
-  // E41 官方示例库：工作台点模板卡 → 暂存起手意图 → 这里（空态挂载时）
-  // 消费预填输入框——用户按回车即以该场景起手推演，同一条管线无特殊通道。
-  useEffect(() => {
-    let pending = "";
-    try {
-      pending = localStorage.getItem("sliderule:pending-template-intent") ?? "";
-      if (pending) localStorage.removeItem("sliderule:pending-template-intent");
-    } catch {
-      return;
-    }
-    if (!pending) return;
-    // ComposerDock 的 fill-prompt 监听在子组件挂载后注册——迟一拍派发
-    const timer = window.setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent("sliderule:fill-prompt", { detail: { text: pending } })
-      );
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, []);
+  // ⚑ E41 官方示例的「点模板卡 → 暂存起手意图 → 空态预填」消费端
+  //   已随示例库一起下架（2026-08-14，用户裁决清除四个官方示例）——
+  //   没有生产者再往 sliderule:pending-template-intent 写值。
   return (
     <div
-      className="flex h-full flex-col items-center justify-center gap-9 text-center"
+      className="relative flex min-h-full flex-1 flex-col"
       data-testid="sliderule-empty-state"
     >
-      <div className="flex flex-col items-center gap-3">
-        <div className="flex items-center gap-3.5">
-          <img
-            src={`${import.meta.env.BASE_URL}assets/sliderule-brand-mark.svg`}
-            alt="SlideRule"
-            className="h-10 w-10 shrink-0"
-          />
-          <h1 className="font-display text-[clamp(22px,2.4vw,30px)] font-semibold tracking-tight text-[#1f2329]">
-            把一句模糊想法，快速推演成可执行的完整应用
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-7 px-1 py-6">
+        {/* ⚠ 2026-09-14：空态不再挂「工程模式可用 · 确认计划后创建工程」。
+            人来写意图，不是来读运行时徽章。工程未启用的告警仍在开聊后的
+            HTML 兼容条上，空态这里只留问候。
+            ⚠ 2026-09-20：空态问候换过两轮。「想做什么？」像盘问；
+            「我能为你做什么？」照搬 Manus。现在用日常口气。 */}
+        <div className="flex w-full flex-wrap items-center justify-center gap-3">
+          <h1 className="text-[26px] font-semibold tracking-tight text-[#171717] sm:text-[28px]">
+            {runtimeKind === "project"
+              ? "继续开发这个工程"
+              : "今天做点什么？"}
           </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={isRunning}
+              data-testid="sliderule-empty-upload"
+              onClick={() =>
+                window.dispatchEvent(new Event("sliderule:open-file-picker"))
+              }
+              className="inline-flex items-center gap-1 rounded-full bg-[#f3f4f6] px-3 py-1.5 text-[13px] text-[#333] transition hover:bg-[#e8eaed] disabled:opacity-50"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              上传资料
+            </button>
+            <button
+              type="button"
+              disabled={isRunning}
+              data-testid="sliderule-empty-example"
+              onClick={() => fillPrompt(QUICK_STARTS[0].fill)}
+              className="inline-flex items-center gap-1 rounded-full bg-[#f3f4f6] px-3 py-1.5 text-[13px] text-[#333] transition hover:bg-[#e8eaed] disabled:opacity-50"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              从示例开始
+            </button>
+          </div>
         </div>
-        <p className="text-[14px] text-stone-500">
-          SlideRule「产品推演引擎」——一句话把业务意图推演成「能跑起来」的企业应用数字孪生
+
+        {composerSlot && (
+          <div
+            className="relative w-full max-w-[680px]"
+            data-testid="sliderule-hero-composer"
+          >
+            {clarifySlot}
+            {todoSlot}
+            {composerSlot}
+          </div>
+        )}
+
+        <div className="flex max-w-[680px] flex-wrap justify-center gap-2">
+          {QUICK_STARTS.map(({ label, fill }) => (
+            <button
+              key={label}
+              type="button"
+              disabled={isRunning}
+              data-testid={`sliderule-quick-start-${label}`}
+              title={fill}
+              onClick={() => fillPrompt(fill)}
+              className="rounded-full bg-[#f3f4f6] px-3.5 py-1.5 text-[13px] text-[#444] transition hover:bg-[#e8eaed] disabled:opacity-50"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p
+          className="text-center text-[12px] leading-5 text-[#a1a1aa]"
+          data-testid="sliderule-empty-enter-hint"
+        >
+          {composerEnterHintLabel()}
         </p>
       </div>
 
-      {/* hero 输入区（多行大框）：空态时唯一的 ComposerDock 就在这里 */}
-      {composerSlot && (
-        <div
-          className="w-full max-w-[880px]"
-          data-testid="sliderule-hero-composer"
-        >
-          {composerSlot}
-        </div>
-      )}
-
-      {/* 快速开始：三个场景 chips，居中（无小标题，密度做减法） */}
-      <div className="flex flex-wrap justify-center gap-3">
-        {QUICK_STARTS.map(({ label, icon: Icon, fill }) => (
-          <button
-            key={label}
-            type="button"
-            disabled={isRunning}
-            data-testid={`sliderule-quick-start-${label}`}
-            title={fill}
-            onClick={() => fillPrompt(fill)}
-            className="flex items-center gap-2 rounded-[12px] border border-[#e5e7eb] bg-white px-4 py-2.5 text-[13px] text-stone-700 shadow-[0_2px_10px_rgb(15_23_42/0.04)] transition hover:border-[#d3d8e0] hover:shadow-[0_4px_14px_rgb(15_23_42/0.08)] disabled:opacity-50"
-          >
-            <Icon className="h-4 w-4 text-stone-500" />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* 回车提示（视觉稿底部一行，弱化处理） */}
-      <div className="text-[12px] text-stone-400">
-        按 Enter 发送，Shift + Enter 换行
+      <div className="relative z-10">
+        <HomeInspiration />
       </div>
     </div>
   );
@@ -512,7 +502,7 @@ function HomeEmptyState({
 /**
  * ClaudeChatSurface — 统一页左栏对话区（Claude 风格轻量 prose 布局）。
  * 头部动作（交付物 / 重置会话 / Dev）由页面唯一顶栏承担；这里只负责对话流与
- * 唯一空态（古典 logo 水印 + hero 文案 + 3 个示例 chips）。
+ * 唯一空态（问候 + Cursor 卡片输入 + chips + 灵感一句）。
  */
 // --- assistant-ui 迁移（左栏 IM 地基）--------------------------------------
 // 滚动跟随 / 消息列表 / 空态分支由 Thread 原语接管（Viewport 自带贴底跟随，
@@ -522,8 +512,63 @@ function HomeEmptyState({
 /** uiTurns（用户+助手成对）→ 扁平消息项；turn 原对象随消息绑定回取。 */
 type ImItem = { id: string; role: "user" | "assistant"; turn: UiTurn };
 
+/**
+ * uiTurns → 外部存储消息数组。**id 必须唯一**：assistant-ui 的
+ * MessageRepository 对重复消息 id 直接抛错，React 边界接住后整页只剩
+ * "An unexpected error occurred"（2026-08-18 步伴真机：版本史同轮存了两份
+ * → 恢复出两个同 id 轮次 → 白屏）。源头已在 deriveTurnsFromState 收口，
+ * 这里是适配层的最后一道对账——上游官方适配器同样在同步前做 id 对账
+ * （assistant-ui#2380 / #4037），任何未来的新造轮路径撞了 id，也只该丢一条
+ * 消息并留告警，不该崩掉整个页面。同 id 保留**后出现**的那条（更新）。
+ */
+export function buildImItems(uiTurns: UiTurn[]): ImItem[] {
+  const flat = foldContinuationTurns(uiTurns).flatMap(turn => [
+    ...(turn.user
+      ? ([{ id: `${turn.id}-user`, role: "user", turn }] as ImItem[])
+      : []),
+    { id: `${turn.id}-assistant`, role: "assistant" as const, turn },
+  ]);
+  const seen = new Set<string>();
+  const keep: ImItem[] = [];
+  for (let i = flat.length - 1; i >= 0; i--) {
+    if (seen.has(flat[i].id)) {
+      console.warn(
+        `[sliderule] 消息 id 撞车，丢弃先出现的一条以保住页面：${flat[i].id}`
+      );
+      continue;
+    }
+    seen.add(flat[i].id);
+    keep.push(flat[i]);
+  }
+  return keep.reverse();
+}
+
 /** 轮次之外的渲染上下文（草稿流/闭环/话题），经 context 传给自定义消息组件——
  *  组件定义在模块层保持身份稳定（每帧重建会让 Messages 整列重挂）。 */
+/**
+ * 距上一次「有动静」过了多少秒。`marker` 变了就重置。
+ *
+ * ⚠ 纯粹的展示逻辑留在组件层，可判据的那部分在 `quiet-time.ts`（`quietHint`）。
+ *   这里只负责把秒数喂过去：一秒一跳的 setInterval 只在运行中挂着，
+ *   停下来就清掉，不让它在空闲页面上一直转。
+ */
+function useQuietSeconds(marker: string, running: boolean): number {
+  const [seconds, setSeconds] = React.useState(0);
+  const sinceRef = React.useRef(Date.now());
+  React.useEffect(() => {
+    sinceRef.current = Date.now();
+    setSeconds(0);
+  }, [marker, running]);
+  React.useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => {
+      setSeconds((Date.now() - sinceRef.current) / 1000);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [running]);
+  return running ? seconds : 0;
+}
+
 const ImSurfaceContext = React.createContext<{
   publishClosure?: PublishClosureSummary | null;
   llmDraft: string;
@@ -532,18 +577,46 @@ const ImSurfaceContext = React.createContext<{
   llmStreams: Array<{ label: string; text: string }>;
   goalText?: string;
   thinkingText: string;
+  /** 静默久了才出现的「已等待 N 秒」；没到门槛是 null（见 quiet-time.ts）。 */
+  quietHint: string | null;
+  /** 工程档已落库的源码版本；结果卡靠它判断「这一轮真的产出了东西」。 */
+  projectRevision?: string | null;
+  /** 后续建议要读的那一小块（模型自己的待办）。整个 state 不进 context。 */
+  sessionState?: {
+    controlTodo?: Array<{ id?: string; status?: string; content?: string }>;
+  } | null;
+  /**
+   * 最近一次验收跑出来的截图。
+   *
+   * ⚠ 2026-09-14：第一版是把 projectId 交给每张结果卡、卡片自己 useProjectThumbnail。
+   *   会话里有几轮就有几张卡，于是**同一个工程的 /verification 被重复 GET 几次**，
+   *   拿回来的还是同一份。取数提到这儿只发一次，卡片只管画。
+   */
+  thumbnailUrl?: string | null;
   isRunning: boolean;
   onChallenge: (id: string) => void;
   /** E26：最新一轮的 id——「补齐缺口」只挂在被闸拦截的最新轮上 */
   latestTurnId?: string | null;
+  runtimeKind?: "html-prototype" | "project";
+  turns?: UiTurn[];
+  deliverableKind?: string;
+  hasOfficeArtifact?: boolean;
 }>({
   llmDraft: "",
   llmDraftLabel: null,
   llmStreams: [],
   thinkingText: "",
+  quietHint: null,
+  projectRevision: null,
+  sessionState: null,
+  thumbnailUrl: null,
   isRunning: false,
   onChallenge: () => {},
   latestTurnId: null,
+  runtimeKind: "html-prototype",
+  turns: [],
+  deliverableKind: "web-app",
+  hasOfficeArtifact: false,
 });
 
 const convertImMessage = (m: ImItem): ThreadMessageLike => ({
@@ -565,14 +638,17 @@ function useImTurn(): ImItem | null {
 
 function ImUserMessage() {
   const item = useImTurn();
-  // 从持久化状态恢复的轮次没有用户文本——整条不渲染（与迁移前一致）
+  // 没有用户文本的轮次不渲染气泡（系统提示 / 空恢复轮）
   if (!item?.turn.user) return null;
   const text = item.turn.user;
   return (
-    <div className="group mb-4 flex flex-col items-end">
-      {/* 用户气泡随壳体走冷调（用户反馈：旧暖色与中性冷调壳体不搭）——
-          取品牌蓝浅色，与侧栏选中态同源 */}
-      <div className="max-w-[520px] rounded-lg bg-[#e6f4ff] px-4 py-2.5 text-[14px] leading-[26px] text-[#1f2329]">
+    <div className="group mb-3 flex flex-col items-end">
+      {/* 2026-08-18：用户块改 Cursor 灰底，不是品牌蓝气泡。
+          上一版 #e6f4ff 在对话流里像消费级聊天，跟侧栏/空会话那套对不上。 */}
+      <div
+        data-testid="sliderule-user-bubble"
+        className="max-w-[560px] rounded-[10px] bg-[#f3f4f6] px-3 py-2 text-[13.5px] leading-6 text-[#171717]"
+      >
         {text}
       </div>
       {/* 迭代环：意图原文回填输入条，改半句再推（悬停显现，不抢注意力） */}
@@ -584,7 +660,7 @@ function ImUserMessage() {
             new CustomEvent("sliderule:fill-prompt", { detail: { text } })
           );
         }}
-        className="mt-1 rounded-full px-2 py-0.5 text-[11px] text-stone-400 opacity-0 transition-opacity hover:bg-[#e9edf2] hover:text-stone-600 focus:opacity-100 group-hover:opacity-100"
+        className="mt-0.5 rounded-md px-1.5 py-0.5 text-[11px] text-stone-400 opacity-0 transition-opacity hover:bg-[#f3f4f6] hover:text-stone-600 focus:opacity-100 group-hover:opacity-100"
       >
         编辑重跑
       </button>
@@ -604,34 +680,85 @@ function ImAssistantMessage() {
     goalText,
     thinkingText,
     onChallenge,
+    runtimeKind,
+    turns,
+    deliverableKind,
+    hasOfficeArtifact,
   } = ctx;
-  const answer = assistantTextForTurn(turn, publishClosure, goalText);
+  const rawAnswer = assistantTextForTurn(turn, publishClosure, goalText, {
+    runtimeKind,
+  });
+  // 完成轮故事面已经画过同一句开口，收尾再印就是用户圈出来的重影。
+  const answer = ensureReadableChatMarkdown(
+    answerAlreadySpoken(rawAnswer, turn) ? "" : rawAnswer
+  );
+  const resultCard = (
+    <TurnResultCard
+      turn={turn}
+      runtimeKind={runtimeKind}
+      goalText={goalText}
+      projectRevision={ctx.projectRevision}
+      /* ⚠ 只挂在**最新那一轮**上：验收截图拍的是工程此刻的样子，
+           贴到三轮之前那张卡上就是张张牛头不对马嘴的图。 */
+      thumbnailUrl={
+        turn.id === ctx.latestTurnId ? ctx.thumbnailUrl : null
+      }
+      hasPages={Boolean(turn.main)}
+      deliverableKind={deliverableKind}
+      hasOfficeArtifact={hasOfficeArtifact}
+      onOpen={() => {
+        window.dispatchEvent(
+          new CustomEvent("sliderule:open-deliverable")
+        );
+      }}
+      onRetry={() => {
+        if (!turn.user) return;
+        window.dispatchEvent(
+          new CustomEvent("sliderule:resend-prompt", {
+            detail: { text: turn.user },
+          })
+        );
+      }}
+    />
+  );
   return (
-    <div className="mb-6 max-w-[640px]">
+    <div className="mb-3 min-w-0 max-w-[640px]">
       {turn.status === "streaming" ? (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm text-stone-500">
-            <span className="inline-flex items-end gap-1">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <span
-                  key={i}
-                  className="sr-dot h-1.5 w-1.5 rounded-full bg-[#1677ff]"
-                  style={{ animationDelay: `${i * 160}ms` }}
-                />
-              ))}
-            </span>
+        <div className="space-y-1.5">
+          {/* ⚠ 流式 / 完成是成对物（§4）。工程档两支都走 SessionStory，
+              只改完成轮 = 跑的时候又变回三桶并排。 */}
+          {runtimeKind === "project" ? (
+            <SessionStory
+              turn={turn}
+              streaming
+              productSlot={null}
+              deliverableKind={deliverableKind}
+            />
+          ) : (
+            <ModelSpeechBlocks turn={turn} />
+          )}
+          <div className="flex items-center gap-2 text-[13px] text-stone-500">
+            <ThinkingOrbMark label={thinkingText} size={20} />
             {/* 状态文案翻滚过渡（anime.js）——不再生硬跳变 */}
             <RollingText text={thinkingText} className="min-w-0 flex-1" />
+            {/* 静默久了才出现。短回合一个字都不多（quiet-time.ts 头注）。 */}
+            {ctx.quietHint ? (
+              <span className="shrink-0 tabular-nums text-stone-400">
+                {ctx.quietHint}
+              </span>
+            ) : null}
           </div>
-          <TurnPhaseTimeline
-            turn={turn}
-            llmDraft={llmDraft}
-            publishClosure={publishClosure}
-          />
-          {/* LLM 实时想法：每一步真 LLM 调用（risk.analyze / report.write /
-              五系统起草…）期间实时流出。E16.1：后端并行子调用交错到达时
-              按 label 分窗——每条流一个稳定窗口（key 固定，平滑泵前缀
-              延续不断），不再共抢一个槽位来回切换 */}
+          {/* 工程档的动作流是上面那列勾；六步钟/阶段带是 HTML 推演的词汇，
+              两套并排会把对话做成看板。 */}
+          {runtimeKind !== "project" ? (
+            <TurnPhaseTimeline
+              turn={turn}
+              llmDraft={llmDraft}
+              publishClosure={publishClosure}
+            />
+          ) : null}
+          {/* LLM 实时想法默认折叠（PR-2）：点开才见 risk.analyze 原文。
+              现在在哪一步看上面的六步钟，不靠散文。 */}
           {llmStreams.map(stream => (
             <LlmLiveOutput
               key={stream.label}
@@ -643,21 +770,47 @@ function ImAssistantMessage() {
         </div>
       ) : (
         /* 14px 正文（用户裁决：再小一号，信息密度优先） */
-        <div className="space-y-2 text-[14px] leading-[26px] text-stone-800">
-          {/* Claude 式顺序：折叠的推演过程 + 闭环徽标在前，总结正文在后
-              （items-start：展开过程时徽标停在首行不跟着下坠） */}
-          <div className="flex flex-wrap items-start gap-2 text-xs text-stone-400">
+        <div
+          className="space-y-1.5 text-[14px] leading-6 text-[#171717]"
+          data-testid="sliderule-assistant-text"
+        >
+          {/* 完成后同样保留开口：它是这一轮「为什么这么做」的唯一记录，
+              收尾总结替代不了过程里的判断。工程档走章节面——往上滚
+              过程还在，不再只挂 latestTurn。 */}
+          {runtimeKind === "project" ? (
+            <SessionStory
+              turn={turn}
+              streaming={false}
+              productSlot={resultCard}
+              deliverableKind={deliverableKind}
+            />
+          ) : (
+            <>
+              <ModelSpeechBlocks turn={turn} />
+              {/* 结果卡：这一轮真的产出了东西才出（判断在 turn-result-card.ts）。
+                  没有它的话，成果只活在右侧预览列里——往上滚看历史什么都不剩。 */}
+              {resultCard}
+            </>
+          )}
+          {/* 后续建议贴着结果，不混进输入条的通用提示（NextStepSuggestions 头注）。
+              只挂在最新一轮：历史轮次的「下一步」早就过期了。 */}
+          {(
+            ctx.latestTurnId
+              ? turn.id === ctx.latestTurnId
+              : turn.id === turns?.at(-1)?.id
+          ) ? (
+            <NextStepSuggestions
+              state={ctx.sessionState}
+              onPick={text => {
+                window.dispatchEvent(
+                  new CustomEvent("sliderule:fill-prompt", { detail: { text } })
+                );
+              }}
+            />
+          ) : null}
+          {runtimeKind !== "project" ? (
             <TurnPhaseTimeline turn={turn} publishClosure={publishClosure} />
-            {publishClosure && (
-              /* mt-0.5：胶囊比 12px 文字行高 4px（py-0.5×2），上边距少 2px
-                 才与「推演过程」首行光学垂直居中（用户反馈） */
-              <span className="mt-0.5 rounded-full bg-[#e9edf2] px-2 py-0.5">
-                {publishClosure.blocked ? "blocked" : "closed"}{" "}
-                {publishClosure.evidencePresentCount}/
-                {publishClosure.skillCount}
-              </span>
-            )}
-          </div>
+          ) : null}
           {/* 思考流留档：推演中每步 LLM 的完整输出，完成后保留成可折叠
               记录（Claude 式）——想法不消失，要看随时点开 */}
           {turn.steps.some(s => s.kind === "llm_output") && (
@@ -668,6 +821,8 @@ function ImAssistantMessage() {
                     key={s.id}
                     title={s.title}
                     text={s.text}
+                    // 留档的 text 可能被落库瘦身截过；真字数在 textChars 里
+                    chars={s.textChars}
                     formatJson={s.formatJson}
                     done
                   />
@@ -676,7 +831,8 @@ function ImAssistantMessage() {
             </div>
           )}
           {/* E16 降级视觉词汇：中断/失败半成品带琥珀标记，不和正常回答长一个样 */}
-          {turn.assistantSource === "fallback" && answer.startsWith("推演中断") ? (
+          {turn.assistantSource === "fallback" &&
+          answer.startsWith("推演中断") ? (
             <div className="rounded-lg border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-[13px] leading-relaxed text-amber-800">
               {answer}
             </div>
@@ -686,15 +842,26 @@ function ImAssistantMessage() {
                data-answer-present：Response 在 SSR/静态渲染下产出为空
                （客户端才填充），测试以此属性断言"回答已就位"。 */
             <div
-              className="max-w-none text-[13.5px] leading-[1.75] text-stone-700"
+              className="max-w-none overflow-visible pb-1 text-[14px] leading-[1.7] text-[#171717]"
               data-testid="sliderule-turn-answer"
+              data-host-speech={
+                turn.assistantSource === "llm" ? "true" : "false"
+              }
               data-answer-present={answer ? "true" : "false"}
             >
-              <Response parseIncompleteMarkdown={false}>{answer}</Response>
+              <Response
+                parseIncompleteMarkdown={false}
+                className="h-auto w-full overflow-visible"
+              >
+                {answer}
+              </Response>
             </div>
           )}
-          {(turn.main || turn.user) && (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-stone-400">
+          {/* ⚠ 2026-09-14 用户指着工程档这两处说没用了：
+              「质疑本轮 / 重新推演」和输入条上的「路线对比一下」。
+              结果卡已经有重试；那几个芯片是 HTML 推演的词。工程档不画。 */}
+          {runtimeKind !== "project" && (turn.main || turn.user) && (
+            <div className="flex flex-wrap items-center gap-1 text-[12px] text-stone-400">
               {/* E26：闭环被闸拦截（证据缺口）→ 主动作是「哪里缺补哪里」——
                   服务端只重跑覆盖门标红的能力，已 PASS 产物原样复用；
                   旁边的「重新推演」保持整轮重推语义，两个按钮各说各话 */}
@@ -708,7 +875,7 @@ function ImAssistantMessage() {
                       new CustomEvent("sliderule:repair-gaps")
                     );
                   }}
-                  className="rounded-full bg-[#e6f4ff] px-2.5 py-0.5 font-medium text-[#1264a3] hover:bg-[#d5ebfc] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md px-1.5 py-0.5 font-medium text-[#1264a3] hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-50"
                   title="只重跑证据缺口对应的能力，已完成的产物原样保留"
                 >
                   补齐缺口
@@ -717,14 +884,15 @@ function ImAssistantMessage() {
               {turn.main && (
                 <button
                   type="button"
+                  data-testid="sliderule-challenge-turn"
                   onClick={() => onChallenge(turn.main!.artifactId)}
-                  className="rounded-full bg-[#e9edf2] px-2 py-0.5 hover:bg-[#e5e7eb]"
+                  className="rounded-md px-1.5 py-0.5 hover:bg-[#f3f4f6] hover:text-stone-600"
                 >
                   质疑本轮
                 </button>
               )}
               {/* 迭代环：同题重发（基于当前推演状态再推一次，非回滚重放） */}
-              {turn.user && (
+              {turn.user && (turn.main || turnDidFactoryWork(turn)) && (
                 <button
                   type="button"
                   data-testid="sliderule-rerun-turn"
@@ -736,7 +904,7 @@ function ImAssistantMessage() {
                       })
                     );
                   }}
-                  className="rounded-full bg-[#e9edf2] px-2 py-0.5 hover:bg-[#e5e7eb] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md px-1.5 py-0.5 hover:bg-[#f3f4f6] hover:text-stone-600 disabled:cursor-not-allowed disabled:opacity-50"
                   title="以同一句意图基于当前推演状态整轮重推"
                 >
                   重新推演
@@ -763,6 +931,16 @@ export function ClaudeChatSurface({
   goalText,
   onChallenge,
   composerSlot,
+  clarifySlot,
+  rehearsalClock = null,
+  hud = null,
+  factoryDecision = null,
+  projectCapabilities: _projectCapabilities = null,
+  runtimeKind,
+  projectRevision = null,
+  controlTodo = null,
+  projectId = null,
+  deliverableKind = "web-app",
 }: {
   uiTurns: UiTurn[];
   isRunning: boolean;
@@ -775,15 +953,47 @@ export function ClaudeChatSurface({
   llmDraftLabel?: string | null;
   /** E16.1 多流分窗：活跃 LLM 子调用流（按首现顺序，运行中展示）。 */
   llmStreams?: Array<{ label: string; text: string }>;
+  rehearsalClock?: RehearsalClockView | null;
+  hud?: ContextHudFacts | null;
+  /** 最近一次工厂选材。没有账本就不传——HUD 不许伪造。 */
+  factoryDecision?: FactoryDecisionView | null;
+  projectCapabilities?: {
+    mode?: string;
+    blockers?: string[];
+    configured?: boolean;
+    canExecute?: boolean;
+  } | null;
+  runtimeKind?: "html-prototype" | "project";
+  /** 工程档已落库的源码版本；结果卡靠它判断有没有真的产出。 */
+  projectRevision?: string | null;
+  /** 模型自己的待办；浮层和后续建议行读它，不进聊天正文。 */
+  controlTodo?: Array<{
+    id?: string;
+    status?: string;
+    content?: string;
+  }> | null;
+  /** 结果卡缩略图要用。 */
+  projectId?: string | null;
+  /** 批准计划上的交付物类别；办公文件章节不标「构建网页」。 */
+  deliverableKind?: string;
   /** 会话话题（恢复的轮次没有 turn.user，总结用它兜底） */
   goalText?: string;
   onChallenge: (id: string) => void;
-  /** E34.1 空态时嵌进首页流的 ComposerDock（墨刀式 hero 输入区） */
+  /** 空态嵌进首页流；开聊后改贴在会话流底部（同一受控组件二选一） */
   composerSlot?: React.ReactNode;
+  /** 澄清卡跟输入条走：空态进首页流，开聊后贴在输入条上方 */
+  clarifySlot?: React.ReactNode;
 }) {
   const latestStepText = latestTurn
     ? textFromStep(latestTurn.steps.at(-1))
     : "";
+  // 「多久没动静了」。⚠ 量的是**静默**不是回合总时长——游标跟着
+  //   thinkingText 走，有新动静就重置（见 quiet-time.ts 头注）。
+  //   2026-09-14 工程档单发超时放宽到 120 秒之后，没有它的话模型思考
+  //   一两分钟的页面和卡死长得一模一样。
+  const quietHintText = quietHint(
+    useQuietSeconds(latestStepText + "|" + (liveAction?.label || ""), isRunning)
+  );
   const thinkingText =
     liveAction?.label ||
     latestStepText ||
@@ -793,16 +1003,16 @@ export function ClaudeChatSurface({
         : "发布闭环完成"
       : "正在推演...");
 
-  const items = useMemo<ImItem[]>(
-    () =>
-      uiTurns.flatMap(turn => [
-        ...(turn.user
-          ? ([{ id: `${turn.id}-user`, role: "user", turn }] as ImItem[])
-          : []),
-        { id: `${turn.id}-assistant`, role: "assistant" as const, turn },
-      ]),
-    [uiTurns]
-  );
+  const items = useMemo<ImItem[]>(() => buildImItems(uiTurns), [uiTurns]);
+  const isEmptyThread = uiTurns.length === 0 && !isRunning;
+  // 浮层只展示控制面刚挑的动作，不拿它改 controlTodo。
+  const todoAction = useMemo(() => {
+    const rows = deriveProjectActivity(uiTurns);
+    const last = rows[rows.length - 1];
+    return last
+      ? { id: last.id, tool: last.tool, detail: last.detail }
+      : null;
+  }, [uiTurns]);
 
   const runtime = useExternalStoreRuntime<ImItem>({
     messages: items,
@@ -813,6 +1023,16 @@ export function ClaudeChatSurface({
     onNew: async () => {},
   });
 
+  // 验收截图整个会话只取一次（见 context 里 thumbnailUrl 的头注）。
+  const verifiedThumbnail = useProjectThumbnail(
+    runtimeKind === "project" ? projectId : null
+  );
+  const hasOfficeArtifact = useOfficeArtifactPresent(
+    runtimeKind === "project" && isOfficeFileDeliverable(deliverableKind)
+      ? projectId
+      : null,
+    isRunning
+  );
   const ctxValue = useMemo(
     () => ({
       publishClosure,
@@ -821,9 +1041,17 @@ export function ClaudeChatSurface({
       llmStreams,
       goalText,
       thinkingText,
+      quietHint: quietHintText,
+      projectRevision,
+      sessionState: controlTodo ? { controlTodo } : null,
+      thumbnailUrl: verifiedThumbnail,
       isRunning,
       onChallenge,
       latestTurnId: latestTurn?.id ?? null,
+      runtimeKind,
+      turns: uiTurns,
+      deliverableKind,
+      hasOfficeArtifact,
     }),
     [
       publishClosure,
@@ -832,46 +1060,85 @@ export function ClaudeChatSurface({
       llmStreams,
       goalText,
       thinkingText,
+      quietHintText,
+      projectRevision,
+      controlTodo,
+      verifiedThumbnail,
       isRunning,
       onChallenge,
       latestTurn?.id,
+      runtimeKind,
+      uiTurns,
+      deliverableKind,
+      hasOfficeArtifact,
     ]
   );
 
+  // ⚠ 2026-09-15：六步钟不再挂在对话列顶上。用户圈了那条「2 起草 SPEC …
+  //   6 汇合过闸」说移除——人在看它在想什么，不是来读工厂 hop 日历。
+  //   组件还在，工程面 StatusBar / 单测仍直接渲染。
+  void rehearsalClock;
+  void factoryDecision;
+  void hud;
+
+  // 手机问卷固定到视口后会跨出对话栏，不能让右侧舞台截获按钮点击。
   return (
-    <div className="relative z-0 flex h-full flex-col overflow-hidden bg-[#f7f8fa] text-[#1f2329]">
+    <div className="relative z-30 flex h-full flex-col overflow-hidden bg-transparent text-[#1f2329] sm:z-0">
+      {/* 点阵改挂 SlideRuleStudio 外壳（空态+开聊同一张网）。这里铺实心底
+          会把那层点挡住——2026-08-20 已经踩过一次。 */}
       {/* Chat area — Viewport 自带贴底跟随（增量到达自动滚底、回翻停住） */}
       <AssistantRuntimeProvider runtime={runtime}>
         <ImSurfaceContext.Provider value={ctxValue}>
-          <ThreadPrimitive.Root className="relative flex min-h-0 flex-1 flex-col">
+          <ThreadPrimitive.Root className="relative z-10 flex min-h-0 flex-1 flex-col">
             {/* E16 智能滚动补件：用户上滚回看时出「回到底部」胶囊
                 （Viewport 本身已带贴底跟随；贴底时该按钮自动 disabled → 隐藏） */}
-            <ThreadPrimitive.ScrollToBottom
-              data-testid="sliderule-scroll-to-bottom"
-              className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-[12px] font-medium text-stone-600 shadow-md transition hover:bg-stone-50 disabled:hidden"
-            >
-              <ArrowDown className="h-3 w-3" />
-              回到底部
-            </ThreadPrimitive.ScrollToBottom>
-            <ThreadPrimitive.Viewport className="mx-auto flex min-h-0 w-full max-w-[780px] flex-1 flex-col overflow-y-auto px-4 pb-4 pt-4 [scrollbar-gutter:stable] sm:px-6">
-              <ThreadPrimitive.Empty>
-                {/* E34 空态首页（用户视觉稿 2026-07-17）：品牌主张 + 模式模板卡 +
-                    快速开始。模式卡与 chips 都走 fill-prompt 填输入框——同一条
-                    推演管线的不同起手式，不造假功能入口。 */}
-                <HomeEmptyState
-                  isRunning={isRunning}
-                  composerSlot={composerSlot}
-                />
-              </ThreadPrimitive.Empty>
-              <div className="py-2">
-                <ThreadPrimitive.Messages
-                  components={{
-                    UserMessage: ImUserMessage,
-                    AssistantMessage: ImAssistantMessage,
-                  }}
-                />
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              <ThreadPrimitive.ScrollToBottom
+                data-testid="sliderule-scroll-to-bottom"
+                className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-[12px] font-medium text-stone-600 shadow-md transition hover:bg-stone-50 disabled:hidden"
+              >
+                <ArrowDown className="h-3 w-3" />
+                回到底部
+              </ThreadPrimitive.ScrollToBottom>
+              <ThreadPrimitive.Viewport className="mx-auto flex min-h-0 min-w-0 w-full max-w-[720px] flex-1 flex-col overflow-y-auto overflow-x-hidden px-4 pb-1 pt-3 [scrollbar-gutter:stable] sm:px-5">
+                <ThreadPrimitive.Empty>
+                  {/* 空态：问候 + 输入 + chips + 底栏一句。chips 走 fill-prompt，
+                    灵感句只导去应用中心，不造假功能入口。 */}
+                  <HomeEmptyState
+                    isRunning={isRunning}
+                    runtimeKind={runtimeKind}
+                    composerSlot={isEmptyThread ? composerSlot : undefined}
+                    clarifySlot={isEmptyThread ? clarifySlot : undefined}
+                    todoSlot={
+                      isEmptyThread ? (
+                        <PlanTodoDock items={controlTodo} action={todoAction} />
+                      ) : undefined
+                    }
+                  />
+                </ThreadPrimitive.Empty>
+                <div className="py-0">
+                  <ThreadPrimitive.Messages
+                    components={{
+                      UserMessage: ImUserMessage,
+                      AssistantMessage: ImAssistantMessage,
+                    }}
+                  />
+                </div>
+              </ThreadPrimitive.Viewport>
+            </div>
+            {!isEmptyThread && (composerSlot || clarifySlot) ? (
+              <div
+                className="pointer-events-auto shrink-0 bg-transparent px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-1 sm:px-5"
+                data-testid="sliderule-composer-footer"
+              >
+                {/* Cursor / LobeChat：输入条浮在对话列里，不要横切 border-t 把步骤和输入割开。 */}
+                <div className="relative mx-auto w-full max-w-[720px]">
+                  {clarifySlot}
+                  <PlanTodoDock items={controlTodo} action={todoAction} />
+                  {composerSlot}
+                </div>
               </div>
-            </ThreadPrimitive.Viewport>
+            ) : null}
           </ThreadPrimitive.Root>
         </ImSurfaceContext.Provider>
       </AssistantRuntimeProvider>
@@ -893,16 +1160,23 @@ function DriveFullStatusBanner({
     | "python_success"
     | "timeout"
     | "python_unavailable"
+    | "control_failed"
     | "fallback";
   className?: string;
 }) {
   // "loading" 不再展示：正常运行时左栏已有思考行 + 实时步骤流，这条横幅
   // 是纯重复（用户去重审查）；横幅只保留异常态（timeout/unavailable/fallback）。
+  //
+  // ⚠ 2026-09-17 TicketStream：control_failed 也不挂。顶上一句
+  // 「本轮执行已中断，详见会话中的具体原因」，会话里已经有琥珀卡
+  // 「推演中断：控制面未返回结果（可重试或换指令）」。横幅自己都在
+  // 指会话——钉两条就是重复。
   if (
     !status ||
     status === "idle" ||
     status === "python_success" ||
-    status === "loading"
+    status === "loading" ||
+    status === "control_failed"
   )
     return null;
   const text =
@@ -997,10 +1271,9 @@ export async function loadPythonRuntimeProjectionFromSession(
 /**
  * SlideRuleUnified — 唯一产品界面（studio 骨架，无模式切换）。
  *
- * - 顶部单行 header：品牌/话题 + STATUS 摘要（待细化/话题/阶段）+ 动作（交付物/设置/重置会话/Dev）。
- * - 左栏：对话流（含唯一空态：古典 logo 水印 + hero 文案 + 示例 chips）。
- * - 右栏：SkillThumbnailBar + 内容区（六系统画面 ⟷「推演过程」执行时间线 + SKILL LINKAGE）。
- * - 底部：唯一 ComposerDock（+ 实用动作菜单 / ✨优化提示词），澄清卡片浮在其上。
+ * - 顶部单行 header：Cursor 式布局图标簇 + 交付物/重置会话。
+ * - 左栏：对话流；输入条贴在会话下面（不是整页底部浮层）。
+ * - 右栏：ArchitectureStage（沙盘/架构图）+ 抽屉 inspector / Checks。
  *
  * 旧的 pan/zoom 推理画布（v4 面）已从本页移除；工程画布仍可经 ?im=dev 进入
  * SlideRuleSplitEngineering 查看。
@@ -1014,8 +1287,17 @@ function SlideRuleUnified({
   liveAction,
   sessionState,
   sendMessage,
-  challengeTurn,
+  pendingPlanApproval = null,
+  submitPlanApproval,
+  pendingAsk = null,
+  onSubmitQuestionnaire,
+  queuedTurns = [],
+  removeQueuedTurn,
+  dismissAsk,
+  challengeTurn: _challengeTurn,
   restoreModelVersion,
+  forkVariant,
+  isRestoringVersion,
   resetSession,
   retryCapability,
   toggleRouteExpanded,
@@ -1039,12 +1321,19 @@ function SlideRuleUnified({
   crossRuntimeGraph,
   publishClosure,
   driveFullStatus,
+  projectCapabilities = null,
+  onCreateProject,
+  canCreateProject = false,
+  projectCreateBlockedReason: _projectCreateBlockedReason,
+  projectCreateState,
   activeSkillId = null,
   skillContents = {},
   latestMermaid = null,
+  specPages = [],
   llmDraft = "",
   llmDraftLabel = null,
   llmStreams = [],
+  rehearsalCursor,
 }: {
   goal: string;
   uiTurns: UiTurn[];
@@ -1053,9 +1342,27 @@ function SlideRuleUnified({
   isRunning: boolean;
   liveAction: LiveAction | null;
   sessionState: ReturnType<typeof useSlideRuleSession>["sessionState"];
-  sendMessage: () => void;
+  sendMessage: (textOverride?: string) => void;
+  pendingPlanApproval?:
+    import("@/lib/sliderule-marathon-driver").ControlPlanApprovalWire | null;
+  submitPlanApproval?: (
+    result: import("./sliderule/PlanApprovalPanel").PlanApprovalOutcome
+  ) => void;
+  pendingAsk?: {
+    question: string;
+    options?: string[];
+    /** 抄 grok `AskUserQuestion`：一发几道题，每项带解释。 */
+    questions?: import("@/lib/sliderule-marathon-driver").ControlQuestionWire[];
+  } | null;
+  /** 问答卡提交：四条路径（选完 / 你自己定 / 别再问了）。 */
+  onSubmitQuestionnaire?: (
+    result: import("./sliderule/QuestionnaireCard").QuestionnaireOutcome
+  ) => void;
+  dismissAsk?: () => void;
   challengeTurn: (id: string) => void;
   restoreModelVersion: (versionId: string) => void;
+  forkVariant?: () => void;
+  isRestoringVersion: boolean;
   resetSession: () => void;
   retryCapability: ReturnType<typeof useSlideRuleSession>["retryCapability"];
   toggleRouteExpanded: (turnId: string) => void;
@@ -1064,6 +1371,10 @@ function SlideRuleUnified({
   executorMode: ReturnType<typeof useSlideRuleSession>["executorMode"];
   driveMode?: "single" | "marathon";
   setDriveMode?: (m: "single" | "marathon") => void;
+  /** 推演中补的话（排队到下一轮）。看得见、撤得掉——见 midrun-queue 头注。 */
+  /** 队列条目带 synthetic 标记（grok is_synthetic：合成品永不参与合并）。 */
+  queuedTurns?: { text: string; synthetic?: boolean }[];
+  removeQueuedTurn?: (index: number) => void;
   pendingClarifications?: ClarificationItem[];
   answerClarifications?: (
     answers: Array<{ gapId: string; answer: string }>
@@ -1086,23 +1397,36 @@ function SlideRuleUnified({
     | "python_success"
     | "timeout"
     | "python_unavailable"
+    | "control_failed"
     | "fallback";
+  projectCapabilities?: {
+    mode?: string;
+    blockers?: string[];
+    configured?: boolean;
+    canExecute?: boolean;
+  } | null;
+  onCreateProject?: () => void;
+  canCreateProject?: boolean;
+  projectCreateBlockedReason?: string | null;
+  projectCreateState?: {
+    status: "idle" | "creating" | "error";
+    error: string | null;
+  };
   /** SSE-driven active skill highlighting for the right rail */
   activeSkillId?: import("@/lib/sliderule-marathon-driver").SkillId | null;
   skillContents?: Partial<
     Record<import("@/lib/sliderule-marathon-driver").SkillId, string>
   >;
   latestMermaid?: string | null;
+  /** spec-first 第 3 步逐页产出的 HTML（推演中右侧实时渲染）。 */
+  specPages?: import("./sliderule/live-runtime/SpecPageLiveStage").SpecPageLive[];
   /** LLM 实时草稿（llm_delta 累积）+ 当前来源标签。 */
   llmDraft?: string;
   llmDraftLabel?: string | null;
   llmStreams?: Array<{ label: string; text: string }>;
+  rehearsalCursor?: RehearsalClockCursor;
 }) {
-  const sessionId = sessionState.sessionId || "sliderule-v51-product";
-  const composerHints = useMemo(
-    () => deriveComposerHintChips(sessionState),
-    [sessionState]
-  );
+  const sessionId = sessionState.sessionId || DEFAULT_SESSION_ID;
 
   // Clarification cards can be hidden; they reappear when pending questions change.
   const clarifications = pendingClarifications ?? [];
@@ -1112,18 +1436,86 @@ function SlideRuleUnified({
   useEffect(() => {
     setClarifyHidden(false);
   }, [clarifyKey]);
+
+  // ⚠ 2026-09-15：2026-09-14 卸掉「进入工程工作台」之后，批准计划
+  //   的会话再也没人调用 onCreateProject。真机 TicketStream 待办 8 条、
+  //   计划已批准，右侧却是接线沙盘。钮可以不挂，创建必须自己走。
+  const createStatus = projectCreateState?.status ?? "idle";
+  const projectSurface = shouldShowProjectComputer({
+    runtimeKind: sessionState.runtimeKind,
+    projectId: sessionState.projectId,
+    canCreateProject,
+    creating: createStatus === "creating",
+  });
+  const deliverableKind = latestPlanDeliverableKind(
+    sessionState.controlTranscript as Array<Record<string, unknown>> | undefined
+  );
+  useEffect(() => {
+    rememberActiveProjectId(sessionState.projectId);
+  }, [sessionState.projectId]);
+  const createProjectRef = useRef(onCreateProject);
+  createProjectRef.current = onCreateProject;
+  useEffect(() => {
+    if (
+      !shouldAutoCreateProject({
+        canCreateProject,
+        isRunning,
+        createStatus,
+        planHasDeliverableKind: planWrittenHasDeliverableKind(
+          sessionState.controlTranscript as Array<Record<string, unknown>> | undefined
+        ),
+      })
+    ) {
+      return;
+    }
+    createProjectRef.current?.();
+  }, [canCreateProject, isRunning, createStatus, sessionState.controlTranscript]);
+  // KD19：作曲家只留**一张**「要不要烧」的决策面。范围卡 / ask 停泊时
+  // 澄清卡让位——2026-08-27 真机截图里两张卡叠在一起，背后那张问的还是
+  // 上一轮的 goal（服务端那半在 rehearsal_control._retire_stale_control_questions）。
+  // 只是让位不是关掉：没有停泊时它照旧出现（见同名测试的反向判据）。
+  const parkedDecisionSurface =
+    Boolean(pendingPlanApproval) || Boolean(pendingAsk);
   const showClarify =
-    clarifications.length > 0 && !clarifyHidden && !!answerClarifications;
+    clarifications.length > 0 &&
+    !clarifyHidden &&
+    !parkedDecisionSurface &&
+    !!answerClarifications;
 
-  // Conversation column: live turns during/after a run; after reload uiTurns is
-  // empty but the latest turn is rebuilt from persisted state — surface it so the
-  // page restores instead of falling back to the empty state.
-  const conversationTurns =
-    uiTurns.length > 0 ? uiTurns : latestTurn ? [latestTurn] : [];
+  // Conversation column: live turns during/after a run. After reload uiTurns is
+  // empty — rebuild the **whole** thread from persisted versions/narrations.
+  // ⚠ 2026-08-18 真机：只灌 latestTurn 一轮，后面迭代发出的话刷新后全没了。
+  const restoredTurns = useMemo(
+    () => (uiTurns.length === 0 ? deriveTurnsFromState(sessionState) : []),
+    [uiTurns.length, sessionState]
+  );
+  const conversationTurns = uiTurns.length > 0 ? uiTurns : restoredTurns;
 
-  // E34.1 墨刀式首页：空态（无轮次且未在跑）时 ComposerDock 渲染在首页
-  // hero 里；否则回底部停靠。二选一，永远只有一个输入条实例。
-  const isHomeEmpty = conversationTurns.length === 0 && !isRunning;
+  const rehearsalFacts = useMemo(
+    () =>
+      deriveStatusBarFacts(sessionState, {
+        turnCount: conversationTurns.length,
+        isRunning,
+        publishClosure,
+        rehearsalCursor: rehearsalCursor ?? idleRehearsalCursor(),
+        executorMode,
+      }),
+    [
+      sessionState,
+      conversationTurns.length,
+      isRunning,
+      publishClosure,
+      rehearsalCursor,
+      executorMode,
+    ]
+  );
+
+  // 空态（无轮次且未在跑）时 ComposerDock 渲染在首页
+  // hero 里；否则贴在左栏会话流底部。二选一，永远只有一个输入条实例。
+  const isHomeEmpty =
+    conversationTurns.length === 0 &&
+    !isRunning &&
+    sessionState.runtimeKind !== "project";
 
   // 入站判定的语境：「这个会话里到底有没有一个成形的应用」。
   //
@@ -1133,32 +1525,30 @@ function SlideRuleUnified({
   // 一句其实是首轮真需求的话。
   const settledModel = useMemo(
     () =>
-      deriveSettledFiveSystemModel(skillContents, publishClosure?.perSkillEvidence),
-    [skillContents, publishClosure?.perSkillEvidence]
+      deriveSettledFiveSystemModel(
+        skillContents,
+        publishClosure?.perSkillEvidence,
+        {
+          versions: (
+            sessionState as {
+              modelVersions?: Array<{ id?: string; model?: unknown }>;
+            }
+          ).modelVersions,
+          currentId: (sessionState as { currentModelVersionId?: string | null })
+            .currentModelVersionId,
+        }
+      ),
+    [skillContents, publishClosure?.perSkillEvidence, sessionState]
   );
-  const hasApp = !!settledModel;
-
-  // 「当前应用是什么」。有了它，判成 iteration 时的引导话术会具体到这个应用
-  // （"补充预算校验、调整审批流程"），而不是泛泛的"指出当前应用要怎么改"。
-  // 没应用就给空串——摘要只影响话术，判定结果不靠它。
-  const appSummary = useMemo(() => {
-    if (!hasApp) return "";
-    return publishClosure?.chatSummary?.trim() || goal.trim();
-  }, [hasApp, publishClosure, goal]);
+  const showStudioChrome = isStudioChromeShown(isHomeEmpty);
 
   return (
-    <div className={`${autopilotTheme.immersionPage} flex flex-col`}>
-      {/* ONE header row — brand + Work/Code 模式切换 + actions */}
-      <div className="relative z-20 shrink-0 border-b border-[#e5e7eb]/70 bg-[#f7f8fa]/90 px-3 backdrop-blur sm:px-4">
-        <SlideRuleTopHud
-          isRunning={isRunning}
-          onResetSession={resetSession}
-          onOpenDeliverables={openDeliverables}
-          embedded={embedded}
-        />
-        {/* Python backend failure visible + recoverable status/retry for core SlideRule workflows (105 req 2)。
-            GitHub Pages 静态演示本就无后端：降级横幅是预期内噪音，不展示。 */}
-        {!IS_GITHUB_PAGES && (pythonApiError || pythonStatusMsg) && (
+    <StudioLayoutProvider available={showStudioChrome} layoutLocked={isRunning}>
+      <div className={`${autopilotTheme.immersionPage} flex flex-col`}>
+        {/* 还没推演：顶栏整条不挂（交付物/重置也占一条底边，空态看着像少了一截）。 */}
+        {showStudioChrome &&
+        !IS_GITHUB_PAGES &&
+        (pythonApiError || pythonStatusMsg) ? (
           <div
             className="mb-2 inline-flex rounded border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-800 shadow-sm"
             title={pythonStatusMsg}
@@ -1178,121 +1568,181 @@ function SlideRuleUnified({
               <span className="ml-1">(degraded envelope)</span>
             )}
           </div>
-        )}
-        <DriveFullStatusBanner
-          status={driveFullStatus}
-          className="mb-2 inline-flex"
-        />
-      </div>
+        ) : null}
+        {showStudioChrome ? (
+          <DriveFullStatusBanner
+            status={driveFullStatus}
+            className="mb-2 inline-flex"
+          />
+        ) : null}
+        {/* ⚠ 2026-09-14：开聊后也不挂「当前：HTML 推演兼容模式」。
+            真机圈了三处壳——左上这颗、右上分栏/全屏/交付物、输入框上
+            已收口/再核对。人在看推演，不是来读运行时徽章。
+            进入工程工作台 / 未启用告警跟着这条一起卸，不再占顶。 */}
 
-      {/* Studio body — left conversation column + right skill rail */}
-      {
-        <div className="relative z-0 min-h-0 flex-1 pb-[104px]">
-          <SlideRuleStudio
-            chatSlot={
-              <ClaudeChatSurface
-                uiTurns={conversationTurns}
-                isRunning={isRunning}
-                goalText={goal}
-                liveAction={liveAction}
-                latestTurn={latestTurn}
-                publishClosure={publishClosure}
-                llmDraft={isRunning ? llmDraft : ""}
-                llmStreams={isRunning ? llmStreams : []}
-                llmDraftLabel={llmDraftLabel}
-                onChallenge={challengeTurn}
-                composerSlot={
-                  isHomeEmpty ? (
+        {/* Studio body — 图标簇在舞台头条右侧，不再独占整页顶栏。 */}
+        {
+          <div className="relative z-0 min-h-0 flex-1">
+            <SlideRuleStudio
+              runtimeKind={projectSurface ? "project" : sessionState.runtimeKind}
+              projectId={sessionState.projectId}
+              projectRevision={sessionState.projectRevision}
+              projectCreateError={projectCreateState?.error ?? null}
+              deliverableKind={deliverableKind}
+              sessionEmpty={isHomeEmpty}
+              turns={conversationTurns}
+              chatSlot={
+                <ClaudeChatSurface
+                  uiTurns={conversationTurns}
+                  isRunning={isRunning}
+                  goalText={goal}
+                  liveAction={liveAction}
+                  latestTurn={latestTurn}
+                  publishClosure={publishClosure}
+                  llmDraft={isRunning ? llmDraft : ""}
+                  llmStreams={isRunning ? llmStreams : []}
+                  llmDraftLabel={llmDraftLabel}
+                  rehearsalClock={rehearsalFacts.rehearsalClock}
+                  hud={rehearsalFacts.hud}
+                  factoryDecision={rehearsalFacts.factoryDecision}
+                  projectCapabilities={projectCapabilities}
+                  runtimeKind={
+                    projectSurface ? "project" : sessionState.runtimeKind
+                  }
+                  projectRevision={sessionState.projectRevision}
+                  controlTodo={sessionState.controlTodo}
+                  projectId={sessionState.projectId}
+                  deliverableKind={deliverableKind}
+                  onChallenge={id =>
+                    dispatchChallengePrefill({ artifactId: id })
+                  }
+                  composerSlot={
                     <ComposerDock
                       input={input}
                       setInput={setInput}
                       sendMessage={sendMessage}
                       isRunning={isRunning}
+                      sessionId={sessionId}
                       goal={goal}
-                      hintChips={composerHints}
+                      hintChips={[]}
+                      statusPill={null}
                       stop={stop}
-                      placeholder="描述你想构建的业务系统，也可以上传需求文档或现有页面……"
-                      hero
+                      hero={isHomeEmpty}
+                      pendingPlanApproval={pendingPlanApproval}
+                      onSubmitPlanApproval={submitPlanApproval}
+                      pendingAsk={pendingAsk}
+                      onSubmitQuestionnaire={onSubmitQuestionnaire}
+                      onDismissAsk={dismissAsk}
+                      onAnswerAsk={text => sendMessage(text)}
+                      queuedTurns={queuedTurns}
+                      onRemoveQueued={removeQueuedTurn}
                     />
-                  ) : undefined
-                }
-              />
-            }
-            activeSkillId={activeSkillId}
-            publishClosure={publishClosure}
-            latestMermaid={latestMermaid}
-            skillContents={skillContents}
-            skillRuntimeGraph={
-              (
-                sessionState as {
-                  skillRuntimeGraph?:
-                    | import("./sliderule/system-screens/five-system-model").SkillRuntimeGraphLike
-                    | null;
-                }
-              ).skillRuntimeGraph ?? null
-            }
-            sessionId={sessionId}
-            appTitle={goal ? goal.slice(0, 24) : undefined}
-            // 用户还没输入时不显示右侧舞台：欢迎页独占全宽，首条消息后舞台登场
-            stageVisible={conversationTurns.length > 0 || isRunning}
-            // 推演中右侧实时渲染：部分五系统模型 → 应用实时长出来；没成形前只报"推演中"
-            isRunning={isRunning}
-            llmDraft={isRunning ? llmDraft : ""}
-            llmDraftLabel={llmDraftLabel}
-            liveActionLabel={isRunning ? (liveAction?.label ?? null) : null}
-            modelVersions={(sessionState as { modelVersions?: Array<{ id: string; instruction?: string }> }).modelVersions ?? []}
-            currentModelVersionId={(sessionState as { currentModelVersionId?: string | null }).currentModelVersionId ?? null}
-            onRestoreVersion={restoreModelVersion}
-            className="h-full"
-          />
-          {/* 右栏「推演过程」标签页已移除：左栏对话流本身就是实时推演过程
+                  }
+                  clarifySlot={
+                    showClarify ? (
+                      <ClarificationCard
+                        questions={clarifications}
+                        onSubmit={answers => answerClarifications?.(answers)}
+                        onClose={() => setClarifyHidden(true)}
+                      />
+                    ) : null
+                  }
+                />
+              }
+              activeSkillId={activeSkillId}
+              publishClosure={publishClosure}
+              latestMermaid={latestMermaid}
+              skillContents={skillContents}
+              skillRuntimeGraph={
+                (
+                  sessionState as {
+                    skillRuntimeGraph?:
+                      | import("./sliderule/system-screens/five-system-model").SkillRuntimeGraphLike
+                      | null;
+                  }
+                ).skillRuntimeGraph ?? null
+              }
+              sessionId={sessionId}
+              appTitle={goal ? goal.slice(0, 24) : undefined}
+              // 用户还没输入时不显示右侧舞台：欢迎页独占全宽，首条消息后舞台登场
+              stageVisible={
+                projectSurface ||
+                conversationTurns.length > 0 ||
+                isRunning
+              }
+              // 推演中右侧实时渲染：部分五系统模型 → 应用实时长出来；没成形前只报"推演中"
+              isRunning={isRunning}
+              llmDraft={isRunning ? llmDraft : ""}
+              llmDraftLabel={llmDraftLabel}
+              liveActionLabel={isRunning ? (liveAction?.label ?? null) : null}
+              // spec-first 第 3 步的页面：一页好了就上屏。恒传（不按 isRunning
+              // 掐）——掐掉的话闭环那一瞬间页面会先消失、再由应用舞台接管，
+              // 中间闪一下空白。舞台判定在 Studio 里一处做完。
+              specPages={specPages}
+              // 落库的那份：刷新之后右侧还能是新链路的页面，而不是掉回区块页
+              specFirstPages={
+                (
+                  sessionState as {
+                    specFirstPages?: {
+                      pages?: Record<string, string>;
+                    } | null;
+                  }
+                ).specFirstPages ?? null
+              }
+              modelVersions={
+                (
+                  sessionState as {
+                    modelVersions?: Array<{
+                      id: string;
+                      instruction?: string;
+                      model?: unknown;
+                    }>;
+                  }
+                ).modelVersions ?? []
+              }
+              currentModelVersionId={
+                (sessionState as { currentModelVersionId?: string | null })
+                  .currentModelVersionId ?? null
+              }
+              onRestoreVersion={restoreModelVersion}
+              onForkVariant={forkVariant}
+              isRestoringVersion={isRestoringVersion}
+              /* ⚠ 2026-09-20 Trae 右上两颗：全屏 + 隐藏右栏。只挂这两颗，
+                 不把 SlideRuleTopHud 分段 / 交付物加回去。推演中 layoutLocked
+                 仍置灰。Xray / HUD 单测仍直接渲染 TopHud。 */
+              chromeSlot={
+                showStudioChrome ? <PreviewChromeLayoutButtons /> : null
+              }
+              /* 重置会话不再走 chromeSlot：那条槽落在舞台头条**右侧**图标簇里。
+               2026-08-24 用户反馈要它在标题左边、更大、更蓝，所以单独一条槽。 */
+              resetSlot={
+                showStudioChrome ? (
+                  <SlideRuleResetSessionButton
+                    isRunning={isRunning}
+                    onResetSession={resetSession}
+                  />
+                ) : null
+              }
+              className="h-full"
+            />
+            {/* 右栏「推演过程」标签页已移除：左栏对话流本身就是实时推演过程
             （步骤流 + LLM 实时草稿），右栏只保留系统画面（用户反馈去重）。 */}
-        </div>
-      }
-
-      {/* Single bottom composer + clarification cards（E34.1 墨刀式：空态时
-          唯一的 ComposerDock 渲染在首页 hero 里，这里只留澄清卡；开聊后
-          回到底部停靠——同一受控组件二选一渲染，input 状态在页面层不丢） */}
-      {
-        <div className={autopilotTheme.immersionOverlayBottom}>
-          <div className="pointer-events-none flex w-full max-w-2xl flex-col items-center">
-            {showClarify && (
-              <ClarificationCard
-                questions={clarifications}
-                onSubmit={answers => answerClarifications?.(answers)}
-                onClose={() => setClarifyHidden(true)}
-              />
-            )}
-
-            {!isHomeEmpty && (
-              <ComposerDock
-                input={input}
-                setInput={setInput}
-                sendMessage={sendMessage}
-                isRunning={isRunning}
-                goal={goal}
-                hasApp={hasApp}
-                appSummary={appSummary}
-                hintChips={composerHints}
-                stop={stop}
-              />
-            )}
           </div>
-        </div>
-      }
+        }
 
-      {/* 设置弹窗已收敛到侧栏「设置」整页（SettingsPage），HUD 不再挂设置入口 */}
-      <DeliverablesPanel
-        open={deliverablesOpen}
-        onClose={() => setDeliverablesOpen(false)}
-        sessionState={sessionState}
-        isRunning={isRunning}
-        onGenerate={() => generateDeliverables()}
-        onExportMd={() => onExportDeliverables()}
-        onEvidenceRefClick={onEvidenceRefClick}
-        publishClosure={publishClosure}
-      />
-    </div>
+        {/* 设置弹窗已收敛到侧栏「设置」整页（SettingsPage），HUD 不再挂设置入口 */}
+        <DeliverablesPanel
+          open={deliverablesOpen}
+          onClose={() => setDeliverablesOpen(false)}
+          sessionState={sessionState}
+          isRunning={isRunning}
+          onGenerate={() => generateDeliverables()}
+          onExportMd={() => onExportDeliverables()}
+          onEvidenceRefClick={onEvidenceRefClick}
+          publishClosure={publishClosure}
+        />
+      </div>
+    </StudioLayoutProvider>
   );
 }
 
@@ -1305,7 +1755,7 @@ function SlideRuleSplitEngineering({
   liveAction,
   sessionState,
   sendMessage,
-  challengeTurn,
+  challengeTurn: _challengeTurn,
   resetSession,
   toggleRouteExpanded,
   retryCapability,
@@ -1335,6 +1785,7 @@ function SlideRuleSplitEngineering({
   openDeliverables,
   publishClosure,
   driveFullStatus,
+  rehearsalCursor,
 }: {
   goal: string;
   uiTurns: UiTurn[];
@@ -1382,7 +1833,9 @@ function SlideRuleSplitEngineering({
     | "python_success"
     | "timeout"
     | "python_unavailable"
+    | "control_failed"
     | "fallback";
+  rehearsalCursor?: RehearsalClockCursor;
 }) {
   const imScrollRef = useRef<HTMLElement>(null);
   const imBottomRef = useRef<HTMLDivElement>(null);
@@ -1490,6 +1943,7 @@ function SlideRuleSplitEngineering({
         closureReason={latestTurn?.routeFacts.closureReason ?? null}
         executorMode={executorMode}
         publishClosure={publishClosure}
+        rehearsalCursor={rehearsalCursor}
       />
 
       <div className={autopilotTheme.split}>
@@ -1557,9 +2011,7 @@ function SlideRuleSplitEngineering({
                         facts={turn.routeFacts}
                         steps={turn.steps}
                         actions={turn.actions}
-                        sessionId={
-                          sessionState.sessionId || "sliderule-v51-product"
-                        }
+                        sessionId={sessionState.sessionId || DEFAULT_SESSION_ID}
                         expanded={
                           turn.routeExpanded || turn.status === "streaming"
                         }
@@ -1592,10 +2044,10 @@ function SlideRuleSplitEngineering({
                     {turn.status === "complete" && (
                       <TurnFootnote
                         turn={turn}
-                        sessionId={
-                          sessionState.sessionId || "sliderule-v51-product"
+                        sessionId={sessionState.sessionId || DEFAULT_SESSION_ID}
+                        onChallenge={id =>
+                          dispatchChallengePrefill({ artifactId: id })
                         }
-                        onChallenge={challengeTurn}
                       />
                     )}
                   </div>
@@ -1657,34 +2109,58 @@ function SlideRuleSplitEngineering({
   );
 }
 
-const ACTIVE_SESSION_KEY = "sliderule:active-session-id";
+function readStoredSessionId(): string | null {
+  try {
+    return localStorage.getItem(ACTIVE_SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 会话壳（Claude 式）：管理"当前会话 id"，切换/新建时以 key=sessionId
  * 整树重挂——hook 对新 id 走 loadOrCreateSessionState 完整水合，
  * 运行时排练数据（localStorage 按 id 分键）自动隔离，零状态串味。
  * 会话选择入口在侧栏（SidebarSessions），通过 window 事件通知这里。
+ *
+ * ⚠ 2026-09-15：地址栏 `?session=` 是权威。只听 localStorage 时，刷新 /
+ *   应用中心整页跳会掉进兜底桶，用户说「丢会话」。
  */
 export default function SlideRule({
   embedded = false,
 }: { embedded?: boolean } = {}) {
   const [activeSessionId, setActiveSessionId] = useState<string>(() => {
-    try {
-      const stored = localStorage.getItem(ACTIVE_SESSION_KEY);
-      if (IS_GITHUB_PAGES) {
-        // 静态演示只认画廊示例种子（E18，pages-demo-*）；其余残留 id
-        // 一律回落主演示，防止演示被指到不存在的空会话上
-        return stored?.startsWith("pages-demo-")
-          ? stored
-          : GITHUB_PAGES_DEMO_SESSION_ID;
-      }
-      return stored || "sliderule-v51-product";
-    } catch {
-      return IS_GITHUB_PAGES
-        ? GITHUB_PAGES_DEMO_SESSION_ID
-        : "sliderule-v51-product";
+    const stored = readStoredSessionId();
+    if (IS_GITHUB_PAGES) {
+      // 静态演示只认画廊示例种子（E18，pages-demo-*）；其余残留 id
+      // 一律回落主演示，防止演示被指到不存在的空会话上
+      return stored?.startsWith("pages-demo-")
+        ? stored
+        : GITHUB_PAGES_DEMO_SESSION_ID;
     }
+    return resolveActiveSessionId({
+      urlSession:
+        typeof window !== "undefined"
+          ? sessionIdFromHref(hrefFromWindow(window))
+          : null,
+      stored,
+    });
   });
+
+  useEffect(() => {
+    if (IS_GITHUB_PAGES) return;
+    try {
+      localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId);
+    } catch {
+      /* 隐私模式：地址栏仍是权威 */
+    }
+    applySessionToHistory(
+      window.history,
+      hrefFromWindow(window),
+      activeSessionId,
+      "replace"
+    );
+  }, [activeSessionId]);
 
   useEffect(() => {
     if (IS_GITHUB_PAGES) return;
@@ -1692,8 +2168,20 @@ export default function SlideRule({
       const id = (ev as CustomEvent<{ sessionId?: string }>).detail?.sessionId;
       if (id) setActiveSessionId(id);
     };
+    const onPop = () => {
+      setActiveSessionId(
+        resolveActiveSessionId({
+          urlSession: sessionIdFromHref(hrefFromWindow(window)),
+          stored: readStoredSessionId(),
+        })
+      );
+    };
     window.addEventListener(SESSION_CHANGED_EVENT, onChanged);
-    return () => window.removeEventListener(SESSION_CHANGED_EVENT, onChanged);
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener(SESSION_CHANGED_EVENT, onChanged);
+      window.removeEventListener("popstate", onPop);
+    };
   }, []);
 
   return (
@@ -1712,6 +2200,7 @@ function SlideRuleSessionBody({
   embedded: boolean;
   activeSessionId: string;
 }) {
+  const { user: authUser, ready: authReady } = useAuth();
   const {
     goal,
     uiTurns,
@@ -1722,8 +2211,21 @@ function SlideRuleSessionBody({
     sessionState,
     executorMode,
     sendMessage,
+    pendingPlanApproval,
+    submitPlanApproval,
+    createProjectFromApprovedPlan,
+    canCreateProject,
+    projectCreateBlockedReason,
+    projectCreateState,
+    pendingAsk,
+    submitQuestionnaire,
+    queuedTurns,
+    removeQueuedTurn,
+    dismissAsk,
     repairGaps,
     restoreModelVersion,
+    forkVariant,
+    isRestoringVersion,
     challengeTurn,
     resetSession,
     toggleRouteExpanded,
@@ -1741,15 +2243,17 @@ function SlideRuleSessionBody({
     activeSkillId,
     skillContents,
     latestMermaid,
+    specPages,
     llmDraft,
     llmDraftLabel,
     llmStreams,
+    rehearsalCursor,
     sessionHydrated,
   } = useSlideRuleSession({
     // E18：Pages 下 activeSessionId 也可能是画廊示例（pages-demo-*，
     // 会话壳已做过准入回落），不再钉死主演示
     sessionId: activeSessionId,
-    documentTitle: IS_GITHUB_PAGES ? "SlideRule · 演示" : undefined,
+    documentTitle: IS_GITHUB_PAGES ? `${BRAND_NAME_FULL} · 演示` : undefined,
     // 「点发送看回放」的预填只属于主演示空会话；画廊示例自带完整终态
     initialGoal:
       IS_GITHUB_PAGES && activeSessionId === GITHUB_PAGES_DEMO_SESSION_ID
@@ -1761,8 +2265,8 @@ function SlideRuleSessionBody({
   useEffect(() => {
     if (IS_GITHUB_PAGES) return;
     document.title = goal
-      ? `${goal.slice(0, 24)} · SlideRule`
-      : "新会话 · SlideRule";
+      ? `${goal.slice(0, 24)} · ${BRAND_NAME_FULL}`
+      : `新会话 · ${BRAND_NAME_FULL}`;
   }, [goal]);
 
   // E33.5 加载官方组件化（用户裁决：弃自定义骨架屏，用 antd 官方 Spin）：
@@ -1794,6 +2298,30 @@ function SlideRuleSessionBody({
   // Python backend error/timeout/degraded/legacy status + retry for core SlideRule workflow (105)
   const [pythonApiError, setPythonApiError] = useState<any>(null);
   const [pythonStatusMsg, setPythonStatusMsg] = useState<string>("");
+  const [projectCapabilities, setProjectCapabilities] = useState<{
+    mode?: string;
+    blockers?: string[];
+    configured?: boolean;
+    canExecute?: boolean;
+  } | null>(null);
+  useEffect(() => {
+    // 工程能力属于登录后资源状态；匿名空态不发受保护请求，避免预期 401
+    // 污染浏览器日志。失败时保持 fail-closed，不显示可启动按钮。
+    setProjectCapabilities(null);
+    if (!authReady || !authUser) return;
+    let cancelled = false;
+    void fetchJsonSafe<{
+      mode?: string;
+      blockers?: string[];
+      configured?: boolean;
+      canExecute?: boolean;
+    }>("/api/sliderule/project-capabilities").then(result => {
+      if (!cancelled && result.ok) setProjectCapabilities(result.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, authUser]);
   const probePythonBackend = useCallback(async () => {
     // GitHub Pages 静态演示无后端：探测必 404（控制台噪音 + 无意义请求），
     // 且状态条本就在 Pages 下不渲染（见 !IS_GITHUB_PAGES 分支），直接跳过。
@@ -1833,14 +2361,16 @@ function SlideRuleSessionBody({
 
   const imSurfaceMode = useMemo(() => resolveImSurfaceMode(), []);
   const isImmersion = imSurfaceMode !== "engineering";
-  // Rebuild the latest turn from persisted session state after refresh when uiTurns is empty.
-  const restoredLatestTurn = useMemo(
-    () =>
-      uiTurns.length === 0 ? deriveLatestTurnFromState(sessionState) : null,
+  // Rebuild the thread from persisted session state after refresh when uiTurns is empty.
+  const restoredTurns = useMemo(
+    () => (uiTurns.length === 0 ? deriveTurnsFromState(sessionState) : []),
     [uiTurns.length, sessionState]
   );
   const latestTurn =
-    uiTurns.length > 0 ? uiTurns[uiTurns.length - 1] : restoredLatestTurn;
+    uiTurns.length > 0
+      ? uiTurns[uiTurns.length - 1]
+      : (restoredTurns[restoredTurns.length - 1] ??
+        deriveLatestTurnFromState(sessionState));
   const latestTurnId = latestTurn?.id ?? null;
 
   const [projectionDensity, setProjectionDensity] = useState<ProjectionDensity>(
@@ -1900,11 +2430,16 @@ function SlideRuleSessionBody({
       pythonSkillRuntimeGraph
     )
       return;
+    // Anonymous visitors do not own a durable session. Avoid probing the
+    // login-gated session endpoint merely to discover that the empty shell has
+    // no persisted projection; this used to produce a visible 404 in the
+    // browser console on every fresh visit.
+    if (!authReady || !authUser) return;
     // Pages 演示的会话全部在 localStorage，后端 sessions API 不存在，跳过投影回捞。
     if (IS_GITHUB_PAGES) return;
     let cancelled = false;
     loadPythonRuntimeProjectionFromSession(
-      sessionState.sessionId || "sliderule-v51-product"
+      sessionState.sessionId || DEFAULT_SESSION_ID
     )
       .then(projection => {
         if (cancelled || !projection) return;
@@ -1922,6 +2457,8 @@ function SlideRuleSessionBody({
     visiblePythonRuntimeProjection,
     pythonPublishClosure,
     pythonSkillRuntimeGraph,
+    authReady,
+    authUser,
   ]);
 
   useEffect(() => {
@@ -2065,16 +2602,21 @@ function SlideRuleSessionBody({
     []
   );
 
-  // Inline node edit confirmation triggers a rerun with user input.
+  // ?im=dev 仍是 /sliderule 产品页可达面（同一路由 + query），不是独立
+  // Dev 页。节点编辑走作曲家预填，不立刻点火；persist fail-closed 在
+  // sendMessage → runTurn 的 challenge 闸上（与质疑本轮同一条）。
   const handleNodeEditSubmit = useCallback(
     (node: BrainstormReasoningNode, text: string) => {
       const producedArtifactId = (node as { producedArtifactId?: string })
         .producedArtifactId;
       if (producedArtifactId && text.trim()) {
-        challengeTurn(producedArtifactId, text.trim());
+        dispatchChallengePrefill({
+          artifactId: producedArtifactId,
+          targetLabel: text.trim(),
+        });
       }
     },
-    [challengeTurn]
+    []
   );
 
   const handleResolveInteractiveGate = useCallback(
@@ -2105,7 +2647,21 @@ function SlideRuleSessionBody({
         return;
       }
       if (action === "export" && reasoningViewModel.terminalMeta?.canExport) {
-        downloadSlideRuleDeliveryMd(sessionState);
+        // 交付口换成 HTML 载体（2026-08-14）：新链路画出来的整套页面打成
+        // 一个自包含文件，推演说明并进去当一页。
+        //
+        // ⚠ **没有页面时如实回落 .md**，不产出一个空壳包。老链路今天还在跑
+        //   （spec-first 挂了会显式回落），那一轮本来就没有 HTML 可交——
+        //   交一个点开什么都没有的文件，比不交更糟：它看着像交付成功了。
+        // ⚠ 不 await：这个处理器不是 async，而且导出本来就该是"点了就走"。
+        //   拉本地那份 Tailwind（400KB、同源）失败时 downloadSlideRuleDeliveryHtml
+        //   自己会 fail-open（包照出，只是没样式），拿不到页面才回落 .md。
+        void downloadSlideRuleDeliveryHtml(sessionState, {
+          appTitle: goal ? goal.slice(0, 40) : undefined,
+          notesMd: serializeSlideRuleDeliveryMd(sessionState),
+        }).then(ok => {
+          if (!ok) downloadSlideRuleDeliveryMd(sessionState);
+        });
       }
     },
     [
@@ -2144,7 +2700,16 @@ function SlideRuleSessionBody({
     liveAction,
     sessionState,
     sendMessage,
+    pendingPlanApproval,
+    submitPlanApproval,
+    pendingAsk,
+    onSubmitQuestionnaire: submitQuestionnaire,
+    queuedTurns,
+    removeQueuedTurn,
+    dismissAsk,
     restoreModelVersion,
+    forkVariant,
+    isRestoringVersion,
     challengeTurn,
     resetSession,
     retryCapability,
@@ -2184,12 +2749,19 @@ function SlideRuleSessionBody({
     crossRuntimeGraph: visibleCrossRuntimeGraph,
     publishClosure: visiblePublishClosure,
     driveFullStatus,
+    projectCapabilities,
+    onCreateProject: () => void createProjectFromApprovedPlan(),
+    canCreateProject,
+    projectCreateBlockedReason,
+    projectCreateState,
     activeSkillId,
     skillContents,
     latestMermaid,
+    specPages,
     llmDraft,
     llmDraftLabel,
     llmStreams,
+    rehearsalCursor,
   };
 
   if (isImmersion) {

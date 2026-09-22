@@ -48,7 +48,9 @@ describe("summarizeClosureForChat", () => {
     expect(text).toContain("1 页 · 2 处字段绑定");
     expect(text).toContain("1 项可写回");
     expect(text).toContain("页面↔流程绑定 1 处");
-    expect(text).toContain("游标");
+    expect(text).toContain("透视");
+    expect(text).toContain("沙盘");
+    expect(text).not.toContain("「游标」");
   });
 
   it("blocked：如实说缺口，不装闭环、不给统计", () => {

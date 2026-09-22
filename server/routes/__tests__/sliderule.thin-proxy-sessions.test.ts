@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vite
 import express from 'express';
 import { createServer } from 'node:http';
 
-vi.mock('../../sliderule/python-delegation.js', () => ({
+// 只替换出网的四个函数，其余（尤其 PythonSlideRuleHttpError 这个类）保留真身：
+// 路由用 `e instanceof PythonSlideRuleHttpError` 判 404 透传，假类会让 instanceof 恒假。
+vi.mock('../../sliderule/python-delegation.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   callPythonSlideRule: vi.fn(),
   callPythonSlideRuleGet: vi.fn(),
   delegateToPythonSlideRule: vi.fn(),
@@ -86,13 +89,19 @@ describe('Node sliderule routes thin proxy (sessions CRUD + execute prove no bus
   });
 
   it('GET /sessions/:id preserves Python 404 not_found contract instead of collapsing to 502', async () => {
+    // 路由靠 `e instanceof PythonSlideRuleHttpError && e.status === 404` 判透传，
+    // 不再解析错误文案；这里必须扔真类型，扔 Error 只会走到 502 兜底。
     (delegation.callPythonSlideRuleGet as any).mockRejectedValueOnce(
-      new Error('python GET /api/sliderule/sessions/missing-1 failed: http 404 {"error":"not_found","sessionId":"missing-1"}')
+      new delegation.PythonSlideRuleHttpError(
+        'python GET /api/sliderule/sessions/missing-1 failed: http 404 {"error":"not_found","sessionId":"missing-1"}',
+        404,
+        '{"error":"not_found","sessionId":"missing-1"}'
+      )
     );
 
     const res = await fetch(`${base}/sessions/missing-1`, { method: 'GET' });
     expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: 'not_found', sessionId: 'missing-1' });
+    expect(await res.json()).toEqual({ error: 'not_found', sessionId: 'missing-1', backend: 'python' });
   });
 
   it('PUT /sessions/:id + DELETE hit real route handlers and delegateToPythonSlideRule (no sanitize/replay/strip/persist in Node)', async () => {

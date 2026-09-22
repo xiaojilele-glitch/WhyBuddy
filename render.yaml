@@ -95,7 +95,9 @@ services:
       # (APP_STORE_FILE)。但免费实例闲置 ~15 分钟休眠，唤醒是全新容器、
       # 文件系统清空 —— 表现为"生成过的应用每隔一会儿就全没了"，而且不报错。
       # 实测过：接口老老实实回 {"apps":[]} / {"sessions":[]}。
-      # 填任意 SQLAlchemy URL 即可（当前用 Neon Postgres）。
+      # 填任意 SQLAlchemy URL 即可（当前用自建 PostgreSQL 17）。
+      # 只出得去 443 的部署改用 APP_STORE_HTTP_API_URL / _KEY 那条 HTTPS
+      # 网关（见 .env.example）：三个存储都走它，落同一个远端库。
       - key: APP_STORE_DATABASE_URL
         sync: false
 
@@ -108,6 +110,17 @@ services:
       # ⚠️ E2B 按用量计费，线上每次生成都会真跑一次沙盒。
       - key: E2B_API_KEY
         sync: false
+
+      # 独立页面检查沙盒模板；工程生产入口仍保持关闭。
+      # 未配置模板时页面检查如实 blocked，不自动创建普通沙盒安装浏览器。
+      - key: WHYBUDDY_PROJECT_BROWSER_TEMPLATE
+        value: ""
+      - key: WHYBUDDY_PROJECT_BROWSER_TIMEOUT_SECONDS
+        value: "120"
+      # Free sleeping services cannot meet the persistent execution/preview contract.
+      # Use docker-compose.project.yml on an always-on deployment before allowlist rollout.
+      - key: WHYBUDDY_PROJECT_ROLLOUT
+        value: disabled
 
   # ── Node（前端 + API，免费公开 Web 服务）─────────────────────────
   - type: web

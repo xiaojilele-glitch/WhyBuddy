@@ -1,10 +1,12 @@
 /**
- * PageScreen — 页面 wireframe（字段列表 + 操作按钮）
+ * PageScreen — 页面 Salt 线框（字段绑定 + 操作权限）。
  *
- * 数据优先级（诚实降级链）：
- *   1. 五系统模型 page 段：pages[].fieldBindings 经 resolveFieldRef 与
- *      datamodel 交叉校验（未解析引用如实标红），actionPermissions 渲染为按钮。
- *   2. 占位骨架（降透明度 + 明示），不冒充真实产物。
+ * 2026-08-18：按 PlantUML Salt / Balsamiq 那套改——一页一个假窗，
+ * 字段名在左、空槽在右，底栏动作全是灰按钮。上一版灰底卡 + teal 圆点 +
+ * 第一个动作涂实心：看起来像便签，不像页。
+ *
+ * 推断仍走 resolveFieldRef，未解析引用如实标红。不猜 surface/kind 换皮，
+ * 不发明页间连线。数据表不在这屏。
  */
 
 import React, { useMemo } from "react";
@@ -22,41 +24,188 @@ interface PageScreenProps {
   className?: string;
 }
 
-interface FieldDef {
+export interface SaltPageField {
+  ref: string;
   name: string;
-  type: string;
-  required?: boolean;
-  editable?: boolean;
+  bound: boolean;
 }
 
-interface PageDef {
+export interface SaltPageDef {
+  id: string;
   title: string;
-  fields: FieldDef[];
+  fields: SaltPageField[];
   actions: string[];
+}
+
+const INK = "#171717";
+const MUTED = "#a1a1aa";
+const LINE = "#e5e7eb";
+
+export function SaltPageCard({ page }: { page: SaltPageDef }) {
+  return (
+    <div
+      data-testid={`salt-page-${page.id}`}
+      style={{
+        boxSizing: "border-box",
+        background: "#fff",
+        border: `1px solid ${LINE}`,
+        borderRadius: 6,
+        overflow: "hidden",
+        fontFamily: "inherit",
+      }}
+    >
+      <div
+        data-testid="salt-page-chrome"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          height: 32,
+          padding: "0 10px",
+          borderBottom: `1px solid ${LINE}`,
+          background: "#fff",
+        }}
+      >
+        <span aria-hidden data-testid="salt-window-dots" style={{ display: "flex", gap: 4 }}>
+          <span style={{ width: 6, height: 6, borderRadius: 3, background: "#d4d4d8" }} />
+          <span style={{ width: 6, height: 6, borderRadius: 3, background: "#d4d4d8" }} />
+          <span style={{ width: 6, height: 6, borderRadius: 3, background: "#d4d4d8" }} />
+        </span>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: INK,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {page.title}
+        </span>
+        <span
+          style={{
+            marginLeft: "auto",
+            color: MUTED,
+            fontSize: 10,
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            flexShrink: 0,
+          }}
+        >
+          {page.id}
+        </span>
+      </div>
+
+      <div style={{ padding: "6px 0" }}>
+        {page.fields.map((field, i) => {
+          const unresolved = !field.bound;
+          return (
+            <div
+              key={`${field.ref}-${i}`}
+              data-testid={`salt-field-${field.ref}`}
+              data-bound={field.bound ? "true" : "false"}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                height: 24,
+                padding: "0 10px",
+              }}
+            >
+              <span
+                title={
+                  unresolved ? `字段绑定未在数据模型中解析：${field.name}` : field.name
+                }
+                style={{
+                  width: 96,
+                  flexShrink: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontSize: 11,
+                  color: unresolved ? "#ef4444" : INK,
+                }}
+              >
+                {unresolved ? "✗ " : ""}
+                {field.name}
+              </span>
+              <div
+                data-slot="empty"
+                aria-hidden
+                style={{
+                  flex: 1,
+                  height: 18,
+                  border: `1px solid ${LINE}`,
+                  borderRadius: 3,
+                  background: "#fff",
+                }}
+              />
+            </div>
+          );
+        })}
+        {page.fields.length === 0 && (
+          <div
+            style={{
+              padding: "8px 10px",
+              color: MUTED,
+              fontSize: 10,
+            }}
+          >
+            无字段绑定
+          </div>
+        )}
+      </div>
+
+      {page.actions.length > 0 && (
+        <div
+          data-testid="salt-page-actions"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+            padding: "8px 10px",
+            borderTop: `1px solid ${LINE}`,
+          }}
+        >
+          {page.actions.map((action, i) => (
+            <span
+              key={`${action}-${i}`}
+              data-testid={`salt-action-${action}`}
+              style={{
+                padding: "2px 8px",
+                border: `1px solid ${LINE}`,
+                borderRadius: 3,
+                background: "#fff",
+                color: "#52525b",
+                fontSize: 10,
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              }}
+            >
+              {action}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function PageScreen({
   publishClosure,
-  rawContent,
   model,
   isActive = false,
   className = "",
 }: PageScreenProps) {
-  // 模型 page 段在场时渲染真实页面结构；否则占位骨架（明示，不伪装）。
   const modelPages = model?.page?.pages ?? [];
   const isPlaceholder = modelPages.length === 0;
-  const pages = useMemo<PageDef[]>(() => {
+  const pages = useMemo<SaltPageDef[]>(() => {
     if (modelPages.length === 0) return [];
     return modelPages.map((p, i) => ({
+      id: p.id || `page-${i + 1}`,
       title: p.name || p.id || `页面 ${i + 1}`,
-      fields: (p.fieldBindings ?? []).map((ref) => {
+      fields: (p.fieldBindings ?? []).map(ref => {
         const res = resolveFieldRef(ref, model);
-        return {
-          name: res.label,
-          type: res.resolved ? "bound" : "unresolved",
-          required: false,
-          editable: true,
-        };
+        return { ref: res.ref, name: res.label, bound: res.resolved };
       }),
       actions: (p.actionPermissions ?? []).map(String),
     }));
@@ -69,75 +218,26 @@ export function PageScreen({
       data-skill="page"
       data-active={isActive}
     >
-      <div className="flex items-center gap-2 border-b border-[#e8eaee] px-4 py-2.5">
-        <div className="h-2 w-2 rounded-full bg-teal-400" />
-        <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Page</span>
-        <span className="text-xs text-stone-400">页面 Wireframe</span>
+      <div className="flex items-center gap-2 border-b border-[#e5e7eb] px-4 py-2">
+        <span className="text-[12px] font-medium text-stone-700">页面</span>
         <div className="ml-auto flex items-center gap-1.5">
           <EvidenceBadges evidence={evidence} />
         </div>
       </div>
 
       {isPlaceholder ? (
-        <EmptyScreenHint title="页面字段绑定（Wireframe）" desc="页面、字段与操作权限，来自五系统模型 page 段" />
+        <EmptyScreenHint
+          title="页面字段绑定（Wireframe）"
+          desc="页面、字段与操作权限，来自五系统模型 page 段"
+        />
       ) : (
-      <div className="min-h-0 flex-1 overflow-auto p-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {pages.map((page) => (
-            <div key={page.title} className={`rounded-md border border-[#e5e7eb] bg-[#eef0f4] p-3 `}>
-              {/* Page title bar */}
-              <div className="mb-3 flex items-center gap-2 rounded border border-[#e5e7eb] bg-white px-3 py-1.5 shadow-sm">
-                <div className="h-1.5 w-1.5 rounded-full bg-teal-400" />
-                <span className="text-xs font-semibold text-stone-700">{page.title}</span>
-              </div>
-
-              {/* Fields */}
-              <div className="space-y-1.5">
-                {page.fields.map((field) => (
-                  <div key={field.name} className="flex items-center gap-2">
-                    <span
-                      className={`w-20 shrink-0 truncate text-[10px] ${
-                        field.type === "unresolved" ? "text-red-500" : "text-stone-500"
-                      }`}
-                      title={field.type === "unresolved" ? `字段绑定未在数据模型中解析：${field.name}` : field.name}
-                    >
-                      {field.type === "unresolved" ? "✗ " : ""}
-                      {field.name}
-                    </span>
-                    <div
-                      className={`h-5 flex-1 rounded border text-[10px] ${
-                        field.editable
-                          ? "border-[#d3d8e0] bg-white"
-                          : "border-transparent bg-[#e9edf2] text-stone-400"
-                      }`}
-                    />
-                    {field.required && (
-                      <span className="text-[10px] text-red-400">*</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Action buttons */}
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {page.actions.map((action, i) => (
-                  <div
-                    key={action}
-                    className={`rounded-sm px-2.5 py-1 text-[10px] font-medium ${
-                      i === 0
-                        ? "bg-teal-500 text-white"
-                        : "border border-[#e5e7eb] bg-white text-stone-600"
-                    }`}
-                  >
-                    {action}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+        <div className="min-h-0 flex-1 overflow-auto p-4" data-testid="page-wireframe">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {pages.map(page => (
+              <SaltPageCard key={page.id} page={page} />
+            ))}
+          </div>
         </div>
-
-      </div>
       )}
     </div>
   );

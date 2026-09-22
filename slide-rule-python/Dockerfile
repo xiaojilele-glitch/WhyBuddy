@@ -6,6 +6,19 @@
 # 会话数据默认落 /app/data/sliderule-sessions.json —— compose 用命名卷
 # 持久化该目录，容器重建不丢会话。
 
+# The worker uploads this outbound-only agent to E2B. Build from the same source
+# as the isolated gateway; a local dist directory is not part of Docker context.
+FROM node:22-alpine AS project-preview-build
+WORKDIR /build
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
+RUN pnpm install --frozen-lockfile --ignore-scripts
+COPY server/project-preview ./server/project-preview
+COPY shared/project-preview-selection.mjs ./shared/project-preview-selection.mjs
+COPY scripts/build-project-preview.mjs ./scripts/build-project-preview.mjs
+RUN node scripts/build-project-preview.mjs
+
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -26,6 +39,9 @@ COPY slide-rule-python/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY slide-rule-python/ ./
+COPY project-templates/ /project-templates/
+COPY server/project-verification/browser-runner.mjs /server/project-verification/browser-runner.mjs
+COPY --from=project-preview-build /build/dist/project-preview /dist/project-preview
 
 EXPOSE 9700
 

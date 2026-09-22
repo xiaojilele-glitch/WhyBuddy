@@ -8,6 +8,8 @@
  */
 
 import React from "react";
+import { Alert, Button, Empty, Flex, Input, Segmented, Space, Table, Tag, Typography } from "antd";
+import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import type { FiveSystemModel } from "../system-screens/five-system-model";
 import {
   type RuntimeState,
@@ -34,8 +36,9 @@ function EditableCell({
 }) {
   const text = value === undefined || value === null ? "" : String(value);
   return (
-    <input
-      className="w-full min-w-16 rounded border border-transparent bg-transparent px-1.5 py-1 text-xs text-stone-700 transition-colors hover:border-[#e5e7eb] focus:border-blue-300 focus:bg-white focus:outline-none"
+    <Input
+      size="small"
+      variant="borderless"
       defaultValue={text}
       onBlur={(e) => {
         if (e.target.value !== text) onCommit(e.target.value);
@@ -83,6 +86,41 @@ export function EntityDataPanel({
   const fields = entity?.fields ?? [];
   const rows = entity ? state.entities[entity.id] ?? [] : [];
 
+  const columns = [
+    ...fields.map(field => ({
+      key: field.id,
+      title: (
+        <Space size={4}>
+          <span>{field.name || field.id}</span>
+          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+            {field.type}
+          </Typography.Text>
+        </Space>
+      ),
+      render: (_: unknown, row: (typeof rows)[number]) => (
+        <EditableCell
+          value={row.values[field.id]}
+          onCommit={raw => commitCell(row.id, field.id, raw)}
+        />
+      ),
+    })),
+    {
+      key: "actions",
+      title: "操作",
+      width: 72,
+      render: (_: unknown, row: (typeof rows)[number]) => (
+        <Button
+          type="text"
+          size="small"
+          danger
+          icon={<DeleteOutlined />}
+          aria-label="删除"
+          onClick={() => entity && apply(deleteRow(state, entity.id, row.id))}
+        />
+      ),
+    },
+  ];
+
   const commitCell = (rowId: string, fieldId: string, raw: string) => {
     if (!entity) return;
     const row = rows.find((r) => r.id === rowId);
@@ -99,122 +137,72 @@ export function EntityDataPanel({
 
   if (entities.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-xs text-stone-400">
-        本话题模型缺少实体定义，推演闭环后可编辑数据
-      </div>
+      <Empty description="本话题模型缺少实体定义，推演闭环后可编辑数据" />
     );
   }
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-auto p-4" data-testid="datamodel-data-panel">
-      <div className="rounded bg-blue-50 px-3 py-2 text-[11px] text-blue-700 ring-1 ring-blue-200">
-        单元格即改即存 —— 与「运行应用」「工作流试运行」共享同一份运行时数据
-      </div>
+    <Flex vertical gap="middle" className="h-full overflow-auto p-4" data-testid="datamodel-data-panel">
+      <Alert
+        type="info"
+        showIcon
+        message="单元格即改即存，与运行应用、工作流试运行共享同一份运行时数据"
+      />
       {rows.some(isSeedRow) && (
-        <div
-          className="rounded bg-amber-50 px-3 py-2 text-[11px] text-amber-700 ring-1 ring-amber-200"
+        <Alert
           data-testid="datamodel-seed-notice"
-        >
-          示例数据 —— 当前 {rows.length} 行里有 {rows.filter(isSeedRow).length}{" "}
-          行是自动铺的演示行；「新增一行」会把它们整批清掉，直接改某一格则只有那一行转为真实数据
-        </div>
+          type="warning"
+          showIcon
+          message="示例数据"
+          description={`当前 ${rows.length} 行里有 ${rows.filter(isSeedRow).length} 行是自动铺的演示行；新增一行会整批清除，直接改某一格则只有该行转为真实数据`}
+        />
       )}
 
-      {/* 实体切页 */}
-      <div className="flex flex-wrap gap-1.5">
-        {entities.map((e) => (
-          <button
-            key={e.id}
-            type="button"
-            data-testid={`datamodel-entity-${e.id}`}
-            onClick={() => setActiveEntityId(e.id)}
-            className={`rounded-full px-3 py-1 text-[11px] font-medium ring-1 transition-colors ${
-              e.id === entity?.id
-                ? "bg-blue-500 text-white ring-blue-500"
-                : "bg-white text-stone-600 ring-[#e5e7eb] hover:bg-blue-50"
-            }`}
-          >
-            {e.name || e.id}
-            <span className={e.id === entity?.id ? "ml-1 opacity-80" : "ml-1 text-stone-400"}>
-              {(state.entities[e.id] ?? []).length}
+      <Segmented
+        value={entity?.id}
+        onChange={value => setActiveEntityId(String(value))}
+        options={entities.map(item => ({
+          value: item.id,
+          label: (
+            <span data-testid={`datamodel-entity-${item.id}`}>
+              {item.name || item.id} <Tag bordered={false}>{(state.entities[item.id] ?? []).length}</Tag>
             </span>
-          </button>
-        ))}
-      </div>
+          ),
+        }))}
+      />
 
       {problem && (
-        <div className="rounded bg-red-50 px-3 py-2 text-[11px] text-red-600 ring-1 ring-red-200">
-          未保存：{problem}
-        </div>
+        <Alert type="error" showIcon message={`未保存：${problem}`} />
       )}
 
-      <div className="overflow-hidden rounded-md border border-[#e5e7eb]">
-        <table className="w-full text-xs">
-          <thead className="bg-[#eef0f4]">
-            <tr>
-              {fields.map((f) => (
-                <th key={f.id} className="px-2 py-2 text-left font-semibold text-stone-600">
-                  {f.name || f.id}
-                  <span className="ml-1 font-normal text-stone-400">{f.type}</span>
-                </th>
-              ))}
-              <th className="w-14 px-2 py-2 text-left font-semibold text-stone-600">操作</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#e8eaee] bg-white">
-            {rows.map((row) => (
-              <tr key={row.id}>
-                {fields.map((f) => (
-                  <td key={f.id} className="px-1 py-0.5">
-                    <EditableCell
-                      value={row.values[f.id]}
-                      onCommit={(raw) => commitCell(row.id, f.id, raw)}
-                    />
-                  </td>
-                ))}
-                <td className="px-2 py-0.5">
-                  <button
-                    type="button"
-                    className="text-[11px] text-red-400 hover:text-red-600"
-                    onClick={() => entity && apply(deleteRow(state, entity.id, row.id))}
-                  >
-                    删除
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={fields.length + 1} className="px-3 py-6 text-center text-stone-300">
-                  暂无数据 — 点下方「新增一行」或到运行应用里「新建」
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        size="small"
+        rowKey="id"
+        columns={columns}
+        dataSource={rows}
+        pagination={false}
+        scroll={{ x: "max-content" }}
+        locale={{ emptyText: <Empty description="暂无数据，可新增一行或到运行应用里新建" /> }}
+      />
 
-      <div>
-        <button
-          type="button"
-          data-testid="datamodel-add-row"
-          onClick={() => {
-            if (!entity) return;
-            // 同运行应用：写第一条真实行前先清掉这张表的演示种子
-            apply(
-              addRow(
-                dropSeedRowsFor(state, entity.id),
-                entity.id,
-                {},
-                new Date().toISOString()
-              ).state
-            );
-          }}
-          className="rounded-full bg-blue-500 px-3 py-1 text-[11px] font-medium text-white hover:bg-blue-600"
-        >
-          ＋ 新增一行
-        </button>
-      </div>
-    </div>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        data-testid="datamodel-add-row"
+        onClick={() => {
+          if (!entity) return;
+          apply(
+            addRow(
+              dropSeedRowsFor(state, entity.id),
+              entity.id,
+              {},
+              new Date().toISOString()
+            ).state
+          );
+        }}
+      >
+        新增一行
+      </Button>
+    </Flex>
   );
 }

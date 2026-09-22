@@ -32,8 +32,10 @@ import {
   callPythonSlideRule,
   callPythonSlideRuleGet,
   delegateToPythonSlideRule,
+  viewerHeadersFrom,
   checkPythonSlideRuleHealth,
   resolvePythonSlideRuleRuntimeConfig,
+  resolvePythonDriveTimeoutMs,
   PythonSlideRuleHttpError,
 } from "../sliderule/python-delegation.js";
 import * as fs from "fs";
@@ -189,14 +191,15 @@ router.get("/health", async (_req: Request, res: Response) => {
 });
 
 // GET /api/sliderule/sessions — thin proxy to Python (Node no longer owns list/session state)
-router.get("/sessions", async (_req: Request, res: Response) => {
+router.get("/sessions", async (req: Request, res: Response) => {
   const pythonRuntime = resolvePythonSlideRuleRuntimeConfig();
   try {
     const data = await callPythonSlideRuleGet(
       pythonRuntime.baseUrl,
       "/api/sliderule/sessions",
       pythonRuntime.internalKey,
-      { timeoutMs: pythonRuntime.timeoutMs },
+      // 身份必须透传，否则 Python 按匿名过滤 → 登录用户看到的历史永远是空的
+      { timeoutMs: pythonRuntime.timeoutMs, viewer: viewerHeadersFrom(req) },
     );
     return res.json(data);
   } catch (e) {
@@ -214,7 +217,8 @@ router.get("/sessions/:sessionId", async (req: Request, res: Response) => {
       pythonRuntime.baseUrl,
       `/api/sliderule/sessions/${encodeURIComponent(sid)}`,
       pythonRuntime.internalKey,
-      { timeoutMs: pythonRuntime.timeoutMs },
+      // 同上：不带身份 → 有主会话一律 404 → 打开应用是空白页
+      { timeoutMs: pythonRuntime.timeoutMs, viewer: viewerHeadersFrom(req) },
     );
     return res.json(data);
   } catch (e) {
@@ -240,7 +244,7 @@ router.put("/sessions/:sessionId", express.json({ limit: "2mb" }), async (req: R
       "PUT",
       body,
       pythonRuntime.internalKey,
-      { timeoutMs: pythonRuntime.timeoutMs },
+      { timeoutMs: pythonRuntime.timeoutMs, viewer: viewerHeadersFrom(req) },
     );
     return res.status(200).json(data);
   } catch (e) {
@@ -260,7 +264,7 @@ router.delete("/sessions/:sessionId", async (req: Request, res: Response) => {
       "DELETE",
       null,
       pythonRuntime.internalKey,
-      { timeoutMs: pythonRuntime.timeoutMs },
+      { timeoutMs: pythonRuntime.timeoutMs, viewer: viewerHeadersFrom(req) },
     );
     return res.status(204).end();
   } catch (e) {
@@ -366,7 +370,9 @@ router.post("/orchestrate-plan", express.json({ limit: "2mb" }), async (req: Req
           intervention: body.intervention ?? null,
         },
         pythonRuntime.internalKey,
-        { timeoutMs: pythonRuntime.timeoutMs },
+        // 身份要跟着走：Python 侧推演类路由 _require_login(viewer)，
+        // 不带就是 401（实测踩过）。理由见 viewerHeadersFrom。
+        { timeoutMs: pythonRuntime.timeoutMs, viewer: viewerHeadersFrom(req) },
       );
       return res.json(data);
     } catch (e) {
@@ -432,7 +438,10 @@ router.post("/drive-full", express.json({ limit: "2mb" }), async (req: Request, 
           installedSkills: body.installedSkills,
         },
         pythonRuntime.internalKey,
-        { timeoutMs: pythonRuntime.timeoutMs },
+        // 推演专用超时，不能用通用的 120s —— 一趟推演实测 374~1190s，
+        // 用通用值必然在第 2 分钟掐断返回 502，而 Python 侧那趟还在跑。
+        // 理由与取值见 python-delegation.ts 的 DEFAULT_DRIVE_TIMEOUT_MS。
+        { timeoutMs: resolvePythonDriveTimeoutMs(), viewer: viewerHeadersFrom(req) },
       );
       return res.json(normalizeDriveClosureResponse(data as any));
     } catch (e) {
@@ -466,7 +475,10 @@ router.post("/drive-marathon", express.json({ limit: "2mb" }), async (req: Reque
         '/api/sliderule/drive-marathon',
         body,
         pythonRuntime.internalKey,
-        { timeoutMs: pythonRuntime.timeoutMs },
+        // 推演专用超时，不能用通用的 120s —— 一趟推演实测 374~1190s，
+        // 用通用值必然在第 2 分钟掐断返回 502，而 Python 侧那趟还在跑。
+        // 理由与取值见 python-delegation.ts 的 DEFAULT_DRIVE_TIMEOUT_MS。
+        { timeoutMs: resolvePythonDriveTimeoutMs(), viewer: viewerHeadersFrom(req) },
       );
       return res.json(normalizeDriveClosureResponse(data as any));
     } catch (e) {
@@ -789,7 +801,7 @@ router.post("/execute-capability", express.json({ limit: "2mb" }), async (req: R
           endpoint,
           payload,
           pythonRuntime.internalKey,
-          { timeoutMs: pythonRuntime.timeoutMs },
+          { timeoutMs: pythonRuntime.timeoutMs, viewer: viewerHeadersFrom(req) },
         );
         return sendJson(data);
       } catch (e) {
@@ -1097,7 +1109,19 @@ router.post("/execute-capability", express.json({ limit: "2mb" }), async (req: R
 //   → 删除该 session 全部缓存截图（模型变化时调用）
 router.post("/sessions/:sessionId/screenshot", express.json({ limit: "512kb" }), async (req: Request, res: Response) => {
   const { sessionId } = req.params;
-  const { modelHash } = (req.body ?? {}) as { modelHash?: string };
+  const { modelHash, device: requestedDevice } = (req.body ?? {}) as {
+    modelHash?: string;
+    device?: string;
+  };
+  const {
+    normalizeScreenshotDevice,
+    resolveScreenshotResponseDevice,
+    screenshotAuthoritySlug,
+    screenshotCacheSlug,
+  } = await import(
+    "./sliderule-screenshot-device.js"
+  );
+  const requested = normalizeScreenshotDevice(requestedDevice);
 
   const fs = await import("node:fs/promises");
   const nodePath = await import("node:path");
@@ -1106,14 +1130,26 @@ router.post("/sessions/:sessionId/screenshot", express.json({ limit: "512kb" }),
   const screenshotDir = nodePath.resolve(__routeDir, "../../tmp/app-thumbnails");
   await fs.mkdir(screenshotDir, { recursive: true });
 
-  const slug = `${sessionId.slice(0, 32)}-${(modelHash ?? "nohash").slice(0, 16)}`;
-  const screenshotPath = nodePath.join(screenshotDir, `${slug}.png`);
+  const authorityPath = nodePath.join(
+    screenshotDir,
+    `${screenshotAuthoritySlug(sessionId, modelHash)}.txt`,
+  );
 
-  // 已有缓存直接返回
+  // Cache lookup follows the device previously confirmed by Python, not the request.
   try {
+    const authoritative = resolveScreenshotResponseDevice(
+      requested,
+      (await fs.readFile(authorityPath, "utf8")).trim(),
+    );
+    const slug = screenshotCacheSlug(sessionId, modelHash, authoritative);
+    const screenshotPath = nodePath.join(screenshotDir, `${slug}.png`);
     await fs.access(screenshotPath);
     const buf = await fs.readFile(screenshotPath);
-    res.set("Content-Type", "image/png").set("Cache-Control", "public, max-age=86400").send(buf);
+    res
+      .set("Content-Type", "image/png")
+      .set("X-Sliderule-Device", authoritative)
+      .set("Cache-Control", "public, max-age=86400")
+      .send(buf);
     return;
   } catch {}
 
@@ -1131,7 +1167,7 @@ router.post("/sessions/:sessionId/screenshot", express.json({ limit: "512kb" }),
   const pythonRuntime = resolvePythonSlideRuleRuntimeConfig();
   try {
     const upstream = await fetch(
-      `${pythonRuntime.baseUrl}/api/sliderule/sessions/${encodeURIComponent(sessionId)}/e2b-screenshot`,
+      `${pythonRuntime.baseUrl}/api/sliderule/sessions/${encodeURIComponent(sessionId)}/e2b-screenshot?device=${requested}`,
       {
         method: "POST",
         headers: { "X-Internal-Key": pythonRuntime.internalKey },
@@ -1145,8 +1181,19 @@ router.post("/sessions/:sessionId/screenshot", express.json({ limit: "512kb" }),
       return;
     }
     const buf = Buffer.from(await upstream.arrayBuffer());
+    const authoritative = resolveScreenshotResponseDevice(
+      requested,
+      upstream.headers.get("x-sliderule-device"),
+    );
+    const slug = screenshotCacheSlug(sessionId, modelHash, authoritative);
+    const screenshotPath = nodePath.join(screenshotDir, `${slug}.png`);
     await fs.writeFile(screenshotPath, buf);
-    res.set("Content-Type", "image/png").set("Cache-Control", "public, max-age=86400").send(buf);
+    await fs.writeFile(authorityPath, authoritative, "utf8");
+    res
+      .set("Content-Type", "image/png")
+      .set("X-Sliderule-Device", authoritative)
+      .set("Cache-Control", "public, max-age=86400")
+      .send(buf);
   } catch {
     res.status(503).json({ error: "screenshot_unavailable" });
   }
@@ -1190,6 +1237,12 @@ router.use(async (req: Request, res: Response) => {
       "X-Internal-Key": runtime.internalKey,
       accept: String(req.headers["accept"] || "*/*"),
     };
+    // 2026-08-02：把访问者身份透传给 Python。判据与理由见 viewerHeadersFrom。
+    //
+    // 2026-08-06：这段原本是就地写的，与 python-delegation 里那几条显式路由
+    // 各写各的——结果显式路由那边一直没带身份，登录用户的会话列表恒为空。
+    // 改成共用同一个函数，杜绝第二次漂移。
+    Object.assign(headers, viewerHeadersFrom(req));
     let body: string | undefined;
     if (method !== "GET" && method !== "HEAD") {
       headers["content-type"] = String(
@@ -1201,6 +1254,14 @@ router.use(async (req: Request, res: Response) => {
     res.status(upstream.status);
     const contentType = upstream.headers.get("content-type");
     if (contentType) res.setHeader("content-type", contentType);
+    // 登录/登出要靠 Set-Cookie 把 httpOnly 凭据种到浏览器上。不回传的话
+    // 登录接口会"成功但没登上"——这类问题很难查，因为响应体是 200。
+    // getSetCookie() 保留多条（Node 18.14+ / undici）；退化时用单值兜底。
+    const setCookies =
+      typeof (upstream.headers as { getSetCookie?: () => string[] }).getSetCookie === "function"
+        ? (upstream.headers as { getSetCookie: () => string[] }).getSetCookie()
+        : ([upstream.headers.get("set-cookie")].filter(Boolean) as string[]);
+    if (setCookies.length > 0) res.setHeader("set-cookie", setCookies);
     if (!upstream.body) {
       res.end();
       return;

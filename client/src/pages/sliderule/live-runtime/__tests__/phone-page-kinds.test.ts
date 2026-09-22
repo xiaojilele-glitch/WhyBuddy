@@ -157,12 +157,14 @@ describe("手机档也渲染 AI 设计的总览版式（2026-07-29）", () => {
     expect(screenSrc).toMatch(/wantsMetrics\s*=\s*\n?\s*!freeformTookOver/);
   });
 
-  it("让位只针对总览页 —— workbench 的 KPI 不受影响", () => {
-    // freeformOverview 只在 monitor/dashboard 上生成；把 workbench 也算进去
-    // 会让业务页的指标凭空消失
-    expect(screenSrc).toMatch(
-      /freeformTookOver[\s\S]{0,160}kind === "monitor" \|\| kind === "dashboard"/
-    );
+  it("由页面语义决定设计版式是否接管，普通 workbench 仍保留 KPI", () => {
+    // marketing-landing 可以使用 workbench 数据视图，但应由设计版式接管；
+    // 普通 application workbench 的不接管契约由 marketing-landing-ownership 覆盖。
+    expect(screenSrc).toContain("pageFreeformOwnsContent(page)");
+  });
+
+  it("设计版式接管营销首页时隐藏业务演示数据提示", () => {
+    expect(screenSrc).toMatch(/pageSeedCount > 0 && !freeformOwnsPage/);
   });
 });
 

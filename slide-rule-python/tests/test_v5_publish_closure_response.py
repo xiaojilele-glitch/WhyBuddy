@@ -436,3 +436,64 @@ def test_appbundle_executor_closure_hash_stable_for_unchanged_publish_inputs_120
     assert first_closure["stableDigest"] == second_closure["stableDigest"]
     assert first_closure["closureHash"] != changed_closure["closureHash"]
     assert first_closure["stableDigest"] != changed_closure["stableDigest"]
+
+
+def test_refine_paint_note_survives_the_whitelist():
+    """新增闭环信号必须进白名单，否则前端只看到结论看不到「没画上」。"""
+    state = V5SessionState(
+        sessionId="closure-paint-note",
+        goal={"text": "精修红标"},
+        artifacts=[],
+        capabilityRuns=[
+            CapabilityRun(
+                id="run-paint",
+                capabilityId="appbundle.runtimeClosure",
+                turnId="t2",
+                result={
+                    "runtimeClosure": {
+                        "skillsChecked": ["page"],
+                        "versionPinsChecked": True,
+                    },
+                    "blocked": False,
+                    "blockers": [],
+                    "perSkillEvidence": {"page": {"evidencePresent": True}},
+                    "findingsByTier": {"hard_blocker": [], "warning": [], "info": []},
+                    "refinePaintNote": "这一处没画上：结构闸说臆造字段",
+                },
+            )
+        ],
+    )
+    response = derive_publish_closure_response(state)
+    assert response is not None
+    assert response["refinePaintNote"] == "这一处没画上：结构闸说臆造字段"
+
+
+def test_refine_reuse_note_survives_the_whitelist():
+    """左栏收口句必须进白名单，否则刷新后又变回「42 步」。"""
+    state = V5SessionState(
+        sessionId="closure-reuse-note",
+        goal={"text": "精修催离"},
+        artifacts=[],
+        capabilityRuns=[
+            CapabilityRun(
+                id="run-reuse",
+                capabilityId="appbundle.runtimeClosure",
+                turnId="t3",
+                result={
+                    "runtimeClosure": {
+                        "skillsChecked": ["page"],
+                        "versionPinsChecked": True,
+                    },
+                    "blocked": False,
+                    "blockers": [],
+                    "perSkillEvidence": {"page": {"evidencePresent": True}},
+                    "findingsByTier": {"hard_blocker": [], "warning": [], "info": []},
+                    "refineReuseNote": "改了 异常条目（p3） · 沿用 3 页 · 规格、权限、流程沿用",
+                },
+            )
+        ],
+    )
+    response = derive_publish_closure_response(state)
+    assert response is not None
+    assert "改了 异常条目" in response["refineReuseNote"]
+    assert "42 步" not in response["refineReuseNote"]

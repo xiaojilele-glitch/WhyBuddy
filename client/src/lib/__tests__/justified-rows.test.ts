@@ -10,7 +10,7 @@ import { DEVICE_ASPECT, aspectForDevice, justifiedRows } from "../justified-rows
 
 /** 真实设备档的宽高比（与 AppRuntimeScreen 的 DEVICE_SPECS 同源） */
 const DESKTOP = 1440 / 810; // 1.778
-const PHONE = 390 / 844; //   0.462
+const PHONE = 405 / 720; //   0.5625（9:16，与出图画布同比）
 
 const ar = (n: number) => ({ aspectRatio: n });
 
@@ -59,7 +59,7 @@ describe("justifiedRows", () => {
     const phoneBox = first.find(b => b.aspectRatio === PHONE)!;
     const deskBox = first.find(b => b.aspectRatio === DESKTOP)!;
     expect(phoneBox.height).toBe(deskBox.height); // 等高
-    expect(phoneBox.width).toBeLessThan(deskBox.width / 3); // 窄得多（1.778 / 0.462 ≈ 3.8）
+    expect(phoneBox.width).toBeLessThan(deskBox.width / 3); // 窄得多（1.778 / 0.5625 ≈ 3.2）
   });
 
   it("行高在目标值附近浮动，不会离谱", () => {
@@ -143,10 +143,15 @@ describe("aspectForDevice", () => {
   it("与首页参照板的出图画布一致（卡片装的是那张图）", () => {
     // 卡片比例的唯一依据是 freeform_block._DEVICE_IMAGE_SIZE：
     //   desktop / tablet → 1280×720、phone → 720×1280。
-    // 不 import 那边（Python），也不再抄 AppRuntimeScreen 的 DEVICE_SPECS——
-    // 2026-08-01 起卡片装的是参照板而不是活渲染，跟屏幕物理比对齐反而是错的
-    // （手机档 390/844 比 9:16 窄 22%，卡片就高 22%，即用户看到的「过长」）。
-    // 出图画布改了而这里没改 → 卡片开始裁图/留边，这条当场红。
+    // 不 import 那边（Python）：卡片比例的依据是**出图画布**，不是屏幕物理比。
+    // 2026-08-01 起卡片装的是参照板而不是活渲染，抄 AppRuntimeScreen 的
+    // DEVICE_SPECS 反而是错的——当时手机档 390/844 比 9:16 窄 22%，卡片就高
+    // 22%，即用户看到的「过长」。
+    //
+    // 2026-08-03 起 DEVICE_SPECS 也是 9:16（405×720），三处数值上一致了，
+    // 但**依据仍然不同**：这里跟的是出图，那里跟的是"设计 LLM 照着哪块画布
+    // 排的版式"。恰好同源不等于可以互相 import——出图尺寸若单独改动，
+    // 这条当场红，而画布那头由 sheet-thumb.test 的一致性用例盯着。
     expect(DEVICE_ASPECT.desktop).toBeCloseTo(16 / 9, 6);
     expect(DEVICE_ASPECT.tablet).toBeCloseTo(16 / 9, 6);
     expect(DEVICE_ASPECT.phone).toBeCloseTo(9 / 16, 6);

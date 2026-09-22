@@ -8,14 +8,12 @@
  */
 
 import React from "react";
-import { Button, message } from "antd";
+import { Button, Empty, Tree, message } from "antd";
+import type { DataNode } from "antd/es/tree";
 import {
-  CaretDownOutlined,
-  CaretRightOutlined,
   CopyOutlined,
   DownloadOutlined,
   FileOutlined,
-  FolderOpenOutlined,
   FolderOutlined,
 } from "@ant-design/icons";
 import type { FiveSystemModel } from "../system-screens/five-system-model";
@@ -60,138 +58,21 @@ function buildDirTree(files: ProjectedFile[]): DirNode {
   return root;
 }
 
-function FileRow({
-  file,
-  depth,
-  active,
-  onSelect,
-}: {
-  file: ProjectedFile;
-  depth: number;
-  active: boolean;
-  onSelect: (path: string) => void;
-}) {
-  const name = file.path.split("/").pop() ?? file.path;
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(file.path)}
-      data-testid={`code-file-${file.path}`}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        width: "100%",
-        textAlign: "left",
-        border: 0,
-        cursor: "pointer",
-        borderRadius: 6,
-        padding: `4px 8px 4px ${21 + depth * 14}px`,
-        fontSize: 12,
-        fontFamily: "ui-monospace, monospace",
-        background: active ? "#e6f4ff" : "transparent",
-        color: active ? "#1677ff" : "#40485a",
-      }}
-    >
-      <FileOutlined
-        style={{
-          fontSize: 12,
-          color: active ? "#1677ff" : LANGUAGE_ICON_COLOR[file.language],
-        }}
-      />
-      <span
-        style={{
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {name}
-      </span>
-    </button>
-  );
-}
-
-function DirRows({
-  node,
-  depth,
-  activePath,
-  collapsed,
-  onToggle,
-  onSelect,
-}: {
-  node: DirNode;
-  depth: number;
-  activePath: string;
-  collapsed: Set<string>;
-  onToggle: (path: string) => void;
-  onSelect: (path: string) => void;
-}) {
-  return (
-    <>
-      {node.dirs.map(dir => {
-        const isCollapsed = collapsed.has(dir.path);
-        return (
-          <React.Fragment key={dir.path}>
-            <button
-              type="button"
-              onClick={() => onToggle(dir.path)}
-              data-testid={`code-dir-${dir.path}`}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                width: "100%",
-                textAlign: "left",
-                border: 0,
-                cursor: "pointer",
-                borderRadius: 6,
-                padding: `4px 8px 4px ${8 + depth * 14}px`,
-                fontSize: 12,
-                fontFamily: "ui-monospace, monospace",
-                background: "transparent",
-                color: "#40485a",
-                fontWeight: 500,
-              }}
-            >
-              {isCollapsed ? (
-                <CaretRightOutlined style={{ fontSize: 9, color: "#8c95a8" }} />
-              ) : (
-                <CaretDownOutlined style={{ fontSize: 9, color: "#8c95a8" }} />
-              )}
-              {isCollapsed ? (
-                <FolderOutlined style={{ fontSize: 12, color: "#8c95a8" }} />
-              ) : (
-                <FolderOpenOutlined
-                  style={{ fontSize: 12, color: "#8c95a8" }}
-                />
-              )}
-              <span>{dir.name}</span>
-            </button>
-            {!isCollapsed && (
-              <DirRows
-                node={dir}
-                depth={depth + 1}
-                activePath={activePath}
-                collapsed={collapsed}
-                onToggle={onToggle}
-                onSelect={onSelect}
-              />
-            )}
-          </React.Fragment>
-        );
-      })}
-      {node.files.map(f => (
-        <FileRow
-          key={f.path}
-          file={f}
-          depth={depth}
-          active={activePath === f.path}
-          onSelect={onSelect}
-        />
-      ))}
-    </>
-  );
+function treeDataOf(node: DirNode): DataNode[] {
+  return [
+    ...node.dirs.map(dir => ({
+      key: `dir:${dir.path}`,
+      title: <span data-testid={`code-dir-${dir.path}`}>{dir.name}</span>,
+      icon: <FolderOutlined />,
+      children: treeDataOf(dir),
+    })),
+    ...node.files.map(file => ({
+      key: file.path,
+      title: <span data-testid={`code-file-${file.path}`}>{file.path.split("/").pop() ?? file.path}</span>,
+      icon: <FileOutlined style={{ color: LANGUAGE_ICON_COLOR[file.language] }} />,
+      isLeaf: true,
+    })),
+  ];
 }
 
 // --- 主视图 -----------------------------------------------------------------
@@ -211,34 +92,11 @@ export function CodeProjectionView({
   const [activePath, setActivePath] = React.useState<string>(
     files[0]?.path ?? ""
   );
-  const [collapsed, setCollapsed] = React.useState<Set<string>>(
-    () => new Set()
-  );
   const active = files.find(f => f.path === activePath) ?? files[0];
-
-  const toggleDir = React.useCallback((path: string) => {
-    setCollapsed(prev => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
-  }, []);
 
   if (files.length === 0) {
     return (
-      <div
-        style={{
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 12,
-          color: "#8c8c8c",
-        }}
-      >
-        本话题还没有可投影的五系统模型
-      </div>
+      <Empty description="本话题还没有可投影的五系统模型" />
     );
   }
 
@@ -265,13 +123,16 @@ export function CodeProjectionView({
             background: "#fcfcfd",
           }}
         >
-          <DirRows
-            node={tree}
-            depth={0}
-            activePath={active?.path ?? ""}
-            collapsed={collapsed}
-            onToggle={toggleDir}
-            onSelect={setActivePath}
+          <Tree
+            showIcon
+            blockNode
+            defaultExpandAll
+            treeData={treeDataOf(tree)}
+            selectedKeys={active ? [active.path] : []}
+            onSelect={keys => {
+              const selected = String(keys[0] ?? "");
+              if (files.some(file => file.path === selected)) setActivePath(selected);
+            }}
           />
         </div>
         <div

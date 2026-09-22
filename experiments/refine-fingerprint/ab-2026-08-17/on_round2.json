@@ -1,0 +1,261 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "financial_bill",
+    "name": "财务账单",
+    "fields": [
+     {
+      "id": "bill_no",
+      "name": "账单编号",
+      "type": "string"
+     },
+     {
+      "id": "community_name",
+      "name": "社区名称",
+      "type": "string"
+     },
+     {
+      "id": "service_project",
+      "name": "服务项目",
+      "type": "string"
+     },
+     {
+      "id": "settlement_status",
+      "name": "结算状态",
+      "type": "enum"
+     }
+    ]
+   },
+   {
+    "id": "service_item",
+    "name": "养老服务",
+    "fields": [
+     {
+      "id": "item_name",
+      "name": "服务名称",
+      "type": "string"
+     },
+     {
+      "id": "price",
+      "name": "价格",
+      "type": "number"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "r1",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "r2",
+    "name": "老年人家属"
+   }
+  ],
+  "permissions": [
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "financial_bill:read",
+   "financial_bill:export",
+   "service_item:read"
+  ],
+  "menus": [
+   {
+    "id": "m1",
+    "label": "运营工作台",
+    "roleRefs": [
+     "r1"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "n_start",
+    "name": "工单创建",
+    "assigneeRole": "r1",
+    "phase": "受理"
+   },
+   {
+    "id": "n_exec",
+    "name": "工单执行",
+    "assigneeRole": "r1",
+    "phase": "跟进"
+   },
+   {
+    "id": "n_end",
+    "name": "工单归档",
+    "assigneeRole": "r1",
+    "phase": "完成"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "n_start",
+    "to": "n_exec",
+    "condition": "顾问指派执行人员"
+   },
+   {
+    "from": "n_exec",
+    "to": "n_end",
+    "condition": "居家照护服务完成"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "运营工作台",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_type",
+     "work_order.elder_name"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "家属服务中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_name",
+     "service_item.item_name",
+     "service_item.price"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "service_item:read"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "财务结算大屏",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "financial_bill.bill_no",
+     "financial_bill.community_name",
+     "financial_bill.service_project",
+     "financial_bill.settlement_status"
+    ],
+    "actionPermissions": [
+     "financial_bill:read"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_dispatch",
+    "name": "智能派单助手",
+    "inputFields": [
+     "work_order.service_type",
+     "work_order.elder_name"
+    ],
+    "outputField": "work_order.order_no",
+    "roleRefs": [
+     "r1"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p1",
+    "workflowRef": "n_start"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "n_exec"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "n_end"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "r1",
+   "r2"
+  ],
+  "dataModelRefs": [
+   "work_order",
+   "financial_bill",
+   "service_item"
+  ],
+  "appIdentity": {
+   "appName": "安康云"
+  },
+  "invariants": [
+   {
+    "id": "inv_order_fields",
+    "statement": "服务工单必须记录工单编号与老人姓名",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.order_no",
+     "work_order.elder_name"
+    ]
+   },
+   {
+    "id": "inv_workflow_assignment",
+    "statement": "工单创建由家属节点发起，后续执行与归档由社区养老顾问负责",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "r1",
+     "r2",
+     "n_start",
+     "n_exec",
+     "n_end"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

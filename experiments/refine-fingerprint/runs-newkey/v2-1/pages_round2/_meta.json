@@ -1,0 +1,32 @@
+{
+ "navItems": [
+  {
+   "id": "elderly_list",
+   "name": "老人档案列表"
+  },
+  {
+   "id": "work_order_dispatch",
+   "name": "服务工单调度"
+  },
+  {
+   "id": "operation_dashboard",
+   "name": "运营数据总览看板"
+  },
+  {
+   "id": "financial_report",
+   "name": "财务结算报表"
+  },
+  {
+   "id": "my_tasks",
+   "name": "我的任务"
+  }
+ ],
+ "boundPages": 5,
+ "pageIds": [
+  "work_order_dispatch",
+  "financial_report",
+  "operation_dashboard",
+  "elderly_list",
+  "my_tasks"
+ ]
+}

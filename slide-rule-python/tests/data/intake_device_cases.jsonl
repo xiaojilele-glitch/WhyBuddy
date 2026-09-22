@@ -38,3 +38,9 @@
 {"id": "dev_explicit_002", "text": "做个手机端的巡店打分工具", "expect": "phone", "note": "明说手机端"}
 {"id": "dev_explicit_003", "text": "做个 PC 端的合同管理后台", "expect": "desktop", "note": "明说 PC 端"}
 {"id": "dev_explicit_004", "text": "网页版的客户跟进管理，销售在电脑上用", "expect": "desktop", "note": "明说网页版 + 电脑"}
+{"id": "dev_tablet_001", "text": "餐厅服务员拿平板给客人点单、改菜、送厨", "expect": "tablet", "note": "手持平板点单，视野接近桌面"}
+{"id": "dev_tablet_002", "text": "查房平板：医生到床边看病程、开医嘱、签字确认", "expect": "tablet", "note": "查房、手持、坐站切换"}
+{"id": "dev_tablet_003", "text": "门店店长拿平板巡店打分、对照陈列标准拍照", "expect": "tablet", "note": "巡店演示姿态"}
+{"id": "dev_tablet_004", "text": "展厅讲解员支起平板给客户演示户型与报价", "expect": "tablet", "note": "现场演示、支起"}
+{"id": "dev_tablet_005", "text": "病房护士站的床旁护理平板，到床边点选护理项", "expect": "tablet", "note": "床旁、点按为主"}
+{"id": "dev_explicit_005", "text": "做个平板端的堂食点单系统", "expect": "tablet", "note": "明说平板端"}

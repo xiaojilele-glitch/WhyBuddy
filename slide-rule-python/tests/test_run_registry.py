@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services import run_registry  # noqa: E402
+from services import run_pause, run_registry  # noqa: E402
 
 
 def setup_function(_fn):
@@ -159,6 +159,105 @@ def test_subscriber_presence_blocks_orphan_cancel(monkeypatch):
 
     run = asyncio.run(scenario())
     assert run.status == "complete"
+
+
+def test_orphan_watchdog_does_not_cancel_a_held_run(monkeypatch):
+    """⚠ 关页面十分钟 ≠ 取消。暂停等人时不烧 LLM，看门狗必须放手。
+
+    把 ``is_holding`` 那两行删掉，这条立刻红——旧看门狗会把这一轮判死。
+    """
+    monkeypatch.setenv("SLIDERULE_RUN_ORPHAN_GRACE_SECONDS", "0.15")
+
+    async def scenario():
+        async def factory():
+            while True:
+                gate = run_pause.take_hold()
+                if gate is not None:
+                    try:
+                        await gate.wait("loop-0")
+                    finally:
+                        run_pause.finish_hold()
+                    break
+                await asyncio.sleep(0.01)
+            yield {"type": "reasoning_step", "label": "after-pause"}
+
+        run = await run_registry.start_run("s-held", factory)
+        assert run_registry.hold_run(run.run_id) is True
+        await asyncio.sleep(0.8)  # 远超 0.15s 宽限，且零订阅者
+        assert run.status == "running", f"暂停中被孤儿看门狗收成了 {run.status}"
+        assert run.cancel_reason != "orphan"
+        assert run_registry.release_run(run.run_id, skip=True) is True
+        await run.task
+        return run
+
+    run = asyncio.run(scenario())
+    assert run.status == "complete"
+
+
+def test_unattended_skip_finishes_the_run_instead_of_orphan_cancel(monkeypatch):
+    """超时按跳过收口之后，没观众也要把这一轮跑完——否则闭环黄。"""
+    monkeypatch.setenv("SLIDERULE_RUN_ORPHAN_GRACE_SECONDS", "0.15")
+
+    async def scenario():
+        async def factory():
+            while True:
+                gate = run_pause.take_hold()
+                if gate is not None:
+                    try:
+                        await gate.wait("loop-0")
+                    finally:
+                        run_pause.finish_hold()
+                    break
+                await asyncio.sleep(0.01)
+            yield {"type": "reasoning_step", "label": "after-skip"}
+
+        run = await run_registry.start_run("s-skip", factory)
+        run_pause.request_hold(
+            run.pause_slot, run_pause.PauseBudget(seconds=0.2, non_interactive=True)
+        )
+        await run.task
+        return run
+
+    run = asyncio.run(scenario())
+    assert run.status == "complete"
+    assert run.cancel_reason != "orphan"
+
+
+def test_answered_then_unwatched_still_orphan_cancels(monkeypatch):
+    """反向：人答过再关页面，后面还在烧 LLM，看门狗该收。"""
+    monkeypatch.setenv("SLIDERULE_RUN_ORPHAN_GRACE_SECONDS", "0.15")
+
+    async def scenario():
+        async def factory():
+            while True:
+                gate = run_pause.take_hold()
+                if gate is not None:
+                    try:
+                        await gate.wait("loop-0")
+                    finally:
+                        run_pause.finish_hold()
+                    break
+                await asyncio.sleep(0.01)
+            await asyncio.sleep(3600)
+            yield {"type": "never"}
+
+        run = await run_registry.start_run("s-answered", factory)
+        gate = run_pause.request_hold(run.pause_slot, run_pause.PauseBudget(seconds=5))
+        assert gate is not None
+        for _ in range(50):
+            if run.pause_slot.active is not None:
+                break
+            await asyncio.sleep(0.02)
+        gate.answer({"选了": "工号"})
+        for _ in range(80):
+            if run.status == "cancelled" or run.finished_at is not None:
+                break
+            await asyncio.sleep(0.05)
+        return run
+
+    run = asyncio.run(scenario())
+    assert run.status == "cancelled"
+    assert run.cancel_reason == "orphan"
 
 
 def test_on_complete_hook_rewrites_complete_event():

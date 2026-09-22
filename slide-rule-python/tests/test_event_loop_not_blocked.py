@@ -12,6 +12,8 @@
 这份测试盯的就是这条纪律不被改回去。
 """
 
+from plan_approval_support import approved_execution_payload
+
 import inspect
 import threading
 import time
@@ -61,6 +63,17 @@ def test_health_still_answers_while_a_long_drive_is_running(monkeypatch):
 
     app = FastAPI()
     app.include_router(sliderule_full.router, prefix="/api/sliderule")
+    # 推演要求登录（2026-08-02）。这条用例自己建了 app，conftest 那个
+    # 全局默认身份够不着它——不装的话 drive-full 直接 401，started 永不置位，
+    # 用例会以"推演没跑起来"失败（而不是静默空过，那条断言就是为此写的）。
+    from middlewares.current_user import optional_user
+
+    class _U:
+        id = "u-loop-test"
+        is_active = True
+        is_superuser = False
+
+    app.dependency_overrides[optional_user] = lambda: _U()
 
     @app.get("/api/health")
     def health():
@@ -74,7 +87,7 @@ def test_health_still_answers_while_a_long_drive_is_running(monkeypatch):
         def fire():
             try:
                 client.post("/api/sliderule/drive-full",
-                            json={"state": state, "userText": "阻塞测试", "max_loops": 1})
+                            json=approved_execution_payload({"state": state, "userText": "阻塞测试", "max_loops": 1}))
             except Exception:
                 pass
 

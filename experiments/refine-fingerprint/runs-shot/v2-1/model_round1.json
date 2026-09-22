@@ -1,0 +1,322 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "id_card",
+      "name": "身份证号",
+      "type": "string"
+     },
+     {
+      "id": "room",
+      "name": "社区房号",
+      "type": "string"
+     },
+     {
+      "id": "risk_level",
+      "name": "健康风险等级",
+      "type": "enum"
+     },
+     {
+      "id": "nursing_level",
+      "name": "护理等级",
+      "type": "enum"
+     },
+     {
+      "id": "archive_no",
+      "name": "档案编号",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "service_item",
+      "name": "服务项目",
+      "type": "string"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约时段",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "长者",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "remark",
+      "name": "备注",
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "id": "service_staff",
+    "name": "服务人员",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "title",
+      "name": "职称",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "状态",
+      "type": "enum"
+     },
+     {
+      "id": "specialty",
+      "name": "擅长",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "advisor",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "staff",
+    "name": "服务人员"
+   },
+   {
+    "id": "director",
+    "name": "养老中心主管"
+   }
+  ],
+  "permissions": [
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "service_staff:read",
+   "service_staff:manage"
+  ],
+  "menus": [
+   {
+    "id": "menu_advisor",
+    "label": "养老顾问工作台",
+    "roleRefs": [
+     "advisor"
+    ],
+    "permissionRefs": [
+     "elder:read",
+     "work_order:create"
+    ]
+   },
+   {
+    "id": "menu_director",
+    "label": "运营总监看板",
+    "roleRefs": [
+     "director"
+    ],
+    "permissionRefs": [
+     "elder:read",
+     "work_order:read",
+     "service_staff:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "n_created",
+    "name": "工单创建",
+    "assigneeRole": "advisor",
+    "phase": "创建"
+   },
+   {
+    "id": "n_assigned",
+    "name": "待服务执行",
+    "assigneeRole": "staff",
+    "phase": "执行"
+   },
+   {
+    "id": "n_completed",
+    "name": "服务完成",
+    "assigneeRole": "staff",
+    "phase": "结单"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "n_created",
+    "to": "n_assigned",
+    "condition": "顾问选择服务项目并指定服务人员"
+   },
+   {
+    "from": "n_assigned",
+    "to": "n_completed",
+    "condition": "服务人员提交服务完成凭证"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.id_card",
+     "elder.room",
+     "elder.risk_level",
+     "elder.nursing_level",
+     "elder.archive_no"
+    ],
+    "actionPermissions": [
+     "elder:create",
+     "elder:read",
+     "elder:update"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "服务工单调度页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.service_item",
+     "work_order.appointment_time",
+     "work_order.elder_ref",
+     "work_order.remark"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:read",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "服务人员移动端工作台",
+    "kind": "workbench",
+    "fieldBindings": [
+     "service_staff.name",
+     "service_staff.title",
+     "service_staff.status",
+     "service_staff.specialty"
+    ],
+    "actionPermissions": [
+     "service_staff:read",
+     "work_order:read",
+     "work_order:update"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "运营数据看板页",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "elder.risk_level",
+     "work_order.service_item"
+    ],
+    "actionPermissions": [
+     "elder:read",
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_risk_assess",
+    "name": "老人风险智能评估",
+    "inputFields": [
+     "elder.nursing_level"
+    ],
+    "outputField": "elder.risk_level",
+    "roleRefs": [
+     "advisor",
+     "director"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p2",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "n_assigned"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "advisor",
+   "staff",
+   "director"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "work_order",
+   "service_staff"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_archive_no",
+    "statement": "当社区养老顾问提交老人基本信息及病史时，系统应保存并生成唯一健康档案编号",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "elder",
+     "elder.archive_no"
+    ]
+   },
+   {
+    "id": "inv_work_order_dispatch",
+    "statement": "当顾问选择服务项目并指定服务人员时，工单进入待服务执行状态并推送通知",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.service_item",
+     "n_created",
+     "n_assigned"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

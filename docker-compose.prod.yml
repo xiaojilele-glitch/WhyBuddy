@@ -3,7 +3,7 @@
 # 前置：main 每次发版由 .github/workflows/deploy-images.yml 自动构建镜像
 # 推到 ghcr.io。服务器上：
 #
-#   cp .env.example .env    # 填 LLM_API_KEY + SESSION_SECRET
+#   cp .env.example .env    # 填 LLM_API_KEY + SLIDERULE_AUTH_SECRET
 #   docker compose -f docker-compose.prod.yml pull
 #   docker compose -f docker-compose.prod.yml up -d
 #   → http://服务器IP:3000/agent-loop/workbench
@@ -15,13 +15,30 @@
 #   docker compose -f docker-compose.prod.yml --profile auto up -d
 #   （watchtower 每 5 分钟检查新镜像，自动拉取重启；回滚前记得先停它）
 #
-# 回滚：把下面两个 image 的 :latest 换成某次发版的 :<commit-sha> 再 up -d。
+# ── 镜像地址：四个变量，从粗到细 ────────────────────────────
+# 默认拼出 ghcr.io/xiaojilele-glitch/whybuddy-{app,python}:latest。四段都能单独换：
+#
+#   SLIDERULE_REGISTRY     仓库主机   默认 ghcr.io
+#   SLIDERULE_IMAGE_OWNER  命名空间   默认 xiaojilele-glitch
+#   SLIDERULE_IMAGE_TAG    版本       默认 latest
+#   SLIDERULE_IMAGE_APP / _PYTHON     整条地址，给上面三个都拼不出来的情况兜底
+#
+# ⚠️ 换 registry 通常**必须连 owner 一起换**。各家仓库的命名空间是各自独立的：
+# 单独设 SLIDERULE_REGISTRY=docker.io 会拼出 docker.io/xiaojilele-glitch/…，
+# 而那个用户在 Docker Hub 上并不存在——看着像配好了，pull 才报 not found。
+#
+# 自己 fork 后用自己构建的镜像（deploy-images.yml 会推到你名下）：
+#   SLIDERULE_REGISTRY=ghcr.io
+#   SLIDERULE_IMAGE_OWNER=<你的GitHub用户名小写>
+#
+# 回滚到某次发版：SLIDERULE_IMAGE_TAG=<commit-sha> 再 up -d（一处改，两个服务一起走）。
 #
 # 国内服务器拉 ghcr 慢/超时，三选一：
-#   a) .env 加 SLIDERULE_REGISTRY=ghcr.nju.edu.cn（ghcr 镜像站）
-#   b) CI 配了 Docker Hub 双推后，.env 覆盖完整镜像地址（走 Hub 国内加速源）：
-#      SLIDERULE_IMAGE_APP=docker.io/<你的DockerHub用户名>/whybuddy-app:latest
-#      SLIDERULE_IMAGE_PYTHON=docker.io/<你的DockerHub用户名>/whybuddy-python:latest
+#   a) SLIDERULE_REGISTRY=ghcr.nju.edu.cn（ghcr 镜像站，owner 不用动——镜像站是透传的）
+#   b) CI 配了 Docker Hub 双推后走 Hub（注意 owner 是你的 **Docker Hub** 用户名，
+#      跟 GitHub 用户名不一定一样）：
+#      SLIDERULE_REGISTRY=docker.io
+#      SLIDERULE_IMAGE_OWNER=<你的DockerHub用户名>
 #   c) 给 Docker daemon 配代理
 #
 # 账号功能（可选，遗留登录/邮箱验证码/projects 才需要）：
@@ -29,15 +46,25 @@
 
 services:
   python:
-    image: ${SLIDERULE_IMAGE_PYTHON:-${SLIDERULE_REGISTRY:-ghcr.io}/xiaojilele-glitch/whybuddy-python:latest}
+    image: ${SLIDERULE_IMAGE_PYTHON:-${SLIDERULE_REGISTRY:-ghcr.io}/${SLIDERULE_IMAGE_OWNER:-xiaojilele-glitch}/whybuddy-python:${SLIDERULE_IMAGE_TAG:-latest}}
     container_name: sliderule-python
     env_file:
       - .env
     environment:
       PORT: 9700
       SLIDE_RULE_INTERNAL_KEY: ${SLIDE_RULE_INTERNAL_KEY:-dev-slide-rule-internal}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-sliderule}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-sliderule_minio_change_me}
+      S3_BUCKET: ${S3_BUCKET:-sliderule-skills}
     volumes:
       - sliderule-python-data:/app/data
+    networks:
+      - default
+      - postgres-internal
+    depends_on:
+      minio:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -53,7 +80,7 @@ services:
     restart: unless-stopped
 
   app:
-    image: ${SLIDERULE_IMAGE_APP:-${SLIDERULE_REGISTRY:-ghcr.io}/xiaojilele-glitch/whybuddy-app:latest}
+    image: ${SLIDERULE_IMAGE_APP:-${SLIDERULE_REGISTRY:-ghcr.io}/${SLIDERULE_IMAGE_OWNER:-xiaojilele-glitch}/whybuddy-app:${SLIDERULE_IMAGE_TAG:-latest}}
     container_name: sliderule-app
     depends_on:
       python:
@@ -76,6 +103,9 @@ services:
       AGENT_LOOP_API_TARGET: http://python:9700
     ports:
       - "3000:3001"
+    networks:
+      - default
+      - postgres-internal
     healthcheck:
       test:
         [
@@ -128,8 +158,39 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # 技能包货仓。API 只给 compose 内网（python 走 http://minio:9000），
+  # 9000 不映射到公网。控制台只绑 127.0.0.1，SSH 隧道再看。
+  minio:
+    # Docker Hub `minio/minio` 在这台生产机上 pull 被拒；Quay 同官方镜像。
+    image: quay.io/minio/minio:latest
+    container_name: sliderule-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-sliderule}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-sliderule_minio_change_me}
+    volumes:
+      - sliderule-minio-data:/data
+    ports:
+      - "127.0.0.1:9001:9001"
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    restart: unless-stopped
+
 volumes:
   sliderule-mysql-data:
     name: sliderule-mysql-data
   sliderule-python-data:
     name: sliderule-python-data
+  sliderule-minio-data:
+    name: sliderule-minio-data
+
+networks:
+  postgres-internal:
+    external: true
+    name: postgres-stack-internal

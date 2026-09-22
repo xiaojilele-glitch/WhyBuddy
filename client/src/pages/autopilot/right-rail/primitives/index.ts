@@ -19,7 +19,9 @@
  * - locale 仅影响 `<StatusCapsule>` 内部静态文案，其他 primitive 透传字符串。
  */
 
-export type SubStageStatus = "completed" | "active" | "pending";
+// 定义挪到 `sub-stage-status.ts`（叶子），这里 re-export 保持对外 API 不变。
+// 两个 primitive 改从叶子取，桶文件的环就断了。
+export type { SubStageStatus } from "./sub-stage-status";
 
 export { StatusCapsule } from "./status-capsule";
 export type { StatusCapsuleProps } from "./status-capsule";

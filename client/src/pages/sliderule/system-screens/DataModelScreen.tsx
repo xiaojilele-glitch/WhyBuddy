@@ -6,6 +6,7 @@
  */
 
 import React, { useMemo, useState } from "react";
+import { Segmented } from "antd";
 import { MermaidDiagram } from "../MermaidDiagram";
 import type { PublishClosureSummary } from "../derive-cross-runtime-summary";
 import { EvidenceBadges } from "./EvidenceBadges";
@@ -13,6 +14,7 @@ import { datamodelToMermaid, type FiveSystemModel } from "./five-system-model";
 import { EntityDataPanel } from "../live-runtime/EntityDataPanel";
 import { EmptyScreenHint } from "./EmptyScreenHint";
 import { EntityRelationGraph } from "./EntityRelationGraph";
+import { DEFAULT_SESSION_ID } from "@/lib/sliderule-session-id";
 
 interface DataModelScreenProps {
   publishClosure?: PublishClosureSummary | null;
@@ -41,7 +43,7 @@ export function DataModelScreen({
   publishClosure,
   mermaidSource,
   model,
-  sessionId = "sliderule-v51-product",
+  sessionId = DEFAULT_SESSION_ID,
   isActive = false,
   className = "",
 }: DataModelScreenProps) {
@@ -69,36 +71,23 @@ export function DataModelScreen({
       data-active={isActive}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-[#e8eaee] px-4 py-2.5">
-        <div className="h-2 w-2 rounded-full bg-blue-400" />
-        <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-          DataModel
-        </span>
+      <div className="flex items-center gap-2 border-b border-[#e5e7eb] px-4 py-2">
+        <span className="text-[12px] font-medium text-stone-700">数据模型</span>
         <div className="ml-auto flex items-center gap-1.5">
           {canEditData && (
-            <div
-              className="flex items-center gap-0.5 rounded-full bg-[#e9edf2] p-0.5 ring-1 ring-[#e5e7eb]/80"
+            <Segmented
+              size="small"
               data-testid="datamodel-mode-toggle"
-            >
-              {([
+              value={screenMode}
+              onChange={value => setScreenMode(value as "diagram" | "table")}
+              options={[
                 { id: "diagram" as const, label: "模型图" },
                 { id: "table" as const, label: "数据表" },
-              ]).map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  data-testid={`datamodel-mode-${id}`}
-                  onClick={() => setScreenMode(id)}
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                    screenMode === id
-                      ? "bg-white text-stone-800 shadow-sm"
-                      : "text-stone-500 hover:text-stone-700"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+              ].map(({ id, label }) => ({
+                value: id,
+                label: <span data-testid={`datamodel-mode-${id}`}>{label}</span>,
+              }))}
+            />
           )}
           <EvidenceBadges evidence={evidence} />
         </div>
@@ -109,7 +98,7 @@ export function DataModelScreen({
           <EntityDataPanel model={model} sessionId={sessionId} />
         </div>
       ) : canEditData ? (
-        // 结构化模型在手 → G6 实体关系图（卡片节点 + 关联边 + 拖拽缩放）
+        // 结构化模型在手 → 表节点 ER 图（字段行上接线）
         <div className="min-h-0 flex-1">
           <EntityRelationGraph datamodel={model!.datamodel} />
         </div>

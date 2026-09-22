@@ -1,0 +1,16 @@
+:root {
+  color: #202426;
+  background: #f4f6f5;
+  font-family: system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 720px; margin: 0 auto; padding: 48px 24px; }
+h1 { margin: 0 0 32px; font-size: 28px; font-weight: 600; }
+.counter { display: flex; align-items: center; gap: 16px; }
+output { min-width: 72px; font-size: 24px; font-variant-numeric: tabular-nums; }
+button { width: 44px; height: 44px; border: 0; border-radius: 6px; color: white; background: #167456; font-size: 24px; cursor: pointer; }
+button:hover { background: #10583f; }
+button:focus-visible { outline: 3px solid #d18820; outline-offset: 3px; }

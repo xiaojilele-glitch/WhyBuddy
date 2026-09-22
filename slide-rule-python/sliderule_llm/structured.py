@@ -27,6 +27,68 @@ import re
 from typing import Any
 
 
+#: 模型把「一串字符串」写歪的那几种形状。
+#:
+#: 抄的标准答案：grok-build `xai-tool-types/src/serde_lenient.rs` 模块头：
+#:
+#:     //! Lenient deserializers for tool arguments whose wire shape models get
+#:     //! wrong in predictable ways.
+#:     //!
+#:     //! String lists (e.g. `task_ids`) may arrive as a bare string or number
+#:     //! instead of an array; see [`lenient_string_list_from_json`].
+#:
+#:     /// - array of strings/numbers → each element as a string (`228` → `"228"`),
+#:     /// - bare string or number → one-element list,
+#:     /// - `null` → empty list.
+#:     /// Booleans, objects, and nested arrays are rejected (`None`).
+#:
+#: 关键是**裸字符串 → 单元素列表**，不是丢掉。本仓原来在
+#: `spec_tree._sanitize_assumptions` 里写的是「不是 list 就当空」——模型把
+#: alternatives 写成 "工号或扫码" 时，那条用户本可以点的备选**被静静扔了**，
+#: 卡退化成一句"知会一声"，改都没得改（2026-08-27 审查真机验的）。
+#:
+#: ⚠ 只给**模型产出**用。内部数据的 `isinstance(x, list) else []` 别改成这个：
+#:   那些地方形状不对是自己的 bug，宽容等于把 bug 藏起来。
+
+
+def lenient_string_list(value: Any) -> list[str] | None:
+    """模型给的「字符串清单」→ list[str]；形状真的不认识才返回 None。
+
+    照 grok 的口径逐条对齐（见上面那段注释）：
+
+        ["a", 228]   → ["a", "228"]
+        "工号或扫码"  → ["工号或扫码"]      ← 要害在这一行
+        228          → ["228"]
+        None / 缺席   → []
+        True / {...} / [[...]] → None（不认识，交给调用方决定怎么办）
+
+    bool 必须在 int 之前判——Python 里 `isinstance(True, int)` 是真，
+    不先挡下来 True 会变成 "True" 混进备选里。
+    """
+
+    def _one(v: Any) -> str | None:
+        if isinstance(v, bool):
+            return None
+        if isinstance(v, str):
+            return v
+        if isinstance(v, (int, float)):
+            return str(v)
+        return None
+
+    if value is None:
+        return []
+    if isinstance(value, list):
+        out: list[str] = []
+        for item in value:
+            text = _one(item)
+            if text is None:
+                return None
+            out.append(text)
+        return out
+    text = _one(value)
+    return None if text is None else [text]
+
+
 class StructuredLlmError(RuntimeError):
     """结构化通道失败（调用方应回落旧路径）。"""
 
@@ -70,7 +132,7 @@ def structured_llm_json(
     *,
     required_keys: tuple[str, ...],
     temperature: float = 0.2,
-    max_tokens: int = 8000,
+    max_tokens: int | None = None,
     max_retries: int = 2,
     reasoning_effort: str | None = None,
 ) -> dict[str, Any]:

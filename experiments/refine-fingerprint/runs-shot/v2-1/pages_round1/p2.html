@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安养通 - 服务工单调度页</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* 自定义滚动条与辅助样式 */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+      }
+      ::-webkit-scrollbar-thumb {
+        gap: 8px;
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+    </style>
+<style>[aria-current="page"]{background-color:color-mix(in srgb, currentColor 12%, transparent);font-weight:600}</style></head>
+<body class="bg-slate-100 text-slate-800 font-sans antialiased h-screen overflow-hidden flex">
+
+    <!-- 左侧固定主导航 -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col flex-shrink-0 border-r border-slate-800">
+    <div class="h-16 flex items-center px-6 gap-3 border-b border-slate-800">
+      <div class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-lg shadow-md">安养通</div>
+      <div class="flex flex-col">
+        <span class="text-white font-bold text-base tracking-wide">安养通养通</span>
+        <span class="text-xs text-slate-400">社区养老服务管理</span>
+      </div>
+    </div>
+    
+    <nav class="flex-1 px-4 py-6 space-y-1.5 text-sm font-medium overflow-y-auto">
+<a data-page-id="p1" href="#" class="flex gap-3 items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg><span>老人档案管理页</span></a>
+<a aria-current="page" data-page-id="p2" href="#" class="bg-primary flex gap-3 items-center px-4 py-3 rounded-lg shadow-sm text-white"><svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg><span>服务工单调度页</span></a>
+<a data-page-id="p3" href="#" class="flex gap-3 items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg><span>服务人员移动端工作台</span></a>
+<a data-page-id="p4" href="#" class="flex gap-3 items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg><span>运营数据看板页</span></a>
+</nav>
+
+    <div class="p-4 border-t border-slate-800">
+      <div class="flex items-center gap-3 px-2 py-1">
+        <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white font-medium text-sm">主</div>
+        <div class="flex flex-col overflow-hidden">
+          <span class="text-xs font-medium text-white truncate">社区养老顾问</span>
+          <span class="text-[11px] text-slate-400 truncate">zhang.mgr@anyang.com</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+    <!-- 右侧主视口 -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+        
+        <!-- 顶部 Header -->
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0 shadow-sm">
+      <nav aria-label="Breadcrumb" class="text-sm">
+        <ol class="flex items-center space-x-2 text-slate-500">
+          <li><a href="#" class="hover:text-primary transition-colors">运营中心</a></li>
+          <li class="text-slate-300">/</li>
+          <li><a href="#" class="text-slate-800 font-medium" aria-current="page">服务工单调度页</a></li>
+        </ol>
+      </nav>
+
+      <div class="flex items-center gap-4">
+        <div class="flex items-center bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg text-amber-800 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-accent animate-pulse mr-2"></span>
+          <span>紧急呼叫 1 起待处理</span>
+        </div>
+        <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg font-medium">
+          今天是 2026-06-08 星期一
+        </div>
+      </div>
+    </header>
+
+        <!-- 正文区域 -->
+        <main class="flex-1 overflow-y-auto p-8 space-y-6">
+            
+            <!-- 页面大标题与快捷操作 -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800 tracking-tight">服务工单调度中心</h2>
+                    <p class="text-sm text-slate-500 mt-1">实时掌控长者服务需求，高效调配社区护理与保障人员资源。</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button class="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all shadow-sm">
+                        导出今日工单报表
+                    </button>
+                    <button data-action="createRecord" data-entity="work_order" class="px-4 py-2 bg-[#20806F] text-white rounded-xl text-sm font-medium hover:bg-[#1a6c5e] transition-all shadow-sm flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        手录新服务需求
+                    </button>
+                </div>
+            </div>
+
+            <!-- 核心统计卡片区 (4 张卡片) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <!-- 待指派工单 -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-[#20806F]/5 rounded-bl-full pointer-events-none"></div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-slate-500">待指派工单</span>
+                        <span class="p-2 bg-[#20806F]/10 text-[#20806F] rounded-xl">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </span>
+                    </div>
+                    <div class="mt-4 flex items-baseline justify-between">
+                        <span data-value="work_order" data-aggregate="count" class="text-3xl font-bold text-slate-800">12</span>
+                        <span class="text-xs text-[#FA8C16] font-medium bg-[#FA8C16]/10 px-2 py-1 rounded-lg">含 3 个紧急</span>
+                    </div>
+                </div>
+
+                <!-- 进行中 -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-bl-full pointer-events-none"></div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-slate-500">进行中工单</span>
+                        <span class="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        </span>
+                    </div>
+                    <div class="mt-4 flex items-baseline justify-between">
+                        <span class="text-3xl font-bold text-slate-800">28</span>
+                        <span class="text-xs text-slate-500">服务人员全员在岗</span>
+                    </div>
+                </div>
+
+                <!-- 今日已完成 -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-bl-full pointer-events-none"></div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-slate-500">今日已完成</span>
+                        <span class="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                    </div>
+                    <div class="mt-4 flex items-baseline justify-between">
+                        <span class="text-3xl font-bold text-slate-800">45</span>
+                        <span class="text-xs text-emerald-600 font-medium">满意度 99.2%</span>
+                    </div>
+                </div>
+
+                <!-- 紧急求助警报 -->
+                <div class="bg-white p-6 rounded-2xl border border-[#FA8C16]/30 shadow-sm relative overflow-hidden bg-gradient-to-br from-white to-[#FA8C16]/5">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-[#FA8C16]/10 rounded-bl-full pointer-events-none"></div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-slate-700">紧急求助警报</span>
+                        <span class="p-2 bg-[#FA8C16] text-white rounded-xl shadow-sm">
+                            <svg class="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        </span>
+                    </div>
+                    <div class="mt-4 flex items-baseline justify-between">
+                        <span class="text-3xl font-bold text-[#FA8C16]">2</span>
+                        <span class="text-xs text-[#FA8C16] font-bold">需立刻人工介入</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 工单状态筛选标签栏 -->
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+                    <button class="px-4 py-2 rounded-xl text-sm font-semibold bg-[#20806F] text-white shadow-sm transition-all">全部待指派 (12)</button>
+                    <button class="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-all">紧急求助 (2)</button>
+                    <button class="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-all">上门助浴 (5)</button>
+                    <button class="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-all">康复护理 (3)</button>
+                    <button class="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-all">基础体检 (2)</button>
+                </div>
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <div class="relative flex-1 md:w-64">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        </span>
+                        <input type="text" placeholder="搜索长者姓名、服务项目..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-[#20806F] transition-all">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 主体区域：左右 50% 宽度分屏布局 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                
+                <!-- 左侧：待指派工单列表面板 -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[700px]">
+                    <!-- 面板标题 -->
+                    <div class="p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-bold text-slate-800 text-base">待指派工单队列</h3>
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#FA8C16]/10 text-[#FA8C16]">12条待处理</span>
+                        </div>
+                        <span class="text-xs text-slate-500">支持点击快速指派或一键智能推荐</span>
+                    </div>
+
+                    <!-- 列表内容 -->
+                    <div class="flex-1 overflow-y-auto p-4 space-y-4" data-rows="work_order">
+                        
+                        <!-- 工单卡片 1 (紧急) -->
+                        <div class="p-4 rounded-xl border-2 border-[#FA8C16]/30 bg-[#FA8C16]/5 hover:shadow-md transition-all relative">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-[#FA8C16] text-white">紧急</span>
+                                    <h4 class="font-bold text-slate-800 text-base"><span data-field="elder_ref">张大爷</span> <span class="text-xs font-normal text-slate-500">（78岁 / 祥和里小区 3号楼 201）</span></h4>
+                                </div>
+                                <span class="text-xs text-slate-400">2023-10-25</span>
+                            </div>
+                            <div class="mt-3 grid grid-cols-2 gap-2 text-sm text-slate-600 bg-white/60 p-3 rounded-lg border border-slate-200/60">
+                                <div><span class="text-slate-400">服务项目：</span><span data-field="service_item">上门突发医疗辅助</span></div>
+                                <div><span class="text-slate-400">预约时段：</span><span data-field="appointment_time">今天 14:00 - 15:00</span></div>
+                            </div>
+                            <div class="mt-3 flex items-center justify-between pt-2 border-t border-slate-200/60">
+                                <span class="text-xs text-slate-500"><span data-field="remark">长者身体状况：患有高血压，需谨慎陪同</span></span>
+                                <div class="flex items-center gap-2">
+                                    <button data-action="submitWorkflow" data-entity="work_order" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors shadow-sm">提交审批</button>
+                                    <button data-action="approveWorkflow" data-entity="work_order" class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm">通过</button>
+                                    <button data-action="openRecord" data-entity="work_order" class="px-3 py-1.5 bg-[#FA8C16] text-white rounded-lg text-xs font-semibold hover:bg-[#e07b12] transition-colors shadow-sm">
+                                        一键智能派单
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- 右侧：服务人员在线状态与派单调度面板 -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[700px]">
+                    <!-- 面板标题 -->
+                    <div class="p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-bold text-slate-800 text-base">服务人员状态与负载</h3>
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">18人在线</span>
+                        </div>
+                        <span class="text-xs text-slate-500">负载率评估与任务进度</span>
+                    </div>
+
+                    <!-- 人员列表内容 -->
+                    <div class="flex-1 overflow-y-auto p-4 space-y-4" data-rows="service_staff">
+                        
+                        <!-- 人员卡片 1 -->
+                        <div class="p-4 rounded-xl border border-slate-200 bg-white hover:border-[#20806F]/40 transition-all">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full bg-[#20806F]/10 text-[#20806F] font-bold flex items-center justify-center text-sm">
+                                        王护
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <h4 class="font-bold text-slate-800 text-sm"><span data-field="name">王秀兰</span> <span class="text-xs font-normal text-slate-500">（<span data-field="title">高级护理师</span>）</span></h4>
+                                            <span data-field="status" class="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-600 border border-emerald-200">空闲中</span>
+                                        </div>
+                                        <p class="text-xs text-slate-500 mt-0.5">擅长：<span data-field="specialty">专业助浴、慢病护理、康复按摩</span></p>
+                                    </div>
+                                </div>
+                                <button data-action="openRecord" data-entity="service_staff" class="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold hover:bg-[#20806F] hover:text-white transition-colors">
+                                    指派给她
+                                </button>
+                            </div>
+                            <!-- 负载进度条 -->
+                            <div class="mt-3 pt-3 border-t border-slate-100">
+                                <div class="flex justify-between text-xs text-slate-500 mb-1">
+                                    <span>今日工作负载 (已完成2单 / 进行中0单)</span>
+                                    <span class="font-semibold text-slate-700">35.0%</span>
+                                </div>
+                                <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                    <div class="h-full bg-[#20806F] rounded-full" style="width: 35%;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+        </main>
+    </div>
+
+    <!-- 模拟智能派单弹窗设计（静态呈现布局，满足设计要素：按服务类型和人员空闲状态进行智能推荐并一键派单） -->
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200">
+            <div class="p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <h3 class="font-bold text-slate-800 text-lg">智能工单指派推荐</h3>
+                <button class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm">
+                    <p class="font-semibold text-slate-800">当前派单目标：上门助浴服务 (长者：李奶奶)</p>
+                    <p class="text-xs text-slate-500 mt-1">系统已结合地理位置、人员空闲状态、历史服务评分完成智能匹配：</p>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="p-3 rounded-xl border-2 border-[#20806F] bg-[#20806F]/5 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-[#20806F] text-white font-bold flex items-center justify-center text-xs">推荐</div>
+                            <div>
+                                <p class="font-bold text-sm text-slate-800">王秀兰 <span class="text-xs text-slate-500 font-normal">（空闲中 距离 0.8km）</span></p>
+                                <p class="text-xs text-slate-500">综合匹配度：98.5% · 擅长助浴</p>
+                            </div>
+                        </div>
+                        <span class="px-2 py-1 bg-[#20806F] text-white rounded-lg text-xs font-semibold">首选</span>
+                    </div>
+
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-xs">备选</div>
+                            <div>
+                                <p class="font-bold text-sm text-slate-800">张敏 <span class="text-xs text-slate-500 font-normal">（空闲中 距离 1.5km）</span></p>
+                                <p class="text-xs text-slate-500">综合匹配度：88.2% · 医士资质</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+                <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-100 transition-all">取消</button>
+                <button class="px-4 py-2 bg-[#20806F] text-white rounded-xl text-sm font-semibold hover:bg-[#1a6c5e] transition-all shadow-sm">一键确认并推送通知</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,442 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder_archive",
+    "name": "老人健康档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "string"
+     },
+     {
+      "id": "medical_history",
+      "name": "主要既往病史",
+      "type": "text"
+     },
+     {
+      "id": "adl_score",
+      "name": "自理能力得分",
+      "type": "number"
+     },
+     {
+      "id": "last_eval_time",
+      "name": "最近评估时间",
+      "type": "date"
+     },
+     {
+      "id": "care_status",
+      "name": "监护状态",
+      "type": "string"
+     },
+     {
+      "id": "id_card",
+      "name": "身份证",
+      "type": "string"
+     },
+     {
+      "id": "address",
+      "name": "服务地址",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单号",
+      "type": "string"
+     },
+     {
+      "id": "service_item",
+      "name": "服务项目",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "关联老人",
+      "type": "ref",
+      "refEntity": "elder_archive"
+     },
+     {
+      "id": "caregiver_ref",
+      "name": "服务人员",
+      "type": "ref",
+      "refEntity": "caregiver"
+     },
+     {
+      "id": "scheduled_time",
+      "name": "约定时间",
+      "type": "string"
+     },
+     {
+      "id": "price",
+      "name": "单价",
+      "type": "number"
+     },
+     {
+      "id": "service_desc",
+      "name": "现场服务简述",
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "id": "caregiver",
+    "name": "护理员",
+    "fields": [
+     {
+      "id": "name",
+      "name": "护理员姓名",
+      "type": "string"
+     },
+     {
+      "id": "experience_years",
+      "name": "工龄",
+      "type": "number"
+     },
+     {
+      "id": "total_care_hours",
+      "name": "累计照护时间",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "evaluation_report",
+    "name": "自理评估报告",
+    "fields": [
+     {
+      "id": "elder_ref",
+      "name": "评估对象",
+      "type": "ref",
+      "refEntity": "elder_archive"
+     },
+     {
+      "id": "eval_date",
+      "name": "评估日期",
+      "type": "date"
+     },
+     {
+      "id": "adl_score",
+      "name": "日常生活活动能力得分",
+      "type": "number"
+     },
+     {
+      "id": "cognitive_score",
+      "name": "认知能力评估得分",
+      "type": "number"
+     },
+     {
+      "id": "social_score",
+      "name": "社会参与与感知沟通能力得分",
+      "type": "number"
+     },
+     {
+      "id": "evaluator",
+      "name": "主评人",
+      "type": "string"
+     },
+     {
+      "id": "reviewer",
+      "name": "复核人员",
+      "type": "string"
+     },
+     {
+      "id": "opinion",
+      "name": "主评估师评估意见",
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "family_role",
+    "name": "老人及家属"
+   },
+   {
+    "id": "manager_role",
+    "name": "社区养老站长"
+   },
+   {
+    "id": "staff_role",
+    "name": "助老护理员"
+   }
+  ],
+  "permissions": [
+   "elder_archive:read",
+   "elder_archive:manage",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "caregiver:read",
+   "caregiver:manage",
+   "evaluation_report:read",
+   "evaluation_report:create",
+   "evaluation_report:manage"
+  ],
+  "menus": [
+   {
+    "id": "menu_monitor",
+    "label": "核心大屏",
+    "roleRefs": [
+     "manager_role"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "menu_archive",
+    "label": "老人档案",
+    "roleRefs": [
+     "manager_role",
+     "staff_role"
+    ],
+    "permissionRefs": [
+     "elder_archive:read"
+    ]
+   },
+   {
+    "id": "menu_dispatch",
+    "label": "智能派单",
+    "roleRefs": [
+     "manager_role"
+    ],
+    "permissionRefs": [
+     "work_order:assign"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_pending",
+    "name": "待派单",
+    "assigneeRole": "manager_role",
+    "phase": "派单阶段"
+   },
+   {
+    "id": "node_in_progress",
+    "name": "服务中",
+    "assigneeRole": "staff_role",
+    "phase": "执行阶段"
+   },
+   {
+    "id": "node_completed",
+    "name": "已服务",
+    "assigneeRole": "staff_role",
+    "phase": "完成阶段"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_pending",
+    "to": "node_in_progress",
+    "condition": "站长指定今日排班空闲的护理员并确认派单"
+   },
+   {
+    "from": "node_in_progress",
+    "to": "node_completed",
+    "condition": "护理员提交现场服务简述并确认完成服务"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "核心综合调度大屏",
+    "kind": "monitor",
+    "fieldBindings": [
+     "elder_archive.care_status",
+     "work_order.order_no",
+     "work_order.service_item",
+     "caregiver.name"
+    ],
+    "actionPermissions": [
+     "elder_archive:read",
+     "work_order:read",
+     "caregiver:read"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "老人健康档案库",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder_archive.name",
+     "elder_archive.age",
+     "elder_archive.medical_history",
+     "elder_archive.adl_score",
+     "elder_archive.last_eval_time",
+     "elder_archive.care_status",
+     "elder_archive.id_card",
+     "elder_archive.address"
+    ],
+    "actionPermissions": [
+     "elder_archive:read",
+     "elder_archive:manage"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "智能派单调度中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_item",
+     "work_order.elder_ref",
+     "work_order.caregiver_ref",
+     "work_order.scheduled_time",
+     "work_order.price",
+     "work_order.service_desc",
+     "caregiver.name"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:read",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "护理员端小程序",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_item",
+     "work_order.scheduled_time",
+     "work_order.service_desc",
+     "caregiver.name",
+     "caregiver.total_care_hours"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update"
+    ]
+   },
+   {
+    "id": "p5",
+    "name": "家属关爱小程序",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder_archive.name",
+     "elder_archive.care_status",
+     "evaluation_report.eval_date",
+     "evaluation_report.adl_score",
+     "evaluation_report.opinion"
+    ],
+    "actionPermissions": [
+     "elder_archive:read",
+     "evaluation_report:read"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "aigc_eval_opinion",
+    "name": "评估意见智能生成",
+    "inputFields": [
+     "evaluation_report.adl_score",
+     "evaluation_report.cognitive_score",
+     "evaluation_report.social_score"
+    ],
+    "outputField": "evaluation_report.opinion",
+    "roleRefs": [
+     "staff_role",
+     "manager_role"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p1",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "node_pending"
+   },
+   {
+    "pageRef": "p4",
+    "workflowRef": "node_in_progress"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "family_role",
+   "manager_role",
+   "staff_role"
+  ],
+  "dataModelRefs": [
+   "elder_archive",
+   "work_order",
+   "caregiver",
+   "evaluation_report"
+  ],
+  "appIdentity": {
+   "appName": "颐家养老云"
+  },
+  "invariants": [
+   {
+    "id": "inv_adl_score_sync",
+    "statement": "自理评估报告的日常生活活动能力得分必须与老人健康档案的自理能力得分保持一致",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "evaluation_report.adl_score",
+     "elder_archive.adl_score"
+    ]
+   },
+   {
+    "id": "inv_assignee_required_on_dispatch",
+    "statement": "工单进入服务中状态时，必须关联具体的可服务护理员",
+    "systems": [
+     "workflow",
+     "datamodel"
+    ],
+    "refs": [
+     "work_order.caregiver_ref",
+     "node_in_progress"
+    ]
+   },
+   {
+    "id": "inv_service_desc_required_on_complete",
+    "statement": "工单标记为已服务完成时，现场服务简述字段不得为空",
+    "systems": [
+     "workflow",
+     "datamodel"
+    ],
+    "refs": [
+     "work_order.service_desc",
+     "node_completed"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

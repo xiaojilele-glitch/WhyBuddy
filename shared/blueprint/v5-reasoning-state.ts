@@ -13,6 +13,7 @@ import type { V5CapabilityId } from "./contracts.js";
 import type { ReasoningEvent } from "./sliderule-reasoning-events.js";
 import type { BrainstormReasoningGraph } from "./brainstorm-reasoning-graph.js";
 import type { SlideRuleReplayEvent } from "./sliderule-session-replay.js";
+import type { Project } from "../project-runtime.generated.js";
 
 export type { V5CapabilityId };
 
@@ -23,7 +24,19 @@ export type AwaitReason =
   | "coverage"
   | "budget"
   | "convergence"
-  | "user_input";
+  | "user_input"
+  | "max_loops"
+  | "max_repeat_guard"
+  | "no_progress"
+  | "closure_blocked"
+  | "closure_missing"
+  | "control_ask"
+  | "control_scope"
+  | "control_plan_approval"
+  /** 控制面澄清停靠。缺它会让停在澄清的会话读不回来，见 models/v5_state.py 同名注释。 */
+  | "control_clarify"
+  /** 马拉松内层驱动失败停靠（slide_rule_marathon.py）。同上，缺它会连失败取证一起丢。 */
+  | "error";
 
 export interface Artifact {
   id: string;
@@ -108,6 +121,34 @@ export interface CapabilityRun {
   result?: unknown;
   timing?: { startedAt?: string; completedAt?: string; durationMs?: number };
   error?: { code?: string; message?: string; detail?: unknown };
+  /**
+   * 2026-09-06 台账三格。抄 grok `ToolCallCompleted`
+   * （xai-tool-protocol/src/session_event.rs）：结局 + 耗时 + 谁写的，一次执行
+   * 该说的话一次说完。
+   *
+   * 此前台账**说不出结局**：只有 `error`（有值=失败），于是"成功"和"没人填
+   * error"长得一模一样。
+   *
+   * ⚠ 三个都是可选的，因为这是**持久化记录**：库里已有的记录都没有它们，
+   *   写成必填会让老会话读不回来。"必填"落在 Python 写路径
+   *   （`CapabilityRun.server_record(...)` 三个参数 keyword-only 无默认值），
+   *   见 models/v5_state.py 里那段。
+   *
+   * `unknown` 对应 grok 的 `#[serde(other)] Unknown`：旧记录和占位记录
+   * **如实说不知道**，不许被编成 success。
+   */
+  status?: "success" | "error" | "cancelled" | "unknown";
+  /** 顶层耗时。`timing.durationMs` 保留给老读者，两处由 server_record 对齐。 */
+  durationMs?: number;
+  /** 这条台账是哪条代码路径写的。申报制——自由字符串半年后会有七种拼法。 */
+  provenance?:
+    | "scheduling.error"
+    | "scheduling.commit"
+    | "executor.run"
+    | "trust.ledger_stub"
+    | "route.execute_capability"
+    | "route.execute_capability_native_llm"
+    | "test.fixture";
 }
 
 export interface DependencyEdge {
@@ -117,13 +158,40 @@ export interface DependencyEdge {
 }
 
 export interface V5SessionState {
+  /** Server-owned references. Source revisions and evidence live in the project store. */
+  runtimeKind?: "html-prototype" | Project["runtimeKind"];
+  projectId?: Project["projectId"] | null;
+  projectRevision?: Project["currentRevision"] | null;
   goal: {
     text: string;
     status: "clear" | "needs_refinement" | "not_recommended";
+    tools?: string[];
+    /**
+     * 本轮该亮哪几格。后端 `stage_legal.product_steps_for_stages` 按真跑的
+     * stage 算好写进来（`rehearsal_control._set_goal_tools` 是唯一写入点）。
+     * ⚠ 前端不许再从 tools 名字自己推——那张表 2026-09-02 已删。
+     * 老会话没有这个字段：读不到就全开，不是画没。
+     */
+    productSteps?: number[];
+    workflow?: string;
   };
   graph: BrainstormReasoningGraph; // capability invocation graph (strict)
   artifacts: Artifact[];
   conversation: Array<{ id: string; role: string; text: string; timestamp?: string }>;
+  /** M1 控制面停泊记录。cheap 回合只写这里。老会话缺字段读成 []。 */
+  controlTranscript?: Array<{
+    id?: string;
+    role: string;
+    text?: string;
+    kind?: string;
+    timestamp?: string;
+    /** Server-owned plan revision and its correlated approval request. */
+    planContent?: string;
+    planId?: string;
+    revision?: number;
+    reqId?: string;
+    [key: string]: unknown;
+  }>;
   openQuestions: Array<{ id: string; text: string }>;
   evidence: any[];
   decisions: any[];
@@ -156,15 +224,90 @@ export interface V5SessionState {
   /** S21 edge 117: append-only replay log (JOB→REPLAY→STORE, per sessionId). */
   sessionReplayLog?: SlideRuleReplayEvent[];
   /** E13 直播时间线持久化：最近几轮的左栏叙述步骤（纯展示数据，无信任
-   *  语义；客户端在轮次落定时随 PUT 回传，刷新后完整回放推演过程）。
-   *  封顶策略在 Python 侧强制（最近 3 轮 × 每轮限步数/字数）。 */
+   *  语义）。驱动器轮末写入会话 blob；客户端 PUT 可覆盖同轮更细的直播
+   *  芯片。封顶在 Python 侧强制（最近 3 轮 × 每轮限步数/字数）。 */
   turnNarrations?: Array<{
     turnId: string;
     user?: string;
     steps: unknown[];
     durationMs?: number;
   }>;
+  /**
+   * E29 模型版本史（前进/回退按钮的数据源）与当前生效版本指针。
+   *
+   * ⚠ 2026-09-13：跟 `specFirstPages` 同一笔欠账——Python 侧
+   * `v5_state.py` 一直有 `modelVersions` / `currentModelVersionId`，TS 这边
+   * 一直没声明。`previousModelVersionId(preparedState)` 于是报 TS2559
+   * 「两个类型没有任何共同属性」，而那正是回退按钮真在走的调用点。
+   */
+  modelVersions?: Array<{
+    id?: string;
+    turnId?: string;
+    instruction?: string;
+    createdAt?: string;
+    model?: unknown;
+    [key: string]: unknown;
+  }>;
+  currentModelVersionId?: string | null;
+  /**
+   * spec-first 工厂的展示投影（规格 / 逐页产物 / 质检提示）。
+   *
+   * ⚠ 2026-09-13：Python 侧 `v5_state.py:specFirstPages` 一直有，**TS 这边
+   * 一直没有** —— 正是 §4 点名的「Python 判定 / TypeScript 运行时」成对物只
+   * 写了一半。后果不是报错而是各处就地 `as any` / 内联重声明（本文件搜
+   * specFirstPages 能看到三四份形状不一的局部声明），而 `pnpm run check` 里
+   * 留着三条 TS2339——CI 第一步就挂在这儿，后面的架构闸整个被 skip。
+   *
+   * Python 那边是 `Optional[Dict[str, Any]]`，所以这里保留索引签名是诚实的：
+   * 已知字段写出来，其余不假装知道。
+   */
+  specFirstPages?: {
+    spec?: unknown;
+    pages?: unknown[] | Record<string, unknown>;
+    qualityNotices?: Array<{ kind: string; text: string }>;
+    [key: string]: unknown;
+  };
   lastTurnId?: string;
+  /**
+   * 工厂待办（2026-09-04 阶段 1）。模型从首轮链上摘掉的公开工具。
+   * 服务端拥有，客户端只读——PUT 不得写回。空 = 账已清。
+   */
+  factoryTodo?: string[];
+  /**
+   * 老师傅自己列的活儿清单（`todo_write` 写的）。服务端拥有，客户端只读。
+   *
+   * ⚠ 2026-09-14 补：Python 侧 2026-09-09 就有了，TS 镜像一直漏着
+   *   （同 specFirstPages / modelVersions 那批的形态，§4）。
+   *   后续建议 chips（`next-step-chips.ts`）读的就是它——没有类型的话
+   *   只能靠 `as any` 硬读，那等于把这条断链继续藏着。
+   */
+  controlTodo?: Array<{ id?: string; status?: string; content?: string }>;
+  /**
+   * 「一直在读、一次没写」的**跨回合**账（2026-09-14）。服务端拥有，客户端只读。
+   * 回合级游标在真机上一次没响（每回合最多 3 轮只读就收尾，阈值 4），
+   * 详见 `models/v5_state.py` 上 controlReadOnly 的说明。
+   */
+  controlReadOnly?: { rounds?: number; nudgedAt?: number };
+  /** 只读子代理账本。服务端拥有，客户端只读。 */
+  subagentTasks?: Array<{
+    id: string;
+    type: string;
+    status?: string;
+    content?: string;
+    error?: string;
+  }>;
+  /**
+   * 本轮降级 Condition（K8s 形状）。服务端 `run_degradation` 写。
+   * 阶段 2：AgenticPickFallback 必须上屏说人话，不许装成模型挑的。
+   */
+  runConditions?: Array<{
+    type?: string;
+    status?: string;
+    reason?: string;
+    message?: string;
+    impact?: string;
+    lastTransitionTime?: string;
+  }>;
   /** P0: why the session is parked awaiting human input (distinct from trust-layer confirm gate). */
   awaitReason?: AwaitReason;
   awaitDetail?: string;
@@ -214,6 +357,14 @@ export interface UserIntervention {
   text: string;
   /** 澄清卡片回答：精确标记本次回答了哪些 open_question gap（按 gap id 精确 resolve，支持部分回答）。 */
   answeredGapIds?: string[];
+  /**
+   * 澄清卡片回答的**问答对**。
+   *
+   * ⚠ 跟上面那条是一件事的两半：id 用来关缺口，答案用来进生成提示词
+   *   （services/v5_llm_generate.clarification_prompt_block 靠 gap.answer 取料）。
+   *   只发 id 的话闸绿了而模型什么也没多知道——澄清白问。
+   */
+  answeredGaps?: Array<{ gapId: string; answer: string }>;
 }
 
 /**
@@ -316,6 +467,16 @@ export interface CoverageGap {
   questionId?: string;
   /** V4 alignment for clarification kind (e.g. "audience", "blueprint-question-xxx"); does not override the gap's 'kind' discriminant. */
   clarifyKind?: string;
+  /** 事件自带的人话。有它前端不许再翻译 clarifyKind。 */
+  kindLabel?: string;
+  /**
+   * 用户答的原话。
+   *
+   * ⚠ 只把缺口置 resolved、不留答案的话，澄清就是白问的：闸绿了，
+   *   生成侧什么也没多知道。答案要原样进提示词
+   *   （services/v5_llm_generate.clarification_prompt_block）。
+   */
+  answer?: string;
 }
 
 /** S13/S14 · G_SCHEMA / G_INV results persisted for structure.decompose (edges 88–89). */

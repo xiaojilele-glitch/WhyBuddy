@@ -1,0 +1,189 @@
+{
+  "xai-grok-tools": {
+    "summary": "模型工具层：定义工具的输入输出、注册和实现。内置实现覆盖命令、读文件、搜索替换、任务、人工问答和本机 computer 终端；它把模型意图变为受类型约束的工具请求。",
+    "boundary": "拥有工具协议和工具实现，不拥有会话轮次、TUI 卡片或工作区权限最终策略。会话宿主负责调度，workspace 负责本机资源与权限。",
+    "sections": [
+      {"name":"工具注册和元数据","purpose":"工具名、描述、参数和注册解析的核心类型。","paths":["src/registry/mod.rs","src/registry/types.rs","src/types/tool_io.rs"]},
+      {"name":"输出和截断","purpose":"定义工具结果，并限制发给模型或 MCP 的输出量。","paths":["src/types/output.rs","src/util/mcp_truncate.rs"]},
+      {"name":"命令执行工具","purpose":"实现 Grok Build bash 工具，并通过环境策略构造执行环境。","paths":["src/implementations/grok_build/bash/mod.rs","src/util/shell_env_policy.rs"]},
+      {"name":"代码读取和编辑","purpose":"read_file、grep、search_replace 是模型理解和修改代码的基本工具。","paths":["src/implementations/grok_build/read_file/mod.rs","src/implementations/grok_build/grep/mod.rs","src/implementations/grok_build/search_replace/mod.rs"]},
+      {"name":"任务和调度","purpose":"task 表达子任务，scheduler actor 推进调度，task_output 处理任务输出。","paths":["src/implementations/grok_build/task/mod.rs","src/implementations/grok_build/scheduler/actor.rs","src/implementations/grok_build/task_output/mod.rs"]},
+      {"name":"人工决策工具协议","purpose":"ask_user_question 和 exit_plan_mode 定义模型暂停并请求用户选择/批准时的结构化 request/response。","paths":["src/implementations/grok_build/ask_user_question/mod.rs","src/implementations/grok_build/exit_plan_mode/mod.rs"]},
+      {"name":"Computer 本机终端","purpose":"computer/local/terminal 提供本机终端控制实现，是 computer 工具族的执行端之一。","paths":["src/computer/mod.rs","src/computer/local/terminal.rs"]},
+      {"name":"MCP、通知和提醒","purpose":"MCP elicitation 表达外部工具要求用户补充的信息；notification 和 reminders 表达外部通知及任务完成提醒。","paths":["src/mcp_elicitation/mod.rs","src/notification/mod.rs","src/reminders/task_completion.rs"]}
+    ],
+    "flows": [
+      {"title":"阅读顺序：模型工具调用从合同到结果","steps":["先读 registry/types.rs，确认工具如何按名称和元数据注册。","再读 types/tool_io.rs 与 types/output.rs，确认调用目标和结果的结构。","选读 implementations/grok_build/bash/mod.rs、read_file/mod.rs 或 grep/mod.rs，核对具体执行器。","最后读 util/mcp_truncate.rs，确认结果进入模型前的输出边界。"],"evidence":["src/registry/types.rs","src/types/tool_io.rs","src/types/output.rs","src/implementations/grok_build/bash/mod.rs","src/util/mcp_truncate.rs"]},
+      {"title":"阅读顺序：人工问答和计划批准为何不是普通 UI","steps":["先读 ask_user_question/mod.rs 中的 Question、QuestionOption 和响应类型。","再读 exit_plan_mode/mod.rs 中计划退出的扩展响应。","随后交叉阅读 pager 的 ACP interaction handler，确认这些结构化请求如何变成前台交互。","最后回到 tools 合同，区分协议拥有者与 UI 渲染者。"],"evidence":["src/implementations/grok_build/ask_user_question/mod.rs","src/implementations/grok_build/exit_plan_mode/mod.rs","../xai-grok-pager/src/app/acp_handler/interactions.rs"]},
+      {"title":"阅读顺序：子任务能力","steps":["从 task/mod.rs 查看任务工具入口与状态模型。","读取 scheduler/actor.rs 了解调度 actor 的职责。","读取 task_output/mod.rs 确认结果如何整理为工具输出。","查看 coordinator_tests.rs 的源内回归样例，了解协调边界。"],"evidence":["src/implementations/grok_build/task/mod.rs","src/implementations/grok_build/scheduler/actor.rs","src/implementations/grok_build/task_output/mod.rs","src/implementations/grok_build/task/coordinator_tests.rs"]}
+    ],
+    "reuse": [
+      {"name":"注册表加类型化 IO","value":"工具声明、输入、输出和执行实现可分开演进。","adaptation":"WhyBuddy 可把生成、页面绑定、sandbox、浏览器验证统一挂入服务端 tool registry，前端只消费事件。","evidence":["src/registry/types.rs","src/types/tool_io.rs","src/types/output.rs"]},
+      {"name":"人工决策协议","value":"问卷和计划批准由工具协议表达，UI 不能自行定义控制含义。","adaptation":"WhyBuddy 应继续让 Python 控制面拥有 ask_user_question/exit_plan_mode 的响应文本与状态，React 只负责输入。","evidence":["src/implementations/grok_build/ask_user_question/mod.rs","src/implementations/grok_build/exit_plan_mode/mod.rs"]},
+      {"name":"任务协调三层","value":"任务入口、调度器、输出整理分离，主 agent 不必直接管理每个子任务。","adaptation":"WhyBuddy 可将生成、启动、浏览器验证拆成有父子关系的 server task。","evidence":["src/implementations/grok_build/task/mod.rs","src/implementations/grok_build/scheduler/actor.rs","src/implementations/grok_build/task_output/mod.rs"]},
+      {"name":"证据预算","value":"工具输出先受大小约束再进入模型上下文。","adaptation":"WhyBuddy 的 DOM、console、网络和截图说明也应有预算、摘要和原始证据引用。","evidence":["src/types/output.rs","src/util/mcp_truncate.rs"]}
+    ],
+    "reading_order": [
+      {"path":"src/lib.rs","reason":"确认工具库公开边界。"},
+      {"path":"src/registry/types.rs","reason":"先读工具注册合同。"},
+      {"path":"src/types/output.rs","reason":"确认工具结果模型。"},
+      {"path":"src/implementations/grok_build/ask_user_question/mod.rs","reason":"阅读已对齐的人类决策协议。"},
+      {"path":"src/implementations/grok_build/task/mod.rs","reason":"阅读子任务工具入口。"},
+      {"path":"src/computer/local/terminal.rs","reason":"阅读本机 computer 执行端。"}
+    ],
+    "tests": [
+      {"path":"src/implementations/grok_build/task/coordinator_tests.rs","proves":"源内回归样例覆盖任务协调的状态推进和输出行为。"},
+      {"path":"src/types/tool_io.rs","proves":"源内测试覆盖 dispatch target 名称解析。"},
+      {"path":"src/util/mcp_truncate.rs","proves":"源内测试覆盖 MCP 输出裁剪边界。"}
+    ]
+  },
+  "xai-grok-workspace": {
+    "summary": "本机工作区宿主层：管理文件、VCS、worktree、项目配置、工具会话、权限、sandbox 元数据和可选 preview 服务。当前开源快照保留 BrowserService 相关注释与接口占位，但没有完整浏览器后端实现；不能据此声称浏览器闭环已经可用。",
+    "boundary": "拥有每个 workspace 的能力和资源生命周期；不绘制 pager UI，不执行模型轮次，也不定义内置工具请求格式。",
+    "sections": [
+      {"name":"WorkspaceHandle","purpose":"集中管理 workspace 会话句柄、sandbox 元数据和生命周期。finalize_session_setup 的注释提到 BrowserService，但当前函数体仅发工具定义与环境事件；浏览器 shutdown 在 session/mod.rs 是空实现。","paths":["src/handle.rs","src/session/mod.rs","src/handle_tests.rs"]},
+      {"name":"Workspace server","purpose":"已存在工作环境里的服务进程：应用 OS sandbox 策略，并在 preview_enabled 开启时启动 preview supervisor。它不是完整的云容器/虚拟机创建平台；sandbox.apply 失败或平台不支持时当前实现会告警并继续。","paths":["src/bin/workspace_server.rs","src/bin/workspace_server_probe.rs"]},
+      {"name":"权限管理器","purpose":"管理权限请求、已记忆决议、策略匹配和 resolution 生命周期。","paths":["src/permission/manager/mod.rs","src/permission/policy.rs","src/permission/resolution_tests.rs"]},
+      {"name":"自动与受管权限策略","purpose":"auto_mode 和 managed_policy 表达不同来源的权限决策。","paths":["src/permission/auto_mode/mod.rs","src/permission/managed_policy/mod.rs","src/permission/managed_policy/tests.rs"]},
+      {"name":"Shell 授权","purpose":"把终端 command/scope 的授权判定放在 workspace 安全域。","paths":["src/permission/shell_access.rs","src/permission/policy.rs"]},
+      {"name":"Session Git 和工具配置","purpose":"session/git 管理会话 VCS 操作，tool_config 为终端、web fetch 等工具构造 session context。","paths":["src/session/git.rs","src/session/tool_config.rs","src/session/mod.rs"]},
+      {"name":"Worktree 生命周期","purpose":"支持异步/流式创建、从 worktree 创建、候选目录选择和进度活动记录。","paths":["src/worktree/mod.rs","src/activity.rs"]},
+      {"name":"Workspace RPC 操作","purpose":"将搜索、hunk、worktree 等能力收敛为 WorkspaceOp 并统一 dispatch。","paths":["src/workspace_ops.rs"]},
+      {"name":"发现、信任和项目配置","purpose":"发现工作区、处理文件系统、目录信任、envrc、恢复和变更监听。","paths":["src/discovery.rs","src/file_system/mod.rs","src/folder_trust.rs","src/trust.rs","src/project_config.rs","src/recovery.rs","src/fs_notify.rs","src/envrc.rs"]}
+    ],
+    "flows": [
+      {"title":"阅读顺序：workspace 服务与当前浏览器缺口","steps":["先读 workspace_server.rs：SandboxManager 应用 OS 限制，preview supervisor 只有显式开启后才启动。该进程运行于已有环境，不负责创建完整云沙盒。","再读 handle.rs 的 finalize_session_setup：注释仍说注入 BrowserService，但当前函数体只发工具定义与环境事件。","再读 session/mod.rs：shutdown_browser_service 是空函数，replace_carrying_browser_service 实际只校验终端后端并替换 toolset。","最后读 browser_tab_chrome_e2e.rs：当前文件仅含测试说明注释；没有可运行测试体。因此不能把这份快照当成完整浏览器运行/验收闭环。"],"evidence":["src/bin/workspace_server.rs","src/handle.rs","src/session/mod.rs","../xai-grok-tools/tests/browser_tab_chrome_e2e.rs"]},
+      {"title":"阅读顺序：命令权限如何形成","steps":["先读 session/tool_config.rs，确认工具如何取得 session workspace context。","读取 permission/manager/mod.rs，查看权限请求和决议的中心状态。","读取 policy.rs 与 shell_access.rs，确认规则和 command scope 的边界。","再读 auto_mode 与 managed_policy，区分用户自动授权和部署侧策略。"],"evidence":["src/session/tool_config.rs","src/permission/manager/mod.rs","src/permission/policy.rs","src/permission/shell_access.rs","src/permission/auto_mode/mod.rs","src/permission/managed_policy/mod.rs"]},
+      {"title":"阅读顺序：隔离 worktree","steps":["从 worktree/mod.rs 的 create_worktree_async 和 create_worktree_streaming 开始。","阅读 activity.rs，确认创建过程如何报告活动与结束状态。","阅读 workspace_ops.rs，了解 worktree 操作怎样进入统一 RPC dispatch。","结合源内 worktree 测试，检查失败清理和通知语义。"],"evidence":["src/worktree/mod.rs","src/activity.rs","src/workspace_ops.rs"]}
+    ],
+    "reuse": [
+      {"name":"会话资源生命周期","value":"把文件、终端进程、工作区元数据和关闭逻辑统一管理；当前浏览器接口只是占位，需要补实现。","adaptation":"WhyBuddy 可借这个生命周期边界，再实现每个 run 的应用工作区、浏览器后端和真实操作验证。静态预览可作为已有能力继续提供。","evidence":["src/handle.rs","src/session/mod.rs","src/bin/workspace_server.rs"]},
+      {"name":"能力级权限策略","value":"权限请求、规则、自动模式和受管策略独立，能留下审计边界。","adaptation":"WhyBuddy 可将命令、文件写入、浏览器导航、发布分为独立 capability。","evidence":["src/permission/manager/mod.rs","src/permission/policy.rs","src/permission/auto_mode/mod.rs","src/permission/managed_policy/mod.rs"]},
+      {"name":"隔离 worktree","value":"生成任务在独立工作目录中进行，创建过程可流式回报。","adaptation":"WhyBuddy 可在 worktree/sandbox 中启动真实项目、由浏览器验证，再决定导出或合并。","evidence":["src/worktree/mod.rs","src/activity.rs"]},
+      {"name":"WorkspaceOp 边界","value":"本机能力通过明确操作协议分派，不散落到调用方。","adaptation":"WhyBuddy 可为 sandbox 和 browser 建立小而可审计的 RPC action 集。","evidence":["src/workspace_ops.rs"]}
+    ],
+    "reading_order": [
+      {"path":"src/lib.rs","reason":"确认 workspace 公开能力。"},
+      {"path":"src/handle.rs","reason":"从真实运行时资源拥有者读起。"},
+      {"path":"src/bin/workspace_server.rs","reason":"确认 sandbox/preview 服务入口。"},
+      {"path":"src/permission/manager/mod.rs","reason":"理解权限中心状态。"},
+      {"path":"src/session/tool_config.rs","reason":"理解能力如何注入工具。"},
+      {"path":"src/worktree/mod.rs","reason":"理解隔离工作目录。"}
+    ],
+    "tests": [
+      {"path":"src/handle_tests.rs","proves":"源内回归样例覆盖 WorkspaceHandle 的资源装配和关闭。"},
+      {"path":"src/permission/resolution_tests.rs","proves":"源内回归样例覆盖权限决议状态和结果语义。"},
+      {"path":"src/permission/managed_policy/tests.rs","proves":"源内回归样例覆盖受管策略解析与适用。"},
+      {"path":"src/worktree/mod.rs","proves":"文件内测试覆盖 worktree 创建、失败通知和清理标记等行为。"}
+    ]
+  },
+  "xai-fast-worktree": {
+    "summary": "高性能 Git worktree 创建库。它结合 git worktree 元数据、并行 CoW 文件复制、BTRFS/overlay 快照、NFS、同步、自动 GC 和可选 SQLite 元数据，优化大仓库隔离副本的创建和复用。",
+    "boundary": "专注于文件副本和 worktree 池的底层效率；不管理 agent session、权限对话、浏览器或 TUI。xai-grok-workspace 在上层决定何时调用它。",
+    "sections": [
+      {"name":"公共 API","purpose":"api.rs 暴露创建、清理和 GC 等主 API。","paths":["src/lib.rs","src/api.rs","src/api/gc.rs"]},
+      {"name":"Worktree 执行","purpose":"worktree 模块及 execute.rs 组织 worktree 创建执行和结果。","paths":["src/worktree/mod.rs","src/worktree/execute.rs"]},
+      {"name":"Git 元数据与 checkout","purpose":"git 模块处理 git 命令、checkout 和 worktree 基础操作。","paths":["src/git/mod.rs","src/git/checkout.rs"]},
+      {"name":"复制和 CoW","purpose":"copy 模块提供文件复制策略，是并行 clone 的基础。","paths":["src/copy/mod.rs"]},
+      {"name":"BTRFS 与 overlay 快照","purpose":"针对 Linux CoW 文件系统提供快照能力与清理。","paths":["src/btrfs/mod.rs","src/overlay/mod.rs"]},
+      {"name":"NFS 客户端","purpose":"nfs 模块处理远程/网络文件系统上的创建和协调。","paths":["src/nfs/mod.rs","src/nfs/client.rs"]},
+      {"name":"同步与 worktree 池","purpose":"sync 支持预创建 worktree 池的同步复用。","paths":["src/sync.rs","src/discovery.rs"]},
+      {"name":"自动 GC 和数据库","purpose":"auto_gc 清理过期资源，db 保存可选元数据。","paths":["src/auto_gc.rs","src/db/mod.rs"]},
+      {"name":"命令行和性能基准","purpose":"fast-worktree 和 lifecycle/perf benchmark 二进制用于运行及度量。","paths":["src/bin/cli.rs","src/bin/worktree_lifecycle_bench.rs","src/bin/pool_perf_bench.rs"]}
+    ],
+    "flows": [
+      {"title":"阅读顺序：快速创建 worktree","steps":["从 lib.rs 的 crate 注释和 api.rs 开始，确认 CoW clone 的公开承诺。","读取 worktree/mod.rs 和 worktree/execute.rs，查看创建流程和执行边界。","读取 git/checkout.rs 与 copy/mod.rs，确认元数据创建后如何完成文件内容。","按部署文件系统条件阅读 btrfs/mod.rs、overlay/mod.rs 或 nfs/client.rs。"],"evidence":["src/lib.rs","src/api.rs","src/worktree/mod.rs","src/worktree/execute.rs","src/git/checkout.rs","src/copy/mod.rs","src/btrfs/mod.rs","src/overlay/mod.rs","src/nfs/client.rs"]},
+      {"title":"阅读顺序：worktree 池和回收","steps":["先读 sync.rs，了解预创建池如何同步复用。","再读 auto_gc.rs，确认回收入口与候选判断。","读取 db/mod.rs，了解可选元数据持久化。","最后查看 lifecycle benchmark，理解作者用什么场景测量生命周期成本。"],"evidence":["src/sync.rs","src/auto_gc.rs","src/db/mod.rs","src/bin/worktree_lifecycle_bench.rs"]}
+    ],
+    "reuse": [
+      {"name":"快副本能力","value":"高频 agent 任务不必每次完整复制仓库。","adaptation":"WhyBuddy 只有在真实项目生成并发量上来后才需要接入；先复用 workspace 的正确隔离模型，再评估这个性能层。","evidence":["src/lib.rs","src/worktree/execute.rs"]},
+      {"name":"文件系统策略分层","value":"普通复制、BTRFS、overlay、NFS 分开实现。","adaptation":"WhyBuddy 的 sandbox 存储实现应按部署环境选择，不能把 Linux 快照假设写进通用业务链。","evidence":["src/copy/mod.rs","src/btrfs/mod.rs","src/overlay/mod.rs","src/nfs/client.rs"]},
+      {"name":"工作池同步和 GC","value":"预热资源与回收策略在同一底层模块内闭环。","adaptation":"WhyBuddy 若维护 sandbox/worktree 池，需要独立的租约、回收和可观测性，不应交给前端页面。","evidence":["src/sync.rs","src/auto_gc.rs","src/db/mod.rs"]}
+    ],
+    "reading_order": [
+      {"path":"src/lib.rs","reason":"先读 crate 的 CoW clone 设计说明。"},
+      {"path":"src/api.rs","reason":"确认对上层暴露的创建与清理 API。"},
+      {"path":"src/worktree/execute.rs","reason":"看实际 worktree 执行路径。"},
+      {"path":"src/git/checkout.rs","reason":"看 git checkout 细节。"},
+      {"path":"src/sync.rs","reason":"看 worktree 池复用。"},
+      {"path":"src/auto_gc.rs","reason":"看回收策略。"}
+    ],
+    "tests": [
+      {"path":"src/api/gc/integration_tests.rs","proves":"源内集成样例覆盖 GC API 相关行为。"},
+      {"path":"src/bin/worktree_lifecycle_bench/tests.rs","proves":"源内样例覆盖生命周期 benchmark 的场景设置。"},
+      {"path":"src/worktree/execute.rs","proves":"文件内测试/断言是理解执行边界的阅读入口。"}
+    ]
+  },
+  "xai-grok-login": {
+    "summary": "Grok shell 家族的认证子系统：管理登录流程、设备码/OIDC、token 刷新、凭证 provider、归因和认证存储。它从 shell 的旧 auth 模块拆出，并被 shell 重新导出以维持调用路径。",
+    "boundary": "拥有认证状态、凭证与刷新流程；不拥有 TUI 登录页、agent 模型调用或 workspace 权限。Pager/shell 是它的调用者。",
+    "sections": [
+      {"name":"认证管理器","purpose":"manager 维护登录状态、账户/凭证选择与管理 API。","paths":["src/manager.rs","src/manager_tests.rs","src/manager/refresh_chain.rs"]},
+      {"name":"登录流程","purpose":"flow 组织登录阶段，pre_tui 支持 TUI 前的认证，device_code 支持设备码。","paths":["src/flow.rs","src/pre_tui.rs","src/device_code.rs"]},
+      {"name":"OIDC 协议","purpose":"oidc/protocol 和 oidc/login 实现 OIDC 协议处理和登录步骤。","paths":["src/oidc/protocol.rs","src/oidc/login.rs","src/oidc/mod.rs"]},
+      {"name":"Token 刷新","purpose":"refresh 下分 OIDC 和外部刷新器，处理过期凭证续期。","paths":["src/refresh/mod.rs","src/refresh/oidc_refresher.rs","src/refresh/external_refresher.rs"]},
+      {"name":"凭证 Provider","purpose":"credential_provider 和 auth_provider 抽象凭证来源及认证提供方。","paths":["src/credential_provider.rs","src/auth_provider.rs","src/backend/mod.rs"]},
+      {"name":"配置与认证方式","purpose":"config、auth_method、model、grok_auth_credentials 表达认证配置和凭证模型。","paths":["src/config.rs","src/auth_method.rs","src/model.rs","src/grok_auth_credentials.rs"]},
+      {"name":"恢复和归因","purpose":"recovery 处理认证恢复，attribution 管理归因信息，api_key_probe 探测 API key。","paths":["src/recovery.rs","src/attribution.rs","src/api_key_probe.rs"]},
+      {"name":"并发保护与错误","purpose":"single_flight 避免同一认证刷新并发重复执行，error 统一失败类型。","paths":["src/single_flight.rs","src/error.rs"]}
+    ],
+    "flows": [
+      {"title":"阅读顺序：首次登录","steps":["先读 flow.rs，获得登录阶段的总入口。","按认证方式继续读 device_code.rs 或 oidc/login.rs。","读 oidc/protocol.rs，确认协议层输入输出。","再读 manager.rs，确认流程结果如何写入可用认证状态。"],"evidence":["src/flow.rs","src/device_code.rs","src/oidc/login.rs","src/oidc/protocol.rs","src/manager.rs"]},
+      {"title":"阅读顺序：过期 token 刷新","steps":["先读 manager.rs 了解刷新请求从管理层如何出现。","读取 credential_provider.rs，确定凭证来源抽象。","读取 refresh/mod.rs 以及 oidc_refresher.rs、external_refresher.rs。","最后读 single_flight.rs，确认相同刷新不会被并发重复发起。"],"evidence":["src/manager.rs","src/credential_provider.rs","src/refresh/mod.rs","src/refresh/oidc_refresher.rs","src/refresh/external_refresher.rs","src/single_flight.rs"]}
+    ],
+    "reuse": [
+      {"name":"认证流程和存储分离","value":"UI 登录动作与凭证存储/provider 可以独立替换。","adaptation":"WhyBuddy 当前账户体系可参考这一边界，但不需要复制 Grok 的 OIDC 实现。","evidence":["src/flow.rs","src/manager.rs","src/credential_provider.rs"]},
+      {"name":"single-flight 刷新","value":"同一过期凭证不会被并发请求触发多次刷新。","adaptation":"WhyBuddy 若接入外部 LLM、浏览器或发布 token，可用同一模式防止并发 refresh 风暴。","evidence":["src/single_flight.rs","src/refresh/mod.rs"]},
+      {"name":"认证方式显式建模","value":"API key、OIDC、外部 provider 由配置/模型区分。","adaptation":"WhyBuddy 可把本地/BYOK/服务端托管凭证建模为不同 provider，避免用前端条件分支混在一起。","evidence":["src/auth_method.rs","src/config.rs","src/model.rs"]}
+    ],
+    "reading_order": [
+      {"path":"src/lib.rs","reason":"确认从 shell 拆出的认证边界。"},
+      {"path":"src/flow.rs","reason":"先读首次登录主流程。"},
+      {"path":"src/manager.rs","reason":"理解认证状态管理。"},
+      {"path":"src/credential_provider.rs","reason":"理解凭证来源。"},
+      {"path":"src/refresh/mod.rs","reason":"理解刷新子系统。"},
+      {"path":"src/single_flight.rs","reason":"理解并发保护。"}
+    ],
+    "tests": [
+      {"path":"src/manager_tests.rs","proves":"源内回归样例覆盖认证 manager 的状态和错误路径。"},
+      {"path":"src/refresh/oidc_refresher_tests.rs","proves":"源内回归样例覆盖 OIDC 刷新。"},
+      {"path":"src/auth_provider_tests.rs","proves":"源内回归样例覆盖认证 provider 行为。"}
+    ]
+  },
+  "xai-grok-telemetry": {
+    "summary": "Grok Build 的遥测引擎：产品事件、Mixpanel 发射、Sentry 错误上报、OpenTelemetry tracing、结构化 unified log、启动信息和进程指标都由它提供。",
+    "boundary": "负责采集、格式化和投递可观测性数据；不决定产品业务状态、不控制 agent、不替代审计证据存储。",
+    "sections": [
+      {"name":"事件模型","purpose":"events 定义产品事件及其字段和发送语义。","paths":["src/events/mod.rs"]},
+      {"name":"外部投递配置","purpose":"external/config、schema、providers 组织外部遥测 provider 的配置与事件 schema。","paths":["src/external/mod.rs","src/external/config.rs","src/external/schema.rs","src/external/providers.rs"]},
+      {"name":"遥测客户端","purpose":"client 提供调用方发送事件的入口。","paths":["src/client.rs","src/config.rs"]},
+      {"name":"统一日志","purpose":"unified_log 和 debug_log 记录结构化/调试日志。","paths":["src/unified_log.rs","src/debug_log.rs"]},
+      {"name":"OpenTelemetry 与 instrumentation","purpose":"otel_layer、instrumentation、hooks_log 将调用过程纳入 tracing。","paths":["src/otel_layer.rs","src/instrumentation.rs","src/hooks_log.rs"]},
+      {"name":"启动与进程信息","purpose":"startup、process_info、process_metrics 描述进程启动和运行指标。","paths":["src/startup.rs","src/process_info.rs","src/process_metrics.rs"]},
+      {"name":"上下文、身份和枚举","purpose":"context、id、enums 组织事件公共上下文与标识。","paths":["src/context.rs","src/id.rs","src/enums.rs"]},
+      {"name":"内存与提示词计时","purpose":"memory_log、memory_telemetry、prompt_timing 记录内存和 prompt 相关可观测性。","paths":["src/memory_log.rs","src/memory_telemetry.rs","src/prompt_timing.rs"]}
+    ],
+    "flows": [
+      {"title":"阅读顺序：产品事件到外部 provider","steps":["先读 events/mod.rs，确认业务事件结构。","读 client.rs，确认调用方的发送入口。","读 external/config.rs 与 external/providers.rs，确认投递配置和 provider 选择。","读 external/schema.rs，确认外发数据的 schema。"],"evidence":["src/events/mod.rs","src/client.rs","src/external/config.rs","src/external/providers.rs","src/external/schema.rs"]},
+      {"title":"阅读顺序：日志和 tracing","steps":["从 unified_log.rs 和 debug_log.rs 区分结构化日志与调试日志。","阅读 instrumentation.rs 和 otel_layer.rs，了解 tracing 接入。","再读 startup.rs、process_info.rs、process_metrics.rs，了解运行环境字段。","最后读 prompt_timing.rs，定位模型调用延迟指标。"],"evidence":["src/unified_log.rs","src/debug_log.rs","src/instrumentation.rs","src/otel_layer.rs","src/startup.rs","src/process_info.rs","src/process_metrics.rs","src/prompt_timing.rs"]}
+    ],
+    "reuse": [
+      {"name":"事件 schema 与 provider 分离","value":"业务事件不与 Mixpanel/Sentry 等单一厂商 API 绑死。","adaptation":"WhyBuddy 的 run、工具、浏览器验证、用户批准事件应先有本地 schema，再可选投递外部平台。","evidence":["src/events/mod.rs","src/external/schema.rs","src/external/providers.rs"]},
+      {"name":"统一日志和 tracing","value":"结构化日志与 span/trace 结合，方便按一个 run 查完整链路。","adaptation":"WhyBuddy 应让 control session ID、sandbox ID、browser tab ID 贯穿日志和 SSE 事件。","evidence":["src/unified_log.rs","src/instrumentation.rs","src/otel_layer.rs"]},
+      {"name":"启动与进程维度","value":"遥测记录启动配置和进程资源，不只记录产品按钮点击。","adaptation":"WhyBuddy 的 sandbox/browser 路线应记录启动失败、端口、退出码和资源回收，作为运行证据的一部分。","evidence":["src/startup.rs","src/process_info.rs","src/process_metrics.rs"]}
+    ],
+    "reading_order": [
+      {"path":"src/lib.rs","reason":"确认遥测 crate 的公开范围。"},
+      {"path":"src/events/mod.rs","reason":"先读产品事件模型。"},
+      {"path":"src/client.rs","reason":"读发送入口。"},
+      {"path":"src/external/providers.rs","reason":"读外部投递选择。"},
+      {"path":"src/unified_log.rs","reason":"读结构化日志。"},
+      {"path":"src/instrumentation.rs","reason":"读 tracing 接入。"}
+    ],
+    "tests": [
+      {"path":"src/external/tests.rs","proves":"源内回归样例覆盖外部遥测配置/投递路径。"},
+      {"path":"src/startup_tests.rs","proves":"源内回归样例覆盖启动遥测。"},
+      {"path":"src/events/mod.rs","proves":"文件内测试和事件定义是阅读事件语义的入口。"}
+    ]
+  }
+}

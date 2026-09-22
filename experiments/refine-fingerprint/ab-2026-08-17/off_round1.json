@@ -1,0 +1,275 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "service_order",
+    "name": "历史服务台账表",
+    "fields": [
+     {
+      "id": "service_item",
+      "name": "服务项目",
+      "type": "string"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约时间",
+      "type": "date"
+     },
+     {
+      "id": "service_staff",
+      "name": "服务人员",
+      "type": "string"
+     },
+     {
+      "id": "current_status",
+      "name": "当前状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "elderly_health_record",
+    "name": "辖区老人健康档案主表",
+    "fields": [
+     {
+      "id": "elderly_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "string"
+     },
+     {
+      "id": "latest_measurement_time",
+      "name": "最近测量时间",
+      "type": "date"
+     },
+     {
+      "id": "core_signs_status",
+      "name": "核心体征状态",
+      "type": "string"
+     },
+     {
+      "id": "risk_level_label",
+      "name": "风险等级标签",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "care_specialist",
+    "name": "社区养老专员"
+   },
+   {
+    "id": "family_member",
+    "name": "家属"
+   }
+  ],
+  "permissions": [
+   "service_order:create",
+   "service_order:read",
+   "service_order:update",
+   "service_order:assign",
+   "elderly_health_record:create",
+   "elderly_health_record:read",
+   "elderly_health_record:update"
+  ],
+  "menus": [
+   {
+    "id": "menu_specialist",
+    "label": "专员工作台",
+    "roleRefs": [
+     "care_specialist"
+    ],
+    "permissionRefs": [
+     "service_order:read",
+     "service_order:update"
+    ]
+   },
+   {
+    "id": "menu_family",
+    "label": "家属服务中心",
+    "roleRefs": [
+     "family_member"
+    ],
+    "permissionRefs": [
+     "service_order:create",
+     "elderly_health_record:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_submitted",
+    "name": "家属已预约",
+    "assigneeRole": "family_member",
+    "phase": "提交"
+   },
+   {
+    "id": "node_pending_dispatch",
+    "name": "待专员接单",
+    "assigneeRole": "care_specialist",
+    "phase": "待办"
+   },
+   {
+    "id": "node_in_service",
+    "name": "服务进行中",
+    "assigneeRole": "care_specialist",
+    "phase": "执行"
+   },
+   {
+    "id": "node_completed",
+    "name": "服务已完成",
+    "assigneeRole": "care_specialist",
+    "phase": "终态"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_submitted",
+    "to": "node_pending_dispatch",
+    "condition": "家属成功提交服务预约"
+   },
+   {
+    "from": "node_pending_dispatch",
+    "to": "node_in_service",
+    "condition": "专员在工作台确认接单"
+   },
+   {
+    "from": "node_in_service",
+    "to": "node_completed",
+    "condition": "服务人员完成上门服务"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p2",
+    "name": "家属服务中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "service_order.service_item",
+     "service_order.appointment_time"
+    ],
+    "actionPermissions": [
+     "service_order:create",
+     "service_order:read"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "健康监测看板",
+    "kind": "monitor",
+    "fieldBindings": [
+     "elderly_health_record.elderly_name",
+     "elderly_health_record.core_signs_status",
+     "elderly_health_record.risk_level_label"
+    ],
+    "actionPermissions": [
+     "elderly_health_record:read"
+    ]
+   },
+   {
+    "id": "p1",
+    "name": "专员工作台",
+    "kind": "workbench",
+    "fieldBindings": [
+     "service_order.service_item",
+     "service_order.current_status"
+    ],
+    "actionPermissions": [
+     "service_order:read",
+     "service_order:update",
+     "service_order:assign"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "cap_risk_eval",
+    "name": "健康风险智能评估",
+    "inputFields": [
+     "elderly_health_record.core_signs_status",
+     "elderly_health_record.age"
+    ],
+    "outputField": "elderly_health_record.risk_level_label",
+    "roleRefs": [
+     "care_specialist"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p1",
+    "workflowRef": "node_pending_dispatch"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "node_submitted"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "main_flow"
+   }
+  ],
+  "landingPageRef": "p2",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "care_specialist",
+   "family_member"
+  ],
+  "dataModelRefs": [
+   "service_order",
+   "elderly_health_record"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_service_appointment",
+    "statement": "家属提交服务预约时必须填写预约时间和服务项目",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "service_order",
+     "service_order.service_item",
+     "service_order.appointment_time",
+     "family_member",
+     "node_submitted"
+    ]
+   },
+   {
+    "id": "inv_health_risk",
+    "statement": "老人健康档案的风险等级标签更新时专员与家属必须可读",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "elderly_health_record",
+     "elderly_health_record.risk_level_label",
+     "care_specialist",
+     "family_member"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

@@ -14,12 +14,26 @@ import re
 _TAG_RE = re.compile(r"<[^>]*>")
 _WS_RE = re.compile(r"\s+")
 _GATEWAY_5XX_RE = re.compile(r"(?:upstream|HTTP|gateway timeout \()\s*(5\d{2})", re.IGNORECASE)
+_ACCOUNTS_EXHAUSTED_RE = re.compile(
+    r"accounts?\s+exhausted|no\s+available\s+accounts?|all available accounts"
+    r"|gateway circuit open",
+    re.IGNORECASE,
+)
 
 
 def humanize_llm_error(text: object, limit: int = 240) -> str:
-    """剥 HTML/坍缩空白；5xx 网关错误加一句人话前缀。永不抛异常。"""
+    """剥 HTML/坍缩空白；5xx 网关错误加一句人话前缀。永不抛异常。
+
+    ⚠ 2026-09-20 真机 sr-20260920102543-OFFICE：524 响应体是
+      `All available accounts exhausted`，罐头却说「瞬时故障」。
+      账号池空不是 Cloudflare TLS，冷却期内再打只会把门焊死。
+    """
     raw = str(text or "")
     cleaned = _WS_RE.sub(" ", _TAG_RE.sub(" ", raw)).strip()
+    if _ACCOUNTS_EXHAUSTED_RE.search(raw):
+        head = "账号池空了，网关正在冷却，请稍后再试"
+        excerpt = cleaned[:120].strip()
+        return f"{head} · {excerpt}" if excerpt else head
     m = _GATEWAY_5XX_RE.search(raw)
     if m:
         head = f"LLM 服务商网关 {m.group(1)}（瞬时故障，建议稍后重试）"

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安养通 - 服务人员移动端工作台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#20806F',
+                        'primary-dark': '#196658',
+                        accent: '#FA8C16',
+                        'bg-main': '#F4F7F6',
+                    },
+                    borderRadius: {
+                        'custom': '10px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for mobile frame */
+        .mobile-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .mobile-scroll::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 4px;
+        }
+    </style>
+<style>[aria-current="page"]{background-color:color-mix(in srgb, currentColor 12%, transparent);font-weight:600}</style></head>
+<body class="bg-slate-200 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Hard constraint: Left aside + top header + main layout -->
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- Left Aside (PC management layout container as required) -->
+        <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col flex-shrink-0 border-r border-slate-800">
+    <div class="h-16 flex items-center px-6 gap-3 border-b border-slate-800">
+      <div class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-lg shadow-md">安养通</div>
+      <div class="flex flex-col">
+        <span class="text-white font-bold text-base tracking-wide">安养通养通</span>
+        <span class="text-xs text-slate-400">社区养老服务管理</span>
+      </div>
+    </div>
+    
+    <nav class="flex-1 px-4 py-6 space-y-1.5 text-sm font-medium overflow-y-auto">
+<a data-page-id="p1" href="#" class="flex gap-3 items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg><span>老人档案管理页</span></a>
+<a data-page-id="p2" href="#" class="flex gap-3 items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg><span>服务工单调度页</span></a>
+<a aria-current="page" data-page-id="p3" href="#" class="bg-primary flex gap-3 items-center px-4 py-3 rounded-lg shadow-sm text-white"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg><span>服务人员移动端工作台</span></a>
+<a data-page-id="p4" href="#" class="flex gap-3 items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg><span>运营数据看板页</span></a>
+</nav>
+
+    <div class="p-4 border-t border-slate-800">
+      <div class="flex items-center gap-3 px-2 py-1">
+        <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white font-medium text-sm">主</div>
+        <div class="flex flex-col overflow-hidden">
+          <span class="text-xs font-medium text-white truncate">社区养老顾问</span>
+          <span class="text-[11px] text-slate-400 truncate">zhang.mgr@anyang.com</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+        {/* Main Wrapper */}
+        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+            
+            {/* Top Header with Breadcrumb */}
+            <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0 shadow-sm">
+      <nav aria-label="Breadcrumb" class="text-sm">
+        <ol class="flex items-center space-x-2 text-slate-500">
+          <li><a href="#" class="hover:text-primary transition-colors">运营中心</a></li>
+          <li class="text-slate-300">/</li>
+          <li><a href="#" class="text-slate-800 font-medium" aria-current="page">服务人员移动端工作台</a></li>
+        </ol>
+      </nav>
+
+      <div class="flex items-center gap-4">
+        <div class="flex items-center bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg text-amber-800 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-accent animate-pulse mr-2"></span>
+          <span>紧急呼叫 1 起待处理</span>
+        </div>
+        <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg font-medium">
+          今天是 2026-06-08 星期一
+        </div>
+      </div>
+    </header>
+
+            {/* Main Content Viewport */}
+            <main class="flex-1 bg-bg-main p-6 overflow-y-auto flex items-center justify-center">
+                
+                {/* Mobile Device Frame Container */}
+                <div class="w-full max-w-[420px] h-[820px] bg-slate-900 rounded-[40px] p-3 shadow-2xl flex flex-col border-4 border-slate-800 relative">
+                    
+                    {/* Phone Speaker & Camera Notch */}
+                    <div class="absolute top-3 left-1/2 transform -translate-x-1/2 w-32 h-5 bg-slate-900 rounded-b-xl z-30 flex items-center justify-center">
+                        <div class="w-12 h-1 bg-slate-700 rounded-full"></div>
+                    </div>
+
+                    {/* Mobile Screen Area */}
+                    <div class="flex-1 bg-[#F9FBFB] rounded-[32px] overflow-hidden flex flex-col relative mobile-scroll">
+                        
+                        {/* Mobile Status Bar */}
+                        <div class="bg-white px-6 pt-3 pb-2 flex justify-between items-center text-xs font-semibold text-slate-700 shrink-0 border-b border-slate-100">
+                            <span>09:41</span>
+                            <div class="flex items-center space-x-1.5">
+                                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.29 19h3.42c1.28.61 2.72 1 4.29 1 4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 16c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+                                <span>5G</span>
+                                <div class="w-5 h-2.5 border border-slate-700 rounded-sm p-0.5 flex items-center">
+                                    <div class="h-full w-3.5 bg-slate-700 rounded-xs"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* App Header / Status Tabs (待上门、已完成) */}
+                        <div class="bg-white px-4 pt-3 pb-2 shadow-xs shrink-0">
+                            <div class="flex justify-between items-center mb-3">
+                                <h2 class="font-bold text-slate-900 text-lg flex items-center">
+                                    <span class="w-2.5 h-2.5 bg-primary rounded-full mr-2"></span>
+                                    安养通工作台
+                                </h2>
+                                <button class="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-custom font-medium hover:bg-slate-200 transition-colors">
+                                    切换人员
+                                </button>
+                            </div>
+                            
+                            {/* Tab Switcher */}
+                            <div class="flex bg-slate-100 p-1 rounded-custom">
+                                <button class="flex-1 py-1.5 text-xs font-semibold rounded-custom bg-white text-primary shadow-xs transition-all">
+                                    待上门任务 (<span data-value="work_order" data-aggregate="count">3</span>)
+                                </button>
+                                <button class="flex-1 py-1.5 text-xs font-medium text-slate-500 rounded-custom hover:text-slate-800 transition-all">
+                                    已完成历史 (<span data-value="work_order" data-aggregate="count">12</span>)
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Mini Statistics Cards Area (15% height approx) */}
+                        <div class="px-4 py-3 grid grid-cols-2 gap-3 shrink-0">
+                            <div class="bg-white p-3 rounded-custom border border-slate-100 shadow-xs flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-custom bg-emerald-50 text-primary flex items-center justify-center shrink-0">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                </div>
+                                <div>
+                                    <p class="text-[11px] text-slate-400 font-medium">今日待办数</p>
+                                    <p class="text-base font-bold text-slate-900"><span data-value="work_order" data-aggregate="count">3</span> <span class="text-xs font-normal text-slate-500">单</span></p>
+                                </div>
+                            </div>
+                            <div class="bg-white p-3 rounded-custom border border-slate-100 shadow-xs flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-custom bg-orange-50 text-accent flex items-center justify-center shrink-0">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                </div>
+                                <div>
+                                    <p class="text-[11px] text-slate-400 font-medium">已完成数</p>
+                                    <p class="text-base font-bold text-slate-900"><span data-value="work_order" data-aggregate="count">2</span> <span class="text-xs font-normal text-slate-500">单</span></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Core Task Card Stack Area (70% height approx) */}
+                        <div class="flex-1 px-4 overflow-y-auto space-y-3 pb-4" data-rows="work_order">
+                            
+                            {/* Task Card 1 (Active/High Priority) */}
+                            <div class="bg-white rounded-custom border-2 border-primary/40 shadow-sm p-4 relative overflow-hidden">
+                                <div class="absolute top-0 right-0 bg-primary text-white text-[10px] px-2.5 py-0.5 rounded-bl-custom font-medium">
+                                    紧急派单
+                                </div>
+                                
+                                <div class="flex items-start justify-between mb-2">
+                                    <div>
+                                        <span class="inline-block bg-emerald-50 text-primary text-[10px] font-semibold px-2 py-0.5 rounded mr-1" data-field="service_item">上门助浴</span>
+                                        <span class="text-sm font-bold text-slate-900"><span data-field="elder_ref">王大爷</span> (82岁)</span>
+                                    </div>
+                                    <span class="text-xs font-bold text-accent">预约 <span data-field="appointment_time">10:30</span></span>
+                                </div>
+
+                                <div class="space-y-1.5 text-xs text-slate-600 mb-3">
+                                    <div class="flex items-start">
+                                        <svg class="w-4 h-4 text-slate-400 mr-1.5 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                        <span class="font-medium text-slate-800" data-field="remark">幸福路 88 号阳光花苑 3 栋 501 室</span>
+                                    </div>
+                                    <div class="flex items-center text-rose-600 bg-rose-50 px-2 py-1 rounded">
+                                        <svg class="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                        <span>紧急备注：老人有关节炎，协助移动时请动作轻缓。</span>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                                    <span class="text-slate-400">派单员：李顾问</span>
+                                    <button class="text-primary font-semibold hover:underline flex items-center" data-action="openRecord" data-entity="work_order">
+                                        查看详情
+                                        <svg class="w-3.5 h-3.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                    </button>
+                                </div>
+                                <div class="mt-2 flex gap-2">
+                                    <button class="bg-primary text-white text-[10px] px-2 py-1 rounded" data-action="submitWorkflow" data-entity="work_order">提交审批</button>
+                                    <button class="bg-emerald-600 text-white text-[10px] px-2 py-1 rounded" data-action="approveWorkflow" data-entity="work_order">通过</button>
+                                    <button class="bg-rose-600 text-white text-[10px] px-2 py-1 rounded" data-action="rejectWorkflow" data-entity="work_order">驳回</button>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        {/* Bottom Fixed Action Bar (15% height approx) */}
+                        <div class="bg-white border-t border-slate-200 p-4 shrink-0 flex items-center space-x-3 shadow-lg">
+                            <button class="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-3 px-4 rounded-custom text-sm shadow-sm transition-all flex items-center justify-center space-x-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                <span>点击接单</span>
+                            </button>
+                            <button class="flex-1 bg-accent hover:bg-orange-600 text-white font-medium py-3 px-4 rounded-custom text-sm shadow-sm transition-all flex items-center justify-center space-x-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                <span>提交服务完成凭证</span>
+                            </button>
+                        </div>
+
+                        {/* Mobile Home Bar Indicator */}
+                        <div class="bg-white pb-1 pt-1 flex justify-center shrink-0">
+                            <div class="w-32 h-1 bg-slate-300 rounded-full"></div>
+                        </div>
+
+                    </div>
+                </div>
+
+                {/* Right Side Annotation Card for UX Context */}
+                <div class="hidden xl:block ml-8 max-w-sm bg-white p-6 rounded-custom shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-slate-900 mb-3 flex items-center text-base">
+                        <span class="w-2 h-2 bg-accent rounded-full mr-2"></span>
+                        需求设计说明
+                    </h3>
+                    <ul class="space-y-3 text-sm text-slate-600">
+                        <li class="flex items-start">
+                            <span class="font-bold text-primary mr-2">01.</span>
+                            <span><strong>服务工单派发：</strong>当顾问在后台选择服务项目并指定服务人员后，系统即时向移动端推送。</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="font-bold text-primary mr-2">02.</span>
+                            <span><strong>智能推荐派单：</strong>支持按服务类型与人员空闲状态在管理后台一键精准派发。</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="font-bold text-primary mr-2">03.</span>
+                            <span><strong>单手操作优化：</strong>核心信息卡片化高对比展示，底部固定大动作按钮，便于护理人员现场快捷流转。</span>
+                        </li>
+                    </ul>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+</body>
+</html>

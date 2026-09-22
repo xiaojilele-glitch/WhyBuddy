@@ -7,15 +7,15 @@
 import React from "react";
 import { TabBar } from "antd-mobile";
 import {
-  DashboardOutlined,
-  TableOutlined,
-  ProfileOutlined,
-  FormOutlined,
-  AppstoreOutlined,
-  LockOutlined,
-} from "@ant-design/icons";
+  AppOutline,
+  UnorderedListOutline,
+  UserContactOutline,
+  FillinOutline,
+  AppstoreOutline,
+  LockOutline,
+} from "antd-mobile-icons";
 
-const MENU_ICONS = [TableOutlined, ProfileOutlined, FormOutlined, AppstoreOutlined];
+const MENU_ICONS = [UnorderedListOutline, UserContactOutline, FillinOutline, AppstoreOutline];
 
 export interface PhoneTabItem {
   pageId: string;
@@ -54,8 +54,8 @@ export default function PhoneTabBar({
 }: PhoneTabBarProps) {
   return (
     // Wrapper div carries the stable testid — antd-mobile TabBar does not forward data-testid to DOM
-    <div data-testid="app-runtime-tabbar" style={{ background: "#fff" }}>
-    <TabBar
+    <div data-testid="app-runtime-tabbar">
+      <TabBar
       activeKey={activeId}
       onChange={(key) => {
         const item = items.find((i) => i.pageId === key);
@@ -67,14 +67,13 @@ export default function PhoneTabBar({
         onChange(key);
       }}
       safeArea={false}
-      style={{ background: "#fff", borderTop: "1px solid #f0f0f0" }}
-    >
-      {items.map((item, i) => {
+      >
+        {items.map((item, i) => {
         const Icon =
           item.pageId === "home"
-            ? DashboardOutlined
+            ? AppOutline
             : item.locked
-            ? LockOutlined
+            ? LockOutline
             : MENU_ICONS[(i - 1 + MENU_ICONS.length) % MENU_ICONS.length];
         return (
           <TabBar.Item
@@ -93,8 +92,8 @@ export default function PhoneTabBar({
             }
           />
         );
-      })}
-    </TabBar>
+        })}
+      </TabBar>
     </div>
   );
 }

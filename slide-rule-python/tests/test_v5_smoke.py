@@ -8,8 +8,12 @@ These test the migrated /api/sliderule surface (sessions, orchestrate, execute).
 They use the permission-system goal from the fixtures to exercise RAG evidence paths.
 """
 
+from plan_approval_support import approved_execution_payload
+
 from fastapi.testclient import TestClient
 import pytest
+
+from conftest import TEST_USER_ID
 
 try:
     from app import app
@@ -86,7 +90,7 @@ def test_app_drive_full_route_returns_runtime_closure_contract(monkeypatch):
     r = client.post(
         "/api/sliderule/drive-full",
         headers={"x-internal-key": INTERNAL_KEY},
-        json={
+        json=approved_execution_payload({
             "state": {
                 "sessionId": "app-route-drive-full",
                 "goal": {"text": "purchase approval"},
@@ -97,12 +101,13 @@ def test_app_drive_full_route_returns_runtime_closure_contract(monkeypatch):
             },
             "userText": "purchase approval route contract",
             "max_loops": 3,
-        },
+        }),
     )
 
     assert r.status_code == 200
     data = r.json()
-    assert seen == {"max_loops": 3, "user_instruction": "purchase approval route contract"}
+    assert seen["max_loops"] == 3
+    assert seen["user_instruction"].startswith("purchase approval route contract\n\nApproved implementation plan")
     assert data["backend"] == "python"
     assert data["publishClosure"]["evidencePresentCount"] == 6
     assert data["skillRuntimeGraph"]["edges"][0]["sourceSkill"] == "datamodel"
@@ -155,7 +160,7 @@ def test_app_drive_full_persists_latest_runtime_projection_for_reload(monkeypatc
     post = client.post(
         "/api/sliderule/drive-full",
         headers={"x-internal-key": INTERNAL_KEY},
-        json={
+        json=approved_execution_payload({
             "state": {
                 "sessionId": sid,
                 "goal": {"text": "purchase approval"},
@@ -166,7 +171,7 @@ def test_app_drive_full_persists_latest_runtime_projection_for_reload(monkeypatc
             },
             "userText": "purchase approval route contract",
             "max_loops": 3,
-        },
+        }),
     )
     assert post.status_code == 200
     assert post.json()["publishClosure"]["evidencePresentCount"] == 6
@@ -187,6 +192,9 @@ def test_app_drive_full_persists_phase_when_existing_session_has_same_turn(monke
 
     sid = "app-route-drive-full-same-turn-phase"
     prior = V5SessionState(
+        # 归属必须写上：会话恒为 private，无主的只有超管读得到
+        # （见 conftest.TEST_USER_ID 那段说明）
+        ownerId=TEST_USER_ID,
         sessionId=sid,
         goal={"text": "purchase approval", "status": "needs_refinement"},
         artifacts=[],
@@ -236,7 +244,7 @@ def test_app_drive_full_persists_phase_when_existing_session_has_same_turn(monke
         post = client.post(
             "/api/sliderule/drive-full",
             headers={"x-internal-key": INTERNAL_KEY},
-            json={
+            json=approved_execution_payload({
                 "state": {
                     "sessionId": sid,
                     "goal": {"text": "purchase approval"},
@@ -249,7 +257,7 @@ def test_app_drive_full_persists_phase_when_existing_session_has_same_turn(monke
                 },
                 "userText": "purchase approval route contract",
                 "max_loops": 3,
-            },
+            }),
         )
         assert post.status_code == 200
 
@@ -272,6 +280,9 @@ def test_session_get_repairs_mojibake_and_projects_purchase_graph():
     chinese = "生成一个采购审批应用，包含采购单、申请人、部门经理、财务、采购执行、审批流、表单页面和风险摘要"
     mojibake = chinese.encode("utf-8").decode("latin1").encode("utf-8").decode("latin1")
     prior = V5SessionState(
+        # 归属必须写上：会话恒为 private，无主的只有超管读得到
+        # （见 conftest.TEST_USER_ID 那段说明）
+        ownerId=TEST_USER_ID,
         sessionId=sid,
         goal={"text": mojibake, "status": "needs_refinement"},
         artifacts=[],
@@ -309,7 +320,7 @@ def test_drive_full_repairs_purchase_text_and_returns_business_graph(monkeypatch
     mojibake = chinese.encode("utf-8").decode("latin1").encode("utf-8").decode("latin1")
 
     def fake_drive_full(state, max_loops=5, user_instruction=""):
-        assert user_instruction == chinese
+        assert user_instruction.startswith(chinese + "\n\nApproved implementation plan")
         assert state.goal["text"] == chinese
         state.runtimePhase = "awaiting"
         state.awaitReason = "max_repeat_guard"
@@ -321,7 +332,7 @@ def test_drive_full_repairs_purchase_text_and_returns_business_graph(monkeypatch
         post = client.post(
             "/api/sliderule/drive-full",
             headers={"x-internal-key": INTERNAL_KEY},
-            json={
+            json=approved_execution_payload({
                 "state": {
                     "sessionId": sid,
                     "goal": {"text": mojibake, "status": "needs_refinement"},
@@ -335,7 +346,7 @@ def test_drive_full_repairs_purchase_text_and_returns_business_graph(monkeypatch
                 },
                 "userText": mojibake,
                 "max_loops": 3,
-            },
+            }),
         )
         assert post.status_code == 200
         state = post.json()["state"]
@@ -503,7 +514,7 @@ def test_orchestrate_and_execute_report_with_native_llm(monkeypatch):
     }
     exec_resp = client.post(
         "/api/sliderule/execute-capability",
-        json=exec_payload,
+        json=approved_execution_payload(exec_payload),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
     assert exec_resp.status_code == 200
@@ -556,7 +567,7 @@ def test_sliderule_route_inventory_105_python_source_of_truth(monkeypatch):
     monkeypatch.setattr("routes.sliderule_full.execute_mapped_capability", fake_mapped)
     monkeypatch.setattr("services.capability_maps.execute_mapped_capability", fake_mapped)
     exec_payload = {"capabilityId": "structure.decompose", "state": {"sessionId": "inv-105", "goal": {"text": "inv"}, "artifacts": [], "capabilityRuns": []}, "inputArtifactIds": [], "roleId": "agent", "turnId": "inv-t"}
-    r = client.post("/api/sliderule/execute-capability", json=exec_payload, headers={"X-Internal-Key": INTERNAL_KEY})
+    r = client.post("/api/sliderule/execute-capability", json=approved_execution_payload(exec_payload), headers={"X-Internal-Key": INTERNAL_KEY})
     assert r.status_code == 200
     data = r.json()
     assert data.get("backend") == "python"
@@ -570,7 +581,7 @@ def test_sliderule_route_inventory_105_python_source_of_truth(monkeypatch):
 
     # drive-turn
     drive_payload = {"state": {"sessionId": "inv-105", "goal": {"text": "inv"}, "artifacts": [], "capabilityRuns": []}, "turnId": "inv-t", "userText": ""}
-    r = client.post("/api/sliderule/drive-turn", json=drive_payload, headers={"X-Internal-Key": INTERNAL_KEY})
+    r = client.post("/api/sliderule/drive-turn", json=approved_execution_payload(drive_payload), headers={"X-Internal-Key": INTERNAL_KEY})
     assert r.status_code == 200
     data = r.json()
     assert data.get("backend") == "python"
@@ -660,7 +671,7 @@ def test_python_owned_execute_and_orchestrate_for_node_retirement(monkeypatch):
     monkeypatch.setattr("services.capability_maps.execute_mapped_capability", fake_mapped)
     r2 = client.post(
         "/api/sliderule/execute-capability",
-        json={"capabilityId": "evidence.search", "state": {"sessionId": "retire-1", "goal": {"text": "ret"}}, "inputArtifactIds": [], "roleId": "agent", "turnId": "ret-t"},
+        json=approved_execution_payload({"capabilityId": "evidence.search", "state": {"sessionId": "retire-1", "goal": {"text": "ret"}}, "inputArtifactIds": [], "roleId": "agent", "turnId": "ret-t"}),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
     assert r2.status_code == 200, r2.text
@@ -707,11 +718,15 @@ def test_dev_python_api_mode_default_classification():
     try:
         rf.is_python_native_capability = fake_is_native
         cm.execute_mapped_capability = lambda c, st, ins, ro, tu: {"title": "dev-py", "summary": "py", "content": "Python dev api mode owns", "provenance": "python-rag"}
-        r2 = client.post("/api/sliderule/execute-capability", json=exec_p, headers={"X-Internal-Key": INTERNAL_KEY})
+        r2 = client.post("/api/sliderule/execute-capability", json=approved_execution_payload(exec_p), headers={"X-Internal-Key": INTERNAL_KEY})
         assert r2.status_code == 200
         d = r2.json()
         assert d.get("backend") == "python"
-        assert d.get("provenance") == "python-rag"
+        # structure.decompose 走的是直连执行器那条路（它委托给 capability_maps
+        # 的真 spec 生成），provenance 因此是 python-spec；上面那个
+        # execute_mapped_capability 的桩其实没被用到。这条用例真正要证的是
+        # 「dev python api mode 下这条路由归 Python 拥有」，值本身是 python-* 就行。
+        assert str(d.get("provenance", "")).startswith("python-")
     finally:
         rf.is_python_native_capability = orig_native
         cm.execute_mapped_capability = orig_m
@@ -763,7 +778,7 @@ def test_fullpath_browser_smoke_chinese_instruction_reasoning_progress_artifacts
     }
     drive = client.post(
         "/api/sliderule/drive-full",
-        json={"state": drive_state, "turnId": "ch-t1", "userText": "用中文指令运行完整推演，检查进度事件、产物、覆盖率、await/done", "max_loops": 1},
+        json=approved_execution_payload({"state": drive_state, "turnId": "ch-t1", "userText": "用中文指令运行完整推演，检查进度事件、产物、覆盖率、await/done", "max_loops": 1}),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
     assert drive.status_code == 200, drive.text
@@ -849,7 +864,7 @@ def test_fullpath_browser_smoke_chinese_instruction_reasoning_progress_artifacts
     }
     d2 = client.post(
         "/api/sliderule/drive-full",
-        json={"state": state2, "turnId": "ch-t2", "userText": "继续中文指令", "max_loops": 1},
+        json=approved_execution_payload({"state": state2, "turnId": "ch-t2", "userText": "继续中文指令", "max_loops": 1}),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
     assert d2.status_code == 200
@@ -912,7 +927,7 @@ def test_v52_queue_clean_landing_smoke_72_tasks_final_landing_patch():
     # drive-full (final full path state)
     d = client.post(
         "/api/sliderule/drive-full",
-        json={"state": {"sessionId": "landing-72", "goal": {"text": "final"}, "artifacts": [], "capabilityRuns": [], "coverageGaps": [], "coverageContract": None}, "turnId": "land-t2", "userText": "final patch", "max_loops": 1},
+        json=approved_execution_payload({"state": {"sessionId": "landing-72", "goal": {"text": "final"}, "artifacts": [], "capabilityRuns": [], "coverageGaps": [], "coverageContract": None}, "turnId": "land-t2", "userText": "final patch", "max_loops": 1}),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
     assert d.status_code == 200
@@ -941,7 +956,7 @@ def test_drive_full_accepts_real_execute_capability_result_model(monkeypatch):
 
     r = client.post(
         "/api/sliderule/drive-full",
-        json={
+        json=approved_execution_payload({
             "state": {
                 "sessionId": "real-exec-model-105",
                 "goal": {"text": "verify real ExecuteCapabilityResult model", "status": "needs_refinement"},
@@ -956,7 +971,7 @@ def test_drive_full_accepts_real_execute_capability_result_model(monkeypatch):
             "turnId": "real-model-t1",
             "userText": "verify real executor model commit",
             "max_loops": 1,
-        },
+        }),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
 
@@ -1035,7 +1050,7 @@ def test_drive_full_route_returns_publish_closure_and_skill_runtime_graph_when_a
 
     r = client.post(
         "/api/sliderule/drive-full",
-        json={
+        json=approved_execution_payload({
             "state": {
                 "sessionId": "closure-route",
                 "goal": {"text": "return closure", "status": "needs_refinement"},
@@ -1050,7 +1065,7 @@ def test_drive_full_route_returns_publish_closure_and_skill_runtime_graph_when_a
             "turnId": "closure-route-t1",
             "userText": "return closure",
             "max_loops": 1,
-        },
+        }),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
 
@@ -1115,7 +1130,7 @@ def test_drive_marathon_returns_publish_closure_response_when_available(monkeypa
 
     r = client.post(
         "/api/sliderule/drive-marathon",
-        json={
+        json=approved_execution_payload({
             "state": {
                 "sessionId": "closure-marathon",
                 "goal": {"text": "return marathon closure", "status": "needs_refinement"},
@@ -1131,7 +1146,7 @@ def test_drive_marathon_returns_publish_closure_response_when_available(monkeypa
             "maxRounds": 1,
             "budget": {},
             "policy": {},
-        },
+        }),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
 
@@ -1188,7 +1203,7 @@ def test_drive_full_happy_path_returns_closed_publish_closure_evidence(monkeypat
 
     r = client.post(
         "/api/sliderule/drive-full",
-        json={
+        json=approved_execution_payload({
             "state": {
                 "sessionId": "happy-closed-119",
                 "goal": {"text": "happy closed closure", "status": "needs_refinement"},
@@ -1203,7 +1218,7 @@ def test_drive_full_happy_path_returns_closed_publish_closure_evidence(monkeypat
             "turnId": "happy-t1",
             "userText": "prove closed",
             "max_loops": 1,
-        },
+        }),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
 
@@ -1239,7 +1254,7 @@ def test_drive_full_route_returns_none_publishClosure_skillRuntimeGraph_on_no_ev
 
     r = client.post(
         "/api/sliderule/drive-full",
-        json={
+        json=approved_execution_payload({
             "state": {
                 "sessionId": "no-ev-route",
                 "goal": {"text": "no evidence", "status": "needs_refinement"},
@@ -1251,7 +1266,7 @@ def test_drive_full_route_returns_none_publishClosure_skillRuntimeGraph_on_no_ev
             "turnId": "no-ev-t1",
             "userText": "",
             "max_loops": 1,
-        },
+        }),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
 
@@ -1339,7 +1354,7 @@ def test_drive_full_model_dump_and_plain_dict_capability_result_compat(monkeypat
 
     r = client.post(
         "/api/sliderule/drive-full",
-        json={
+        json=approved_execution_payload({
             "state": {
                 "sessionId": "compat-model-dict",
                 "goal": {"text": "drive full compat model_dump vs dict", "status": "needs_refinement"},
@@ -1354,7 +1369,7 @@ def test_drive_full_model_dump_and_plain_dict_capability_result_compat(monkeypat
             "turnId": "compat-t1",
             "userText": "compat test",
             "max_loops": 1,
-        },
+        }),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
 
@@ -1387,7 +1402,7 @@ def test_drive_full_model_dump_and_plain_dict_capability_result_compat(monkeypat
     monkeypatch.setattr("routes.sliderule_full.drive_full_v5_session", fake_drive_degraded)
     r2 = client.post(
         "/api/sliderule/drive-full",
-        json={
+        json=approved_execution_payload({
             "state": {
                 "sessionId": "compat-deg",
                 "goal": {"text": "degraded", "status": "needs_refinement"},
@@ -1396,7 +1411,7 @@ def test_drive_full_model_dump_and_plain_dict_capability_result_compat(monkeypat
             "turnId": "deg-t",
             "userText": "",
             "max_loops": 1,
-        },
+        }),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
     assert r2.status_code == 200
@@ -1452,7 +1467,7 @@ def test_drive_full_blocked_path_for_missing_declared_skill_evidence(monkeypatch
 
     r = client.post(
         "/api/sliderule/drive-full",
-        json={
+        json=approved_execution_payload({
             "state": {
                 "sessionId": "drive-blocked-ev-119",
                 "goal": {"text": "drive full blocked on missing declared skill ev"},
@@ -1467,7 +1482,7 @@ def test_drive_full_blocked_path_for_missing_declared_skill_evidence(monkeypatch
             "turnId": "blk-t1",
             "userText": "prove no fake green",
             "max_loops": 1,
-        },
+        }),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
 

@@ -29,16 +29,24 @@ import base64
 import json
 import os
 import re
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import json_repair
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from pathlib import Path
 
+from sliderule_llm.config import default_max_tokens
+
 from .app_preview import OverviewPreviewSink
-from .enrich_timing import stage as _enrich_stage
-from .identity_palette_hint import FALLBACK_SEED, derive_prompt_palette
+from .enrich_timing import remaining_run_budget_seconds, stage as _enrich_stage
+from .identity_palette_hint import (
+    BRAND_LABEL,
+    BRAND_SEED,
+    active_brand_seed,
+    derive_prompt_palette,
+)
+from .sheet_palette import usable_chart_palette
 from .palette_guard import extract_hex_colors, palette_report, repair_colors
 from .schema_legal import (
     EXPERIENCE_BLOCKS,
@@ -46,7 +54,6 @@ from .schema_legal import (
     FREEFORM_ALLOWED_ICON_REFS,
     FREEFORM_ALLOWED_STYLE_PROPS,
     FREEFORM_ALLOWED_TAGS,
-    FREEFORM_EMBEDDABLE_BLOCK_TYPES,
     FREEFORM_ICON_NAME_PATTERN,
     FREEFORM_LEGACY_ICON_ALIASES,
 )
@@ -102,20 +109,42 @@ class FreeformGenerationError(RuntimeError):
     """FreeformInsight 内容生成/校验失败（调用方应把这个区块降级/拿掉）。"""
 
 
-# "数据声明"形状的数字——check_numbers_grounded 只拦这些，不拦结构性数字
-# （近7天/Top 5/2026年度/24小时这类标题词，终检实测过的误伤面）：
+# 取值范围的说明词——"前5条""最近3笔""Top 10"这类**列表标题**，说的是
+# "这个列表打算显示几行"，不是"数据算出来是几"。它们没有聚合可挂，被当成
+# 数据声明拦下就是死局：模型改不出能过的写法，只能重试到耗尽。
+#
+# 2026-08-05 真跑代价：首页设计连挂三次、609 秒零产出，全败在同一个「前5条」
+# 上——而那正是 rowsRef 的 limit（默认 5）在标题里的自然说法。
+#
+# 为什么原来会漏：下面那条量词规则的注释自称"不拦结构性数字"，但它靠的是
+# 「天/小时/年不在量词表里」这个巧合，没有任何正向白名单。于是同样形状的
+# 标签，命运取决于量词碰巧在不在表里——`前10名` 放行、`前5条` 拦下。
+_STRUCTURAL_SCOPE_RE = re.compile(
+    r"(?:前|最近|近|第|top|Top|TOP)\s*\d[\d,\.]*\s*"
+    r"(?:条|单|件|个|笔|人|次|名|项|页|行|天|周|月|年)?"
+)
+
+# "数据声明"形状的数字——check_numbers_grounded 只拦这些。
+# ⚠️ 判定前先把上面那些取值范围说明词挖掉，否则它们会被下面的量词规则误伤。
 _NUMERIC_CLAIM_RES = (
     re.compile(r"^\W*[¥$€]?\d[\d,\.]*\s*%?\W*$"),          # 整段就是一个数（"128" "1,234.5%"）
     re.compile(r"[¥$€]\s*\d"),                              # 货币（"¥128,000"）
     re.compile(r"\d+(\.\d+)?\s*%"),                         # 百分比（"3.5%"）
     re.compile(r"\d{1,3}(,\d{3})+"),                        # 千分位（"12,345"）
     re.compile(r"(共|合计|总计|累计)\s*\d"),                 # 计数句式（"共 42 条"）
-    re.compile(r"\d[\d,\.]*\s*(条|单|件|个|笔|人|次|元|万|亿)"),  # 数+量词（"328 单"；时间单位天/小时/年不在列）
+    re.compile(r"\d[\d,\.]*\s*(条|单|件|个|笔|人|次|元|万|亿)"),  # 数+量词（"328 单"）
 )
 
 
 def _NUMERIC_CLAIM_RES_MATCH(text: str) -> bool:
-    return any(p.search(text) for p in _NUMERIC_CLAIM_RES)
+    """这段文字是不是在"声称一个算出来的数"。
+
+    先把取值范围说明词（前5条/最近3笔/Top 10）挖掉再判——挖的是**那一小段**
+    而不是整句，所以"最近30天新增 128 单"里的 `128 单` 照样拦得住：被挖掉的
+    只有 `最近30`，剩下的仍然是一句实打实的数据声明。
+    """
+    stripped = _STRUCTURAL_SCOPE_RE.sub(" ", text)
+    return any(p.search(stripped) for p in _NUMERIC_CLAIM_RES)
 
 
 # 内容树硬上限（micromark/cmark 同款纪律：不可信输入必须带嵌套/规模上限）。
@@ -123,6 +152,14 @@ def _NUMERIC_CLAIM_RES_MATCH(text: str) -> bool:
 # 值做纵深防御第二道（持久化快照恢复也走渲染那条路径）。改值两侧要一起改。
 FREEFORM_MAX_DEPTH = 12
 FREEFORM_MAX_NODES = 300
+
+# rowsRef 单次取行数（2026-08-03）。逐行内容展开发生在渲染期，一个 rowsRef
+# 就能把 limit 份模板子树摆进页面——limit 不设上限的话，一句 "limit": 500 能
+# 直接把渲染预算（FREEFORM_MAX_NODES）吃穿、页面高度也失控。默认值按参照图上
+# 排行榜/动态流的常见长度取（5~8 条），上限给到 20 留余量。
+# 两侧同值：前端 block-registry.tsx 展开时再夹一次（纵深防御，快照恢复也走那条路）。
+ROWS_REF_DEFAULT_LIMIT = 5
+ROWS_REF_MAX_LIMIT = 20
 
 
 def _env_budget(name: str, default: int) -> int:
@@ -327,7 +364,36 @@ _PHONE_IMAGE_ACTUAL_SIZE = "720x1280"
 # 中文标签糊成一片。所以下面 prompt 里图表最多 2 张、动态列表最多 5 行那些
 # 上限不能单独放开——真正让参照失效的不是总像素不够，是每个元素分到的像素
 # 不够。0.92MP 这一档实测中文仍然锐利，当前上限有余量。
-_SHEET_IMAGE_SIZE = _DEVICE_IMAGE_SIZE["desktop"]
+#
+# ── 2026-08-03：参照板单独提到 2560x1440，**不跟区块级参照图共用一张表** ──
+#
+# 探针实测（api.gpt.ge / gpt-image-2，同一句提示词逐档跑）：
+#   1280x720   51.2s   773KB     ← 此前用的
+#   1920x1088  49.5s  1482KB
+#   2048x1152  52.1s  1572KB
+#   2560x1440  50.6s  2136KB     ← 现在用的
+#   1920x1080  ✗ 400 "both edges must be multiples of 16"（1080÷16=67.5）
+#
+# 两条结论：
+#   ① **两边都必须是 16 的倍数**，所以拿不到 1920x1080，2560x1440 反而合法
+#      （2560÷16=160，1440÷16=90）。这是端点的硬校验，2.4 秒就打回来，
+#      连队列都没进——跟"生成慢"是两回事，别混。
+#   ② **耗时不随像素涨**：四倍像素，四档全落在 49~52s 的噪声里，最大那张甚至
+#      比最小那张快。这家按次排队、不按像素算力。所以这次提分辨率的时间成本
+#      是 0，换来每个元素 4 倍像素——上面那句"每个元素分到的像素不够"正是
+#      灰条/掉坐标轴刻度那批老 bug 的成因。
+#
+# 为什么不跟 _DEVICE_IMAGE_SIZE 一起提：那张表还供着**区块级参照图**
+# （_image_size_for_device），而区块级那张是**喂进视觉 LLM 当输入**的，
+# 图越大输入 token 越多、越慢越贵。参照板不进模型输入（它是给设计 LLM 看的
+# 附图，同样进输入……但只进一次，且它决定整页版式，值这个钱）——区块级那张
+# 每个区块都要生一次，成本乘以区块数。两者的账不一样，所以拆成两张表。
+_SHEET_DEVICE_IMAGE_SIZE: dict[str, str] = {
+    "phone": "1440x2560",
+    "desktop": "2560x1440",
+    "tablet": "2560x1440",
+}
+_SHEET_IMAGE_SIZE = _SHEET_DEVICE_IMAGE_SIZE["desktop"]
 
 
 def _image_size_for_device(device: str) -> str:
@@ -339,35 +405,83 @@ def _sheet_image_size_for_device(device: str) -> str:
 
     device 没明说时走桌面档——跟 _build_overview_sheet_prompt 的 else 分支
     一致：那一支要在一张横版画布上并排画桌面和手机两块，本身就是横版。
+
+    2026-08-03 起读 _SHEET_DEVICE_IMAGE_SIZE（2560x1440 档），不再跟区块级
+    参照图共用 _DEVICE_IMAGE_SIZE——两者的成本账不一样，理由见那张表上方。
     """
-    return _DEVICE_IMAGE_SIZE.get(device) or _SHEET_IMAGE_SIZE
+    return _SHEET_DEVICE_IMAGE_SIZE.get(device) or _SHEET_IMAGE_SIZE
 
 
-def _theme_palette(theme_id: str, generated_theme: Optional[dict[str, Any]] = None) -> dict[str, Any]:
-    """身份主题现在可能是 identity_theme_gen.py 生成的种子色——优先用这个
-    （同一个 app 的侧边栏/顶栏就是照它来的，颜色要统一），传了但不合契约
-    就落回 FALLBACK_SEED 派生的中性色板，不让一个坏字典拖垮整个生成。
-    判定用 is_valid_generated_theme——与前端同一契约，前端会弃用的主题这里
-    绝不拿来配色（否则卡片一个色系、侧栏另一个色系）。
+def _theme_palette(
+    theme_id: str,
+    generated_theme: Optional[dict[str, Any]] = None,
+    chart_colors: Optional[list[str]] = None,
+    chart_variant_key: str = "",
+) -> dict[str, Any]:
+    """**外壳一个颜色**（2026-08-03，用户裁决）：色板由**当轮种子色**派生。
 
-    theme_id（appIdentity.theme 那 8 选 1 的分类字段）2026-07-30 起不再参与
-    颜色决定——它仍然是 gate 校验的合法分类值，但不再对应任何手挑色板；
-    这里保留参数只是为了不动调用方的签名，函数体内不读它。真正的颜色只有
-    两个来源：LLM 选的种子色，或者 FALLBACK_SEED。
+    ⚠️ 2026-08-24：这句原文是"永远是 BRAND_SEED 派生的色板"，现在不再"永远"——
+    作曲家上有了设计系统选择器，种子色按轮取（active_brand_seed）。08-03 那条裁决
+    没被推翻：它砍的是「LLM 为每个应用自动选色」（要先花 74s 生参照图再取色），
+    不是「用户显式挑一套」。仍然是一轮一套、全局统一，只是这一套由用户定。
+
+    ⚠️ 2026-08-04 起**图表色是例外**：那一组改成从这个应用自己的参照图上读
+    （chart_colors，来源见 services/sheet_palette）。外壳统一、图表跟着应用走
+    ——「全站一个颜色」那条裁决管的是外壳。
+
+    这个色板只有一个用途：告诉设计 LLM「运行时的侧边栏/顶栏/按钮已经按这套
+    渲染了」，好让它生成的版式配色跟真实外壳对得上。所以它必须与前端实际
+    渲染的那套同源——两者同读 identity_theme_presets.json 的 brandSeed。
+
+    theme_id / generated_theme 都不再参与颜色决定，签名保持不变：调用点有十几处，
+    且**存量应用的库里仍然存着 generatedTheme 字段**。保留参数 = 老数据不需要
+    迁移脚本，读进来直接被忽略。
+
+    · theme_id：appIdentity.theme 那 8 选 1 的分类字段，2026-07-30 起就不是
+      颜色来源了（仍然是 gate 校验的合法分类值）。
+    · generated_theme：2026-08-03 起不再生成。为它生的那张参照图从不展示给
+      任何人，用一次生图换一个色值，已整段移除。
 
     derive_prompt_palette 返回的色板是 OKLCh 近似（不是前端渲染用的权威
     HCT 派生），只用于这里的 prompt 拼接和下面 palette_guard 的色相参照——
     见 identity_palette_hint.py 顶部说明，为什么这里不需要跟前端数值一致。"""
-    del theme_id
-    if is_valid_generated_theme(generated_theme):
-        seed = str(generated_theme.get("seed"))  # type: ignore[union-attr]
-        label = str(generated_theme.get("label") or "自定义主题")  # type: ignore[union-attr]
-        return derive_prompt_palette(seed, id_="generated", label=label)
-    return derive_prompt_palette(FALLBACK_SEED, id_="fallback", label="中性 · 降级")
+    del theme_id, generated_theme
+    # ⚠ 按轮取，不用模块常量：用户可能在作曲家里选了别的设计系统。
+    #   写成 BRAND_SEED 的话选择器会变成纯装饰——UI 动了、生成的颜色没动。
+    _seed, _label = active_brand_seed()
+    palette = derive_prompt_palette(_seed, id_="brand", label=_label)
+    # 2026-08-04：图表色改成从这个应用的参照图上读（services/sheet_palette）。
+    # 传进来了就覆盖——**这一步是为了消掉"提示词说的"和"画出来的"分叉**：
+    # 前端真实渲染已经优先用 chartColors 了（identity-palette.chartsFor），
+    # 这里不跟着换的话，设计 LLM 会照着一组不会出现的颜色配色，
+    # palette_guard 的色相参照也对着过时的色相判。
+    #
+    # 没取到色就退回账本色序，**用跟前端同一个键**（产品名），两边才挑到同一套。
+    # 此前这里够不着应用名，只能用旧的色相旋转算法，于是兜底路径上"提示词说的"
+    # 和"画出来的"也是分叉的——那是 0f9172a 留下的已知不一致，它的注释写着
+    # "修的时候一次穿到底"，就是这里。
+    #
+    # 两个都没有时才落回旧算法：那是老调用点的行为，不因这次改动悄悄变色。
+    usable = usable_chart_palette(chart_colors or [])
+    if usable:
+        palette = {**palette, "charts": usable}
+    elif chart_variant_key:
+        palette = derive_prompt_palette(
+            active_brand_seed()[0],
+            id_="brand",
+            label=active_brand_seed()[1],
+            chart_variant_key=chart_variant_key,
+        )
+    return palette
 
 
-def _theme_prompt_fragment(theme_id: str, generated_theme: Optional[dict[str, Any]] = None) -> str:
-    hint = _theme_palette(theme_id, generated_theme)
+def _theme_prompt_fragment(
+    theme_id: str,
+    generated_theme: Optional[dict[str, Any]] = None,
+    chart_colors: Optional[list[str]] = None,
+    chart_variant_key: str = "",
+) -> str:
+    hint = _theme_palette(theme_id, generated_theme, chart_colors, chart_variant_key)
     charts = ", ".join(hint["charts"])
     return (
         f"这个应用当前用的身份主题是「{hint['label']}」，下面这套色板已经用在真实"
@@ -376,8 +490,10 @@ def _theme_prompt_fragment(theme_id: str, generated_theme: Optional[dict[str, An
         f"- 主色：{hint['primary']}（悬停态 {hint['primaryHover']}，浅端 {hint['gradTo']}）\n"
         f"- 内容区底色：{hint['contentBg']}\n"
         f"- 强调浅底/强调字：{hint['accentBg']} / {hint['accentFg']}\n"
+        # 「这 N 个」按实际条数写。此前写死"这 3 个"、后面却列了 6 个色
+        # ——参照图取色之后条数还会变（4~6），写死的数字只会更不准。
         f"- 多类别/多序列区分色（画多阶段流程、多类别图例这种需要好几个不同色块"
-        f"时优先从这 3 个里选，而不是自己配一套糖果色）：{charts}\n"
+        f"时优先从这 {len(hint['charts'])} 个里选，而不是自己配一套糖果色）：{charts}\n"
         "同一个组件里如果需要不止一种颜色，从以上色值出发做深浅/透明度调整，"
         "不要引入跟这套色板色相不搭的新颜色（比如主题是暖橙系就不要通篇上蓝紫）。"
     )
@@ -509,6 +625,14 @@ def build_freeform_models(datamodel: dict[str, Any]) -> type[BaseModel]:
     """
     entities, field_types = _entity_index(datamodel)
 
+    def _entity_field_ids(entity_id: str) -> list[str]:
+        """某实体的真实字段 id 列表——只用来把校验错误说清楚。
+
+        报错里带上"这个实体到底有哪些字段"，reask 一次就能改对；只说"字段
+        不存在"的话模型只能瞎猜，白烧一轮重试。"""
+        prefix = f"{entity_id}."
+        return [k[len(prefix):] for k in field_types if k.startswith(prefix)]
+
     class DataRef(BaseModel):
         """一个数字的真实来源。
 
@@ -581,6 +705,95 @@ def build_freeform_models(datamodel: dict[str, Any]) -> type[BaseModel]:
                 raise ValueError("dataRef.trendGrain 需要同时给 trendFieldRef")
             return self
 
+    class RowsRef(BaseModel):
+        """逐行真实数据的来源——「取这张表、按某字段排序、前 N 行」。
+
+        为什么要有它（2026-08-03）：dataRef 只能表达聚合值（count/sum/avg），
+        没有"枚举第 N 行"的能力。于是设计模型只要想画排行榜/动态流/最近记录
+        这类**一行一行**的内容，就只能画出表头加一片空白——这正是当初引入
+        blockRef（从固定积木清单里挑一个摆进来）的唯一原因。
+
+        但固定积木是死的：长什么样由组件写死，设计模型改不动，参照图上画的
+        版式落不了地。用户裁决「首页只由 LLM 动态设计，图上有什么就设计什么」
+        之后，正确的解法不是二选一，而是**把逐行能力补给设计模型自己**：
+        版式它自由画，数据我们负责喂真的。补上之后 blockRef 整条通道就没有
+        存在理由了，已一并删除。
+
+        ## 用法：这个节点是列表容器，它的 children 是**一行**的模板
+
+            {"tag": "div", "rowsRef": {...}, "children": [ ...一行的样子... ]}
+
+        渲染端把 children 这棵子树按取到的行数重复渲染，每行把子树里带
+        fieldRef 的节点替换成那一行的真实字段值。模板只写一次，展开发生在
+        渲染期——所以设计树本身不会因为行数多而变大，节点上限不受影响。
+
+        ## 安全边界（逐行数据比聚合数字敏感得多，这里是主要防线）
+
+        · fieldRefs 是**显式白名单**：模板里的 fieldRef 只能取这里声明过的
+          字段。不声明就读不到——避免设计模型顺手把整张表的字段拉出来。
+        · limit 夹在 1..ROWS_REF_MAX_LIMIT 之间，防止一个 rowsRef 把整表拉平
+          撑爆版面（也撑爆渲染预算）。
+        · entityRef / fieldRefs / sortByRef 全部要求在真实数据模型里存在，
+          与 dataRef 同一套判定，不另起一套。
+        """
+
+        entityRef: str
+        #: 模板里允许读取的字段白名单。至少一个，且必须真实存在。
+        fieldRefs: list[str] = Field(default_factory=list)
+        #: 排序字段（可选，不给就按数据源自然顺序）。
+        sortByRef: Optional[str] = None
+        #: asc | desc，默认 desc（榜单/动态流绝大多数是"最大/最新在前"）。
+        order: Optional[str] = None
+        #: 取前几行。
+        limit: int = ROWS_REF_DEFAULT_LIMIT
+
+        @field_validator("entityRef")
+        @classmethod
+        def check_entity(cls, v: str) -> str:
+            if v not in entities:
+                raise ValueError(
+                    f"rowsRef.entityRef '{v}' does not exist. "
+                    f"Real entities are: {list(entities.keys())}"
+                )
+            return v
+
+        @field_validator("limit")
+        @classmethod
+        def check_limit(cls, v: int) -> int:
+            if v < 1 or v > ROWS_REF_MAX_LIMIT:
+                raise ValueError(
+                    f"rowsRef.limit 必须在 1..{ROWS_REF_MAX_LIMIT} 之间（给的是 {v}）"
+                )
+            return v
+
+        @field_validator("order")
+        @classmethod
+        def check_order(cls, v: Optional[str]) -> Optional[str]:
+            if v is not None and v not in ("asc", "desc"):
+                raise ValueError("rowsRef.order must be 'asc' or 'desc'")
+            return v
+
+        @model_validator(mode="after")
+        def check_fields(self) -> "RowsRef":
+            if not self.fieldRefs:
+                raise ValueError(
+                    "rowsRef.fieldRefs 不能为空——必须先声明这一行要显示哪些字段，"
+                    "模板里的 fieldRef 只能取声明过的字段"
+                )
+            for fid in self.fieldRefs:
+                if f"{self.entityRef}.{fid}" not in field_types:
+                    raise ValueError(
+                        f"rowsRef.fieldRefs 里的 '{fid}' 在实体 '{self.entityRef}' 上"
+                        f"不存在。该实体的真实字段：{_entity_field_ids(self.entityRef)}"
+                    )
+            if self.sortByRef and f"{self.entityRef}.{self.sortByRef}" not in field_types:
+                raise ValueError(
+                    f"rowsRef.sortByRef '{self.sortByRef}' 在实体 "
+                    f"'{self.entityRef}' 上不存在。"
+                    f"该实体的真实字段：{_entity_field_ids(self.entityRef)}"
+                )
+            return self
+
     class ChartSpec(BaseModel):
         """真图表声明——不是画出来的近似值，是运行时拿真实行数据现算的
         ECharts option（复用 client 侧 build-echarts-option.ts 那套已经在用
@@ -639,145 +852,108 @@ def build_freeform_models(datamodel: dict[str, Any]) -> type[BaseModel]:
                     )
             return self
 
-    class BlockRef(BaseModel):
-        """把一个**现成的体验积木**摆进设计树里（2026-07-29）。
+    class ActionRef(BaseModel):
+        """这个节点点了之后干什么（2026-08-13 新增）。
 
-        动机：freeform 的 dataRef 只能表达聚合值（count/sum/avg），没有"枚举
-        真实第 N 行"的能力——排行榜/动态流这类逐行内容它画不出来，真机试过
-        一次只能画出表头 + 空表身。与其让它硬画，不如让它**挑一个现成积木摆进
-        自己的版式里**，渲染仍走那个积木经过测试的真渲染器（主题联动、诚实
-        空态、真实行数据都是白送的）。
+        ## 为什么补这一维
 
-        这是 chart 节点的泛化：那边是"节点上挂 chart，渲染委托给 ECharts"，
-        这边是"节点上挂 blockRef，渲染委托给 ExperienceBlockBoundary"。同一个
-        口子，从只能嵌图表放宽到能嵌名单内的任何积木。
+        节点契约原来只有 tag/style/text/iconRef/imageRef/dataRef/chart/
+        rowsRef/fieldRef/children ——**没有任何"点了干什么"**。于是设计模型
+        画得出「编辑」按钮，却没地方写它该触发什么，渲染出来是个会发光的 div。
 
-        名单语义抄 Puck 的 DropZone allow（packages/core/lib/data/
-        is-component-allowed.ts）：**allow 设了就只放行名单内的**，名单外一律
-        拒。名单从 experience_block_catalog.json 的 freeformEmbeddable 派生。
+        而管道一直是通的：`ExperienceBlockRendererProps` 里有
+        `onAction(actionId, eventData)`，所有渲染器都收得到，组件区块靠它干活
+        （DataTable 行内那两个链接就是）。自由树那边调用次数是 0——不是线断了，
+        是节点上没有可以接线的地方。
 
-        binding 的深校验直接吃目录里那份 bindingSchema——跟 Gate 校验
-        page.blocks 用的是同一本账（EXPERIENCE_BLOCK_BINDING_SCHEMAS），
-        不另写一套判定，免得两处对同一个绑定给出不同结论。
+        ## 抄了什么、没抄什么
+
+        抄 nocobase 的 Action：**容器由动作自己决定（openMode: drawer/modal/
+        page），不由触发它的那个组件决定**。仓库里 pagePipes 的注释已经引过
+        这一条，这里保持同一套分层。
+
+        **没抄它的内嵌式**：nocobase 把"要打开的东西"作为按钮的子 schema
+        （`properties.drawer1`）。那样自包含、不用解析引用，但同一个表单在多处
+        打开就要写多遍，且 schema 会很深。我们这边模型本来就是引用式的
+        （entityRef/fieldRef 全是引用），而且有结构闸专门查悬空引用——
+        用引用更贴本仓的既有纪律。
+
+        ## 为什么只有这三种
+
+        `navigate`（跳到某一页）**这一版没有**：目标是 page id，而
+        `build_freeform_models` 只拿得到 datamodel、结构闸也没走进自由树——
+        **验不了的引用不该让模型写**，否则就是又开一个可以瞎填的字段。
+        等 page id 能传进来再补。
+
+        这三种全部落在 datamodel 上，验得死；而且运行时那三个入口
+        （pagePipes 的 openCreate / openRecordById / openEdit）**全是现成的**，
+        一个都不用新加。
+
+        ## 标签白名单一个字不动
+
+        白名单里**没有 `button`**（只有 div/span/p/strong/em/small/h1-3/ul/li）
+        ——这本身就印证了"自由树从来没打算能点"。但不加：加了之后模型能画出
+        不带 actionRef 的 `<button>`，那就是又造一批死按钮，回到原点。
+
+        改成**带 actionRef 的节点自动变可交互**（渲染层加 role="button"、
+        tabIndex、键盘事件）。好处是顺带更有表达力——整张卡片可点，不只是
+        卡片角落那个按钮；而且白名单是 XSS 防线，能不动就不动。
+
+        ## 写入仍然归组件
+
+        动作只负责"打开哪个容器"，真正的增删改查由组件完成。理由是实测的：
+        让模型自己写 JS 实现增删改查，六项功能通过 12/18，三份里只有 1 份全过，
+        而且失败是静默的（能点、不报错、就是没反应）。
         """
 
-        type: str
-        binding: dict[str, Any] = Field(default_factory=dict)
-        props: dict[str, Any] = Field(default_factory=dict)
+        #: 词表**直接查 html_bindings.ACTION_KINDS**（2026-08-14 晚收拢）。
+        #: 之前这里手抄了一份 Literal，靠 AST 测试跟那边对齐——四份词表
+        #: 两份是抄写。现在 Python 侧只剩 html_bindings 那一份，这里查表校验，
+        #: 加词只改一处。转移三种在自由树上暂时只是**词表统一**：老链路的
+        #: 提示词不教模型用它们（审批在 Workflow 试运行面做）。
+        kind: str
+        entityRef: str
 
-        @field_validator("type")
+        @field_validator("kind")
         @classmethod
-        def check_type(cls, v: str) -> str:
-            if v not in FREEFORM_EMBEDDABLE_BLOCK_TYPES:
+        def check_kind(cls, v: str) -> str:
+            from services.html_bindings import ACTION_KINDS
+
+            if v not in ACTION_KINDS:
                 raise ValueError(
-                    f"blockRef.type '{v}' can not be embedded in a freeform design. "
-                    f"Embeddable types are: {list(FREEFORM_EMBEDDABLE_BLOCK_TYPES)}"
+                    f"actionRef.kind '{v}' 不在动作词表里。"
+                    f"只有这些词有后果：{list(ACTION_KINDS)}"
                 )
             return v
 
-        @model_validator(mode="after")
-        def check_binding(self) -> "BlockRef":
-            schema = EXPERIENCE_BLOCK_BINDING_SCHEMAS.get(self.type) or {}
-            required = [str(k) for k in (schema.get("required") or [])]
-            optional = [str(k) for k in (schema.get("optional") or [])]
-            if not required and not optional:
-                # 这类积木不吃 binding（QuickActionPanel / WorkflowTimeline）。
-                if self.binding:
-                    raise ValueError(
-                        f"blockRef.type '{self.type}' does not take a binding "
-                        f"(got keys: {sorted(self.binding)})"
-                    )
-                return self
-
-            allowed = set(required) | set(optional)
-            unknown = sorted(set(self.binding) - allowed)
-            if unknown:
+        @field_validator("entityRef")
+        @classmethod
+        def check_entity(cls, v: str) -> str:
+            if v not in entities:
                 raise ValueError(
-                    f"blockRef.binding for '{self.type}' has unknown keys {unknown}. "
-                    f"Allowed: {sorted(allowed)}"
-                )
-            missing = [k for k in required if not str(self.binding.get(k) or "").strip()]
-            if missing:
-                raise ValueError(
-                    f"blockRef.binding for '{self.type}' is missing required keys {missing}"
-                )
-
-            entity_ref = str(self.binding.get("entityRef") or "").strip()
-            if entity_ref and entity_ref not in entities:
-                raise ValueError(
-                    f"blockRef.binding.entityRef '{entity_ref}' does not exist. "
+                    f"actionRef.entityRef '{v}' does not exist. "
                     f"Real entities are: {list(entities.keys())}"
                 )
-            # 字段引用必须落在同一个实体上、类型对得上（date 的位置不能塞
-            # number）——判定标准与 Gate 的 _validate_block_binding 同源。
-            for ref_key, want_type in (schema.get("entityFieldRefs") or {}).items():
-                field_id = str(self.binding.get(ref_key) or "").strip()
-                if not field_id:
-                    continue
-                qualified = f"{entity_ref}.{field_id}"
-                if qualified not in field_types:
-                    raise ValueError(
-                        f"blockRef.binding.{ref_key} '{field_id}' does not exist on entity "
-                        f"'{entity_ref}'"
-                    )
-                if field_types[qualified] != want_type:
-                    raise ValueError(
-                        f"blockRef.binding.{ref_key} '{field_id}' on '{entity_ref}' is type "
-                        f"'{field_types[qualified]}', {self.type} requires a {want_type} field"
-                    )
-            # 数组型字段引用（ActivityFeed 宽行档的 detailFieldRefs）——校验口径
-            # 与 Gate 的 _validate_block_binding 同源。
-            for key, spec in (schema.get("entityFieldRefLists") or {}).items():
-                val = self.binding.get(key)
-                if val is None:
-                    continue
-                if not isinstance(val, list):
-                    raise ValueError(
-                        f"blockRef.binding.{key} must be an array of field ids, got {val!r}"
-                    )
-                cap = spec.get("maxItems")
-                if cap and len(val) > cap:
-                    raise ValueError(
-                        f"blockRef.binding.{key} accepts at most {cap} field(s), got {len(val)}"
-                    )
-                want = spec.get("fieldType")
-                for field_id in val:
-                    qualified = f"{entity_ref}.{field_id}"
-                    if qualified not in field_types:
-                        raise ValueError(
-                            f"blockRef.binding.{key} '{field_id}' does not exist on entity "
-                            f"'{entity_ref}'"
-                        )
-                    if want and field_types[qualified] != want:
-                        raise ValueError(
-                            f"blockRef.binding.{key} '{field_id}' on '{entity_ref}' is type "
-                            f"'{field_types[qualified]}', {self.type} requires a {want} field"
-                        )
-            for key, choices in (schema.get("enums") or {}).items():
-                val = self.binding.get(key)
-                if val is not None and val not in choices:
-                    raise ValueError(
-                        f"blockRef.binding.{key} '{val}' is not one of {list(choices)}"
-                    )
-            for key, bounds in (schema.get("ranges") or {}).items():
-                val = self.binding.get(key)
-                if val is None:
-                    continue
-                lo, hi = bounds[0], bounds[1]
-                if not isinstance(val, int) or isinstance(val, bool) or not (lo <= val <= hi):
-                    raise ValueError(
-                        f"blockRef.binding.{key} must be an integer in [{lo}, {hi}], got {val!r}"
-                    )
-            return self
+            return v
 
     class FreeformNode(BaseModel):
         tag: str
         style: dict[str, str] = Field(default_factory=dict)
         text: Optional[str] = None
         iconRef: Optional[str] = None
+        imageRef: Optional[Literal["landing-hero"]] = None
+        imageAlt: Optional[str] = None
         dataRef: Optional[DataRef] = None
         chart: Optional[ChartSpec] = None
-        blockRef: Optional[BlockRef] = None
+        #: 逐行列表容器：children 是一行的模板，按取到的行数重复渲染。
+        rowsRef: Optional[RowsRef] = None
+        #: 取当前行的某个字段值（只在 rowsRef 子树内有意义，且必须在该
+        #: rowsRef 的 fieldRefs 白名单里——两条都由 FreeformDesign 树级校验保证）。
+        fieldRef: Optional[str] = None
+        #: 点了干什么。openRecord/editRecord 要有"当前行"，所以必须落在
+        #: rowsRef 子树内且实体对得上——跟 fieldRef 同一条作用域规则，
+        #: 由 FreeformDesign 树级校验保证。
+        actionRef: Optional[ActionRef] = None
         children: list["FreeformNode"] = Field(default_factory=list)
 
         @field_validator("tag")
@@ -876,6 +1052,83 @@ def build_freeform_models(datamodel: dict[str, Any]) -> type[BaseModel]:
         root: FreeformNode
 
         @model_validator(mode="after")
+        def check_action_refs_scoped(self) -> "FreeformDesign":
+            """openRecord / editRecord 必须落在某个 rowsRef 的子树里，且实体对得上。
+
+            跟 fieldRef 同一条作用域规则，理由也同一条：这两个动作要的是
+            **当前这一行**，作用域外没有"当前行"可言，渲染期无解。
+
+            createRecord 不受这条限制——新建不需要当前行，页头那个「+ 新建」
+            按钮就该在列表外面。
+
+            实体对得上这条是防串台：在 customer 的列表里放一个
+            `editRecord(follow_up)`，运行时会拿着客户的行 id 去开跟进记录的
+            表单，打开的是一条不存在的记录。这种错单看节点看不出来，只有
+            树级才判得了。
+            """
+
+            def walk(node: "FreeformNode", row_entity: Optional[str]) -> None:
+                scope = node.rowsRef.entityRef if node.rowsRef is not None else row_entity
+                a = node.actionRef
+                # 转移三种跟 open/edit 同一条作用域规则：流程实例挂在具体
+                # 那条记录上，没有"当前行"就没有可提交/可审批的对象。
+                if a is not None and a.kind != "createRecord":
+                    if scope is None:
+                        raise ValueError(
+                            f"actionRef '{a.kind}' 不在任何 rowsRef 里——"
+                            "打开/编辑某一条记录必须放在声明了 rowsRef 的列表容器内部"
+                            "（要有\"当前行\"才知道开哪一条）。"
+                            "页头那种「新建」按钮请用 kind='createRecord'。"
+                        )
+                    if a.entityRef != scope:
+                        raise ValueError(
+                            f"actionRef '{a.kind}' 的 entityRef 是 '{a.entityRef}'，"
+                            f"但它所在的列表是 '{scope}' 的——两者必须一致，"
+                            "否则会拿着这张表的行 id 去开另一张表的记录。"
+                        )
+                for child in node.children:
+                    walk(child, scope)
+
+            walk(self.root, None)
+            return self
+
+        @model_validator(mode="after")
+        def check_field_refs_scoped(self) -> "FreeformDesign":
+            """fieldRef 必须落在某个 rowsRef 的子树里，且取的字段被那个
+            rowsRef 显式声明过。
+
+            这条只能在树级做——单个节点看不到自己在谁的作用域内。两件事一起
+            管住：
+              · 作用域外的 fieldRef（没有"当前行"可言）→ 渲染期无解，直接拦下
+              · 白名单外的字段 → 逐行数据的主要防线，见 RowsRef 的说明
+            嵌套 rowsRef 时以**最近的**那个为准（同 CSS 作用域直觉），所以递归
+            时把 allowed 换成内层的白名单。
+            """
+
+            def walk(node: "FreeformNode", allowed: Optional[set[str]]) -> None:
+                scope = (
+                    set(node.rowsRef.fieldRefs) if node.rowsRef is not None else allowed
+                )
+                if node.fieldRef is not None:
+                    if scope is None:
+                        raise ValueError(
+                            f"fieldRef '{node.fieldRef}' 不在任何 rowsRef 里——"
+                            "取某一行的字段必须放在声明了 rowsRef 的列表容器内部。"
+                            "如果你要的是总数/求和这类聚合值，用 dataRef。"
+                        )
+                    if node.fieldRef not in scope:
+                        raise ValueError(
+                            f"fieldRef '{node.fieldRef}' 没有在所属 rowsRef 的 "
+                            f"fieldRefs 里声明（已声明的是 {sorted(scope)}）——"
+                            "要显示的字段必须先在 rowsRef.fieldRefs 里列出来。"
+                        )
+                for child in node.children:
+                    walk(child, scope)
+
+            walk(self.root, None)
+            return self
+
+        @model_validator(mode="after")
         def check_tree_bounds(self) -> "FreeformDesign":
             depth, nodes = _freeform_tree_bounds(self.root)
             if depth > FREEFORM_MAX_DEPTH:
@@ -893,144 +1146,113 @@ def build_freeform_models(datamodel: dict[str, Any]) -> type[BaseModel]:
     return FreeformDesign
 
 
-def _blockref_prompt_fragment() -> str:
-    """可嵌积木清单——从目录的 freeformEmbeddable 派生（2026-07-29）。
+def _action_prompt_fragment() -> str:
+    """按钮怎么才能真的能点——actionRef 的用法（2026-08-13）。
 
-    名单语义抄 Puck 的 DropZone allow：allow 设了就只放行名单内的。改目录
-    一处，Pydantic 校验/这段 prompt/前端渲染三处同步。绑定字段说明直接吃
-    bindingSchema，与 Gate 校验 page.blocks 同一本账。
+    不写这一段的话模型永远不会用它：契约里加了字段，但提示词里没提，
+    等于加了个没人知道的开关。这跟 rowsRef 上线时是同一个道理。
     """
-    if not FREEFORM_EMBEDDABLE_BLOCK_TYPES:
-        return ""
-    by_type = {str(b["type"]): b for b in EXPERIENCE_BLOCKS}
-    lines = [
-        "",
-        "有些内容你**画不出来**：需要逐行列出真实记录的那类（排行榜、动态流、",
-        "流程时间线、入口按钮组）。dataRef 只能取聚合值（count/sum/avg），没有",
-        "\"引用第 N 行\"的表达方式，硬画只会得到一个表头加一片空白。",
-        "",
-        "遇到这种内容，不要硬画，也不要跳过——**在你的版式里摆一个现成积木**：",
-        "节点上加一个 blockRef 字段，运行时会把那个积木真实渲染进这块区域",
-        "（真实行数据、主题配色、空态文案都由积木自己负责，你只决定它摆在哪、",
-        "占多大）。这跟 chart 字段是同一个机制，只是换成了积木。",
-        "",
-        "可以嵌的积木只有这几个，名单之外的一律不接受：",
-    ]
-    for block_type in FREEFORM_EMBEDDABLE_BLOCK_TYPES:
-        block = by_type.get(block_type) or {}
-        schema = block.get("bindingSchema") or {}
-        required = list(schema.get("required") or [])
-        optional = list(schema.get("optional") or [])
-        desc = str(block.get("description") or "").strip()
-        if not required and not optional:
-            bind_desc = "不需要 binding（省略这个字段）"
-        else:
-            parts = []
-            field_refs = schema.get("entityFieldRefs") or {}
-            for key in required:
-                want = field_refs.get(key)
-                parts.append(f"{key}（必填{'，同实体下的 ' + want + ' 字段' if want else ''}）")
-            ref_lists = schema.get("entityFieldRefLists") or {}
-            for key in optional:
-                want = field_refs.get(key)
-                extra = ""
-                if want:
-                    extra = f"，同实体下的 {want} 字段"
-                elif key in ref_lists:
-                    spec = ref_lists[key]
-                    cap = spec.get("maxItems")
-                    want_type = spec.get("fieldType")
-                    extra = "，同实体下的{}字段 id **数组**{}".format(
-                        f" {want_type} " if want_type else "",
-                        f"，最多 {cap} 个" if cap else "",
-                    )
-                elif key in (schema.get("enums") or {}):
-                    extra = "，取值：" + "/".join(map(str, schema["enums"][key]))
-                elif key in (schema.get("ranges") or {}):
-                    lo, hi = schema["ranges"][key]
-                    extra = f"，{lo}-{hi} 的整数"
-                parts.append(f"{key}（可选{extra}）")
-            bind_desc = "binding: " + "、".join(parts)
-        lines.append(f"- {block_type}：{desc[:60]}　{bind_desc}")
-        # 表现档位（props.variant）——同一个积木的两种长相，由设计者按版面挑。
-        # 从 propsSchema 派生而不是在这写死，加档位改目录一处即可。
-        variants = (
-            ((block.get("propsSchema") or {}).get("properties") or {})
-            .get("variant", {})
-            .get("enum")
-        )
-        if variants:
-            lines.append(
-                f"  ↳ 这个积木有 props.variant 可选：{'/'.join(map(str, variants))}"
-                "（不写按第一个算）"
-            )
-    lines += [
-        "",
-        "写法（binding 里的 limit/sortOrder 这类可选项也写在 binding 里，不要写进 props；",
-        "props 只放上面标了 ↳ 的表现档位）：",
-        '{"tag": "div", "style": {"flex": "1"}, "blockRef": {',
-        '  "type": "<上面名单里的一个>",',
-        '  "binding": {"entityRef": "<真实实体 id>", "...": "<按上面说明填>"},',
-        '  "props": {"variant": "<有 ↳ 才写，没有就整个省掉 props>"}',
-        "}}",
-        "",
-        "**积木摆在哪，就挑对应的长相**：占满整行的位置用宽行档（ActivityFeed 的",
-        "variant=row），这时一定要用 detailFieldRefs 补 1-3 个明细字段，否则一整行",
-        "只有标题和日期，右边三分之二全是空的；挤在窄侧栏里才用默认的时间轴档。",
-        "",
-        "跟 chart 一样：有 blockRef 的节点不要再写 children/text（积木会接管这块",
-        "区域的内容），节点自己的 style 仍然控制它在版式里占多大、周围留多少白。",
-        "积木自带卡片外观（标题栏 + 白底 + 内边距），所以**不要再给这个节点套一层",
-        "自己画的卡片**（不要设 backgroundColor / border / boxShadow / padding），",
-        "否则又是卡片套卡片。",
-        "",
-        "这些积木是**可选的**：这一页确实需要展示逐行记录才摆，用不上就完全不用，",
-        "不要为了凑数硬塞一个跟这页业务无关的排行榜。",
-    ]
-    return "\n".join(lines)
+    return """\
+想让某个元素**点了有反应**（按钮、卡片、一行记录），给它加 actionRef。
+不加 actionRef 的元素点了什么都不会发生——不要画一个写着「编辑」却没有
+actionRef 的框，那对用户是纯误导。
+
+    {"tag": "div", "text": "+ 新建客户",
+     "actionRef": {"kind": "createRecord", "entityRef": "customer"}}
+
+三种动作，只有这三种：
+
+    createRecord   打开新建表单。**不需要当前行**，页头那个「新建」就用它。
+    openRecord     打开这一行的详情。
+    editRecord     打开这一行的编辑表单。
+
+⚠️ openRecord / editRecord **必须写在 rowsRef 列表容器的内部**——它们要的是
+"当前这一行"，写在列表外面没有当前行可言，会被直接判失败。
+而且 entityRef 必须跟所在列表的 entityRef 一致，否则会拿着这张表的行 id
+去开另一张表的记录。
+
+⚠️ 标签白名单里**没有 button**。带了 actionRef 的元素会自动变成可点击的
+（含键盘可达），所以用 div/span 加 actionRef 就行，整张卡片也可以点。
+
+⚠️ actionRef 只负责"打开哪个容器"，**不做写入**。真正的保存/删除由打开的
+那个表单完成，你不需要也不能表达"点了直接改数据"。
+"""
 
 
-def build_freeform_prompt(
-    design_brief: str,
-    datamodel: dict[str, Any],
-    *,
-    theme_id: str = "",
-    device: str = "",
-    generated_theme: Optional[dict[str, Any]] = None,
-) -> str:
-    return f"""你是一名前端视觉设计师。设计一个可视化组件：{design_brief}
-要有视觉创意和现代感，大胆用间距、层次、颜色对比、图标去表达内容。
+def _rows_prompt_fragment() -> str:
+    """逐行内容怎么画——rowsRef 的用法（2026-08-03）。
 
-{_theme_prompt_fragment(theme_id, generated_theme)}
-{_device_prompt_fragment(device)}
+    取代了此前的 `_blockref_prompt_fragment`（口径是"你画不出来，从名单里挑
+    个现成积木摆进去"）。用户裁决「首页只由 LLM 动态设计，参照图上有什么就
+    设计什么，不要固定组件」之后，固定积木那条路整体删除，逐行能力直接补给
+    设计模型自己——版式它自由画，真实行数据由 rowsRef 喂进去。
 
-只能用安全原子积木拼：{", ".join(FREEFORM_ALLOWED_TAGS)} 标签。
+    这段话必须把三件事说清楚，少一件都会退回老毛病：
+      ① 逐行内容**可以画**（不说的话模型沿用旧直觉，改用聚合数字替代）；
+      ② 模板只写一行（不说的话模型会手写 5 份几乎相同的子树，节点数爆掉）；
+      ③ 要显示的字段必须先在 fieldRefs 里声明（白名单是逐行数据的主要防线，
+         漏声明会被 Pydantic 拒收、白烧一轮 reask）。
+    """
+    return "\n".join([
+        "",
+        "### 逐行内容（排行榜、最近动态、待办清单、流程记录……）",
+        "",
+        "这类「一行一行列出真实记录」的内容**你可以自己画**，版式完全由你定：",
+        "几列、每列多宽、徽标/进度条怎么摆，跟画别的区域一样自由。",
+        "",
+        "数据这样绑：在**列表容器**节点上写 rowsRef 声明取哪些行，它的 children",
+        "写**一行**的样子（模板），运行时会按取到的真实行数重复渲染这份模板，",
+        "把模板里带 fieldRef 的节点替换成那一行的真实值。",
+        "",
+        '{"tag": "div", "style": {"display": "flex", "flexDirection": "column"},',
+        ' "rowsRef": {',
+        '   "entityRef": "<真实实体 id>",',
+        '   "fieldRefs": ["<这一行要显示的字段 id>", "..."],',
+        '   "sortByRef": "<排序字段 id，可选>", "order": "desc", "limit": 5},',
+        ' "children": [',
+        '   {"tag": "div", "style": {"display": "flex", "gap": "12px"},',
+        '    "children": [{"tag": "span", "fieldRef": "<字段 id>"},',
+        '                 {"tag": "span", "fieldRef": "<字段 id>"}]}]}',
+        "",
+        "四条硬规矩：",
+        "1. **模板只写一份**——不要手写 5 份几乎相同的行，重复由运行时负责。",
+        # 2026-08-04：原来这条只说了 fieldRef 与 fieldRefs 的**关系**，没说
+        # fieldRefs 本身必填。真机连挂三轮、烧 192 秒降级，报的都是
+        # "rowsRef.fieldRefs 不能为空"——模型写了 entityRef/limit 就以为齐了。
+        # 关系描述推不出"这个字段不能省"，得直说。
+        "2. **fieldRefs 必填、且不能是空数组**——先在这里列出这一行要显示的字段 id，"
+        "模板里的 fieldRef 才取得到值。只写 entityRef 和 limit 是不够的，会被直接拒收。",
+        "3. **fieldRef 只能取 fieldRefs 里声明过的字段**，没声明的读不到（会被拒）。",
+        "4. rowsRef 与 fieldRef 都必须指向数据模型里真实存在的实体/字段，不能编。",
+        "",
+        "limit 建议 5-8 条（上限 20）。这一页用不上逐行内容就完全不用，不要为了",
+        "凑版面硬塞一个跟业务无关的排行榜——参照图上有才画，没有就没有。",
+    ])
 
-图标（iconRef）：直接用 Ant Design 图标组件名，PascalCase、以 Outlined 结尾
-（也可以是 Filled/TwoTone），比如 WalletOutlined、ShoppingCartOutlined、
-PieChartOutlined。Ant Design 有上百个图标，**按语义挑最贴切的那个**，不要
-将就：金额/营收用 DollarOutlined/WalletOutlined/AccountBookOutlined，订单/
-购物用 ShoppingCartOutlined/ShoppingOutlined，库存/补货用 InboxOutlined/
-DropboxOutlined/ContainerOutlined，任务/清单用 ProfileOutlined/
-CarryOutOutlined，图表/分析用 PieChartOutlined/BarChartOutlined/
-LineChartOutlined，用户/会员用 UserOutlined/TeamOutlined/CrownOutlined，
-时间/排期用 ClockCircleOutlined/CalendarOutlined，告警/风险用
-WarningOutlined/AlertOutlined/FireOutlined。下面是一批常用示例，但不限于
-这些，任何合法的 Ant Design 图标名都可以用：
-{json.dumps(list(FREEFORM_ALLOWED_ICON_REFS), ensure_ascii=False)}
-每张统计卡/列表项/小节标题旁边，尽量都配一个贴切的 iconRef，图标是这类信息
-卡片天然该有的视觉锚点，不要整份设计一个图标都不用。
-图标要做得醒目、有存在感：统计卡（KPI 卡）的图标别做成一个跟正文一样大的
+
+#: 「怎么画」的**兜底**处方（2026-08-07 拆出来）。
+#:
+#: 这两段（图标用法 1037 字 + 间距/圆角/阴影刻度 581 字）原本写死在
+#: build_freeform_prompt 正文里，是首页同质化的最大来源：实测两个完全不同
+#: 业务（连锁药房 / 农业大棚）的首页设计提示词**逐字相同 98.6%**——8512 字
+#: 里只有 123 字随业务变化，而那 123 字全是 enum 选项名和内容清单，
+#: 没有一个字关于"怎么排"。
+#:
+#: 于是每张 KPI 卡都被钉成"左上角一个 40~48px 圆角色块图标底座"，间距只准
+#: 取 4/8/12/16/24/32，阴影只准用那两串固定值。药房和大棚拿到同一份处方，
+#: 画出来自然是同一张脸。
+#:
+#: 现在它退居**兜底**：正常路径由 _refine_craft_via_llm 按业务现写
+#: （见那个函数），改写失败才回落到这里。回落是静默的、逐字节等于旧行为。
+#:
+#: ⚠️ 这是模板不是成品：`{icon_list}` 那个占位符要由 _craft_fallback() 填。
+#: 原文在 build_freeform_prompt 的 f-string 里，图标清单是就地插值的；搬成
+#: 模块常量之后 f-string 没了，直接用会把 `{json.dumps(...)}` 原样发给模型。
+_FREEFORM_CRAFT_FALLBACK_TEMPLATE = """图标要做得醒目、有存在感：统计卡（KPI 卡）的图标别做成一个跟正文一样大的
 小字符，做成一个 40~48px 的圆角色块当图标底座（给这个图标节点设
 backgroundColor 一块主题色/浅色底 + borderRadius + 居中），图标本身用
-fontSize 22~28px（图标大小 = 所在节点的 fontSize，想让图标大就把这个节点的
-fontSize 调大，不是设 width/height），色块配色跟这张卡的主色系呼应——参考
-现代仪表盘里"每张 KPI 卡左上角一个醒目图标方块"的做法，不要缩成一个灰扑扑
-的小图标。
-
-style 对象的 key 只能用这些 CSS 属性名，写了列表之外的属性（比如 fontFamily、
-listStyle）会被直接判失败：{", ".join(FREEFORM_ALLOWED_STYLE_PROPS)}。
-颜色用具体十六进制值，背景可用 linear-gradient(...)，不能出现 url(...)。
+fontSize 22~28px，色块配色跟这张卡的主色系呼应——参考现代仪表盘里
+"每张 KPI 卡左上角一个醒目图标方块"的做法，不要缩成一个灰扑扑的小图标。
 
 间距（padding/margin/gap）、圆角（borderRadius）只能从这套固定刻度里取值，
 不要自己另外发明数字——这套刻度是应用真实壳体（侧边栏/顶栏/卡片）本身在用
@@ -1044,7 +1266,213 @@ listStyle）会被直接判失败：{", ".join(FREEFORM_ALLOWED_STYLE_PROPS)}。
 - 阴影：浅色卡片用 "0 1px 2px 0 rgba(0,0,0,0.03), 0 1px 6px -1px rgba(0,0,0,0.02), 0 2px 4px 0 rgba(0,0,0,0.02)"
   这类很轻的多层阴影（近似取代边框、不抢视觉），需要更明显层次时用
   "0 6px 16px 0 rgba(0,0,0,0.08), 0 3px 6px -4px rgba(0,0,0,0.12), 0 9px 28px 8px rgba(0,0,0,0.05)"，
-  不要自己调一个更重/更黑的阴影。
+  不要自己调一个更重/更黑的阴影。"""
+
+
+def _craft_fallback() -> str:
+    """「怎么画」的兜底处方。图标**契约**不在这里（见 _icon_contract）。"""
+    return _FREEFORM_CRAFT_FALLBACK_TEMPLATE
+
+
+#: 图标的**契约**：怎么把一个图标挂上去。永远在提示词里，跟改写没关系。
+#:
+#: 2026-08-07 拆分后第一次真机产出就踩了这个坑：药房和大棚两页
+#: **一个 iconRef 都没有**，模型把 "FileSearchOutlined"、"AlertOutlined"
+#: 这些名字当**正文**写进了 text 字段，页面上渲染出一排蓝色的英文单词。
+#:
+#: 原因很直接：改写系统提示里写着"不要写任何关于 JSON 结构、标签名、字段名
+#: 的内容"，改写 LLM 老老实实照办，写出来的是"图标使用 MedicineBoxOutlined
+#: 表示药房业务、图标统一 16px"——**只说了用哪个图标，没说图标挂在哪**。
+#: 而这句"挂在节点的 iconRef 字段上"原本就藏在被我搬走的那段处方里。
+#:
+#: 所以边界在这儿：
+#:   · **契约**（字段名 iconRef、名字形状、大小由 fontSize 决定、可选清单）
+#:     → 系统给，固定不变，改写碰不到；
+#:   · **处方**（配哪个语义的图标、多大、要不要底座色块、什么形状）
+#:     → 改写按业务自己定。
+#: 这跟 style 白名单 / chart 字段名留在外面是同一条线——凡是"写错就判失败或
+#: 渲染不出来"的，都不进改写的输入。
+_FREEFORM_ICON_CONTRACT_TEMPLATE = """图标怎么挂：在**需要图标的那个节点**上写 `"iconRef": "<Ant Design 图标组件名>"`。
+图标名不是正文——**绝不要把图标名写进 text 字段**，那样页面上会直接显示出
+"FileSearchOutlined" 这么一串英文单词。一个节点写了 iconRef 就渲染成图标本身。
+名字用 PascalCase、以 Outlined 结尾（Filled/TwoTone 也可以），比如
+WalletOutlined、ShoppingCartOutlined、PieChartOutlined。Ant Design 有上百个
+图标，**按语义挑最贴切的那个**，不要将就：金额/营收用 DollarOutlined/
+WalletOutlined/AccountBookOutlined，订单/购物用 ShoppingCartOutlined/
+ShoppingOutlined，库存/补货用 InboxOutlined/DropboxOutlined/ContainerOutlined，
+任务/清单用 ProfileOutlined/CarryOutOutlined，图表/分析用 PieChartOutlined/
+BarChartOutlined/LineChartOutlined，用户/会员用 UserOutlined/TeamOutlined/
+CrownOutlined，时间/排期用 ClockCircleOutlined/CalendarOutlined，告警/风险用
+WarningOutlined/AlertOutlined/FireOutlined。下面是一批常用示例，但不限于这些，
+任何合法的 Ant Design 图标名都可以用：
+{icon_list}
+图标大小 = 这个节点的 fontSize，想让图标大就把这个节点的 fontSize 调大，
+**不是**设 width/height。
+每张统计卡/列表项/小节标题旁边，尽量都配一个贴切的 iconRef——图标是这类信息
+卡片天然该有的视觉锚点，不要整份设计一个图标都不用。"""
+
+
+def _icon_contract() -> str:
+    """把图标契约里的可选清单填上。
+
+    用 replace 而不是 str.format：这段文本里有 `"iconRef": "<...>"` 这样的
+    JSON 片段，将来再加一段带花括号的例子，format 会当场炸，replace 不会。
+    """
+    return _FREEFORM_ICON_CONTRACT_TEMPLATE.replace(
+        "{icon_list}", json.dumps(list(FREEFORM_ALLOWED_ICON_REFS), ensure_ascii=False)
+    )
+
+
+#: 让 LLM 按业务现写「怎么画」那一段的系统提示（2026-08-07）。
+#:
+#: 形制照抄 _SHEET_PROMPT_REFINE_SYSTEM（参照板出图提示词那条已经这么干了，
+#: 见 _build_overview_sheet_facts 的说明）。但**边界不同，这条差别是要命的**：
+#:
+#:   出图那条的产物是一张**图片**，没有校验。改写 LLM 漏一条，图丑一点而已。
+#:   这条的产物是一棵**必须过校验的 JSON 树**（标签白名单 / style 属性白名单 /
+#:   dataRef 与 chart 的 key 名与取值域）。漏掉契约条款 → 设计判失败 →
+#:   首页退回固定骨架，正是用户抱怨的那个样子。
+#:
+#: 所以**契约段不进这个改写的输入，也不许它输出契约**：它只负责"气质与排布"，
+#: 白名单和 schema 由 build_freeform_prompt 自己拼在外面，改写 LLM 碰不到。
+#:
+#: ⚠️ 第 3 条被真机打过脸一次，值得单独说。原文只写"图标用 Ant Design 组件名、
+#: 按语义挑"，改写 LLM 照办，产出"图标使用 MedicineBoxOutlined 表示药房业务、
+#: 统一 16px"——**说了用哪个，没说挂在哪**。下游设计模型于是把图标名当正文
+#: 写进 text，两页一个 iconRef 都没有，页面上排出一串蓝色英文单词。
+#: 现在"挂在 iconRef 字段上"由 _icon_contract() 固定给出，这里补一句让改写
+#: 知道机制已由系统交代、它只管设计判断，免得它以为自己得负责说清怎么挂。
+_FREEFORM_CRAFT_REFINE_SYSTEM = (
+    "你是给「界面设计模型」写作画要求的人。下面会给你一个企业应用某一页的"
+    "**事实**：这一页要覆盖的内容范围、真实数据字段、设备档。\n\n"
+    "请据此写出一段**中文作画要求**，交给另一个模型去产出这一页的版式。\n\n"
+    "要求：\n"
+    "1. 只输出要求正文，不要解释、不要标题、不要 markdown 代码块。\n"
+    "2. **按这个业务的性质决定视觉气质与排布**：哪块内容该最显眼、分几列、"
+    "谁跟谁并排、什么该占整行、卡片之间的大小对比、图标该用什么语义的、"
+    "间距该紧凑还是疏朗、圆角该硬朗还是柔和、阴影该轻还是重。"
+    "按这个业务的人打开这一页最先要做什么来排——**不要套「顶部一排等宽指标卡 + "
+    "下面两张图 + 底部一张表」那种通用后台网格**，那是这次要摆脱的东西。\n"
+    "3. 图标：**怎么挂图标（写在哪个字段上）系统已经另外交代过了，你不用管**，"
+    "你只决定设计层面的事——这一页哪些地方该配图标、配什么语义的图标"
+    "（用 Ant Design 图标组件名，如 WarningOutlined）、多大、要不要底座色块、"
+    "什么形状，也可以判断这一页压根不用底座。\n"
+    "4. 间距、圆角、阴影**给出具体数值**，让下游有确定的依据；但数值由你按这一页"
+    "的气质定，不必迁就任何通用刻度。\n"
+    "5. **不要**写任何关于 JSON 结构、标签名、允许的 CSS 属性名、dataRef/chart "
+    "字段名的内容——那些由系统另行给出，你写了会互相打架。\n"
+    "6. 不要编造数据模型里没有的字段或指标。\n"
+    "7. 长度 300-600 字，写成连贯的中文段落。"
+)
+
+
+def _refine_craft_via_llm(
+    design_brief: str, datamodel: dict[str, Any], *, device: str = ""
+) -> Optional[str]:
+    """让 LLM 按这一页的业务现写「怎么画」。**加分项，失败静默回退。**
+
+    与 _refine_sheet_prompt_via_llm 同一套 fail-open 纪律：任何失败（LLM 报错 /
+    空回复 / 短得不像要求）都返回 None，调用方回落 _FREEFORM_CRAFT_FALLBACK
+    ——那份常量逐字节等于改造前的行为，所以最坏情况是"跟以前一样"，不是更差。
+
+    为什么值得多花一轮 LLM：写死处方下两个完全不同业务的首页设计提示词逐字
+    相同 98.6%，版式必然雷同。
+
+    ⚠️ 这是**拿确定性换多样性**。那两段常量原本在替模型兜住已知的坑（图标退化成
+    小字符、间距各写各的），现在每次让改写 LLM 重新想一遍，它漏掉哪一条，那一页
+    就可能复发对应的老毛病。判断划不划算只能看产出——别拿"以前修过"当作现在也
+    不会复发的理由。这句话是从 _build_overview_sheet_facts 那次同类改造里抄来的，
+    因为那次的教训后来真的复发过一回（灰条占位）。
+    """
+    # 连 import 都放进 try：这一整段是加分项，导入失败（模块缺失、循环导入）
+    # 也必须表现成"这一步跳过"，而不是把 build_freeform_prompt 整个炸掉——
+    # 那会让首页退回固定骨架，比拿兜底处方画一张同质化的页糟得多。
+    try:
+        from sliderule_llm.client import LlmError, call_llm_with_retry
+    except Exception as exc:  # noqa: BLE001
+        print(f"[freeform_block] craft refine skipped (import): {str(exc)[:160]}")
+        return None
+
+    # 预算不够就别抢：这一步是**嵌在 monitor.design 里面**跑的，而 design 自己
+    # 的准入线只有 `130 * design_total` 秒。实测这次改写单次 ~40s，如果卡着
+    # 130 秒进来再花 40，留给真正出版式的只剩 90——那不是"版式朴素一点"，是
+    # 版式**整段生成失败**、首页退回固定骨架，比拿兜底处方画一张同质化的页
+    # 糟得多。所以门槛设在 design 准入线之上留足余量。
+    #
+    # 220 = 40（改写实测）+ 130（design 准入线）+ 50（改写偶尔重试一轮的余量）。
+    # 拿不到预算上下文（remaining is None，比如单测/离线调用）时照常跑——
+    # 这跟这个文件里另外两处预算判断（palette / design）的写法一致。
+    remaining = remaining_run_budget_seconds()
+    if remaining is not None and remaining < 220:
+        print(f"[freeform_block] craft refine skipped: 预算只剩 {remaining:.0f}s")
+        return None
+
+    facts = "\n".join(
+        [
+            f"设备档：{device or 'desktop'}。",
+            f"这一页要覆盖的内容范围：\n{design_brief}",
+            f"真实数据字段：\n{_datamodel_summary_lines(datamodel)}",
+        ]
+    )
+    try:
+        result = call_llm_with_retry(
+            [
+                {"role": "system", "content": _FREEFORM_CRAFT_REFINE_SYSTEM},
+                {"role": "user", "content": facts},
+            ],
+            max_attempts=2,
+            backoff_ms=1500,
+            temperature=0.9,  # 比出图改写更高：这一步要的就是发散
+            max_tokens=default_max_tokens(),
+        )
+    except LlmError as exc:
+        print(f"[freeform_block] craft refine skipped: {str(exc)[:160]}")
+        return None
+    except Exception as exc:  # noqa: BLE001 — 改写失败绝不能拖垮主链路
+        print(f"[freeform_block] craft refine skipped (unexpected): {str(exc)[:160]}")
+        return None
+    text = (result.content or "").strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    if len(text) < 120:
+        print(f"[freeform_block] craft refine skipped: 回复太短（{len(text)} 字）")
+        return None
+    return text
+
+
+def build_freeform_prompt(
+    design_brief: str,
+    datamodel: dict[str, Any],
+    *,
+    theme_id: str = "",
+    device: str = "",
+    generated_theme: Optional[dict[str, Any]] = None,
+    chart_colors: Optional[list[str]] = None,
+    chart_variant_key: str = "",
+) -> str:
+    # 「怎么画」这一段每页现写一次（拿确定性换多样性，理由见 _refine_craft_via_llm）。
+    # 失败静默回落到兜底常量，逐字节等于改造前的行为。
+    craft = _refine_craft_via_llm(design_brief, datamodel, device=device) or _craft_fallback()
+    return f"""你是一名前端视觉设计师。设计一个可视化组件：{design_brief}
+要有视觉创意和现代感，大胆用间距、层次、颜色对比、图标去表达内容。
+
+{_theme_prompt_fragment(theme_id, generated_theme, chart_colors, chart_variant_key)}
+{_device_prompt_fragment(device)}
+
+只能用安全原子积木拼：{", ".join(FREEFORM_ALLOWED_TAGS)} 标签。
+
+受控图片（imageRef）：只有营销落地页会提供 `landing-hero`。需要主视觉时在一个
+div 节点写 `"imageRef":"landing-hero"` 和准确的 `imageAlt`；运行时只会解析
+这个受控引用，不能填写 URL、data URI 或其它值。图片节点可用 width/height/
+borderRadius/overflow 控制版式，不能用 CSS url(...)。
+
+{_icon_contract()}
+
+{craft}
+
+style 对象的 key 只能用这些 CSS 属性名，写了列表之外的属性（比如 fontFamily、
+listStyle）会被直接判失败：{", ".join(FREEFORM_ALLOWED_STYLE_PROPS)}。
+颜色用具体十六进制值，背景可用 linear-gradient(...)，不能出现 url(...)。
 
 根节点（也就是最外层那个 "root"）会被直接放进页面已有的内容区容器里，那层
 容器本身已经带了背景色和内边距——根节点的 style 不要再设置 backgroundColor
@@ -1075,7 +1503,8 @@ listStyle）会被直接判失败：{", ".join(FREEFORM_ALLOWED_STYLE_PROPS)}。
 想要图表视觉上更突出，用外层包一层更宽的容器（比如让它独占一整行）或
 调整周围留白，而不是在 chart 节点自己身上加一个不会生效的 height 期望。
 {_chart_candidates_prompt_fragment(datamodel)}
-{_blockref_prompt_fragment()}
+{_rows_prompt_fragment()}
+{_action_prompt_fragment()}
 下面是这个应用真实的数据模型，唯一可以引用的数据来源：
 {json.dumps(datamodel, ensure_ascii=False, indent=2)}
 
@@ -1161,8 +1590,8 @@ def _build_reference_image_prompt(
         # _generate_overview_sheet_b64 任何一步失败都静默返回 None，
         # generate_freeform_block 就会退回来自己生一张，把带 blockRef JSON 的
         # 总览 brief 原样喂到这里。真机复现过两次：画面里直接印出
-        # 「blockRef / ActivityFeed」徽标，严重时整块 JSON 当代码块画进图里。
-        "注意：上面的设计需求里可能夹带 JSON 片段、字段 id、blockRef 之类的"
+        # 「rowsRef / entityRef」这类徽标，严重时整块 JSON 当代码块画进图里。
+        "注意：上面的设计需求里可能夹带 JSON 片段、字段 id、rowsRef 之类的"
         "技术标识，那些只是在告诉你**这一格该放什么内容**，不是要画的文案——"
         "画面里一个技术标识都不许出现，该画成对应的真实界面（比如一行行的动态"
         "列表、带图标和状态标签的条目），标题用人看得懂的中文短语；"
@@ -1221,15 +1650,19 @@ def _build_overview_sheet_facts(
 
       · 画布尺寸与设备档 —— 端点逐像素认 size，两边说的必须是同一个画布
       · design_brief    —— 这一页经过门禁的内容范围
-      · 主题色板        —— 运行时外壳已经按种子渲染了，参照图偏色就会撞色
       · datamodel 摘要  —— 真实实体/字段/enum 选项，防止编出对不上的分类数
+
+    ⚠️ **不给色板**（2026-08-03，用户裁决：首页生图自由发挥）。
+    此前这里会附一句"运行时外壳已经按这套渲染了，别偏色"。现在全站外壳是
+    统一的白菜单 + 白 Header + 一个品牌主色，参照图本来就不需要去迁就它——
+    它的职责只剩**版式**。把配色的手铐摘掉，出图的表现力明显更高，而外壳
+    的一致性由前端那套固定色板保证，不依赖这张图画成什么样。
 
     ⚠️ 保留一条底线：**这段文本会被原样塞进 refine 的输入里**，而 brief 里
     夹带 blockRef JSON 是常态。refine 那一步的指令里必须自己处理这件事——
     这里不再重复禁令（那正是本次要拿掉的东西之一）。
     """
-    hint = _theme_palette(theme_id, generated_theme)
-    charts = "、".join(hint["charts"])
+    del theme_id, generated_theme  # 见上：参照图不再受色板约束
     datamodel_summary = _datamodel_summary_lines(datamodel)
     canvas = _sheet_image_size_for_device(device)
     tier = {
@@ -1241,12 +1674,6 @@ def _build_overview_sheet_facts(
         f"画布：{canvas} 像素，出图端点逐像素照此返回。",
         f"设备档：{tier}。",
         f"这一页要覆盖的内容范围：\n{design_brief}",
-        (
-            f"这个应用的身份色板（运行时的侧边栏/顶栏/按钮已经按这套渲染了）："
-            f"主题「{hint['label']}」，主色 {hint['primary']}，"
-            f"内容区底色 {hint['contentBg']}，强调浅底 {hint['accentBg']}，"
-            f"多类别/多序列区分色 {charts}。"
-        ),
     ]
     if datamodel_summary:
         parts.append(
@@ -1272,12 +1699,34 @@ _SHEET_PROMPT_REFINE_SYSTEM = (
     "2. 版式由你按这一页的**业务性质**决定：哪块内容该在最显眼的位置、"
     "分几列、谁跟谁并排、什么该占整行——按这个业务的人打开这一页最先要做什么"
     "来排，不要套「顶部一排指标卡 + 下面两张图 + 底部一张表」那种通用后台网格。\n"
-    "3. 事实清单里可能夹带 JSON 片段、字段 id、blockRef 这类**技术标识**，"
+    "3. 事实清单里可能夹带 JSON 片段、字段 id、rowsRef 这类**技术标识**，"
     "那些只是在说明某一格该放什么内容，不是要画在图上的文案——你写的提示词里"
     "必须把它们翻译成人看得懂的中文界面说法。\n"
     "4. 这张图**不能出现任何真实数据**（它会被误当成真实业务数字）。你要在"
     "提示词里写清楚该怎么占位，并且**按字段类型选合适的占位形状**，让人一眼"
     "看出这一格装的是什么类型的内容。\n"
+    # 2026-08-03 补：这一条此前只写"要占位"，没写"占位长什么样"，于是出图里
+    # 数值那一类退化成**灰色横条/灰色圆角方块**——真机连着撞到（KPI 数值、
+    # 环图中心、坐标轴刻度全是灰条）。
+    #
+    # 这不是"不好看"而已：参照板的读者是设计模型，它看图学的是"这一格该放什么
+    # 形状的内容"。一根灰条什么都没说——分不清那格装的是三位数计数、金额还是
+    # 日期，于是列宽/对齐/字号全学不到，信息层级也塌了（看不出 KPI 卡是三层
+    # 还是一层）。
+    #
+    # 同一条规则在区块级参照图那边（_build_reference_image_prompt）一直是写死
+    # 的常量，2026-07-31 这条链路改成两段式时**没跟着搬过来**——V5.7 架构图
+    # 当时就写下了这个风险："改写 LLM 漏掉哪一条，那一张图就会复发对应的老
+    # bug。"这次就是那次复发。所以补的时候把**两头都写死**：既说占位形状，
+    # 也点名禁掉灰条这个具体的退化形态。
+    "4b. 占位必须是**看得见的文字**，而且要保留每类字段本来的形状——"
+    "日期写成 20XX-XX-XX、金额写成 ¥ ××,×××、百分比写成 ××.×%、"
+    "计数写成 ×,××× 或「×× 人」、手机号写成 138-••••-••••、"
+    "人名写成「张先生」这类（按本业务语境选，别带无关职业称呼）、"
+    "状态/分类直接用事实清单里给出的真实枚举标签。\n"
+    "   **不许用灰色横条、灰色色块或者留空来代替这些文字**，一格都不行。"
+    "同样地，坐标轴刻度、图例数值、KPI 的环比那一行也都要写成可读的占位文字，"
+    "不能省掉——这张图是拿来当版式参照的，信息层级必须画满。\n"
     "5. 画布尺寸和色板照抄事实清单里的值，不要自己改。\n"
     "6. 长度控制在 400-800 字，写成一段连贯的中文，不要分点罗列。"
 )
@@ -1311,7 +1760,7 @@ def _refine_sheet_prompt_via_llm(facts: str, *, device: str = "") -> Optional[st
             max_attempts=2,
             backoff_ms=1500,
             temperature=0.7,
-            max_tokens=2000,
+            max_tokens=default_max_tokens(),
         )
     except LlmError as exc:
         print(f"[freeform_block] sheet prompt refine skipped: {str(exc)[:160]}")
@@ -1463,6 +1912,65 @@ def _supports_image_content_parts() -> bool:
         return False
 
 
+def _image_generation_configured() -> bool:
+    """配没配生图。**这就是首页参照板的开关**——没有单独的环境变量。
+
+    首页参照板可以单独指到另一家服务商（SHEET_ 前缀），缺项时回落到默认那份，
+    所以两份任意一份齐全就算配了；判据与 _generate_overview_sheet_b64 真正
+    取配置的顺序一致，不能只看默认那份（否则只配了 SHEET_ 的部署会被误判成
+    "没配"，一张图都不生，而实际上它是能生的）。
+
+    读不出配置按"没配"处理：宁可退回纯文字设计，也不要在一个注定失败的
+    生图请求上串行地白等一分钟。
+    """
+    try:
+        from sliderule_llm.image_client import get_image_gen_config
+
+        return (
+            get_image_gen_config("SHEET_") is not None
+            or get_image_gen_config() is not None
+        )
+    except Exception:  # noqa: BLE001 — 配置异常不该拖垮主链路
+        return False
+
+
+def _build_marketing_hero_prompt(design_brief: str, *, device: str = "") -> str:
+    orientation = "横向宽画幅" if device != "phone" else "竖向画幅"
+    return (
+        f"为以下品牌首页生成一张{orientation}的沉浸式主视觉真实摄影素材：\n"
+        f"{design_brief}\n\n"
+        "画面要清晰展示真实地点、产品或体验本身，主体完整、光线自然、细节可检视，"
+        "并在构图一侧保留适量干净空间供界面层叠放标题。不要出现任何文字、数字、"
+        "标志、水印、控件、边框、设备外壳或排版稿。不要使用渐变色块、抽象光斑、"
+        "朦胧库存照片质感。输出应当是一张可直接作为全宽首屏背景使用的独立图片。"
+    )
+
+
+def _build_marketing_page_prompt(design_brief: str, *, device: str = "") -> str:
+    if device == "phone":
+        device_label = "手机端"
+        composition = "390x844 左右的单列竖屏页面，触控优先，首屏底部露出下一内容区"
+    elif device == "tablet":
+        device_label = "平板端"
+        composition = (
+            "1112x834 左右的横屏页面，窄侧栏 + 主任务 + 可折叠旁路详情，"
+            "触控优先，不要 1920 工作台密度"
+        )
+    else:
+        device_label = "桌面端"
+        composition = "1440x900 左右的宽屏页面，首屏内容有明确水平层次，底部露出下一内容区"
+    return (
+        f"为以下品牌生成一张{device_label}完整首页视觉稿，而不是一张独立 Hero 素材：\n"
+        f"{design_brief}\n\n"
+        f"画布与构图：{composition}。画出真实可运行网页的完整页面组合，包括品牌导航、"
+        "真实摄影主视觉、可读中文文案、清晰的主要行动按钮，以及与业务直接相关的下一内容区开头。"
+        "产品、地点、服务或人物必须清晰可检视，不能只用抽象色块代替。标题、辅助文案、按钮、"
+        "图片和后续内容之间的相对尺寸、位置、留白和对齐必须明确，让另一个模型能够逐区还原。"
+        "不要套通用后台 KPI 卡片网格，不要把标题或主要体验塞进悬浮卡片，不要画浏览器边框、"
+        "设备外壳、水印、设计标注或多个页面拼板。只输出一个设备档的一张完整首页视觉稿。"
+    )
+
+
 def _generate_overview_sheet_b64(
     design_brief: str,
     datamodel: dict[str, Any],
@@ -1470,22 +1978,32 @@ def _generate_overview_sheet_b64(
     theme_id: str = "",
     device: str = "",
     generated_theme: Optional[dict[str, Any]] = None,
+    marketing_hero: bool = False,
+    marketing_page: bool = False,
 ) -> Optional[str]:
     """生成参照板（默认三区，device 明说 desktop/phone 时两区——见
     _build_overview_sheet_prompt）。跟 _generate_reference_image_b64 一样是
     **加分项**：任何失败都静默返回 None，调用方退回纯文字生成，绝不拖垮主链路。
 
-    尺寸走 _SHEET_IMAGE_SIZE（传 1792x1024，实收 1672x941）——这张
-    图上要同时容纳版式和一堆样例，小了字就糊。可用尺寸是白名单，见
-    _SHEET_IMAGE_SIZE 上方那份活体探针记录，别凭直觉改。
+    尺寸走 _sheet_image_size_for_device()（桌面 2560x1440 / 手机 1440x2560，
+    见 _SHEET_DEVICE_IMAGE_SIZE）——这张图上要同时容纳版式和一堆样例，
+    小了字就糊。**两边都必须是 16 的倍数**，否则端点直接 400；可用尺寸见
+    那张表上方的活体探针记录，别凭直觉改。
+
+    2026-08-06 更正：这段此前写着"传 1792x1024，实收 1672x941"，那是**上上家**
+    端点（hello.vangularcode.asia，无论传什么都降档回同一个横版尺寸）的结论。
+    当前端点（api.gpt.ge）逐像素认 size，实测传 2560x1440 实收 2560x1440。
+    换端点必须整份重测，别把旧结论当常量——这条注释本身就是没重测的产物。
 
     **首页参照板可以单独指到另一家服务商**（2026-07-30）：配齐
     SHEET_IMAGE_API_URL / SHEET_IMAGE_MODEL / SHEET_IMAGE_API_KEY 三项就走那家，
     缺任意一项自动回落到默认端点、行为与从前逐字节一致。
 
     为什么只给这一处开这个口子：审查一份第三方技能包的产出时量到，它的图是
-    7.3MP 而我们 1.6MP，观感差距主要来自**端点给的像素档位**，不是提示词
-    （同一 prompt 在我们端点传 3840x2160 也只回 1672x941，实测 85s vs 90s）。
+    7.3MP 而当时我们只有 1.6MP，观感差距主要来自**端点给的像素档位**，不是
+    提示词（同一 prompt 在当时那家端点传 3840x2160 也只回 1672x941）。
+    换到认尺寸的端点之后这个缺口自己合上了（现在 2560x1440 = 3.7MP），这个
+    口子留着是为了下次再遇到降档端点时不用改代码。
     而这张首页参照板是当前**唯一驱动版式的图**——FreeformInsight 没放开
     （见 experience_block_catalog 那条 generationEnabled:false 与它的哨兵测试），
     单区块参照图只在这张失败时兜底触发。所以把口子开在这一处，等于用最小
@@ -1504,9 +2022,15 @@ def _generate_overview_sheet_b64(
     except Exception:
         return None
     try:
-        prompt = _build_overview_sheet_prompt(
-            design_brief, datamodel, theme_id=theme_id, device=device, generated_theme=generated_theme
-        )
+        if marketing_page:
+            prompt = _build_marketing_page_prompt(design_brief, device=device)
+        elif marketing_hero:
+            prompt = _build_marketing_hero_prompt(design_brief, device=device)
+        else:
+            prompt = _build_overview_sheet_prompt(
+                design_brief, datamodel, theme_id=theme_id, device=device,
+                generated_theme=generated_theme,
+            )
         sheet_cfg = get_image_gen_config("SHEET_")
         size = (os.environ.get("SHEET_IMAGE_SIZE") or "").strip() if sheet_cfg else ""
         png_bytes = generate_image_png(
@@ -1527,6 +2051,8 @@ def _render_preview_screenshot_b64(
     theme_id: str,
     device: str,
     generated_theme: Optional[dict[str, Any]],
+    reference_image_b64: Optional[str] = None,
+    landing_media_b64: Optional[str] = None,
 ) -> Optional[str]:
     """把校验通过的候选内容真实渲染一次、截图，供下面的自我校验步骤跟参考图
     比对（借鉴 abi/screenshot-to-code 的 screenshot_preview 思路：生成→截图→
@@ -1542,27 +2068,65 @@ def _render_preview_screenshot_b64(
         from services.app_screenshot import (
             capture_freeform_preview_screenshot,
             e2b_screenshot_available,
+            local_screenshot_available,
         )
         from services.freeform_preview_store import put_preview
     except Exception:
         return None
-    if not e2b_screenshot_available():
+    # 2026-08-04：此前这里只认 E2B，而 E2B 要公网域名——本地开发永远拿不到，
+    # 这个自检闭环从上线起 got=0 一次没跑过。本机 Playwright 可用就够了。
+    if not (local_screenshot_available() or e2b_screenshot_available()):
         return None
     try:
-        pid = put_preview(
-            {
-                "freeformContent": design_dump,
-                "themeId": theme_id,
-                "generatedTheme": generated_theme,
-                "device": device or _DEFAULT_DEVICE,
-            }
-        )
+        preview_payload = {
+            "freeformContent": design_dump,
+            "themeId": theme_id,
+            "generatedTheme": generated_theme,
+            "device": device or _DEFAULT_DEVICE,
+        }
+        hero_b64 = landing_media_b64 or reference_image_b64
+        if hero_b64:
+            preview_payload["_landingHeroB64"] = hero_b64
+        pid = put_preview(preview_payload)
         png_bytes = capture_freeform_preview_screenshot(pid)
     except Exception:
         return None
     if not png_bytes:
         return None
     return base64.b64encode(png_bytes).decode("ascii")
+
+
+def _count_nodes(node: Any) -> int:
+    """内容树节点总数。护栏用：修订不该把东西改没了。"""
+    if not isinstance(node, dict):
+        return 0
+    return 1 + sum(_count_nodes(c) for c in (node.get("children") or []))
+
+
+def _format_axe_evidence(violations: Optional[list]) -> str:
+    """把 axe-core 扫出来的确定性违规拼成证据段。
+
+    为什么要单独一段、而且明说「这些是算出来的硬事实」：UICrit（UIST'24）
+    实测 zero-shot 让模型自由评审 UI，**只有 13.1% 的意见有效**。对比度、
+    alt 文本这类能算准的东西根本不该问模型——axe-core 是 deterministic、
+    官方口径「no false positives」，还能给出确切数值（实测算出对比度
+    1.65、并指明前景色 #c9c9c9）。把硬事实先摆出来，模型才不至于满屏
+    臆测；也让它清楚哪些是必须改、哪些只是它的主观建议。
+    """
+    if not violations:
+        return ""
+    lines = ["【已确诊的硬问题（axe-core 自动检测算出来的，不是主观判断，必须修）】"]
+    for v in violations[:6]:
+        if not isinstance(v, dict):
+            continue
+        lines.append(
+            f"- {v.get('id')}（{v.get('impact') or '未分级'}，{v.get('count') or 0} 处）："
+            f"{(v.get('help') or '')[:80]}"
+        )
+        for s in (v.get("sample") or [])[:1]:
+            lines.append(f"    实测：{str(s)[:160]}")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _critique_against_reference(
@@ -1572,29 +2136,70 @@ def _critique_against_reference(
     preview_screenshot_b64: str,
     design_brief: str,
     FreeformDesign: type[BaseModel],
+    axe_violations: Optional[list] = None,
 ) -> Optional[dict[str, Any]]:
-    """把参考图和真实渲染截图一起喂给 LLM，让它自己判断这版结构是不是明显
-    比参考图单薄/有版式问题；如果是，让它直接产出一版修订过的完整 JSON。
+    """把参考图、真实渲染截图、以及 axe-core 扫出来的确定性违规一起喂给 LLM，
+    让它按真实设计评审的维度找问题，并产出一版修订过的完整 JSON。
 
-    只做一轮，不递归再校验一次修订结果的截图——那样成本会失控。修订结果
-    仍然要过同一套 Pydantic 深校验，校验不过就放弃这轮修订、用原版本，不能
-    因为"想变得更好"反而引入一个没校验过的坏结果。任何失败（LLM 报错/
-    JSON 解析失败/校验不过）都静默回退到原始 design_dump。
+    ## 为什么不是「让它自由发挥」
+
+    UICrit（UIST'24，google-research-datasets/uicrit）拿 3059 条专业设计师
+    批评做过实测：**zero-shot 自由评审只有 13.1% 的意见有效**，失败模式是
+    大量臆测、抓不住重点。而这里的修订是**直接采纳**的——放任自由发挥等于
+    让一个八成说胡话的评审去改用户的页面。
+
+    所以三条约束照该论文的结论来：
+    ① 维度白名单，权重取自那 11328 条批评的实际分布（见 prompt 内注）；
+    ② 强制两段式「standard / observed」——这是真实批评的固定结构，
+       必须先说出依据的标准，就很难凭空编问题；
+    ③ 能算准的（对比度/alt）交给 axe-core，不进模型的主观判断。
+
+    ## 护栏
+
+    只做一轮，不递归再校验修订结果的截图——那样成本会失控。修订结果必须：
+    - 过同一套 Pydantic 深校验（原有）
+    - **节点数不少于原版**（新增）——防止它"精简"掉真实内容。UICrit 那
+      13.1% 的另一面就是它可能自信地删掉不该删的东西。
+
+    任何失败（LLM 报错/JSON 解析失败/校验不过/节点变少）都静默回退到原始
+    design_dump——想变好不能反而变坏。
     """
     from sliderule_llm.client import LlmError, call_llm_with_retry
 
+    axe_block = _format_axe_evidence(axe_violations)
     critique_prompt = (
-        f"设计需求是：{design_brief}\n\n"
-        "第一张图是这个区块的配色/版式参考图（生成用的草稿参照，不是真实数据）。"
-        "第二张图是刚才生成的结构 JSON 真实渲染出来的样子（图表部分因为还没有"
-        "真实数据会显示「暂无数据」占位，这是正常的，不算问题，不用因此改动）。\n\n"
-        "对比这两张图，只看版式密度、留白节奏、图标使用、色彩克制程度这些跟"
-        "具体数据无关的方面：如果第二张明显比第一张单薄（卡片数量少很多/"
-        "大片空白/完全没用图标/结构过于简单），请输出一版修订后的完整 JSON，"
-        "在现有基础上补充更多卡片/分组/图标，让密度更接近参考图，其它规则"
-        "（安全标签白名单、dataRef 必须指向真实字段、chart 字段格式）完全不变。"
-        "如果已经足够接近，不需要改，直接回复严格的 JSON 字符串 \"GOOD\"，"
-        "不要输出别的文字。"
+        f"你是资深产品设计评审。设计需求是：{design_brief}\n\n"
+        "第一张图是配色/版式参考图（草稿参照，不是真实数据）。第二张图是刚才"
+        "生成的结构 JSON 真实渲染出来的样子。\n"
+        "【不算问题、不要因此改动】图表显示「暂无数据」占位（此刻还没有真实行"
+        "数据，是正常的）。\n\n"
+        f"{axe_block}"
+        "请只在下面这些维度上找问题——它们来自 UICrit（UIST'24）对 11328 条"
+        "真实设计师批评的分布统计，括号里是该类问题在真实评审中的占比：\n"
+        "1. 图标与文案是否让人一看就懂（20.6%）：图标含义含糊、标签词不达意\n"
+        "2. 视觉层级与主次（13.6%）：最重要的信息没有被突出，或次要信息喧宾夺主\n"
+        "3. 可点击元素的可用性（13.0%）：按钮/操作项看起来不像能点，或热区过小\n"
+        "4. 一致性（7.5%）：同类元素的字号/圆角/间距/颜色处理不统一\n"
+        "5. 字号与字重层级（5.9%）：标题没有明显大于正文，层级靠不住\n"
+        "6. 对齐与边界（4.9%）：元素越界、错位、参差不齐\n"
+        "7. 留白与密度（3.7%）：过于单薄大片空白，或过于拥挤没有喘息\n\n"
+        "**每条意见必须写成两段式**（这是真实设计师批评的固定结构，"
+        "写不出「标准」的意见一律不要提）：\n"
+        '  standard：这一条依据的设计标准是什么\n'
+        '  observed：当前这一版具体哪里违背了它（要能在第二张图上指出来）\n\n'
+        "纪律：\n"
+        "- 只提你能在第二张图里**看到**的问题，不要臆测看不见的东西\n"
+        "- 没把握的不要提。少而准 >> 多而糊\n"
+        "- 修订只能在现有结构上调整/补充，**不要删掉已有的卡片、分组或数据绑定**\n"
+        "- 其它规则完全不变：安全标签白名单、dataRef 必须指向真实字段、chart 字段格式\n\n"
+        "只输出 JSON，两种形态二选一：\n"
+        '① 有问题：{"findings":[{"dimension":"层级","standard":"…","observed":"…"}],'
+        '"design":{完整修订后的内容树}}\n'
+        '② 已经够好：{"findings":[],"design":null}\n'
+        "**findings 非空就必须同时给出 design**——把你列出的问题在这份内容树里"
+        "实际改掉（调 style 的字号/字重/间距/背景，或补节点），只挑出毛病却不"
+        "给修订等于白说一轮。确实无从下手的那条，就别写进 findings。\n"
+        "design 必须是完整的内容树（跟输入同结构、可直接替换），不是 diff 片段。"
     )
     convo: list[dict[str, Any]] = [
         {
@@ -1612,24 +2217,81 @@ def _critique_against_reference(
             max_attempts=2,
             backoff_ms=2000,
             temperature=0.5,
-            max_tokens=14000,
+            max_tokens=default_max_tokens(),
             on_delta=lambda _chunk: None,
         )
-    except LlmError:
+    except LlmError as exc:
+        # 同上：静默失败会伪装成「评审认为没问题」。实测因此误判过一次
+        # ——LLM 压根没配上，却以为是模型说 OK。
+        print(f"[freeform_block] 评审 LLM 调用失败，本轮跳过：{str(exc)[:160]}")
         return None
 
     raw = (result.content or "").strip()
-    if raw.strip('"').strip() == "GOOD" or not raw:
+    # 解析每一步都留痕。此前失败是静默 return None，日志里只剩 revised=0，
+    # 分不清是「它说没问题」「它说了但输出被截断」还是「解析没认出来」
+    # ——排查时只能靠猜（实测因此误判过一次）。
+    if not raw:
+        print("[freeform_block] 评审无返回（空正文）")
+        return None
+    if raw.strip('"').strip() == "GOOD":  # 上一版口径，模型偶尔还这么答
         return None
     try:
         text = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.MULTILINE)
         if not text.startswith("{"):
+            print(f"[freeform_block] 评审返回不是 JSON：{text[:120]}")
             return None
         payload = json.loads(text)
-        revised = FreeformDesign.model_validate(payload)
-    except (ValueError, json.JSONDecodeError, ValidationError):
+    except (ValueError, json.JSONDecodeError) as exc:
+        # 最常见的是要求「同时给意见和完整树」时输出被 max_tokens 截断
+        print(
+            f"[freeform_block] 评审 JSON 解析失败（{str(exc)[:60]}）；"
+            f"长度 {len(text)}，结尾：…{text[-80:]}"
+        )
         return None
-    return revised.model_dump()
+
+    findings = payload.get("findings") if isinstance(payload, dict) else None
+    if isinstance(findings, list) and findings:
+        # 评审意见留痕。哪怕最后没采纳修订，也要能看到它到底看出了什么——
+        # 否则「revised=0」永远分不清是「确实没问题」还是「它根本没在看」。
+        for f in findings[:5]:
+            if isinstance(f, dict):
+                print(
+                    f"[freeform_block] 评审意见[{f.get('dimension') or '?'}] "
+                    f"标准={str(f.get('standard') or '')[:60]} "
+                    f"实况={str(f.get('observed') or '')[:80]}"
+                )
+
+    # 新契约 {"findings":[...], "design":{...}}；design 为空即「不用改」
+    candidate = payload.get("design") if isinstance(payload, dict) else None
+    if candidate is None and isinstance(payload, dict) and "root" in payload:
+        candidate = payload  # 兼容老口径：整份树直接顶格返回
+    if not isinstance(candidate, dict):
+        if isinstance(findings, list) and findings:
+            # 提了问题却不给修订 = 白说一轮。prompt 里已明令要求两者同出，
+            # 还这样就是模型没照做，留痕出来才知道要不要再拧 prompt。
+            print(f"[freeform_block] 评审提了 {len(findings)} 条意见但没给修订，本轮不改")
+        return None
+
+    try:
+        revised = FreeformDesign.model_validate(candidate)
+    except (ValueError, ValidationError) as exc:
+        if isinstance(exc, ValidationError) and exc.errors():
+            first = exc.errors()[0]
+            path = ".".join(str(part) for part in first.get("loc") or ()) or "<root>"
+            detail = str(first.get("msg") or str(exc))
+            print(f"[freeform_block] 修订未过深校验，保留原版：{path}: {detail}")
+        else:
+            print(f"[freeform_block] 修订未过深校验，保留原版：{str(exc)[:240]}")
+        return None
+    revised_dump = revised.model_dump()
+
+    # 护栏：修订不许把内容改少。UICrit 实测的高幻觉率有另一面——模型会
+    # 自信地"精简"掉不该删的东西，而这里的修订是直接采纳的。
+    before, after = _count_nodes(design_dump.get("root")), _count_nodes(revised_dump.get("root"))
+    if after < before:
+        print(f"[freeform_block] 修订被拒：节点 {before} → {after}，改少了，保留原版")
+        return None
+    return revised_dump
 
 
 def _prune_non_dict_list_items(node: Any) -> Any:
@@ -1665,6 +2327,129 @@ def _repair_freeform_json_or_none(text: str) -> Optional[dict[str, Any]]:
     return _prune_non_dict_list_items(payload)
 
 
+def _repair_missing_field_refs(node: Any) -> int:
+    """给写了 rowsRef 但漏了 fieldRefs 的列表容器，按模板里实际用到的 fieldRef
+    把这份声明补上。返回补了几处。
+
+    ## 为什么值得机械补，而不是继续重问
+
+    `rowsRef.fieldRefs 不能为空` 是这条链路上最顽固的一个失败——2026-08-04
+    真机连挂三轮、烧掉 192 秒，三轮报的都是同一句（见 _reask_hint 的说明）；
+    2026-08-07 又复现一次，三轮全挂在同一句，整页降级回固定骨架。分诊式
+    reask 提示已经加过了，还是挡不住：模型写了 entityRef/sortByRef/limit，
+    模板里 fieldRef 一个不少，就是不肯把这份字段清单再抄一遍到 fieldRefs 里。
+
+    但正因为"模板里 fieldRef 一个不少"，**模型的意图是完全明确的**：这一行
+    要显示的字段就是模板里用到的那些。这不是猜，是把它已经写出来的信息换个
+    地方誊一遍——跟 json-repair 补括号是同一类修复（语法/形式错，语义没歧义），
+    所以放在同一个位置、按同一条纪律做：能省一轮重问才生效，修不了就原样
+    交给校验器照旧报错、照旧 reask，不改变任何失败路径的行为。
+
+    只补**空缺**：已经写了非空 fieldRefs 的一律不碰——那是模型的显式选择
+    （比如它想显示的字段比模板里出现的多，留着给 sortByRef 用）。
+    """
+    fixed = 0
+    if isinstance(node, list):
+        return sum(_repair_missing_field_refs(item) for item in node)
+    if not isinstance(node, dict):
+        return 0
+
+    rows_ref = node.get("rowsRef")
+    if isinstance(rows_ref, dict) and not rows_ref.get("fieldRefs"):
+        used: list[str] = []
+
+        def _collect(n: Any) -> None:
+            # 只走这个列表容器自己的模板子树。嵌套的 rowsRef 有自己的字段域，
+            # 把它的 fieldRef 收上来会串味（拿 B 实体的字段去声明 A 实体的行）。
+            if isinstance(n, list):
+                for item in n:
+                    _collect(item)
+                return
+            if not isinstance(n, dict):
+                return
+            ref = n.get("fieldRef")
+            if isinstance(ref, str) and ref and ref not in used:
+                used.append(ref)
+            for child in n.get("children") or []:
+                if isinstance(child, dict) and isinstance(child.get("rowsRef"), dict):
+                    continue
+                _collect(child)
+
+        for child in node.get("children") or []:
+            _collect(child)
+        if used:
+            rows_ref["fieldRefs"] = used
+            fixed += 1
+
+    for child in node.get("children") or []:
+        fixed += _repair_missing_field_refs(child)
+    return fixed
+
+
+def _reask_hint(error_text: str) -> str:
+    """按**这次真正报的错**给建议，而不是每次都念一遍全部老经验。
+
+    ## 为什么改成分诊
+
+    2026-08-04 真机：一次首页设计连挂三轮、烧掉 192 秒，最后降级回固定骨架。
+    三轮报的都是同一句——
+
+        root.children.2.children.1.rowsRef
+          Value error, rowsRef.fieldRefs 不能为空
+
+    错误本身回喂得没问题，问题出在紧跟着那段固定的"请仔细检查"：它整段讲的是
+    children 形状、tag/style 白名单、以及 dataRef 的 key 名怎么写，**一个字都
+    没提 rowsRef**。模型拿到一句正确的报错，后面跟着一大段把它往 dataRef 上引
+    的建议——三轮都没改对。
+
+    那段话本身没错，它是 dataRef 时代攒下来的真经验；错在**无差别播放**。
+    提示词里每多一句无关的话，真正相关的那句就被冲淡一分——这跟出图那边
+    "一长串禁令把'画满'那句冲掉"是同一个毛病（见 _build_reference_image_prompt
+    里 2026-07-30 那段注释）。
+
+    ## 分诊口径
+
+    按错误原文里的关键词挑一条建议。认不出来才回落通用清单——**不是每次都发
+    通用清单再附加一条**：那等于没分诊。
+
+    新增一类失败模式时，在这里加一条，而不是往通用清单里再堆一句。
+    """
+    err = error_text or ""
+    if "rowsRef" in err or "fieldRef" in err:
+        return (
+            "这个错跟**逐行内容（rowsRef）**有关，请只检查这几点：\n"
+            "· rowsRef 里 fieldRefs 是**必填且不能为空**——先列出这一行要显示的"
+            "字段 id，模板里的 fieldRef 才取得到值；只写 entityRef/limit 是不够的。\n"
+            "· 模板（rowsRef 节点的 children）里每一个 fieldRef，都必须出现在"
+            "同一个 rowsRef 的 fieldRefs 数组里。\n"
+            "· entityRef 和所有字段 id 必须是数据模型里真实存在的，不能编。\n"
+            "· 这一页如果本来就不需要逐行列表，**直接把这个 rowsRef 节点整个删掉**"
+            "比补一个凑数的字段清单好。\n"
+        )
+    if "dataRef" in err:
+        return (
+            "这个错跟 **dataRef** 有关：它的 key 只有 entityRef / aggregate / "
+            "trendFieldRef / trendGrain 四个，写成 entity / field 之类会被拒；"
+            "引用的实体和字段必须真实存在且类型对得上。\n"
+        )
+    if "chart" in err:
+        return (
+            "这个错跟 **chart 节点**有关：type 只能是 bar/line/pie/donut，"
+            "entityRef / dimensionFieldId 必须真实存在，metric=sum 时必须给 "
+            "metricFieldId。\n"
+        )
+    if "tag" in err or "style" in err or "iconRef" in err:
+        return (
+            "这个错跟**白名单**有关：tag、style 属性名、iconRef 都只能用允许清单"
+            "里的值，清单在上面的说明里，不要用清单外的。\n"
+        )
+    return (
+        "请仔细检查：children 数组每一项必须是完整节点对象（不能是裸字符串）、"
+        "tag/style 属性/iconRef 必须在允许的白名单内、引用的实体和字段必须真实"
+        "存在且类型对得上。\n"
+    )
+
+
 def generate_freeform_block(
     design_brief: str,
     datamodel: dict[str, Any],
@@ -1674,10 +2459,15 @@ def generate_freeform_block(
     generated_theme: Optional[dict[str, Any]] = None,
     max_retries: int = 2,
     temperature: float = 0.7,
-    max_tokens: int = 14000,
+    max_tokens: int | None = None,
     use_reference_image: bool = True,
     allow_screenshot_verify: bool = True,
     reference_image_b64: Optional[str] = None,
+    landing_media_b64: Optional[str] = None,
+    full_page_visual: bool = False,
+    reconstruction_prompt: Optional[str] = None,
+    chart_colors: Optional[list[str]] = None,
+    chart_variant_key: str = "",
 ) -> dict[str, Any]:
     """生成 + 深校验一个 FreeformInsight 区块的内容树。校验失败时把「上次
     输出 + 具体报错」拼回消息重问（跟 structured_llm_json 同一套 reask 语义，
@@ -1699,11 +2489,15 @@ def generate_freeform_block(
     视觉 LLM 一起看（需要网关声明 LLM_SUPPORTS_IMAGE_CONTENT_PARTS=1，未声明
     或生图不可用时自动降级为纯文字生成，行为与加这段之前完全一致）。
 
-    max_tokens 默认 7000 → 10000 → 14000：每次都是被真实截断推上去的。
-    10000 那次是加了视觉参照（模型描述更细、节点数变多）；14000 这次是加了
+    max_tokens 缺省走全局 `default_max_tokens()`。这里的写死值一路 7000 →
+    10000 → 14000，**每一次都是被真实截断推上去的**，从来没有一次是预判对的：
+    10000 那次是加了视觉参照（模型描述更细、节点数变多）；14000 那次是加了
     blockRef（可嵌积木清单进 prompt、逐行内容清单进 brief，输出又长一截，
-    实测在 6580 字符处被切断、三次重试全挂在同一个位置）。截断表现为
-    "invalid JSON: Expecting ',' delimiter"，不是模型写错了 JSON，是话没说完。
+    实测在 6580 字符处被切断、三次重试全挂在同一个位置）；再往后换了推理模型，
+    14000 又被思考 token 整个吃光，正文一个字没有、首页设计整段失败。
+    这条追赶曲线就是"预算不该写死"的证据本身，所以不再猜，交给全局那一个。
+    截断表现为 "invalid JSON: Expecting ',' delimiter"——不是模型写错了 JSON，
+    是话没说完。
     """
     design_brief = (design_brief or "").strip()
     if not design_brief:
@@ -1714,12 +2508,26 @@ def generate_freeform_block(
 
     FreeformDesign = build_freeform_models(datamodel)
     prompt_text = build_freeform_prompt(
-        design_brief, datamodel, theme_id=theme_id, device=device, generated_theme=generated_theme
+        design_brief, datamodel, theme_id=theme_id, device=device,
+        generated_theme=generated_theme, chart_colors=chart_colors,
+        chart_variant_key=chart_variant_key,
     )
+    if reconstruction_prompt:
+        prompt_text += (
+            "\n\n下面是从参考图独立解析并通过结构校验的页面还原契约。"
+            "它约束视觉区域、相对几何和组件映射；业务数据仍只允许使用上面的"
+            "DataModel 与合法 dataRef/rowsRef：\n"
+            + reconstruction_prompt
+        )
+    if full_page_visual:
+        prompt_text += (
+            "\n\n这是营销首页的完整页面设计，不是嵌在后台壳里的单张卡片。根节点拥有整张"
+            "营销首页的内容结构；参考图里可见的品牌导航、主视觉、可读文案、主要行动和"
+            "后续内容区都要还原。不要生成浏览器边框或设备外壳。"
+        )
 
     # 调用方可以把现成的参照图传进来（reference_image_b64）——总览页就是这么用的：
-    # 一张三区参照板同时喂给桌面档和手机档两次设计，两档才出自同一套视觉语言，
-    # 也省掉一次生图。没传才自己生一张。
+    # 唯一设备档复用首页参照图；没传时区块生成器才自己补一张。
     if reference_image_b64 is None and use_reference_image and get_llm_config().supports_image_content_parts:
         with _enrich_stage("block.refimage", device=device or "unspecified") as _st:
             reference_image_b64 = _generate_reference_image_b64(
@@ -1728,6 +2536,13 @@ def generate_freeform_block(
             _st["got"] = 1 if reference_image_b64 else 0
 
     if reference_image_b64:
+        shell_note = (
+            "\n注意：这是一张完整营销首页视觉稿。页面内容从品牌导航开始，参考图里"
+            "可见的所有主要区域都归你设计；只排除浏览器边框和设备外壳。"
+            if full_page_visual
+            else "\n注意：侧边栏、顶栏、搜索框、用户头像这些外壳组件由运行时另外"
+            "渲染，不归你设计——不要在你的内容树里搭这些，从内容区第一张卡片开始画。"
+        )
         first_content: Any = [
             {
                 "type": "text",
@@ -1740,9 +2555,7 @@ def generate_freeform_block(
                 # _build_overview_sheet_prompt 那条注释）。所以这里不需要"外壳是
                 # 背景"那句解释；但"别自己搭外壳"这条禁令保留——它防的是设计 LLM
                 # 自作主张在内容区里加一套导航，跟参照图画不画壳无关。
-                + "\n注意：侧边栏、顶栏、搜索框、用户头像这些外壳组件由运行时另外"
-                "渲染，不归你设计——不要在你的内容树里搭这些，从内容区第一张卡片"
-                "开始画。",
+                + shell_note,
             },
             {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{reference_image_b64}"}},
         ]
@@ -1759,6 +2572,10 @@ def generate_freeform_block(
                 backoff_ms=2000,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                # 推理档位不在这里定。这条路是全链路最吃思考的一段（七层深、带严格
+                # 契约的节点树，全局 low 时实测 3 次尝试全挂在 `tag Field required`），
+                # 但正因为它最吃思考，才**不该**由代码写死一个档位盖住 .env——
+                # 那是"分路值反向咬人"的形态，理由见 config.py 那块墓碑。
                 on_delta=lambda _chunk: None,  # 强制流式，免疫 CF 524（跟 structured_llm_json 同招）
             )
         except LlmError as exc:
@@ -1789,6 +2606,18 @@ def generate_freeform_block(
             print("[freeform_block] JSON repaired mechanically (json-repair), reask 轮次被省下")
             payload = repaired_payload
 
+        # 校验前先把"漏抄 fieldRefs"这一类补上——模型已经在模板里写清了要显示
+        # 哪些字段，只是没誊到声明里。理由见 _repair_missing_field_refs。
+        try:
+            refs_fixed = _repair_missing_field_refs(payload.get("root"))
+        except Exception:  # noqa: BLE001 — 修复自身出问题不该顶掉已有的 reask 兜底
+            refs_fixed = 0
+        if refs_fixed:
+            print(
+                f"[freeform_block] rowsRef.fieldRefs repaired mechanically: {refs_fixed} 处，"
+                "reask 轮次被省下"
+            )
+
         try:
             design = FreeformDesign.model_validate(payload)
         except ValidationError as exc:
@@ -1799,12 +2628,7 @@ def generate_freeform_block(
                     "role": "user",
                     "content": (
                         f"你上次的输出没有通过校验，具体错误：\n{last_error}\n"
-                        "请仔细检查：children 数组每一项必须是完整节点对象（不能是裸字符串）、"
-                        "tag/style 属性/iconRef 必须在允许的白名单内、dataRef 引用的实体和字段"
-                        "必须真实存在且类型对得上。如果报错是 dataRef 相关的 'Field required' 或"
-                        "缺 entityRef，最常见原因是 key 名写错了（比如写成 entity/field），"
-                        "dataRef 的 key 只有 entityRef / aggregate / trendFieldRef / "
-                        "trendGrain 四个，不是别的名字。"
+                        f"{_reask_hint(last_error)}"
                         "重新输出完整的 JSON，只要一个 JSON 对象。"
                     ),
                 },
@@ -1823,7 +2647,7 @@ def generate_freeform_block(
         # 违规先 reask（跟 Pydantic 校验失败走同一条路，把具体哪几个色、偏了
         # 多少度告诉它）；重试耗尽时**机械纠偏后放行**，绝不因为配色问题抛错
         # ——抛了调用方就回落固定骨架，那正是这一整条链路一直在治的病。
-        palette_hint = _theme_palette(theme_id, generated_theme)
+        palette_hint = _theme_palette(theme_id, generated_theme, chart_colors, chart_variant_key)
         palette_list = [
             c
             for c in [palette_hint.get("primary"), *(palette_hint.get("charts") or [])]
@@ -1843,7 +2667,7 @@ def generate_freeform_block(
                         {
                             "role": "user",
                             "content": report.reask_message(palette_list, primary_color)
-                            + "\n其余内容（版式、节点结构、dataRef、chart、blockRef）保持不变，"
+                            + "\n其余内容（版式、节点结构、dataRef、chart、rowsRef）保持不变，"
                             "重新输出完整的 JSON，只要一个 JSON 对象。",
                         },
                     ]
@@ -1880,17 +2704,31 @@ def generate_freeform_block(
                 # （审查文档「九、3」）。这条线一上，那个区间就能换成实测值。
                 with _enrich_stage("block.screenshot", device=device or "unspecified") as _st:
                     preview_b64 = _render_preview_screenshot_b64(
-                        design_dump, theme_id=theme_id, device=device, generated_theme=generated_theme
+                        design_dump,
+                        theme_id=theme_id,
+                        device=device,
+                        generated_theme=generated_theme,
+                        reference_image_b64=reference_image_b64,
+                        landing_media_b64=landing_media_b64,
                     )
                     _st["got"] = 1 if preview_b64 else 0
                 if preview_b64:
+                    # 截图那一趟顺带扫出来的确定性违规（本机路径才有；E2B 返回空）
+                    try:
+                        from services.app_screenshot import last_axe_violations
+
+                        _axe = last_axe_violations()
+                    except Exception:  # noqa: BLE001 — 拿不到证据不该拖垮评审
+                        _axe = []
                     with _enrich_stage("block.critique", device=device or "unspecified") as _st:
+                        _st["axe"] = len(_axe)
                         revised_dump = _critique_against_reference(
                             design_dump,
                             reference_image_b64=reference_image_b64,
                             preview_screenshot_b64=preview_b64,
                             design_brief=design_brief,
                             FreeformDesign=FreeformDesign,
+                            axe_violations=_axe,
                         )
                         _st["revised"] = 1 if revised_dump is not None else 0
                     if revised_dump is not None:
@@ -1943,7 +2781,9 @@ def _enrich_freeform_blocks_inner(model: dict[str, Any]) -> dict[str, Any]:
     appbundle = model.get("appbundle") or {}
     identity = appbundle.get("appIdentity") or {}
     theme_id = str(identity.get("theme") or "").strip()
-    device = str(appbundle.get("preferredDevice") or "").strip()
+    from .device_policy import preferred_layout_device
+
+    device = preferred_layout_device(appbundle)
     # identity_theme_gen.enrich_identity_theme 如果已经跑过（在这之前调用），
     # appIdentity.generatedTheme 会有一份自定义主题——FreeformInsight 的配色
     # 要照它走，不能还停在 8 预设，不然侧边栏和内容卡片颜色对不上。
@@ -2015,6 +2855,36 @@ def _enrich_freeform_blocks_inner(model: dict[str, Any]) -> dict[str, Any]:
             f"raise {_ENRICH_MAX_REF_IMAGES_ENV} / {_ENRICH_MAX_SCREENSHOT_VERIFY_ENV} to widen)"
         )
     return model
+
+
+def _marketing_landing_design_brief(
+    page: dict[str, Any], datamodel: dict[str, Any], *, audience: str = "design"
+) -> str:
+    """消费型首页的视觉任务，不借用运营总览的内容与容器假设。"""
+    del datamodel
+    name = str(page.get("name") or page.get("id") or "首页")
+    lines = [
+        f"「{name}」是面向访客的品牌与转化首页，不是内部工作台。",
+        "首屏必须采用沉浸式首屏主视觉，品牌或产品名作为最醒目的标题，并提供一个明确的主要行动按钮。",
+        "首屏在常见桌面和手机视口内仍要露出下一段内容的开头；后续内容围绕真实服务、体验或商品展开。",
+        "避免后台卡片阵列、数据分析区、排行榜、活动流水和侧边导航；版式应服务于浏览、理解与转化。",
+    ]
+    if audience == "design":
+        lines.append(
+            "主视觉必须使用受控媒体节点 imageRef=landing-hero，并填写准确的 imageAlt；"
+            "不要用色块或渐变冒充真实图片。"
+        )
+    elif audience == "image":
+        lines.append(
+            "生成一张完整首页视觉稿：必须同时画出真实场景主视觉、可读界面文案、"
+            "主要行动按钮和下一内容区开头，让后续设计模型能够按整页结构还原。"
+        )
+    else:
+        lines.append(
+            "只生成首页主视觉使用的真实场景摄影素材，不画网页文字、按钮、导航、"
+            "浏览器或设备外壳；主体完整，并为界面标题保留干净区域。"
+        )
+    return "\n".join(lines)
 
 
 def _monitor_overview_design_brief(
@@ -2147,6 +3017,16 @@ def _monitor_overview_design_brief(
         seen_row_keys.add(key)
         return True
 
+    # 这一页声明的**逐行内容**（2026-08-03 改）。
+    #
+    # 以前这里拼的是 blockRef 的 JSON（"照抄这段，把这个积木摆进版式"）。固定
+    # 积木那条通道已整体删除——现在设计模型用 rowsRef 自己画逐行内容，所以这里
+    # 改成用**业务语言**描述"这一页有哪些一行一行的东西、数据从哪来"，具体长
+    # 什么样由模型按参照图决定，我们不再规定形状。
+    #
+    # 两个受众都要说（对比上一版把两边一起停掉的做法）：
+    #   · 设计 LLM 要知道有哪些逐行内容可画、绑哪个实体哪些字段；
+    #   · 生图模型要把它们画进参照板——现在渲染端真做得出来了，参照板承诺得起。
     for r in page.get("rankings") or []:
         entity = str(r.get("entity") or "").strip()
         sort_by = str(r.get("sortBy") or "").rpartition(".")[2]
@@ -2155,10 +3035,10 @@ def _monitor_overview_design_brief(
         if not _take(f"RankedList|{entity}|{sort_by}"):
             continue
         limit = r.get("limit")
-        extra = f', "limit": {limit}' if isinstance(limit, int) else ""
+        limit_bit = f"，取前 {limit} 条" if isinstance(limit, int) else ""
         row_bits.append(
-            f'{r.get("name") or r.get("id")}：{{"type": "RankedList", "binding": '
-            f'{{"entityRef": "{entity}", "sortByRef": "{sort_by}"{extra}}}}}'
+            f'{r.get("name") or r.get("id")}（排行榜）：实体 "{entity}"，'
+            f'按字段 "{sort_by}" 从高到低排序{limit_bit}'
         )
         _visual("RankedList", str(r.get("name") or ""))
     for f in page.get("feeds") or []:
@@ -2169,54 +3049,20 @@ def _monitor_overview_design_brief(
         level = str(f.get("levelField") or "").rpartition(".")[2]
         if not _take(f"ActivityFeed|{entity}|{time_field}|{level}"):
             continue
-        extra = f', "levelFieldRef": "{level}"' if level else ""
+        level_bit = f'，另有等级字段 "{level}" 可用来上色/加徽标' if level else ""
         row_bits.append(
-            f'{f.get("name") or f.get("id")}：{{"type": "ActivityFeed", "binding": '
-            f'{{"entityRef": "{entity}", "timeFieldRef": "{time_field}"{extra}}}}}'
+            f'{f.get("name") or f.get("id")}（最近动态）：实体 "{entity}"，'
+            f'按时间字段 "{time_field}" 倒序{level_bit}'
         )
         _visual("ActivityFeed", str(f.get("name") or ""))
-    for b in page.get("blocks") or []:
-        block_type = str(b.get("type") or "")
-        if block_type not in FREEFORM_EMBEDDABLE_BLOCK_TYPES:
-            continue
-        binding = b.get("binding") or {}
-        ent = str(binding.get("entityRef") or "")
-        if block_type == "RankedList":
-            key = f"RankedList|{ent}|{binding.get('sortByRef') or ''}"
-        elif block_type == "ActivityFeed":
-            key = (
-                f"ActivityFeed|{ent}|{binding.get('timeFieldRef') or ''}"
-                f"|{binding.get('levelFieldRef') or ''}"
-            )
-        else:
-            key = f"{block_type}|{b.get('id')}"
-        if not _take(key):
-            continue
-        # 2026-07-31：不是每个可嵌入区块都是"逐行内容"。QuickActionPanel（一组
-        # 快捷动作按钮）和 WorkflowTimeline（流程阶段条）**不吃 binding**——前者
-        # 的按钮来自 page.actions，后者的节点从 workflow 机械派生（见目录里这两条
-        # 的 bindingSchema.note）。给它们拼一个 "binding": {} 是在提示模型"这里
-        # 该填点什么"，而它填什么都是错的。所以按"吃不吃 binding"分开写。
-        if binding:
-            row_bits.append(
-                f'{b.get("id")}：{{"type": "{block_type}", "binding": '
-                f"{json.dumps(binding, ensure_ascii=False)}}}"
-            )
-            _visual(block_type, str(b.get("name") or ""))
-        else:
-            props = b.get("props") or {}
-            title = str(props.get("title") or b.get("name") or b.get("id") or "")
-            extra = ""
-            if block_type == "WorkflowTimeline" and props.get("chainRef"):
-                extra = f'，"props": {{"chainRef": "{props["chainRef"]}"}}'
-            _visual(block_type, title)
-            plain_bits.append(
-                f'{title}：{{"type": "{block_type}"{extra}}}（这个积木不吃 binding，'
-                f"照抄即可)"
-            )
+
     # ── 出图受众：到此为止 ──────────────────────────────────────
-    # 下面全是 blockRef 的技术形态与安置机制，只对设计 LLM 有意义。给生图模型
-    # 的是同一批积木的视觉描述——它才画得出来。
+    # 下面是给设计 LLM 的安置指导，只对它有意义。给生图模型的是同一批内容的
+    # 视觉描述——它才画得出来。
+    #
+    # 2026-08-03：这批逐行内容以前渲染端做不出来（dataRef 只有聚合值），所以
+    # 上一版把给生图模型的这段一并停掉了，理由是"参照板不该承诺渲染兑现不了
+    # 的东西"。现在 rowsRef 补上了逐行能力，承诺兑现得了，这段恢复。
     if audience == "image":
         if visual_bits:
             lines.append(
@@ -2227,128 +3073,67 @@ def _monitor_overview_design_brief(
 
     if row_bits:
         lines.append(
-            "这一页还声明了下面这些**逐行内容**，请把它们用 blockRef 摆进你的版式里"
-            "（binding 照抄，由你决定各自放哪一格、占多宽）：\n- " + "\n- ".join(row_bits)
-        )
-    if plain_bits:
-        # 这两类是**总览页的动作面/流程面**，不是数据面——它们的存在本身就会
-        # 改变版式重心（一整排操作按钮该在最上面还是靠右？流程条是通栏还是
-        # 塞在一角？），这正是 2026-07-31 放开 monitor 页 page.blocks 想要的效果。
-        lines.append(
-            "这一页还声明了下面这些**非数据面的成品积木**（动作入口／流程阶段），"
-            "同样用 blockRef 摆进版式里，由你决定放哪、占多宽——它们跟一堆数字的"
-            "阅读优先级不一样，别默认往最下面塞：\n- " + "\n- ".join(plain_bits)
+            "这一页还有下面这些**逐行内容**。版式由你按参照图定（几列、多宽、"
+            "怎么排都由你），数据用 rowsRef 绑（用法见下方说明）：\n- "
+            + "\n- ".join(row_bits)
         )
 
-    # 2026-07-29：这里原来是一句硬禁令——"不要画排行榜/动态流/数据列表"，
-    # 理由是 dataRef 取不到逐行记录、硬画只会出空表头。禁令本身没错，但代价是
-    # 那些内容被赶到设计之外单独渲染成外挂卡，首页变成"AI 设计区 + 两张外挂
-    # 卡"，主次和留白都由不得设计者。
+    # 措辞用祈使式并把代价说明白（2026-08-01 的教训，保留）：仓库里两次栽在
+    # 许可式措辞上——schema_legal 记着 "You MAY emit…" 让七个通电区块一个没被
+    # 用、连跑三次全是 0。所以这里说"要画就这样画"，不说"你可以考虑画"。
     #
-    # 现在有 blockRef 了（见 _blockref_prompt_fragment）：逐行内容仍然不由它
-    # 画，但**由它决定摆在哪、占多大**，渲染交给积木自己的真渲染器。所以这里
-    # 从"不许"改成"要用就摆一个"。
-    # 2026-08-01：这一句从**许可式**改成**祈使式 + 说清代价**。
-    #
-    # 原文是"如果这一页还适合……就摆一个……用不上就完全不用，不必凑数"。
-    # 它读起来是一道选择题，而上面列出的那些积木**并不是备选项**——它们是这
-    # 一页已经声明、一定会被渲染的东西：设计者不安置，它们不会消失，只会掉到
-    # 设计区外面的固定骨架里，于是首页又变回"AI 设计区 + 几张外挂卡"，主次和
-    # 留白仍旧由不得设计者（这正是 blockRef 桥当初要解决的问题）。
-    #
-    # 仓库里两次教训都指向同一件事——措辞方式决定模型行为：schema_legal 那边
-    # 记着许可式（"You MAY emit…"）让七个通电区块一个都没被用、连跑三次全是 0；
-    # binding 哨兵词写 "none" 时模型把它当成要填的值。所以这里也用祈使式，
-    # 并且**把不安置的代价明说出来**。
-    if row_bits or plain_bits:
-        # 措辞的作用域必须**咬死在积木上**（2026-08-01 修）。
-        #
-        # 上一版写的是"上面列出的积木是备选项……别为了凑齐而硬塞"。但"上面"
-        # 之上还有"必须包含的 KPI 统计卡/ 必须包含的图表"两段清单，紧跟着
-        # "不能遗漏清单里的任何一项"——于是两句话字面冲突："别为了凑齐而硬塞"
-        # 与"不能遗漏任何一项"。模型化解冲突的方式是把 KPI/图表也当成了可选：
-        # 真跑一轮声明 3 个 KPI + 3 张图表，设计只画出 1 个数字、0 张图表。
-        #
-        # 所以这里改成：先重申必含清单不在取舍范围内，再指名道姓地说"只有下面
-        # 这几个积木可选"，并把"别硬塞"的对象也限定到积木。
-        names = [b.split("：", 1)[0] for b in (row_bits + plain_bits)]
+    # 2026-08-03 措辞随机制改：以前这些是"已声明、你不安置就会掉到设计区外面
+    # 变成外挂卡"的既成事实，所以要说"不摆的代价"。现在没有外挂卡这条退路了
+    # ——整页就是你的设计，参照图上没有的就是没有。于是取舍标准回到唯一该有
+    # 的那个：**看参照图**。
+    if row_bits:
+        names = [b.split("（", 1)[0] for b in row_bits]
         lines.append(
-            "关于**积木**（也只关于积木）的取舍——上面「必须包含」的 KPI 统计卡"
+            "关于**逐行内容**（也只关于它）的取舍——上面「必须包含」的 KPI 统计卡"
             "与图表**不在取舍范围内，一项都不能少**：\n"
-            f"· 可选的只有这几个积木：{'、'.join(names)}\n"
-            "· 用得上 → 用 blockRef 摆进版式（binding/props 照抄），放哪一格、"
-            "占多宽由你定；\n"
-            "· 用不上 → **不要摆**。没被你摆进来的会被移除，不会跑到你的设计"
-            "外面另起一张卡。\n"
-            "按这一页的实际需要选，不必把积木凑齐——但这句话只对积木有效，"
+            f"· 可选的只有这几块：{'、'.join(names)}\n"
+            "· 参照图上画了 → 用 rowsRef 画出来，放哪一格、占多宽、长什么样由你定；\n"
+            "· 参照图上没有 → **不要画**。不画就是这一页没有这块内容，不会跑到"
+            "你的设计外面另起一张卡。\n"
+            "按这一页的实际需要选，不必凑齐——但这句话只对逐行内容有效，"
             "KPI 与图表照单全画。"
         )
-    lines.append(
-        "除了 KPI 统计卡和图表，这一页若还适合展示逐行记录（排行榜、最近动态/"
-        "提醒、流程阶段条、常用操作入口），一律用 blockRef 摆现成积木（用法见"
-        "下方说明）——不要自己用 CSS 去画这类内容（画出来只有表头没有行），"
-        "也不要因为画不了就当它不存在。"
-    )
     return "\n".join(lines)
 
+def _existing_chart_colors(model: dict[str, Any]) -> list[str]:
+    """模型里已经有的图表色（幂等用：重跑一遍不该再花一次取色调用）。"""
+    identity = ((model.get("appbundle") or {}).get("appIdentity")) or {}
+    got = identity.get("chartColors")
+    return [c for c in got if isinstance(c, str)] if isinstance(got, list) else []
 
-def _placed_blockref_types(content: Any) -> set[str]:
-    """走一遍设计树，收出被 blockRef 摆进去的积木类型。
 
-    深度上限与渲染侧 collectFreeformBlockRefKeys 同值（8），坏形状一律跳过、
-    不抛——这段跑在 fail-open 的增强链路里。
+def _chart_variant_key(model: dict[str, Any]) -> str:
+    """账本色序的挑选键——**必须跟前端取的是同一个值**。
+
+    前端用的是 `productName || appName`（app-runtime-schema），所以这里取
+    appIdentity.productName。取不到就返回空串，退回旧算法（老行为）而不是编一个
+    ——编出来的键会让提示词和真实渲染挑到不同的两套色，比"都用旧的"更难查。
     """
-    found: set[str] = set()
-
-    def walk(node: Any, depth: int) -> None:
-        if depth > 8 or not isinstance(node, (dict, list)):
-            return
-        if isinstance(node, list):
-            for item in node:
-                walk(item, depth + 1)
-            return
-        ref = node.get("blockRef")
-        if isinstance(ref, dict) and ref.get("type"):
-            found.add(str(ref["type"]))
-        for value in node.values():
-            if isinstance(value, (dict, list)):
-                walk(value, depth + 1)
-
-    walk(content, 0)
-    return found
+    identity = ((model.get("appbundle") or {}).get("appIdentity")) or {}
+    return str(identity.get("productName") or "").strip()
 
 
-def _prune_unplaced_blocks(page: dict[str, Any], content: Any) -> None:
-    """把设计者没有安置的可嵌积木从 page.blocks / page.layout 里摘掉。
+def _write_chart_colors(model: dict[str, Any], colors: list[str]) -> None:
+    """把取到的图表色写进 appbundle.appIdentity.chartColors。
 
-    见调用点注释。这里只做机械移除，判断权在设计 LLM 的产出里。
+    挂在 appIdentity 下而不是新开一个顶层字段：这就是"这个应用长什么样"的一部分，
+    跟 theme/icon/nav 同一段；门禁与修复器也已经按段处理这一块（出现即校验、
+    非法值清除留痕）。前端 app-runtime-schema 从同一处透传。
     """
-    blocks = page.get("blocks")
-    if not isinstance(blocks, list) or not blocks:
-        return
-    placed = _placed_blockref_types(content)
-    dropped_ids: list[str] = []
-    kept: list[Any] = []
-    for block in blocks:
-        btype = str((block or {}).get("type") or "") if isinstance(block, dict) else ""
-        if btype in FREEFORM_EMBEDDABLE_BLOCK_TYPES and btype not in placed:
-            dropped_ids.append(str(block.get("id") or btype))
-            continue
-        kept.append(block)
-    if not dropped_ids:
-        return
-    page["blocks"] = kept
-    layout = page.get("layout")
-    if isinstance(layout, dict):
-        for slot_key, refs in list(layout.items()):
-            if isinstance(refs, list):
-                layout[slot_key] = [r for r in refs if r not in dropped_ids]
-    # no silent drops：移除的是用户看得见的内容，必须留痕。
-    print(
-        f"[freeform_block] {page.get('id')} 设计者未安置，已移除 "
-        f"{len(dropped_ids)} 个积木: {dropped_ids}"
-        f"（设计里用到的类型: {sorted(placed) or '无'}）"
-    )
+    appbundle = model.get("appbundle")
+    if not isinstance(appbundle, dict):
+        appbundle = {}
+        model["appbundle"] = appbundle
+    identity = appbundle.get("appIdentity")
+    if not isinstance(identity, dict):
+        identity = {}
+        appbundle["appIdentity"] = identity
+    identity["chartColors"] = list(colors)
 
 
 def enrich_monitor_page_overviews(
@@ -2384,49 +3169,153 @@ def _enrich_monitor_page_overviews_inner(
     appbundle = model.get("appbundle") or {}
     identity = appbundle.get("appIdentity") or {}
     theme_id = str(identity.get("theme") or "").strip()
-    device = str(appbundle.get("preferredDevice") or "").strip()
+    from .device_policy import preferred_layout_device
+
+    device = preferred_layout_device(appbundle)
     # 哪一页代表这个应用：落地页那张参照板就是用户点开应用第一眼看到的画面，
     # 也就是卡片该显示的东西（见 OverviewPreviewSink.offer 的取舍规则）。
     landing_ref = str(appbundle.get("landingPageRef") or "").strip()
     generated_theme_raw = identity.get("generatedTheme")
     generated_theme = generated_theme_raw if isinstance(generated_theme_raw, dict) else None
 
-    max_ref_images = _env_budget(_ENRICH_MAX_REF_IMAGES_ENV, _ENRICH_MAX_REF_IMAGES_DEFAULT)
+    # 生图只给**首页**一张（2026-08-03，用户裁决）。
+    #
+    # 之前是"每个 monitor/dashboard 页各一张，上限 4 张"，再加主题那张。实测
+    # 单张 60~85s 且串行，而真正被用到的只有落地页那张——它同时是应用中心
+    # 卡片显示的画面（见 OverviewPreviewSink.offer）。其余页拿到参照板的收益
+    # 远不抵那一分多钟。
+    #
+    # 开关就是**有没有配生图 key**，不再引入新的环境变量：配了就首页这一张，
+    # 没配就一张都不生（整页退回纯文字设计，与从前"未配生图"时逐字节一致）。
+    # 少一个旋钮少一处"文档说关了其实没关干净"的机会——这条链路已经踩过
+    # 一次那个坑（主题图曾经不读成本笼子，设 0 之后照生，白等 685s）。
+    sheet_enabled = _image_generation_configured() and _supports_image_content_parts()
     max_screenshot_verify = _env_budget(
         _ENRICH_MAX_SCREENSHOT_VERIFY_ENV, _ENRICH_MAX_SCREENSHOT_VERIFY_DEFAULT
     )
-    ref_used = 0
     shot_used = 0
-    capped_pages = 0
-    for page in (model.get("page") or {}).get("pages") or []:
+    sheet_used = 0
+    pages = (model.get("page") or {}).get("pages") or []
+    eligible_pages = [
+        page
+        for page in pages
+        if (
+            str(page.get("presentation") or "").strip() == "marketing-landing"
+            or (
+                str(page.get("kind") or "").strip() in ("monitor", "dashboard")
+                and (bool(page.get("stats")) or bool(page.get("charts")))
+            )
+        )
+        and not (
+            isinstance(page.get("freeformOverview"), dict)
+            and page["freeformOverview"].get("root")
+        )
+    ]
+    sync_page = next(
+        (page for page in eligible_pages if str(page.get("id") or "") == landing_ref),
+        eligible_pages[0] if eligible_pages else None,
+    )
+    sync_page_id = str((sync_page or {}).get("id") or "")
+
+    # 一个够格的页都没有 —— 说清楚，别默不作声（2026-08-06）。
+    #
+    # 实测撞到：一个手机端私教应用，4 个页面全是 calendar/workbench/kanban，
+    # stats 与 charts 全为 0，于是 eligible_pages 是空的，这个函数**一声不吭
+    # 直接返回**。表现是"这个应用就是没有设计"，日志里连一行都没有——比
+    # 生成失败还难查，因为失败至少会留个 failed 状态。
+    #
+    # 为什么不干脆放宽资格：这些页面本来就没有可聚合的内容（stats/charts 全空），
+    # 硬给它设计一版总览等于让模型**发明数据**。这条链路的纪律是不发明——
+    # 所以正确的做法是把"为什么没有"讲出来，而不是硬凑一个出来。
+    #
+    # 只打日志，**不往页面上写状态标记**。
+    #
+    # 本来想顺手标一个 freeformOverviewStatus="not_eligible"，查下来放弃了：
+    # 前端一个地方都没读这个字段（已有的 ready/deferred/failed 同样没人读），
+    # 所以标记带不来任何用户可见的好处；而它会把一个字段写进**已经过门禁的
+    # 模型**里，打破 test_v5_llm_generate_gate 那条"modelSection 等于门禁批准
+    # 的原样产出"的不变量。为一个没人读的字段破坏一条真不变量，不划算。
+    # 哪天前端要显示"这个应用没有可做总览的页"，再连着 UI 一起加。
+    if not eligible_pages:
+        kinds = ",".join(sorted({str(p.get("kind") or "?") for p in pages})) or "(无页面)"
+        print(
+            f"[freeform_block] 没有可做总览的页，本次不生成任何版式设计："
+            f"共 {len(pages)} 页（{kinds}），没有一页带 stats/charts，"
+            f"也没有 presentation=marketing-landing 的页。"
+            f"这不是失败——这个应用确实没有可聚合的内容。"
+        )
+        return model
+
+    # 真实长尾里首页参照图、取色、版式合计会占 2~6 分钟。运行预算只约束这些
+    # fail-open 视觉增强，不中断已经过结构闸的业务模型、权限和流程。
+    remaining = remaining_run_budget_seconds()
+    design_total = 1
+    required_visual_seconds = 150 + (130 * design_total)
+    reference_budget_available = remaining is None or remaining >= required_visual_seconds
+    if sync_page is not None and remaining is not None and remaining < 130 * design_total:
+        sync_page["freeformOverviewStatus"] = "deferred_budget"
+        with _enrich_stage(
+            "monitor.design",
+            page=sync_page_id,
+            device=device or "unspecified",
+            current=1,
+            total=design_total,
+        ) as skipped:
+            skipped["got"] = 0
+            skipped["skippedReason"] = "deadline"
+        for page in eligible_pages:
+            if page is not sync_page:
+                page["freeformOverviewStatus"] = "deferred"
+        return model
+
+    for page in pages:
         # 2026-07-27：dashboard 也纳入——此前只认 monitor,LLM 把总览页写成
         # dashboard(prompt 曾反向引导)或夹具用 dashboard 时,设计版式整条
         # 生成不出来,首页恒回固定骨架。渲染端 AppRuntimeScreen 同步放宽。
-        if str(page.get("kind") or "").strip() not in ("monitor", "dashboard"):
+        is_marketing_landing = (
+            str(page.get("presentation") or "").strip() == "marketing-landing"
+        )
+        if not is_marketing_landing and str(page.get("kind") or "").strip() not in ("monitor", "dashboard"):
             continue
         # 只看 stats/charts——rankings/feeds 不进设计文案（见
         # _monitor_overview_design_brief 的说明），一个页面如果只声明了
         # rankings/feeds、没有 stats/charts，freeformOverview 没有东西可画，
         # 生成了也是空区块，不如不生成，直接走原有固定骨架（那套骨架的
         # renderRankingCard/renderFeedCard 本来就能正确渲染这种页面）。
-        has_content = bool(page.get("stats")) or bool(page.get("charts"))
+        has_content = is_marketing_landing or bool(page.get("stats")) or bool(page.get("charts"))
         if not has_content:
             continue
         # 幂等（2026-07-27 D1）：已有总览设计的页不重生成（同上区块级注释）。
         existing_overview = page.get("freeformOverview")
         if isinstance(existing_overview, dict) and existing_overview.get("root"):
             continue
-        brief = _monitor_overview_design_brief(page, datamodel)
+        page_id_now = str(page.get("id") or "")
+        if page_id_now != sync_page_id:
+            page["freeformOverviewStatus"] = "deferred"
+            continue
+        page["freeformOverviewStatus"] = "generating"
+        brief_builder = (
+            _marketing_landing_design_brief if is_marketing_landing else _monitor_overview_design_brief
+        )
+        brief = brief_builder(page, datamodel)
         # 参照板走**出图受众**那一份：同一批内容，但积木用视觉描述而不是
         # blockRef 的 JSON 形态（见 _monitor_overview_design_brief 的 audience）。
-        sheet_brief = _monitor_overview_design_brief(page, datamodel, audience="image")
-        # 与 enrich_freeform_blocks 同一预算语义：按尝试计费（见彼处注释）。
-        use_ref = ref_used < max_ref_images
+        sheet_brief = brief_builder(page, datamodel, audience="image")
+        hero_brief = (
+            brief_builder(page, datamodel, audience="hero")
+            if is_marketing_landing
+            else ""
+        )
+        # 只有首页那一张（见上面的说明）。
+        #
+        # 落地页没声明时退回"第一个符合条件的页"——不能因为模型漏填一个字段
+        # 就整个应用一张图都没有。按尝试计费：生图失败也算用掉了，否则端点
+        # 抖动时这个"一张"会退化成"每页都试一次"。
+        is_landing = bool(landing_ref) and page_id_now == landing_ref
+        use_ref = sheet_enabled and sheet_used == 0 and reference_budget_available
         allow_shot = use_ref and shot_used < max_screenshot_verify
         if use_ref:
-            ref_used += 1
-        else:
-            capped_pages += 1
+            sheet_used += 1
         if allow_shot:
             shot_used += 1
         # 参照板（只画会真正生成的那几档真实版式），共用一张。分开生的话
@@ -2438,119 +3327,182 @@ def _enrich_monitor_page_overviews_inner(
         page_id = str(page.get("id") or "")
         # 埋点①：参照板生图。单张实测 60~85s，是这一段最贵的一步，也是并行化
         # 收益最大的那一处（见审查文档「八、7」第 2 项）——改造前后就靠这条线对比。
-        with _enrich_stage("monitor.sheet", page=page_id, device=device or "unspecified") as _st:
-            sheet_b64 = (
-                _generate_overview_sheet_b64(
-                    sheet_brief, datamodel, theme_id=theme_id, device=device,
+        with _enrich_stage(
+            "monitor.sheet", page=page_id, device=device or "unspecified", current=1, total=1
+        ) as _st:
+            landing_media_b64 = None
+            if use_ref and is_marketing_landing:
+                # 完整视觉稿负责还原，独立 Hero 负责运行时媒体。两个请求互不依赖，
+                # 并发发出避免把营销首页生图时长直接翻倍。
+                from concurrent.futures import ThreadPoolExecutor
+
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    page_future = pool.submit(
+                        _generate_overview_sheet_b64,
+                        sheet_brief,
+                        datamodel,
+                        theme_id=theme_id,
+                        device=device,
+                        generated_theme=generated_theme,
+                        marketing_page=True,
+                        marketing_hero=False,
+                    )
+                    hero_future = pool.submit(
+                        _generate_overview_sheet_b64,
+                        hero_brief,
+                        datamodel,
+                        theme_id=theme_id,
+                        device=device,
+                        generated_theme=generated_theme,
+                        marketing_page=False,
+                        marketing_hero=True,
+                    )
+                    sheet_b64 = page_future.result()
+                    landing_media_b64 = hero_future.result()
+            elif use_ref:
+                sheet_b64 = _generate_overview_sheet_b64(
+                    sheet_brief,
+                    datamodel,
+                    theme_id=theme_id,
+                    device=device,
                     generated_theme=generated_theme,
                 )
-                if use_ref and _supports_image_content_parts()
-                else None
-            )
-            # 跳过（预算撞顶/通道不支持图片）和真生了图，耗时天差地别，
+            else:
+                sheet_b64 = None
+            # 跳过（非首页/未配生图/通道不支持图片）和真生了图，耗时天差地别，
             # 光看 ms 会以为"生图很快"，得把这一位记下来才看得懂数据。
             _st["got"] = 1 if sheet_b64 else 0
+            _st["mediaGot"] = 1 if landing_media_b64 else 0
         # 这张图排完版式就该丢了——但它同时也正是应用中心那张卡该显示的画面。
         # 调用方给了收集槽就交一份（见 app_preview：**没给槽就什么都不做**，
         # 所以两个脚本调用方不用改也不会被污染）。生图失败传 None 无害，
         # offer 自己会忽略。
         if preview_sink is not None:
-            preview_sink.offer(page_id, sheet_b64, is_landing=bool(landing_ref and page_id == landing_ref))
+            preview_sink.offer(
+                page_id,
+                landing_media_b64 if is_marketing_landing else sheet_b64,
+                is_landing=bool(landing_ref and page_id == landing_ref),
+            )
+        # 参考图先独立解析成可检查的结构契约，再交给最终页面生成器。此前最终
+        # LLM 同时承担看图、理解布局和写 JSON，失败后无法区分是哪一层出了错。
+        with _enrich_stage(
+            "monitor.reconstruction",
+            page=page_id,
+            device=device or "unspecified",
+            current=1,
+            total=1,
+        ) as _rst:
+            try:
+                from .page_reconstruction import analyze_page_reference
+
+                reconstruction = analyze_page_reference(
+                    sheet_b64,
+                    design_brief=brief,
+                    datamodel=datamodel,
+                    device=device,
+                )
+            except Exception as exc:  # noqa: BLE001 - analysis cannot block a valid model
+                reconstruction = {
+                    "version": "page-reconstruction-v1",
+                    "status": "failed",
+                    "spec": None,
+                    "prompt": "",
+                    "diagnostic": f"reconstruction orchestration failed: {str(exc)[:500]}",
+                }
+            page["pageReconstruction"] = reconstruction
+            _rst["got"] = 1 if reconstruction.get("status") == "ready" else 0
+            _rst["status"] = str(reconstruction.get("status") or "failed")
+        # 顺手把这张图的**配色**也读回来（2026-08-04）。
+        #
+        # 用户观察："图表的颜色是一样的"。查下来是链路断在这一步：图每个应用
+        # 都真的生成了、也真的喂给了视觉模型，但视觉模型只被问了"这一页该怎么
+        # 排"，从来没人问过"图上是什么颜色"——那份配色画完就丢了，图表色另走
+        # 账本里 8 套预置色序按应用名散列挑一套，而那 8 套是同一条 ramp 的 8 个
+        # 旋转，所以摆在一起仍然是"一个调调"。
+        #
+        # 这里补的就是那一问：图已经在手上，多问一句拿到的是**这个应用自己的**
+        # 颜色。放在这个位置是因为 sheet_b64 只在首页那一张上有值（sheet_used
+        # 那道闸），一个应用只会取一次色。
+        #
+        # 取不到/不合格返回 None，什么都不写——前端读不到 chartColors 就回落
+        # 账本色序，跟这次改动之前的行为一模一样（fail-open）。
+        palette_remaining = remaining_run_budget_seconds()
+        if (
+            sheet_b64
+            and not _existing_chart_colors(model)
+            and (palette_remaining is None or palette_remaining >= 160)
+        ):
+            with _enrich_stage(
+                "monitor.palette", page=page_id, device=device or "unspecified", current=1, total=1
+            ) as _pst:
+                from .sheet_palette import extract_chart_palette
+
+                picked = extract_chart_palette(sheet_b64)
+                _pst["got"] = len(picked or ())
+            if picked:
+                _write_chart_colors(model, picked)
+                print(f"[freeform_block] 参照图取色 → 图表色 {picked}")
+        elif sheet_b64 and not _existing_chart_colors(model):
+            with _enrich_stage(
+                "monitor.palette", page=page_id, device=device or "unspecified", current=1, total=1
+            ) as skipped:
+                skipped["got"] = 0
+                skipped["skippedReason"] = "deadline"
+        design_remaining = remaining_run_budget_seconds()
+        if design_remaining is not None and design_remaining < 130 * design_total:
+            page["freeformOverviewStatus"] = "deferred_budget"
+            with _enrich_stage(
+                "monitor.design",
+                page=page_id,
+                device=device or "unspecified",
+                current=1,
+                total=design_total,
+            ) as skipped:
+                skipped["got"] = 0
+                skipped["skippedReason"] = "deadline"
+            continue
         try:
-            with _enrich_stage("monitor.design", page=page_id, device=device or "unspecified"):
+            with _enrich_stage(
+                "monitor.design",
+                page=page_id,
+                device=device or "unspecified",
+                current=1,
+                total=design_total,
+            ):
                 content = generate_freeform_block(
                     brief, datamodel, theme_id=theme_id, device=device,
                     generated_theme=generated_theme,
                     use_reference_image=use_ref,
                     allow_screenshot_verify=allow_shot,
                     reference_image_b64=sheet_b64,
+                    landing_media_b64=landing_media_b64,
+                    full_page_visual=is_marketing_landing,
+                    reconstruction_prompt=(
+                        str(reconstruction.get("prompt") or "")
+                        if reconstruction.get("status") == "ready"
+                        else None
+                    ),
+                    # 设计 LLM 拿到的图表色 = 真实会画出来的那几个（上面刚从
+                    # 参照图读出来的）。不传的话它会照着账本旧色配色，而 ECharts
+                    # 画的是参照图那套——同一页两套颜色。
+                    chart_colors=_existing_chart_colors(model) or None,
+                    chart_variant_key=_chart_variant_key(model),
                 )
-            # 手机档再设计一版（方案 B）。
-            #
-            # 形状照两处成熟先例：react-grid-layout 的 layouts={{lg,md,sm}}
-            # ——同一份内容、每个断点一份布局，取用时"有本档用本档、没有就往
-            # 更大的档回退"；以及本仓库自己 page.layout + layout.mobile 的
-            # 覆盖约定。这里定为 freeformOverview = {root, mobile:{root}}：
-            # 默认那份是 device 档（通常桌面），mobile 是手机档覆盖。
-            #
-            # 为什么值得多花一次调用：设计是按 device 生成的，phone 档的提示词
-            # 明确要求"内容区窄、必须单列纵向、字号图标间距收紧一档"。此前只
-            # 生一份，手机上看到的是桌面版式被 CSS 掰弯的结果——能读，但不是
-            # 为手机规划的。
-            #
-            # 失败不影响主产物：手机那份生不出来就不挂 mobile 键，前端自动
-            # 回退到 root（与 RGL 的"往更大的档回退"同一语义）。
-            # 2026-07-30：手机那份只在**没明说是桌面档**时才生成。
-            #
-            # 此前是无条件生成，理由是"两档都得有设计"。但扫了一遍真实数据：
-            # 9 个应用的 preferredDevice 全是 desktop——不是因为它们真都是桌面
-            # 应用，而是因为生成契约里这个字段**只声明了合法域、没给任何判据**
-            # （见 schema_legal 的 Step 8），模型无从选择就一路倒向 desktop。
-            # 于是"两档都生成"实际是在为一个没人做过的判断买单。
-            #
-            # 现在契约里补了姿态判据（_DEVICE_RUBRIC，与入站判定共用同一份），
-            # 这个字段有意义了，就该用它来省掉这次调用：明说 desktop 就不生成
-            # 手机档（约 67s / 总览页）。unspecified 或没写仍然两档都生成——
-            # **只在明确的时候才砍**，判不出来时宁可多花一分钟，也不要让用户
-            # 切到手机档看见一个被 CSS 掰弯的桌面版式。
-            #
-            # 这也正是 M3 WindowWidthSizeClass.fromWidth(w, density,
-            # supportedSizeClasses) 的语义：布局声明自己有哪几档，解析器在
-            # **现有的**档里挑最合适的，不要求全都存在。少生成一档不是降级，
-            # 是如实声明"这个应用只有这一档"。
-            declared_desktop_only = device == "desktop"
-            if device != "phone" and not declared_desktop_only:
-                try:
-                    # 埋点③：手机档。注释里写的是约 67s/页，这条线用来核实这个
-                    # 数字是否还成立——它同时是"跳过手机档省了多少"的依据。
-                    with _enrich_stage("monitor.design", page=page_id, device="phone"):
-                        mobile_content = generate_freeform_block(
-                            brief, datamodel, theme_id=theme_id, device="phone",
-                            generated_theme=generated_theme,
-                            use_reference_image=use_ref,
-                            # 手机那份不再单独截图自检：那一步是"渲染出来再让视觉
-                            # 模型跟参照图比一遍"，成本高且收益递减，两档都做等于
-                            # 把总览页的生成时间再翻一倍。
-                            allow_screenshot_verify=False,
-                            reference_image_b64=sheet_b64,
-                        )
-                    # 复制一份而不是原地改：生成器返回的对象不该被调用方
-                    # 就地改写。真被咬过——测试里 fake 两次返回同一个 dict，
-                    # `content["mobile"] = mobile_content` 直接造出自引用结构。
-                    content = {**content, "mobile": mobile_content}
-                except FreeformGenerationError as exc:
-                    print(
-                        f"[freeform_block] {page.get('id')} mobile overview generation failed, "
-                        f"falling back to the desktop design on phone: {str(exc)[:160]}"
-                    )
             page["freeformOverview"] = content
-            # 设计者的否决权（2026-08-01）：**没被摆进设计的可嵌积木，就此移除**。
-            #
-            # 此前"不摆"没有任何出口——积木照样渲染，只是掉到设计区外面的固定
-            # 骨架里。于是设计 LLM 判断"这一页用不上它"这件事**根本无法表达**：
-            # 不摆比摆还糟（出现在它控制不到的地方，打断它安排的主次和留白）。
-            # 上面 brief 里那段"用不上就不要摆"因此才成立——现在它是真的。
-            #
-            # 谁来判断：设计 LLM 是链路上信息最全的一环（它刚把整页版式排完），
-            # 而声明这些积木的是更早、信息更少的五系统生成。把取舍交给前者。
-            #
-            # 只动**可嵌类型**：不可嵌的积木压根没有"摆进设计"这个选项，按
-            # 未安置移除等于无条件删掉。总览页上这两个集合当前恰好相等
-            # （monitor_ok == FREEFORM_EMBEDDABLE_BLOCK_TYPES），这里仍按类型
-            # 判断而不是依赖那个巧合。
-            #
-            # 保守偏向保留：按**类型**匹配而非逐实例指纹——设计里出现过该类型
-            # 就整类保留。宁可多留一个（掉骨架，老行为），也不要误删。
-            # 移除必须留痕：静默删掉用户看得见的内容是这个仓库明令避免的。
-            _prune_unplaced_blocks(page, content)
+            page["freeformOverviewStatus"] = "ready"
         except FreeformGenerationError as exc:
+            page["freeformOverviewStatus"] = "failed"
             print(
                 f"[freeform_block] {page.get('id')} monitor overview generation failed, "
                 f"keeping fixed skeleton: {str(exc)[:200]}"
             )
-    if capped_pages:
-        print(
-            f"[freeform_block] monitor overview budget hit: {capped_pages} page(s) generated "
-            f"text-only (ref-image cap {max_ref_images}; raise {_ENRICH_MAX_REF_IMAGES_ENV} to widen)"
+    # no silent caps：一张都没生的时候说清楚是"没配 key"还是"通道不吃图"，
+    # 否则现象只是"首页长得比较素"，没人会想到去查配置。
+    if not sheet_enabled:
+        why = (
+            "生图未配置（IMAGE_API_URL / IMAGE_MODEL / IMAGE_API_KEY 需三项齐全）"
+            if not _image_generation_configured()
+            else "LLM 通道不支持图片输入（LLM_SUPPORTS_IMAGE_CONTENT_PARTS=0）"
         )
+        print(f"[freeform_block] 首页参照板已跳过，本次全部走纯文字设计：{why}")
     return model

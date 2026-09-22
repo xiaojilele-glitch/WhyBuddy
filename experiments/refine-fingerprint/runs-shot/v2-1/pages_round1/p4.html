@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>运营数据看板 - 安养通社区养老服务管理平台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              DEFAULT: '#20806F',
+              50: '#E6F4F1',
+              100: '#C7E8E3',
+              500: '#20806F',
+              600: '#1A685A',
+              700: '#145247',
+            },
+            accent: {
+              DEFAULT: '#FA8C16',
+              50: '#FFF7E8',
+              500: '#FA8C16',
+            }
+          },
+          borderRadius: {
+            DEFAULT: '10px',
+            lg: '12px',
+            xl: '16px',
+          }
+        }
+      }
+    }
+  </script>
+<style>[aria-current="page"]{background-color:color-mix(in srgb, currentColor 12%, transparent);font-weight:600}</style></head>
+<body class="h-full flex overflow-hidden text-slate-700">
+
+  <!-- 左侧固定主导航 -->
+  <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col flex-shrink-0 border-r border-slate-800">
+    <div class="h-16 flex items-center px-6 gap-3 border-b border-slate-800">
+      <div class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-lg shadow-md">安养通</div>
+      <div class="flex flex-col">
+        <span class="text-white font-bold text-base tracking-wide">安养通养通</span>
+        <span class="text-xs text-slate-400">社区养老服务管理</span>
+      </div>
+    </div>
+    
+    <nav class="flex-1 px-4 py-6 space-y-1.5 text-sm font-medium overflow-y-auto">
+<a data-page-id="p1" href="#" class="flex gap-3 items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg><span>老人档案管理页</span></a>
+<a data-page-id="p2" href="#" class="flex gap-3 items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg><span>服务工单调度页</span></a>
+<a data-page-id="p3" href="#" class="flex gap-3 items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg><span>服务人员移动端工作台</span></a>
+<a aria-current="page" data-page-id="p4" href="#" class="bg-primary flex gap-3 items-center px-4 py-3 rounded-lg shadow-sm text-white"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg><span>运营数据看板页</span></a>
+</nav>
+
+    <div class="p-4 border-t border-slate-800">
+      <div class="flex items-center gap-3 px-2 py-1">
+        <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white font-medium text-sm">主</div>
+        <div class="flex flex-col overflow-hidden">
+          <span class="text-xs font-medium text-white truncate">社区养老顾问</span>
+          <span class="text-[11px] text-slate-400 truncate">zhang.mgr@anyang.com</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 右侧主界面 -->
+  <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+    
+    <!-- 顶部 Header -->
+    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0 shadow-sm">
+      <nav aria-label="Breadcrumb" class="text-sm">
+        <ol class="flex items-center space-x-2 text-slate-500">
+          <li><a href="#" class="hover:text-primary transition-colors">运营中心</a></li>
+          <li class="text-slate-300">/</li>
+          <li><a href="#" class="text-slate-800 font-medium" aria-current="page">运营数据看板页</a></li>
+        </ol>
+      </nav>
+
+      <div class="flex items-center gap-4">
+        <div class="flex items-center bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg text-amber-800 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-accent animate-pulse mr-2"></span>
+          <span>紧急呼叫 1 起待处理</span>
+        </div>
+        <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg font-medium">
+          今天是 2026-06-08 星期一
+        </div>
+      </div>
+    </header>
+
+    <!-- 正文内容区 -->
+    <main class="flex-1 overflow-y-auto p-8 space-y-6">
+      
+      <!-- 顶部时间范围与社区筛选面板 -->
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-semibold text-slate-700">统计社区：</span>
+          <select class="bg-slate-50 border border-slate-300 text-slate-700 text-sm rounded-lg px-3 py-2 outline-none focus:border-primary">
+            <option>东湖街道综合养老服务中心（全域）</option>
+            <option>南山社区日间照料中心</option>
+            <option>北苑社区居家养老服务站</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-semibold text-slate-700">时间范围：</span>
+          <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-sm">
+            <button class="px-3 py-1.5 bg-white font-medium text-primary rounded-md shadow-sm">今日实时</button>
+            <button class="px-3 py-1.5 text-slate-600 hover:text-slate-900">近 7 天</button>
+            <button class="px-3 py-1.5 text-slate-600 hover:text-slate-900">近 30 天</button>
+            <button class="px-3 py-1.5 text-slate-600 hover:text-slate-900">自定义</button>
+          </div>
+          <span class="text-xs text-slate-400 pl-2">数据每 5 分钟自动同步</span>
+        </div>
+      </div>
+
+      <!-- 核心指标概览区：4张大数字统计卡片 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+        
+        <!-- 卡片1：当日工单完成率 -->
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-slate-500">当日工单完成率</span>
+            <div class="w-10 h-10 rounded-lg bg-primary-50 text-primary flex items-center justify-center font-bold">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+          </div>
+          <div class="my-4">
+            <div class="text-3xl font-extrabold text-slate-900 tracking-tight" data-value="work_order" data-aggregate="count">96.8%</div>
+            <div class="text-xs text-slate-500 mt-1 flex items-center gap-1">
+              <span>已完成 <strong class="text-slate-700">128</strong> 单</span>
+              <span class="text-slate-300">/</span>
+              <span>总数 <strong class="text-slate-700">132</strong> 单</span>
+            </div>
+          </div>
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span class="text-emerald-600 font-medium flex items-center">
+              <svg class="w-3.5 h-3.5 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+              较昨日 +2.3%
+            </span>
+            <span class="text-slate-400">实时统计</span>
+          </div>
+        </div>
+
+        <!-- 卡片2：综合服务满意度得分 -->
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-slate-500">综合服务满意度得分</span>
+            <div class="w-10 h-10 rounded-lg bg-amber-50 text-accent flex items-center justify-center font-bold">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+            </div>
+          </div>
+          <div class="my-4">
+            <div class="text-3xl font-extrabold text-slate-900 tracking-tight" data-value="elder" data-aggregate="count">4.92<span class="text-sm font-normal text-slate-400 ml-1">/ 5.0分</span></div>
+            <div class="text-xs text-slate-500 mt-1">
+              收到长者与家属评价 <strong class="text-slate-700">98</strong> 份
+            </div>
+          </div>
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span class="text-emerald-600 font-medium flex items-center">
+              <svg class="w-3.5 h-3.5 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+              好评率 98.5%
+            </span>
+            <span class="text-slate-400">实时统计</span>
+          </div>
+        </div>
+
+        <!-- 卡片3：总服务时长 -->
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-slate-500">当日总服务时长</span>
+            <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+          </div>
+          <div class="my-4">
+            <div class="text-3xl font-extrabold text-slate-900 tracking-tight" data-value="work_order" data-aggregate="count">342<span class="text-sm font-normal text-slate-500 ml-1">小时</span></div>
+            <div class="text-xs text-slate-500 mt-1">
+              人均服务时长 <strong class="text-slate-700">8.5</strong> 小时
+            </div>
+          </div>
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span class="text-slate-600 font-medium">包含上门与日托照料</span>
+            <span class="text-slate-400">实时统计</span>
+          </div>
+        </div>
+
+        <!-- 卡片4：在岗人员总数 -->
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-slate-500">在岗人员总数</span>
+            <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </div>
+          </div>
+          <div class="my-4">
+            <div class="text-3xl font-extrabold text-slate-900 tracking-tight" data-value="service_staff" data-aggregate="count">40<span class="text-sm font-normal text-slate-500 ml-1">人</span></div>
+            <div class="text-xs text-slate-500 mt-1">
+              出勤率 <strong class="text-slate-700">100%</strong> (共 40 名在册)
+            </div>
+          </div>
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span class="text-emerald-600 font-medium">全员正常出勤</span>
+            <span class="text-slate-400">实时统计</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 主体图表区：采用对称的网格面板布局 -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- 左上方：折线图面板（近 7 天工单完成趋势） -->
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-base font-bold text-slate-800">近 7 天工单完成趋势</h3>
+              <p class="text-xs text-slate-400 mt-0.5">展示 2026-06-02 至 2026-06-08 每日派单与完成走势</p>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-primary inline-block"></span>完成单量</span>
+              <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-300 inline-block"></span>派单总量</span>
+            </div>
+          </div>
+          
+          <!-- SVG 折线图模拟 -->
+          <div class="h-64 w-full relative flex items-end pt-6 pb-2" data-chart="donut" data-entity="work_order" data-dimension="appointment_time" data-metric="count">
+            <!-- 背景网格横线 -->
+            <div class="absolute inset-x-0 top-6 bottom-8 flex flex-col justify-between pointer-events-none">
+              <div class="border-b border-slate-100 w-full text-[10px] text-slate-400 text-right pr-2">160单</div>
+              <div class="border-b border-slate-100 w-full text-[10px] text-slate-400 text-right pr-2">120单</div>
+              <div class="border-b border-slate-100 w-full text-[10px] text-slate-400 text-right pr-2">80单</div>
+              <div class="border-b border-slate-100 w-full text-[10px] text-slate-400 text-right pr-2">40单</div>
+              <div class="border-b border-slate-200 w-full"></div>
+            </div>
+
+            <svg class="absolute inset-x-6 top-8 bottom-8 w-[calc(100%-3rem)] h-[calc(100%-2rem)] overflow-visible" viewBox="0 0 700 200" preserveAspectRatio="none">
+              <!-- 派单总量折线 -->
+              <polyline fill="none" stroke="#cbd5e1" stroke-width="3" stroke-dasharray="4 4" points="0,50 116,40 233,65 350,30 466,45 583,25 700,35" />
+              <!-- 完成单量折线 -->
+              <polyline fill="none" stroke="#20806F" stroke-width="3" points="0,65 116,55 233,80 350,40 466,50 583,30 700,42" />
+              <!-- 数据坐标点 -->
+              <circle cx="0" cy="65" r="4" fill="#20806F" />
+              <circle cx="116" cy="55" r="4" fill="#20806F" />
+              <circle cx="233" cy="80" r="4" fill="#20806F" />
+              <circle cx="350" cy="40" r="4" fill="#20806F" />
+              <circle cx="466" cy="50" r="4" fill="#20806F" />
+              <circle cx="583" cy="30" r="4" fill="#20806F" />
+              <circle cx="700" cy="42" r="4" fill="#20806F" />
+            </svg>
+          </div>
+
+          <div class="flex justify-between text-xs text-slate-400 pt-2 border-t border-slate-100 px-2">
+            <span>2026-06-02</span>
+            <span>2026-06-03</span>
+            <span>2026-06-04</span>
+            <span>2026-06-05</span>
+            <span>2026-06-06</span>
+            <span>2026-06-07</span>
+            <span class="text-primary font-semibold">2026-06-08 (今日)</span>
+          </div>
+        </div>
+
+        <!-- 右上方：环形图面板（服务类型占比） -->
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-base font-bold text-slate-800">服务类型工单占比</h3>
+              <p class="text-xs text-slate-400 mt-0.5">当日各类社区养老服务项目工单分布情况</p>
+            </div>
+            <span class="text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">共计 132 单</span>
+          </div>
+
+          <!-- 环形图与图例复合区域 -->
+          <div class="flex flex-col sm:flex-row items-center justify-around gap-6 py-4">
+            <!-- 环形图 SVG -->
+            <div class="relative w-44 h-44 flex-shrink-0 flex items-center justify-center" data-chart="donut" data-entity="work_order" data-dimension="service_item" data-metric="count">
+              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                <!-- 生活照料 35% -->
+                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#20806F" stroke-width="16" stroke-dasharray="251.2" stroke-dashoffset="0" />
+                <!-- 医疗护理 28% -->
+                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#38bdf8" stroke-width="16" stroke-dasharray="251.2" stroke-dashoffset="-87.9" />
+                <!-- 康复训练 17% -->
+                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#FA8C16" stroke-width="16" stroke-dasharray="251.2" stroke-dashoffset="-158.2" />
+                <!-- 营养配餐 12% -->
+                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#a78bfa" stroke-width="16" stroke-dasharray="251.2" stroke-dashoffset="-200.95" />
+                <!-- 精神慰藉 8% -->
+                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#cbd5e1" stroke-width="16" stroke-dasharray="251.2" stroke-dashoffset="-231" />
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span class="text-xs text-slate-400">核心服务</span>
+                <span class="text-lg font-bold text-slate-800">5大板块</span>
+              </div>
+            </div>
+
+            <!-- 图例详情列表 -->
+            <div class="flex flex-col justify-center space-y-2.5 w-full max-w-[240px] text-xs">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full bg-primary inline-block"></span>
+                  <span class="text-slate-700 font-medium">生活照料服务</span>
+                </div>
+                <span class="text-slate-500 font-semibold">35.0% (46单)</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full bg-sky-400 inline-block"></span>
+                  <span class="text-slate-700 font-medium">专业医疗护理</span>
+                </div>
+                <span class="text-slate-500 font-semibold">28.0% (37单)</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full bg-accent inline-block"></span>
+                  <span class="text-slate-700 font-medium">长者康复训练</span>
+                </div>
+                <span class="text-slate-500 font-semibold">17.0% (22单)</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full bg-violet-400 inline-block"></span>
+                  <span class="text-slate-700 font-medium">营养配餐配送</span>
+                </div>
+                <span class="text-slate-500 font-semibold">12.0% (16单)</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full bg-slate-300 inline-block"></span>
+                  <span class="text-slate-700 font-medium">精神关怀慰藉</span>
+                </div>
+                <span class="text-slate-500 font-semibold">8.0% (11单)</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>服务类型按工单派发频次计算</span>
+            <span class="text-primary font-medium">各项服务达标率 100%</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 下方：横向柱状图面板（各服务人员工作量统计排名） -->
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm" data-rows="service_staff" data-sort="name" data-order="desc" data-limit="6">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h3 class="text-base font-bold text-slate-800">各服务人员工作量统计排名 (Top 6)</h3>
+            <p class="text-xs text-slate-400 mt-0.5">统计当日护理人员已完成工单数量及服务总时长分布</p>
+          </div>
+          <div class="flex items-center gap-4 text-xs text-slate-500">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-primary inline-block"></span>完成工单数（单）</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-amber-400 inline-block"></span>服务时长（小时）</span>
+          </div>
+        </div>
+
+        <!-- 柱状图数据展示区 -->
+        <div class="space-y-4">
+          
+          <!-- 人员1 -->
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-medium text-slate-700 flex items-center gap-2">
+                <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[10px]">1</span>
+                <span data-field="name">张师傅</span> <span class="text-slate-400 font-normal" data-field="title">（高级护理员）</span>
+              </span>
+              <span class="text-slate-600 font-semibold">完成 14 单 / 累计 10.5 小时</span>
+            </div>
+            <div class="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex">
+              <div class="bg-primary h-full rounded-full" style="width: 90%;"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <span>注：当前统计包含上门居家服务与中心日间照料考核数据</span>
+          <a href="#" class="text-primary font-medium hover:underline">查看全部 40 位在岗人员工作台明细 &rarr;</a>
+        </div>
+      </div>
+
+      <!-- 页脚版权 -->
+      <footer class="pt-6 pb-2 text-center text-xs text-slate-400 border-t border-slate-200 mt-12">
+        安养通社区养老服务管理平台 &copy; 2026 医养结合智慧运营系统 版权所有
+      </footer>
+
+    </main>
+  </div>
+
+</body>
+</html>

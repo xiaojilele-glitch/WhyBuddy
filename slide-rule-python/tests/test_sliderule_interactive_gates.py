@@ -625,7 +625,7 @@ def test_drive_reject_after_confirm_stales_and_triggers_replan_recompare_flow():
     import importlib
     importlib.reload(sess_mod)
     from services.slide_rule_session import drive_reasoning_turn as _reloaded_drive
-    from services.slide_rule_session import pick_next_capabilities as real_pick_next
+    from services.engine_scheduling import pick_next_capabilities as real_pick_next
 
     orig_orch = sess_mod.__dict__.get("orchestrate_plan")
     orig_pick = sess_mod.__dict__.get("pick_next_capabilities")

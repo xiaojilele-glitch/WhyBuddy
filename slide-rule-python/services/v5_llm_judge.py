@@ -23,6 +23,8 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Dict, List, Optional
 
+from sliderule_llm.config import default_max_tokens
+
 DIMENSIONS = ("requirement_coverage", "domain_sense", "naming_quality")
 
 _JUDGE_INSTRUCTION = """\
@@ -79,7 +81,14 @@ def _digest_model(model: Dict[str, Any], limit_fields: int = 4) -> str:
         for e in _l(_d(m.get("datamodel")).get("entities"))
     ]
     rbac = _d(m.get("rbac"))
-    out["roles"] = _l(rbac.get("roles"))
+    # "id:显示名"，与下面 workflow 节点同款写法。直接透传会把 dict 打进
+    # 评审提示词，评委看到的是 JSON 噪音而不是"这个角色是干什么的"。
+    from .rbac_roles import role_entries
+
+    out["roles"] = [
+        r["id"] if r["label"] == r["id"] else f"{r['id']}:{r['label']}"
+        for r in role_entries(rbac)
+    ]
     out["permissions"] = _l(rbac.get("permissions"))
     wf = _d(m.get("workflow"))
     out["workflow"] = {
@@ -145,7 +154,7 @@ def judge_content_quality(
         from sliderule_llm.client import call_llm_json
 
         def llm_json_fn(messages: List[Dict[str, str]]) -> Dict[str, Any]:  # type: ignore[misc]
-            parsed, _result = call_llm_json(messages, temperature=0.0, max_tokens=1200)
+            parsed, _result = call_llm_json(messages, temperature=0.0, max_tokens=default_max_tokens())
             return parsed
 
     messages = [

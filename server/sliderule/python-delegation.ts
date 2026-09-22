@@ -36,12 +36,90 @@ export interface PythonSlideRuleHealthResult {
 
 export interface PythonSlideRuleCallOptions {
   timeoutMs?: number;
+  /** 访问者身份头，见 viewerHeadersFrom。不传 = 这次调用对 Python 是匿名的。 */
+  viewer?: ViewerHeaders;
+}
+
+/** 只有这两个头代表"请求是谁发的"。 */
+export type ViewerHeaders = { cookie?: string; authorization?: string };
+
+/**
+ * 从入站请求里摘出访问者身份头，转发给 Python。
+ *
+ * ## 为什么必须显式转发
+ *
+ * `X-Internal-Key` 回答的是"Node 有没有权调 Python"，**不是**"这个请求是谁发的"。
+ * 两者混淆过一次：2026-08-02 之前 /api/sliderule/* 的兜底代理只带内部密钥，
+ * Python 侧 optional_user 永远拿不到用户，应用中心的归属判定整体退化成匿名。
+ * 那次在兜底代理里补了转发，但 **sessions 那几条显式路由用的是
+ * delegateToPythonSlideRule，没跟着改**——于是留下一个很别扭的不对称：
+ *
+ *     POST /sessions      没有显式路由 → 落到兜底代理 → 带 cookie → 建出来有主
+ *     GET  /sessions      有显式路由   → 走本文件   → 不带    → 匿名 → 空列表
+ *
+ * 表现就是"登录后新建会话、跑完推演，左侧历史里一条都没有"（2026-08-06 用户实测）。
+ * 会话确实建出来了、归属也对，只是列表请求到 Python 时是个陌生人。
+ * GET /sessions/{id} 同理 → 打开别人可见的应用是空白页。
+ *
+ * ## 为什么是白名单而不是整包透传
+ *
+ * `host` / `content-length` 这些得由 fetch 自己按新请求算，原样带过去会让上游
+ * 拿到错的值。这跟兜底代理里那段注释是同一条纪律，**这里是它唯一的实现**，
+ * 两处共用，避免再漂移一次。
+ */
+export function viewerHeadersFrom(req: {
+  headers: Record<string, unknown>;
+}): ViewerHeaders {
+  const out: ViewerHeaders = {};
+  const cookie = req?.headers?.["cookie"];
+  if (typeof cookie === "string" && cookie) out.cookie = cookie;
+  const auth = req?.headers?.["authorization"];
+  if (typeof auth === "string" && auth) out.authorization = auth;
+  return out;
+}
+
+function withViewer(
+  headers: Record<string, string>,
+  viewer: ViewerHeaders | undefined,
+): Record<string, string> {
+  if (viewer?.cookie) headers["cookie"] = viewer.cookie;
+  if (viewer?.authorization) headers["authorization"] = viewer.authorization;
+  return headers;
 }
 
 const DEFAULT_BASE_URL = "http://localhost:9700";
 const DEFAULT_INTERNAL_KEY = "dev-slide-rule-internal";
 const DEFAULT_TIMEOUT_MS = 120_000;
+
+/**
+ * 推演（drive-full）专用超时。**不能用上面那个 120s 的通用值。**
+ *
+ * 一趟推演实测 374~1190s（见 routes/sliderule_full.py 里 drive_full 那条注释），
+ * 而通用超时是 2 分钟——非流式那条路一旦被走到，必然在第 2 分钟 AbortController
+ * 掐断、返回 502，而 Python 侧那趟推演**还在跑**（drive_full 是 `def` 路由，
+ * 跑在线程池里，客户端断开不会取消它）。表现是"用户看到失败，但后台照样在烧
+ * LLM 额度，最后还成功落库了"——用户多半会再点一次，于是同一个话题生成两遍。
+ *
+ * 为什么不把 DEFAULT_TIMEOUT_MS 整体调大：那个值同时管着健康检查、llm-channel
+ * 这些秒级调用，调大等于后端真挂了也要吊 20 分钟才报错。慢的是推演这一条，
+ * 就只放宽这一条。
+ *
+ * 40 分钟 = 实测最慢 1190s 的两倍余量（1190s 是 5 并发下量到的；单跑更快，
+ * 但并发正是展会现场的常态）。要调用 PYTHON_SLIDE_RULE_DRIVE_TIMEOUT_MS。
+ *
+ * 连接挂 40 分钟听着久，但两边的代价不对称：挂着只占 Node 一个 socket，
+ * 而掐早了是"整趟白烧 + 用户重试再烧一遍"。宁可挂着。
+ *
+ * ⚠️ 前端正常走的是 SSE（drive-full-stream，兜底代理裸 fetch 不设超时，不受此限），
+ * 这条非流式路是 SSE 失败后的回退。回退路径出问题最难发现——正因为平时不走。
+ */
+const DEFAULT_DRIVE_TIMEOUT_MS = 2_400_000;
 const DEFAULT_HEALTH_PATH = "/health";
+
+/** 推演专用超时，允许用 PYTHON_SLIDE_RULE_DRIVE_TIMEOUT_MS 覆盖。 */
+export function resolvePythonDriveTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  return parsePositiveInt(env.PYTHON_SLIDE_RULE_DRIVE_TIMEOUT_MS, DEFAULT_DRIVE_TIMEOUT_MS);
+}
 
 function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, "");
@@ -153,10 +231,13 @@ export async function callPythonSlideRule(
     `${trimTrailingSlashes(pythonBase)}${normalizedEndpoint}`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Internal-Key": internalKey,
-      },
+      headers: withViewer(
+        {
+          "Content-Type": "application/json",
+          "X-Internal-Key": internalKey,
+        },
+        options.viewer,
+      ),
       body: JSON.stringify(payload),
     },
     timeoutMs,
@@ -180,10 +261,13 @@ export async function delegateToPythonSlideRule(
   const timeoutMs = options.timeoutMs ?? resolvePythonSlideRuleRuntimeConfig().timeoutMs;
   const init: RequestInit = {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Internal-Key": internalKey,
-    },
+    headers: withViewer(
+      {
+        "Content-Type": "application/json",
+        "X-Internal-Key": internalKey,
+      },
+      options.viewer,
+    ),
   };
   if (method !== "GET" && method !== "DELETE") {
     init.body = JSON.stringify(payload ?? {});

@@ -17,8 +17,7 @@ import {
   ErrorBlock,
   Ellipsis,
 } from "antd-mobile";
-// 图标复用 @ant-design/icons（已在主包），省掉 antd-mobile-icons 依赖
-import { PlusOutlined, LockOutlined } from "@ant-design/icons";
+import { AddOutline, LockOutline } from "antd-mobile-icons";
 
 export interface PhoneListField {
   id: string;
@@ -119,7 +118,7 @@ export default function PhonePageList({
           data-testid="app-runtime-create"
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            {canCreate ? <PlusOutlined /> : <LockOutlined />}
+            {canCreate ? <AddOutline /> : <LockOutline />}
             {canCreate ? "新建" : createLockedHint || "无新建权限"}
           </span>
         </MobileButton>
@@ -164,7 +163,7 @@ export default function PhonePageList({
           // 比没有更糟——用户会以为数据已经是最新的。
           disabled={!onRefresh}
         >
-        <List style={{ "--border-top": "none", "--border-bottom": "none", borderRadius: 8, overflow: "hidden" }}>
+        <List mode="card">
           {shown.map((row) => (
             <SwipeItem
               key={row.id}

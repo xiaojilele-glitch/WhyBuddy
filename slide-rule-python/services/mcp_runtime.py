@@ -1,5 +1,11 @@
 """Injectable Python runtime boundary for mcp.call.
 
+⚠ 2026-08-27：非产品流、流式 driver 不调、禁止接成控制面。
+事故：mcp_runtime 是独立可注入适配器（测试/node_bridge 才 set），
+v5_full_driver 与 rehearsal_control 零引用。若把薄控制面接到这里，
+会变成不通电的插座——那是编码 Agent 的 MCP 应用商店 DNA，不是
+推演母语。产品流走封闭工具表 + 工厂信封，不走本适配器。
+
 This module defines the adapter and permission-check interfaces only. It never
 opens a network connection or supplies a fake production adapter; tests inject
 their own fakes through create_mcp_runtime().

@@ -48,6 +48,9 @@ def test_empty_instruction_falls_back_to_goal(monkeypatch):
     """演示域 + 空指令：此前静默跳过闭环（回合完成却无闭环），现在回落
     goal 原文照常收口——确定性域走冻结夹具，零 LLM。"""
     monkeypatch.delenv("SLIDERULE_LLM_GENERATE_ENABLED", raising=False)
+    # 这条测的是"空指令回落 goal 原文"，用夹具只是取一条零 LLM 的确定性
+    # 收口路径。夹具快路径 2026-08-10 起默认关，显式开回来。
+    monkeypatch.setenv("SLIDERULE_DEMO_FIXTURE_ENABLED", "1")
     state = _state("采购审批平台", "t-e37-empty-instr")
     state = _ensure_runtime_closure_evidence(state, "", 1)
 

@@ -1,5 +1,11 @@
 """Injectable runtime boundary for skill.invoke.
 
+⚠ 2026-08-27：非产品流、流式 driver 不调、禁止接成控制面。
+事故：skill_runtime 是独立可注入适配器（测试/node_bridge 才 set），
+v5_full_driver 与 rehearsal_control 零引用。若把薄控制面接进来，
+会变成不通电的插座——skill.invoke 适配器不是推演母语，也不是
+工厂信封。产品流的技能图走 v5_skill_runtime_graph，不走本模块。
+
 This module defines the adapter interface used by the Python SlideRule
 executor. It does not discover skills, launch local commands, or call external
 services; callers inject an adapter that implements the runtime-specific work.

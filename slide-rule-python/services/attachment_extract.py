@@ -21,6 +21,8 @@ import base64
 import os
 from typing import Any, Optional
 
+from sliderule_llm.config import default_max_tokens
+
 # 与前端 ComposerDock 的注入预算同口径（MAX_CHARS_PER_ATTACHMENT=6000）
 MAX_CONTEXT_CHARS = 6000
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -103,7 +105,7 @@ def extract_image(name: str, data: bytes) -> dict[str, Any]:
     try:
         from sliderule_llm.client import call_llm
 
-        result = call_llm(messages, max_tokens=1600)
+        result = call_llm(messages, max_tokens=default_max_tokens())
     except Exception as e:  # LlmError 或连接层异常，一律如实
         return _fail(f"视觉 LLM 提取失败：{e}")
     text = (result.content or "").strip()
@@ -175,7 +177,7 @@ def _distill_with_llm(name: str, raw: str) -> Optional[str]:
                 },
                 {"role": "user", "content": f"文档《{name}》原文：\n\n{raw}"},
             ],
-            max_tokens=2400,
+            max_tokens=default_max_tokens(),
         )
         text = (result.content or "").strip()
         return text or None

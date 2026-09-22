@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Router as WouterRouter, Switch, useLocation } from "wouter";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 
 import {
   AUTOPILOT_PATH,
@@ -12,8 +12,10 @@ import {
   REPLAY_PATH_PREFIX,
   SLIDERULE_PATH,
 } from "@/components/navigation-config";
+import { LegacyUnmaintainedBanner } from "@/components/LegacyUnmaintainedBanner";
 import AgentLoopPage, {
   getAgentLoopSliderulePath,
+  getAgentLoopWorkbenchPath,
 } from "@/pages/agent-loop/AgentLoopPage";
 
 import { AppSidebar } from "./components/AppSidebar";
@@ -24,8 +26,8 @@ import { RecoveryDialog } from "./components/RecoveryDialog";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { useRecoveryDetection } from "./hooks/useRecoveryDetection";
 import { useViewportTier } from "./hooks/useViewportTier";
-import { useAuthStore } from "./lib/auth-store";
 import { IS_GITHUB_PAGES } from "./lib/deploy-target";
+import { AuthProvider, useAuth } from "./lib/use-auth";
 import { useProjectStore } from "./lib/project-store";
 import { useAppStore } from "./lib/store";
 
@@ -41,31 +43,12 @@ const LegacyCommandCenterPage = lazy(
 );
 const LineagePage = lazy(() => import("@/pages/lineage/LineagePage"));
 const ProjectCockpitHome = lazy(() => import("./pages/ProjectCockpitHome"));
-const AdminAuditPage = lazy(() =>
-  import("./pages/admin/AdminLayout").then(m => ({ default: m.AdminAuditPage }))
-);
-const AdminFailuresPage = lazy(() =>
-  import("./pages/admin/AdminLayout").then(m => ({ default: m.AdminFailuresPage }))
-);
-const AdminLayout = lazy(() =>
-  import("./pages/admin/AdminLayout").then(m => ({ default: m.AdminLayout }))
-);
-const AdminOverviewPage = lazy(() =>
-  import("./pages/admin/AdminLayout").then(m => ({ default: m.AdminOverviewPage }))
-);
-const AdminProjectsPage = lazy(() =>
-  import("./pages/admin/AdminLayout").then(m => ({ default: m.AdminProjectsPage }))
-);
-const AdminRunsPage = lazy(() =>
-  import("./pages/admin/AdminLayout").then(m => ({ default: m.AdminRunsPage }))
-);
-const AdminUsersPage = lazy(() =>
-  import("./pages/admin/AdminLayout").then(m => ({ default: m.AdminUsersPage }))
-);
 const AutopilotRoutePage = lazy(
   () => import("./pages/autopilot/AutopilotRoutePage")
 );
-const AuthPage = lazy(() => import("./pages/auth/AuthPage"));
+// 全站唯一的登录页（2026-08-03）：接 Neon 身份体系。
+// 旧的 `/login` + AuthPage（Node/MySQL 账号体系）已整套删除，只留一条重定向。
+const MianTuanAuthPage = lazy(() => import("./pages/auth/MianTuanAuthPage"));
 const SpecCenterPage = lazy(() => import("./pages/specs/SpecCenterPage"));
 const TaskDetailPage = lazy(() =>
   import("./pages/tasks").then(m => ({ default: m.TaskDetailPage }))
@@ -97,6 +80,22 @@ const routerBase =
     : import.meta.env.BASE_URL.replace(/\/$/, "");
 const AGENT_LOOP_PATH = "/agent-loop";
 
+/** 书签仍可达的旧路由：页顶标明不再维护，不 404。
+ *  ⚠ 不能用裸 fragment 包 `h-screen` 子页（Autopilot / Tasks 驾驶舱）。
+ *  条在上面、子页自己 100vh，底栏会被顶到折页下面——跟当初不包
+ *  AgentLoopPage 是同一类裁切，只是换了套壳。 */
+function LegacyUnmaintainedRoute({ children }: { children: ReactNode }) {
+  return (
+    <div
+      data-testid="legacy-unmaintained-route"
+      className="flex h-screen min-h-0 flex-col"
+    >
+      <LegacyUnmaintainedBanner />
+      <div className="min-h-0 flex-1 overflow-auto">{children}</div>
+    </div>
+  );
+}
+
 function Router() {
   return (
     <Switch>
@@ -105,73 +104,88 @@ function Router() {
           <RedirectRoute to={getAgentLoopSliderulePath()} />
         )}
       </Route>
-      <Route path={PROJECTS_PATH}>{() => <ProjectCockpitHome />}</Route>
-      <Route path={AUTOPILOT_PATH} component={AutopilotRoutePage} />
+      <Route path={PROJECTS_PATH}>
+        {() => (
+          <LegacyUnmaintainedRoute>
+            <ProjectCockpitHome />
+          </LegacyUnmaintainedRoute>
+        )}
+      </Route>
+      <Route path={AUTOPILOT_PATH}>
+        {() => (
+          <LegacyUnmaintainedRoute>
+            <AutopilotRoutePage />
+          </LegacyUnmaintainedRoute>
+        )}
+      </Route>
       <Route path={`${PROJECTS_PATH}/:projectId/tasks/:taskId`}>
         {params => (
-          <ProjectTaskRoute
-            projectId={params.projectId}
-            taskId={params.taskId || null}
-          />
+          <LegacyUnmaintainedRoute>
+            <ProjectTaskRoute
+              projectId={params.projectId}
+              taskId={params.taskId || null}
+            />
+          </LegacyUnmaintainedRoute>
         )}
       </Route>
       <Route path={`${PROJECTS_PATH}/:projectId/tasks`}>
-        {params => <ProjectTasksRoute projectId={params.projectId} />}
+        {params => (
+          <LegacyUnmaintainedRoute>
+            <ProjectTasksRoute projectId={params.projectId} />
+          </LegacyUnmaintainedRoute>
+        )}
       </Route>
       <Route path={`${PROJECTS_PATH}/:projectId`}>
         {params => <ProjectAutopilotRedirect projectId={params.projectId} />}
       </Route>
-      <Route path={"/login"}>
+      <Route path={"/signin"}>
         {() =>
-          IS_GITHUB_PAGES ? <RedirectRoute to={PROJECTS_PATH} /> : <AuthPage />
+          IS_GITHUB_PAGES ? (
+            <RedirectRoute to={getAgentLoopWorkbenchPath()} />
+          ) : (
+            <MianTuanAuthPage />
+          )
         }
       </Route>
-      <Route path={"/admin"}>
+      {/* 旧登录页的地址。留着重定向而不是直接 404——外部链接、书签、
+          还有代码里历史遗留的跳转都指着它。 */}
+      <Route path={"/login"}>
         {() => (
-          <AdminLayout>
-            <AdminOverviewPage />
-          </AdminLayout>
+          <RedirectRoute to={IS_GITHUB_PAGES ? PROJECTS_PATH : "/signin"} />
         )}
       </Route>
       <Route path={"/admin/users"}>
-        {() => (
-          <AdminLayout>
-            <AdminUsersPage />
-          </AdminLayout>
-        )}
+        {() => <RedirectRoute to="/agent-loop/admin/users" />}
       </Route>
       <Route path={"/admin/projects"}>
-        {() => (
-          <AdminLayout>
-            <AdminProjectsPage />
-          </AdminLayout>
-        )}
+        {() => <RedirectRoute to="/agent-loop/admin/projects" />}
       </Route>
       <Route path={"/admin/runs"}>
-        {() => (
-          <AdminLayout>
-            <AdminRunsPage />
-          </AdminLayout>
-        )}
+        {() => <RedirectRoute to="/agent-loop/admin/runs" />}
       </Route>
       <Route path={"/admin/failures"}>
-        {() => (
-          <AdminLayout>
-            <AdminFailuresPage />
-          </AdminLayout>
-        )}
+        {() => <RedirectRoute to="/agent-loop/admin/failures" />}
       </Route>
       <Route path={"/admin/audit"}>
+        {() => <RedirectRoute to="/agent-loop/admin/audit" />}
+      </Route>
+      <Route path={"/admin"}>
+        {() => <RedirectRoute to="/agent-loop/admin" />}
+      </Route>
+      <Route path={"/tasks"}>
         {() => (
-          <AdminLayout>
-            <AdminAuditPage />
-          </AdminLayout>
+          <LegacyUnmaintainedRoute>
+            <TasksPage />
+          </LegacyUnmaintainedRoute>
         )}
       </Route>
-      <Route path={"/tasks"}>{() => <TasksPage />}</Route>
       <Route path={"/specs"} component={SpecCenterPage} />
       <Route path={"/tasks/:taskId"}>
-        {params => <TaskDetailRoute taskId={params.taskId} />}
+        {params => (
+          <LegacyUnmaintainedRoute>
+            <TaskDetailRoute taskId={params.taskId} />
+          </LegacyUnmaintainedRoute>
+        )}
       </Route>
       <Route path={`${REPLAY_PATH_PREFIX}/:missionId`}>
         {params => <ReplayPage missionId={params.missionId || ""} />}
@@ -202,9 +216,13 @@ function Router() {
       <Route path={`${AGENT_LOOP_PATH}/workbench`} component={AgentLoopPage} />
       <Route path={`${AGENT_LOOP_PATH}/workbench/legacy`} component={AgentLoopPage} />
       <Route path={`${AGENT_LOOP_PATH}/skills`} component={AgentLoopPage} />
+      <Route path={`${AGENT_LOOP_PATH}/components`} component={AgentLoopPage} />
       <Route path={`${AGENT_LOOP_PATH}/help`} component={AgentLoopPage} />
       <Route path={`${AGENT_LOOP_PATH}/settings`} component={AgentLoopPage} />
       <Route path={`${AGENT_LOOP_PATH}/settings/legacy`} component={AgentLoopPage} />
+      <Route path={`${AGENT_LOOP_PATH}/dashboard`} component={AgentLoopPage} />
+      <Route path={`${AGENT_LOOP_PATH}/admin/:section`} component={AgentLoopPage} />
+      <Route path={`${AGENT_LOOP_PATH}/admin`} component={AgentLoopPage} />
       <Route path={`${AGENT_LOOP_PATH}/runs/:runId`} component={AgentLoopPage} />
       <Route path={AGENT_LOOP_PATH} component={AgentLoopPage} />
       {/* Direct /sliderule redirects above; AgentLoop hosts the embedded 推演 surface. */}
@@ -334,24 +352,16 @@ function RecoveryGuard() {
   );
 }
 
-function AuthBootstrap() {
-  const fetchMe = useAuthStore(state => state.fetchMe);
-
-  useEffect(() => {
-    if (IS_GITHUB_PAGES) return;
-    // V5 /sliderule is chrome-free and deliberately isolated from auth/project stores.
-    // Skip fetchMe here to eliminate the unconditional 401 console noise on the demo route
-    // (the route already skips RecoveryGuard, AuthRouteGuard, sidebar, etc. via isChromeFree).
-    if (isSlideRuleLocation(typeof window !== 'undefined' ? window.location.pathname : '')) return;
-    if (isAgentLoopLocation(typeof window !== 'undefined' ? window.location.pathname : '')) return;
-    void fetchMe();
-  }, [fetchMe]);
-
-  return null;
-}
-
+/**
+ * 把登录用户接到项目 store 上。
+ *
+ * 旧账号体系下掉后（2026-08-03），身份来自 `AuthProvider`（新的 Neon 体系）。
+ * 原来这里还配着一个 `AuthBootstrap` 负责首屏 fetchMe——现在那件事是
+ * AuthProvider 自己做的，组件删掉了。
+ */
 function AuthProjectOwnerBridge() {
-  const currentUserId = useAuthStore(state => state.currentUser?.id ?? null);
+  const { user } = useAuth();
+  const currentUserId = user?.id ?? null;
   const setActiveOwner = useProjectStore(state => state.setActiveOwner);
 
   useEffect(() => {
@@ -375,9 +385,16 @@ function isHomeLocation(location: string) {
   );
 }
 
+/**
+ * 登录类页面：**整屏渲染，不套应用外壳**。
+ *
+ * 套上外壳的话，未登录的人在登录页左边看到的是一整列自己点不动的功能菜单——
+ * 既占地方又误导。/signin 是面团的登录页（2026-08-03 新增），/login 是旧账号
+ * 体系那个，两个都要排除。
+ */
 function isAuthLocation(location: string) {
   const [pathname] = location.trim().split(/[?#]/, 1);
-  return pathname === "/login";
+  return pathname === "/login" || pathname === "/signin";
 }
 
 function isSlideRuleLocation(location: string) {
@@ -418,21 +435,15 @@ export function isProjectWorkspaceLocation(location: string) {
 
 function AuthRouteGuard() {
   const [location, setLocation] = useLocation();
-  const currentUser = useAuthStore(state => state.currentUser);
-  const loading = useAuthStore(state => state.loading);
-  const sessionChecked = useAuthStore(state => state.sessionChecked);
+  const { user, ready } = useAuth();
 
   useEffect(() => {
     if (IS_GITHUB_PAGES) return;
-    if (
-      sessionChecked &&
-      !loading &&
-      !currentUser &&
-      isProjectWorkspaceLocation(location)
-    ) {
-      setLocation("/login");
+    // 必须等 ready：未就绪时 user 恒为 null，不等就会把已登录的人也踢去登录页。
+    if (ready && !user && isProjectWorkspaceLocation(location)) {
+      setLocation(`/signin?next=${encodeURIComponent(location)}`);
     }
-  }, [currentUser, loading, location, sessionChecked, setLocation]);
+  }, [user, ready, location, setLocation]);
 
   return null;
 }
@@ -496,8 +507,6 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <LocaleSync />
-          <AuthBootstrap />
-          <AuthProjectOwnerBridge />
           <Toaster
             position="top-center"
             toastOptions={{
@@ -511,9 +520,16 @@ function App() {
               },
             }}
           />
-          <WouterRouter base={routerBase}>
-            <AppShell />
-          </WouterRouter>
+          {/* AuthProvider 提到根：登录页、侧栏、管理台、应用中心共用同一份
+              登录态。原来它只包着 DashboardApp，导致 /signin 拿到的是 Context
+              的默认值（user 恒 null、refresh 是空函数），"已登录就别停在登录页"
+              那条逻辑根本不会触发。 */}
+          <AuthProvider>
+            <WouterRouter base={routerBase}>
+              <AuthProjectOwnerBridge />
+              <AppShell />
+            </WouterRouter>
+          </AuthProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

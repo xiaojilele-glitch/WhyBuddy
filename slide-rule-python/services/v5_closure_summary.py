@@ -71,8 +71,13 @@ def _model_stats_lines(publish_closure: Dict[str, Any]) -> List[str]:
         )
     rb = section("rbac")
     if rb and isinstance(rb.get("roles"), list):
+        # 显示名而不是引用键：这行是给人看的。角色补中文名之后直接 str(r)
+        # 会把整个 dict 打进摘要（"{'id': 'warehouse_keeper', 'name': ...}"）。
+        from .rbac_roles import role_entries
+
+        _names = [r["label"] for r in role_entries(rb)]
         lines.append(
-            f"角色权限：{len(rb['roles'])} 角色（{'、'.join(str(r) for r in rb['roles'][:6])}）· {len(rb.get('permissions') or [])} 权限"
+            f"角色权限：{len(_names)} 角色（{'、'.join(_names[:6])}）· {len(rb.get('permissions') or [])} 权限"
         )
     pg = section("page")
     if pg and isinstance(pg.get("pages"), list):
@@ -92,7 +97,20 @@ def build_summary_messages(state: Any, publish_closure: Dict[str, Any]) -> List[
     present = sum(1 for v in per_skill.values() if isinstance(v, dict) and v.get("evidencePresent"))
 
     parts: List[str] = [f"业务意图：{goal or '(未提供)'}"]
-    parts.append(f"闭环状态：{'blocked（证据缺口拦截）' if blocked else 'closed'} · 证据 {present}/{len(per_skill) or 6}")
+    # ⚠ 这一行以前写死 "blocked（证据缺口拦截）"。2026-08-27 智能工单那趟真机：
+    #   实际 blocker 是 CLOSURE_GOAL_RELEVANCE_FAILED（产出跟题对不上），模型
+    #   只能顺着"证据缺口"四个字编出一个"DLP 脱敏规则库缺口"——模型里根本没有
+    #   那东西。用户照着屏幕补证据，补一天也走不通。
+    #   理由从 closure_block_reason.user_report 来，那是唯一渲染它的地方。
+    from .closure_block_reason import user_report as _block_report
+
+    status = "blocked" if blocked else "closed"
+    parts.append(f"闭环状态：{status} · 证据 {present}/{len(per_skill) or 6}")
+    reason = _block_report(publish_closure)
+    if reason:
+        # 单开一行而不是塞进上一行：下面 system 里要求"如实说 closed/blocked",
+        # 拦截原因是**另一件事**，混成一句模型会把两者揉成一个说法。
+        parts.append(f"拦截原因（原样转述，不要改写、不要补充）：{reason}")
     stats = _model_stats_lines(publish_closure)
     if stats:
         parts.append("五系统模型事实：\n" + "\n".join(f"- {s}" for s in stats))
@@ -110,7 +128,11 @@ def build_summary_messages(state: Any, publish_closure: Dict[str, Any]) -> List[
     system = (
         "你是 SlideRule 的推演总结助手。基于给定的推演全程材料，写一段面向用户的"
         "中文收口总结（350 字以内，markdown，短段落+短列表）。必须覆盖四点："
-        "1) 闭环结论（如实说 closed/blocked 与证据数）；"
+        # ⚠ 判据盯语义不盯这句字面（CLAUDE.md §2）：光在材料里给了原因不够，
+        #   上一版模型就是在"证据缺口"四个字的暗示下自己编了个缺口名字。
+        #   这里明写「照抄、不许换成别的原因」，把编造的口子堵在指令侧。
+        "1) 闭环结论（如实说 closed/blocked 与证据数；blocked 时**照抄**材料里"
+        "给出的拦截原因，不许换成别的原因、不许自己命名一个缺口）；"
         "2) 现在这个应用能干什么（结合五系统模型的实体/流程/角色/页面/AI 能力，说人话）；"
         "3) 推演中发现的关键风险与分歧（提炼自风险分析/反方观点/综合结论，最多 3 条）；"
         "4) 建议的下一步（1-2 条，具体可做）。"
@@ -121,6 +143,56 @@ def build_summary_messages(state: Any, publish_closure: Dict[str, Any]) -> List[
         {"role": "system", "content": system},
         {"role": "user", "content": "\n\n".join(parts) + "\n\n现在输出总结。"},
     ]
+
+
+# 模型把指令清单写进正文时的记号。对照 Instructor / LangChain 的
+# output parser：看起来像 prompt 回声的 completion 直接拒收。
+#
+# ⚠ 2026-08-19 安康随访通：chatSummary 落成「存审计日志 / 字数与格式检查」。
+#   不是 1200 字中段被截，是模型把 system 里的检查项复述出来了。
+#   「不要复述这段指令」写在 prompt 里挡不住——必须在出口拦。
+_ECHO_MARKERS = (
+    "字数与格式检查",
+    "不要复述这段指令",
+    "现在输出总结",
+    "字数：大约",
+    "符合「",
+)
+
+
+def summary_looks_like_instruction_echo(text: str) -> bool:
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    first = raw.splitlines()[0].strip()
+    if first.startswith("存审计日志"):
+        return True
+    return any(mark in raw for mark in _ECHO_MARKERS)
+
+
+def _mechanical_summary(publish_closure: Dict[str, Any]) -> Optional[str]:
+    """方案 A 同款事实行：闭环状态 + 五系统统计。零 LLM。"""
+    lines = _model_stats_lines(publish_closure)
+    if not lines:
+        return None
+    blocked = bool(publish_closure.get("blocked"))
+    per_skill = publish_closure.get("perSkillEvidence") or {}
+    present = sum(
+        1 for v in per_skill.values() if isinstance(v, dict) and v.get("evidencePresent")
+    )
+    from .closure_block_reason import user_report as _block_report
+
+    head = (
+        f"闭环{'被拦截' if blocked else '已闭合'} · "
+        f"证据 {present}/{len(per_skill) or 6}。"
+    )
+    # 零 LLM 这条路以前一个字理由都没有——"被拦截"然后没有下文。回声兜底走的
+    # 就是这里，用户看到的就是这句，所以它也得带上原因（CLAUDE.md §4：
+    # 成对的东西只改一条，另一条静默地还是老样子）。
+    reason = _block_report(publish_closure)
+    if reason:
+        head = f"{head}原因：{reason}。"
+    return head + "\n" + "\n".join(lines)
 
 
 def generate_closure_chat_summary(
@@ -134,11 +206,24 @@ def generate_closure_chat_summary(
 
         messages = build_summary_messages(state, publish_closure)
         kwargs: Dict[str, Any] = {"max_tokens": 900, "temperature": 0.3}
+        buffered: List[str] = []
         if on_delta is not None:
-            kwargs["on_delta"] = on_delta
+            kwargs["on_delta"] = buffered.append
         result = call_llm_with_retry(messages, **kwargs)
         text = (result.content or "").strip()
-        return text or None
+        if not text:
+            return None
+        if summary_looks_like_instruction_echo(text):
+            # 回声不许落库、也不许流到左栏。机械行跟客户端模板同一批事实。
+            print("[v5_closure_summary] model echoed the checklist, using mechanical facts")
+            mech = _mechanical_summary(publish_closure)
+            if mech and on_delta is not None:
+                on_delta(mech)
+            return mech
+        if on_delta is not None:
+            for chunk in buffered:
+                on_delta(chunk)
+        return text
     except Exception as exc:  # noqa: BLE001 — 总结永远不挡闭环
         print(f"[v5_closure_summary] summary failed, fallback to template: {str(exc)[:160]}")
         return None

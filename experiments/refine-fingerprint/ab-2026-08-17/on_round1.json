@@ -1,0 +1,270 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "urgency",
+      "name": "紧急程度",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "financial_bill",
+    "name": "财务账单",
+    "fields": [
+     {
+      "id": "bill_no",
+      "name": "账单编号",
+      "type": "string"
+     },
+     {
+      "id": "community_name",
+      "name": "社区名称",
+      "type": "string"
+     },
+     {
+      "id": "service_project",
+      "name": "服务项目",
+      "type": "string"
+     },
+     {
+      "id": "service_count",
+      "name": "服务人次",
+      "type": "string"
+     },
+     {
+      "id": "subsidy_amount",
+      "name": "补贴金额",
+      "type": "string"
+     },
+     {
+      "id": "settlement_status",
+      "name": "结算状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "service_item",
+    "name": "养老服务",
+    "fields": [
+     {
+      "id": "item_name",
+      "name": "服务名称",
+      "type": "string"
+     },
+     {
+      "id": "price",
+      "name": "价格",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "r1",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "r2",
+    "name": "老年人家属"
+   }
+  ],
+  "permissions": [
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "financial_bill:read",
+   "financial_bill:export",
+   "service_item:read"
+  ],
+  "menus": [
+   {
+    "id": "m1",
+    "label": "运营工作台",
+    "roleRefs": [
+     "r1"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "n_start",
+    "name": "工单创建",
+    "assigneeRole": "r1",
+    "phase": "受理"
+   },
+   {
+    "id": "n_exec",
+    "name": "工单执行",
+    "assigneeRole": "r1",
+    "phase": "跟进"
+   },
+   {
+    "id": "n_end",
+    "name": "工单归档",
+    "assigneeRole": "r1",
+    "phase": "完成"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "n_start",
+    "to": "n_exec",
+    "condition": "顾问指派执行人员"
+   },
+   {
+    "from": "n_exec",
+    "to": "n_end",
+    "condition": "居家照护服务完成"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "运营工作台",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_name"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "家属服务中心",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "service_item.item_name",
+     "service_item.price"
+    ],
+    "actionPermissions": [
+     "service_item:read"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "财务结算大屏",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "financial_bill.bill_no",
+     "financial_bill.settlement_status"
+    ],
+    "actionPermissions": [
+     "financial_bill:read",
+     "financial_bill:export"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_1",
+    "name": "工单智能分析",
+    "inputFields": [
+     "work_order.elder_name",
+     "work_order.service_type"
+    ],
+    "outputField": "work_order.urgency",
+    "roleRefs": [
+     "r1"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p1",
+    "workflowRef": "n_start"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "n_exec"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "n_end"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "r1",
+   "r2"
+  ],
+  "dataModelRefs": [
+   "work_order",
+   "financial_bill",
+   "service_item"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_1",
+    "statement": "服务工单必须记录工单编号与服务类型",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.order_no",
+     "work_order.service_type"
+    ]
+   },
+   {
+    "id": "inv_2",
+    "statement": "工单必须经由社区养老顾问在工作流中流转完成",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "r1",
+     "n_start",
+     "n_exec",
+     "n_end"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

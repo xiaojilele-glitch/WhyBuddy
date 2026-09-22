@@ -1,11 +1,10 @@
 import express, { type ErrorRequestHandler, type NextFunction, type RequestHandler } from "express";
 
-import type { ProjectRecord, UserRecord } from "../persistence/repositories.js";
+import type { AdminUsersReader } from "../auth/sliderule-admin-users.js";
+import { forwardedCredentials } from "../auth/sliderule-identity.js";
+import type { ProjectRecord } from "../persistence/repositories.js";
 
-export interface AdminUsersReader {
-  list(): Promise<UserRecord[]>;
-  findById(userId: string): Promise<UserRecord | null>;
-}
+export type { AdminUsersReader };
 
 export interface AdminProjectsReader {
   list(): Promise<ProjectRecord[]>;
@@ -18,8 +17,6 @@ export interface AdminRouterDeps {
   users: AdminUsersReader;
   projects: AdminProjectsReader;
 }
-
-type PublicUserRecord = Omit<UserRecord, "passwordHash">;
 
 type JsonObject = Record<string, unknown>;
 
@@ -49,11 +46,6 @@ export interface AdminRouteContractResponse {
 
 const ADMIN_FORBIDDEN_ERROR = "Admin privileges required";
 const ADMIN_ROUTE_FAILED_ERROR = "Admin route failed";
-
-function publicUser(user: UserRecord): PublicUserRecord {
-  const { passwordHash: _passwordHash, ...safeUser } = user;
-  return safeUser;
-}
 
 export function mapAdminPythonRouteContract(
   contract: AdminPythonRouteContract,
@@ -107,9 +99,9 @@ export function createAdminRouter(deps: AdminRouterDeps) {
 
   router.get(
     "/summary",
-    asyncRoute(async (_request, response) => {
+    asyncRoute(async (request, response) => {
       const [users, projects] = await Promise.all([
-        deps.users.list(),
+        deps.users.list(forwardedCredentials(request)),
         deps.projects.list(),
       ]);
 
@@ -128,22 +120,44 @@ export function createAdminRouter(deps: AdminRouterDeps) {
 
   router.get(
     "/users",
-    asyncRoute(async (_request, response) => {
-      const users = await deps.users.list();
-      response.json({ success: true, items: users.map(publicUser) });
+    asyncRoute(async (request, response) => {
+      const rawQ = request.query.q;
+      const q = typeof rawQ === "string" ? rawQ : "";
+      const users = await deps.users.list(forwardedCredentials(request), q);
+      response.json({ success: true, items: users });
     }),
   );
 
   router.get(
     "/users/:userId",
     asyncRoute(async (request, response) => {
-      const user = await deps.users.findById(request.params.userId);
+      const user = await deps.users.findById(
+        request.params.userId,
+        forwardedCredentials(request),
+      );
       if (!user) {
         response.status(404).json({ success: false, error: "User not found" });
         return;
       }
 
-      response.json({ success: true, user: publicUser(user) });
+      response.json({ success: true, user });
+    }),
+  );
+
+  router.patch(
+    "/users/:userId",
+    asyncRoute(async (request, response) => {
+      const body = request.body as { isActive?: unknown };
+      const user = await deps.users.setActive(
+        request.params.userId,
+        body?.isActive !== false,
+        forwardedCredentials(request),
+      );
+      if (!user) {
+        response.status(404).json({ success: false, error: "User not found" });
+        return;
+      }
+      response.json({ success: true, user });
     }),
   );
 

@@ -15,7 +15,7 @@ The model shape this gate expects (also the shape the LLM generator targets):
 
     {
       "datamodel": {"entities": [{"id","name","fields":[{"id","name","type"}]}]},
-      "rbac":      {"roles": ["applicant", ...],
+      "rbac":      {"roles": [{"id":"applicant","name":"申请人"}, ...],
                     "permissions": ["purchase:create", ...],
                     "menus": [{"id","label","roleRefs":["applicant"],"permissionRefs":[...]}]},
       "workflow":  {"nodes": [{"id","name","assigneeRole":"dept_manager"}],
@@ -32,10 +32,18 @@ All checks are pure + deterministic. No LLM, no IO.
 """
 
 from __future__ import annotations
+from .archetype_legal import device_domain_or as _device_domain_or
+from .archetype_legal import historic_preferred_devices as _historic_preferred_devices
+from .archetype_legal import required_evidence as _required_evidence
+from .archetype_legal import supported_devices as _supported_devices
 
 from typing import Any, Dict, List
 
-SKILL_KEYS = ["datamodel", "rbac", "workflow", "page", "aigc", "appbundle"]
+#: ⚠ 2026-08-30：第 11 处手抄的六系统词表——而且是**结构闸自己那一份**。
+#: `v5_llm_generate` 的注释写着 "mirrors v5_model_gate.SKILL_KEYS"，
+#: 「mirror」正是本仓第四条点名的形状：两份靠人肉对齐，改一份不报错。
+#: 现在同源于产品原型账本。
+SKILL_KEYS = _required_evidence()
 
 DANGLING = "PUBLISH_DANGLING_CROSSREF"
 MISSING_SECTION = "PUBLISH_MISSING_SKILL_SECTION"
@@ -49,14 +57,17 @@ PUBLISH_ENUM_VIOLATION = "PUBLISH_ENUM_VIOLATION"
 # 此处 re-export 保持历史名字；加合法值只改对应账本，四方一致性由测试锁死。
 from .schema_legal import (  # noqa: F401 — re-export 即接口
     CHART_TYPES,
-    EXPERIENCE_BLOCK_ALLOWED_SLOTS,
-    EXPERIENCE_BLOCK_ALLOWED_SLOTS_BY_TYPE,
+    EXPERIENCE_BLOCK_ALLOWED_REGIONS,
+    EXPERIENCE_BLOCK_ALLOWED_REGIONS_BY_TYPE,
     EXPERIENCE_BLOCK_BINDING_SCHEMAS,
     EXPERIENCE_BLOCK_TYPES,
     FIELD_TONES,
     FIELD_TYPES,
     NUMBER_FORMATS,
+    PAGE_SURFACE_DENSITIES,
+    PAGE_SURFACE_TYPES,
     PAGE_KINDS,
+    PAGE_PRESENTATIONS,
     STAT_FORMATS,
     STRING_FORMATS,
 )
@@ -178,6 +189,70 @@ def _validate_block_binding(
                     ref=str(value), skill="page",
                 ))
 
+        # 带标题的字段分组（SectionedForm.sections / DataTable.columnGroups）。
+        #
+        # 2026-08-09 批次 5/7 加的形状：`[{title, fieldRefs:[...]}]`。校验三件事
+        # ——分组本身是对象、标题非空、里面每个字段都真的属于这个实体。
+        #
+        # **标题必须非空**，这条比看着重要：分段表单和多级表头的全部意义就是那个
+        # 标题；标题空了，界面上就是几组没名字的字段挤在一起，比不分组更糟。
+        for field, spec in (schema.get("entityFieldGroups") or {}).items():
+            value = binding.get(field)
+            if value is None:
+                continue
+            if not isinstance(value, list):
+                findings.append(_finding(
+                    PUBLISH_INVALID_FIELD, f"{block_path}.binding.{field}",
+                    f"{field} must be an array of {{title, fieldRefs}} groups, got '{value}'",
+                    ref=str(value), skill="page",
+                ))
+                continue
+            max_groups = spec.get("maxGroups")
+            if max_groups and len(value) > max_groups:
+                findings.append(_finding(
+                    PUBLISH_INVALID_FIELD, f"{block_path}.binding.{field}",
+                    f"{field} accepts at most {max_groups} group(s), got {len(value)}",
+                    ref=str(len(value)), skill="page",
+                ))
+            max_each = spec.get("maxFieldsPerGroup")
+            for gi, group in enumerate(value):
+                where = f"{block_path}.binding.{field}[{gi}]"
+                if not isinstance(group, dict):
+                    findings.append(_finding(
+                        PUBLISH_INVALID_FIELD, where,
+                        f"group must be an object with title and fieldRefs, got '{group}'",
+                        ref=str(group), skill="page",
+                    ))
+                    continue
+                if not str(group.get("title") or "").strip():
+                    findings.append(_finding(
+                        PUBLISH_INVALID_FIELD, f"{where}.title",
+                        "group title must not be empty — the title is the whole point of grouping",
+                        ref="", skill="page",
+                    ))
+                refs = group.get("fieldRefs")
+                if not isinstance(refs, list) or not refs:
+                    findings.append(_finding(
+                        PUBLISH_INVALID_FIELD, f"{where}.fieldRefs",
+                        f"fieldRefs must be a non-empty array of field ids, got '{refs}'",
+                        ref=str(refs), skill="page",
+                    ))
+                    continue
+                if max_each and len(refs) > max_each:
+                    findings.append(_finding(
+                        PUBLISH_INVALID_FIELD, f"{where}.fieldRefs",
+                        f"a group accepts at most {max_each} field(s), got {len(refs)}",
+                        ref=str(len(refs)), skill="page",
+                    ))
+                for field_ref in refs:
+                    qualified = f"{entity_ref}.{field_ref}"
+                    if qualified not in field_types:
+                        findings.append(_finding(
+                            DANGLING, f"{where}.fieldRefs",
+                            f"'{field_ref}' not found in entity '{entity_ref}' fields",
+                            ref=str(field_ref), skill="page",
+                        ))
+
         # 数组型字段引用（ActivityFeed 宽行档的 detailFieldRefs）：逐个落到同
         # 一实体上。写成非数组、或超出 maxItems 都拦——渲染端只能画声明得清楚
         # 的列，模糊的声明到了运行时只能猜，猜出来的列是编的。
@@ -260,15 +335,10 @@ def _collect_field_types(datamodel: Dict[str, Any]) -> Dict[str, str]:
 
 
 def _collect_role_ids(rbac: Dict[str, Any]) -> set:
-    roles: set = set()
-    for role in _as_list(rbac.get("roles")):
-        if isinstance(role, str):
-            roles.add(role.strip())
-        elif isinstance(role, dict):
-            rid = str(role.get("id") or role.get("name") or "").strip()
-            if rid:
-                roles.add(rid)
-    return roles
+    """角色引用键集合。两种写法都吃——判断收在 services/rbac_roles.py 一处。"""
+    from .rbac_roles import role_ids
+
+    return set(role_ids(rbac))
 
 
 def _collect_permission_ids(rbac: Dict[str, Any]) -> set:
@@ -366,6 +436,8 @@ def validate_five_system_model(
     model: Any,
     *,
     require_landing_page_ref: bool = False,
+    require_preferred_device: bool = False,
+    require_page_kind_contract: bool = True,
 ) -> Dict[str, Any]:
     """Structural closure gate. Returns {'passed': bool, 'findings': [...]}.
 
@@ -375,6 +447,23 @@ def validate_five_system_model(
     require_landing_page_ref=True (strict mode): appbundle.landingPageRef must be
     present, non-None, and non-blank. Use for LLM-generated and LLM-refined models.
     Defaults to False for backward-compat (old snapshots without the field still pass).
+
+    require_preferred_device=True: appbundle.preferredDevice must be one of
+    the wired devices in the product-archetype ledger. The tolerant default
+    still accepts missing values and historic snapshots (desktop/tablet/phone).
+
+    require_page_kind_contract（2026-08-14 加，默认 True = 老行为）：
+      kanban 必须有 statusField、calendar 必须有 dateField。这两条是**老渲染器
+      （AppRuntimeScreen）的输入需求**——它渲染看板/日历时要知道按哪个字段分列、
+      按哪个字段排期。
+
+      **新链路传 False**：那条链路的交付物是第 3 步的 HTML，页面长什么样由 HTML
+      决定；全仓 dateField 没有一个新链路消费者，运行时也不读 page.kind。
+      拿一个没人会用的字段拦下整条链路，代价是回落老路（2026-08-14 口腔连锁
+      那轮就是这么挂的）。
+
+      ⚠ 只关「必须存在」这一支。字段**给了就必须指到本页实体的对应类型字段**——
+        那条解析/类型校验对两条链路一视同仁，不受此开关影响。
     """
     findings: List[Dict[str, Any]] = []
     m = _as_dict(model)
@@ -442,6 +531,44 @@ def validate_five_system_model(
                     f"field type '{ftype}' is not one of {'/'.join(FIELD_TYPES)}",
                     ref=ftype, skill="datamodel",
                 ))
+            # refEntity：关系字段的目标声明（2026-08-11）。
+            #
+            # ## 为什么必须由模型声明，而不是运行时猜
+            #
+            # 契约原来没有这个键，前端只能**按字段名猜**目标实体
+            # （`guessRefEntityId`：剥掉 _ref/_id 后缀再跟实体 id 匹配，歧义就
+            # 放弃）。拿 181 份真实生成模型量过：1689 个 ref 字段里只有 691 个
+            # （41%）猜得出来，另外 998 个**退化成纯文本输入框**——用户得手打一个
+            # 行 id。猜不出的都是名字对不上的正常命名：`assigned_team` 指向
+            # `oncall_teams`、`route_group_id` 指向 `on_call_group`，或者
+            # `alert_ref` 而实体里同时有 `alert_event` 和 `alert_route_rule`
+            # （两个都以 alert_ 开头 → 歧义不猜）。
+            #
+            # 这也是 Directus（`related_collection`）/ Strapi（`target`）/
+            # nocobase（关联字段的 `target`）的一致做法：**关系字段自带目标**，
+            # 没有哪个成熟方案靠名字反推。
+            #
+            # 口径与本段其余条目一致：**出现即校验、缺省不罚**（老模型零破坏，
+            # 运行时那条猜测保留当兜底）。
+            if "refEntity" in fd:
+                target = str(fd.get("refEntity") or "").strip()
+                if ftype != "ref":
+                    findings.append(_finding(
+                        DANGLING, f"{fpath}.refEntity",
+                        f"refEntity declared on non-ref field (type '{ftype}')",
+                        ref=ftype, skill="datamodel",
+                    ))
+                elif not target:
+                    findings.append(_finding(
+                        EMPTY_SECTION, f"{fpath}.refEntity",
+                        "refEntity declared but empty", skill="datamodel",
+                    ))
+                elif target not in entity_ids:
+                    findings.append(_finding(
+                        DANGLING, f"{fpath}.refEntity",
+                        f"refEntity '{target}' is not an entity in this datamodel",
+                        ref=target, skill="datamodel",
+                    ))
             if "options" in fd:
                 if ftype != "enum":
                     findings.append(_finding(
@@ -520,6 +647,44 @@ def validate_five_system_model(
                 ref=kind, skill="page",
             ))
 
+        presentation = str(pd.get("presentation") or "").strip()
+        if presentation and presentation not in PAGE_PRESENTATIONS:
+            findings.append(_finding(
+                PUBLISH_ENUM_VIOLATION, f"page.pages[{pid}].presentation",
+                f"page presentation '{presentation}' is not one of {'/'.join(PAGE_PRESENTATIONS)}",
+                ref=presentation, skill="page",
+            ))
+        elif presentation == "marketing-landing":
+            forbidden = [
+                key for key in ("stats", "charts", "rankings", "feeds")
+                if bool(pd.get(key))
+            ]
+            if forbidden:
+                findings.append(_finding(
+                    PUBLISH_ENUM_VIOLATION, f"page.pages[{pid}].presentation",
+                    "marketing-landing must not declare operations dashboard content: "
+                    + ", ".join(forbidden),
+                    ref=presentation, skill="page",
+                ))
+
+        surface_raw = pd.get("surface")
+        if surface_raw is not None:
+            surface = _as_dict(surface_raw)
+            surface_type = str(surface.get("type") or "").strip()
+            density = str(surface.get("density") or "").strip()
+            if surface_type not in PAGE_SURFACE_TYPES:
+                findings.append(_finding(
+                    PUBLISH_ENUM_VIOLATION, f"page.pages[{pid}].surface.type",
+                    f"page surface type '{surface_type}' is not one of {'/'.join(PAGE_SURFACE_TYPES)}",
+                    ref=surface_type, skill="page",
+                ))
+            if density and density not in PAGE_SURFACE_DENSITIES:
+                findings.append(_finding(
+                    PUBLISH_ENUM_VIOLATION, f"page.pages[{pid}].surface.density",
+                    f"page surface density '{density}' is not one of {'/'.join(PAGE_SURFACE_DENSITIES)}",
+                    ref=density, skill="page",
+                ))
+
         def _check_view_binding(key: str, required_type: str, required: bool) -> None:
             ref = str(pd.get(key) or "").strip()
             if not ref:
@@ -543,8 +708,25 @@ def validate_five_system_model(
                     ref=ref, skill="page",
                 ))
 
-        _check_view_binding("statusField", "enum", required=kind == "kanban")
-        _check_view_binding("dateField", "date", required=kind == "calendar")
+        # ⚑ 2026-08-14：`required` 这一支是**老渲染器契约**，按链路开关。
+        #
+        # kanban 要 statusField、calendar 要 dateField，这两条存在的理由是
+        # AppRuntimeScreen 渲染看板/日历时得知道按哪个字段分列、按哪个字段排期。
+        # 换句话说它们是**区块渲染器的输入需求**，不是模型自身的完整性。
+        #
+        # 新链路的交付物是第 3 步那份 HTML，页面长什么样由 HTML 决定：
+        # 全仓 `dateField` 没有一个新链路消费者（前端精确匹配只命中类型声明、
+        # 老渲染器用例与 demo 模板），而 html-binding-runtime / derive-binding-source
+        # 压根不读 page.pages[].kind。拿一个没人会用的字段去拦整条链路，
+        # 拦下来的代价是回落老路——2026-08-14 口腔连锁那轮就是这么挂的
+        # （calendar 页缺 dateField，重问 2 次未补，整条回落）。
+        #
+        # ⚠ **只松「必须存在」，不松「存在就得对」**：下面 _check_view_binding 里
+        #   的解析与类型校验对两条链路一视同仁。新链路真给了 dateField，它照样
+        #   必须指到本页实体的 date 字段——放行悬空引用是另一个病，不在这次范围。
+        _kind_contract = require_page_kind_contract
+        _check_view_binding("statusField", "enum", required=_kind_contract and kind == "kanban")
+        _check_view_binding("dateField", "date", required=_kind_contract and kind == "calendar")
         _check_view_binding("colorBy", "enum", required=False)
         for fb in _as_list(pd.get("fieldBindings")):
             ref = str(fb).strip()
@@ -975,6 +1157,31 @@ def validate_five_system_model(
                 "identity productName must be a non-empty string when declared",
                 ref="", skill="appbundle",
             ))
+        # 2026-08-04：chartColors（参照图取色的产物，可选）。出现即校验——
+        # 这一段会被前端直接当成图表的分类色画出来，非法值 = 画不出来的假承诺，
+        # 跟上面三个枚举同一条纪律。只查客观可查的（是不是 6 位 hex、够不够几个），
+        # 好不好看/区分度那条在写入侧（sheet_palette）已经把过关，这里不重复。
+        chart_colors = identity.get("chartColors")
+        if chart_colors is not None:
+            import re
+
+            from .sheet_palette import MIN_USABLE_COLORS
+
+            bad = (
+                not isinstance(chart_colors, list)
+                or len(chart_colors) < MIN_USABLE_COLORS
+                or any(
+                    not isinstance(c, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", c)
+                    for c in chart_colors
+                )
+            )
+            if bad:
+                findings.append(_finding(
+                    DANGLING, "appbundle.appIdentity.chartColors",
+                    f"chartColors must be a list of at least {MIN_USABLE_COLORS} 6-digit hex colors",
+                    ref=str(chart_colors)[:80], skill="appbundle",
+                ))
+
         # Step 9: designRecipeRef 合法域
         design_recipe = str(identity.get("designRecipeRef") or "").strip()
         if design_recipe and design_recipe not in DESIGN_RECIPES:
@@ -1004,17 +1211,26 @@ def validate_five_system_model(
 
     # Step 8: preferredDevice 合法域
     pref_device = str(appbundle.get("preferredDevice") or "").strip()
-    if pref_device and pref_device not in ("desktop", "tablet", "phone"):
+    # ⚠ 2026-08-30：曾是写死的元组。加 watch/tablet 要同时改 intake_judge 的
+    #   两处，漏一处 = 生成出来了但闸不认（第四条）。现在同源于账本。
+    supported_devices = _supported_devices()
+    if require_preferred_device and pref_device not in supported_devices:
         findings.append(_finding(
             DANGLING, "appbundle.preferredDevice",
-            f"preferredDevice '{pref_device}' must be desktop/tablet/phone",
+            f"preferredDevice '{pref_device}' must be exactly {_device_domain_or()}",
+            ref=pref_device, skill="appbundle",
+        ))
+    elif pref_device and pref_device not in set(_historic_preferred_devices()):
+        findings.append(_finding(
+            DANGLING, "appbundle.preferredDevice",
+            f"preferredDevice '{pref_device}' must be {'/'.join(_historic_preferred_devices())}",
             ref=pref_device, skill="appbundle",
         ))
 
     # Step 7: page layout 校验（可选，出现即校验 slot 合法性 + block 引用）。
     # 槽位合法域从目录账本派生（此前这里手抄一份，往目录加槽位时 per-type
     # 校验放行、这里却拒绝，会产出自相矛盾的 finding）。
-    LAYOUT_SLOTS = set(EXPERIENCE_BLOCK_ALLOWED_SLOTS)
+    LAYOUT_SLOTS = set(EXPERIENCE_BLOCK_ALLOWED_REGIONS)
     for pi, pg in enumerate(_as_list(m.get("page", {}).get("pages"))):
         pd = _as_dict(pg)
         layout = _as_dict(pd.get("layout"))
@@ -1027,6 +1243,64 @@ def validate_five_system_model(
         layout_page = f"page.pages[{pd.get('id') or pi}].layout"
         for slot_key, block_refs in layout.items():
             if slot_key == "mobile":
+                continue
+            if slot_key == "grid":
+                grid = _as_dict(block_refs)
+                if not grid and block_refs:
+                    findings.append(_finding(
+                        DANGLING, f"{layout_page}.grid",
+                        "layout grid must be an object keyed by desktop/tablet/phone",
+                        ref="grid", skill="page",
+                    ))
+                    continue
+                grid_columns = {"desktop": 12, "tablet": 8, "phone": 4}
+                for breakpoint, raw_items in grid.items():
+                    grid_path = f"{layout_page}.grid.{breakpoint}"
+                    if breakpoint not in grid_columns:
+                        findings.append(_finding(
+                            DANGLING, grid_path,
+                            f"layout grid breakpoint '{breakpoint}' must be desktop/tablet/phone",
+                            ref=str(breakpoint), skill="page",
+                        ))
+                        continue
+                    seen_grid_refs = set()
+                    columns = grid_columns[breakpoint]
+                    for item_index, raw_item in enumerate(_as_list(raw_items)):
+                        item = _as_dict(raw_item)
+                        item_path = f"{grid_path}[{item_index}]"
+                        ref_str = str(item.get("blockRef") or "").strip()
+                        if ref_str in seen_grid_refs:
+                            findings.append(_finding(
+                                DANGLING, f"{item_path}.blockRef",
+                                f"duplicate layout grid blockRef '{ref_str}' in breakpoint '{breakpoint}'",
+                                ref=ref_str, skill="page",
+                            ))
+                        elif ref_str:
+                            seen_grid_refs.add(ref_str)
+                        if ref_str != "page-content" and ref_str not in page_block_types:
+                            findings.append(_finding(
+                                DANGLING, f"{item_path}.blockRef",
+                                f"layout grid block ref '{ref_str}' not found in page.blocks",
+                                ref=ref_str, skill="page",
+                            ))
+                        coords = [item.get(key) for key in ("x", "y", "w", "h")]
+                        if any(isinstance(value, bool) or not isinstance(value, int) for value in coords):
+                            findings.append(_finding(
+                                DANGLING, item_path,
+                                "layout grid x/y/w/h must be integers",
+                                ref=ref_str, skill="page",
+                            ))
+                            continue
+                        x, y, width, height = coords
+                        if (
+                            x < 0 or y < 0 or width <= 0 or height <= 0
+                            or x + width > columns
+                        ):
+                            findings.append(_finding(
+                                DANGLING, item_path,
+                                f"layout grid item must fit within {columns} columns with non-negative x/y and positive w/h",
+                                ref=ref_str, skill="page",
+                            ))
                 continue
             # 槽位表被多包了一层 `slots`。真跑撞过一次 6/6 页全中：prompt 里
             # 那句 "a layout object with slots summary/primary/..." 会被读成
@@ -1064,7 +1338,7 @@ def validate_five_system_model(
                 # 这里只查"槽位名合法 + 区块 id 存在"，从没拿这份数据交叉核对
                 # 过——一个 RankedList 塞进 activity 槽也不会被拦。
                 btype = page_block_types[ref_str]
-                allowed_slots_for_type = EXPERIENCE_BLOCK_ALLOWED_SLOTS_BY_TYPE.get(btype)
+                allowed_slots_for_type = EXPERIENCE_BLOCK_ALLOWED_REGIONS_BY_TYPE.get(btype)
                 if allowed_slots_for_type and slot_key not in allowed_slots_for_type:
                     findings.append(_finding(
                         PUBLISH_ENUM_VIOLATION, f"{layout_page}.{slot_key}",

@@ -32,27 +32,34 @@ except Exception:
 
 
 def _check_deployed_python_service(start: float) -> Dict[str, Any]:
+    """本进程的装配根装起来了没有。
+
+    ⚠ 2026-08-29 换掉了原来的写法。原来是函数体里 `import app`，成功就 ready。
+    两个毛病：方向反的（业务层依赖装配根，grok 那边装配根被依赖数是 0），
+    以及**它永远不会红**——uvicorn 用 `app:app` 起的，`sys.modules['app']` 早在了，
+    这句 import 拿的是缓存必然成功；而 app 真炸了的话进程根本起不来，没人调得到
+    这个接口。现在读装配根自己钉的标记，没装配过就老实说没装配过。
+    见 services/composition_root_state.py 模块头。
+    """
     dur = int((time.time() - start) * 1000)
-    # Python service is "deployed" if we can import core modules without fatal error
-    # This is internal readiness, no external net.
-    try:
-        # light probe without side effects
-        import app  # type: ignore  # noqa: F401
+    from .composition_root_state import composition_root_ready
+
+    ready = composition_root_ready()
+    if ready:
         return {
             "provider": "deployed_python_service",
             "status": "ready",
-            "reason": "python app module loadable",
+            "reason": "composition root assembled",
             "duration_ms": dur,
-            "metadata": {"probe": "import"},
+            "metadata": {"probe": "composition_root", **ready},
         }
-    except Exception as exc:
-        return {
-            "provider": "deployed_python_service",
-            "status": "degraded",
-            "reason": f"python service probe degraded: {str(exc)[:100]}",
-            "duration_ms": dur,
-            "metadata": {},
-        }
+    return {
+        "provider": "deployed_python_service",
+        "status": "degraded",
+        "reason": "composition root not assembled in this process",
+        "duration_ms": dur,
+        "metadata": {"probe": "composition_root"},
+    }
 
 
 def run_external_provider_cutover_readiness() -> Dict[str, Any]:

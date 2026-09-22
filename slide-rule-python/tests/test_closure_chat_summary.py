@@ -82,6 +82,67 @@ def test_generate_summary_never_raises_and_falls_back_to_none(monkeypatch):
     assert summary_mod.generate_closure_chat_summary(_state_with_artifacts(), CLOSURE) is None
 
 
+LEAKED_CHECKLIST = (
+    "存审计日志 / 字数与格式检查\n"
+    "字数：大约 280 字\n"
+    "符合「350 字以内」"
+)
+
+
+def test_echoed_checklist_is_rejected_for_mechanical_facts(monkeypatch):
+    """⚠ 2026-08-19：模型把指令清单写进 chatSummary。对照 Instructor
+    拒收像 prompt 的 completion——回声不许落库。"""
+    import sliderule_llm.client as client_mod
+
+    class _Result:
+        content = LEAKED_CHECKLIST
+        model = "fake"
+        usage = {}
+
+    def fake_call(messages, **kwargs):
+        on_delta = kwargs.get("on_delta")
+        if on_delta:
+            on_delta("存审计日志")
+            on_delta(" / 字数与格式检查")
+        return _Result()
+
+    monkeypatch.setattr(client_mod, "call_llm_with_retry", fake_call)
+    chunks = []
+    text = summary_mod.generate_closure_chat_summary(
+        _state_with_artifacts(), CLOSURE, on_delta=chunks.append
+    )
+    assert text is not None
+    assert "字数与格式检查" not in text
+    assert "存审计日志" not in text
+    assert "数据模型" in text and "2 实体" in text
+    assert all("字数与格式检查" not in c for c in chunks)
+
+
+def test_good_summary_unchanged(monkeypatch):
+    import sliderule_llm.client as client_mod
+
+    class _Result:
+        content = "闭环已闭合。这个竞赛平台能报名、评审。"
+        model = "fake"
+        usage = {}
+
+    monkeypatch.setattr(
+        client_mod, "call_llm_with_retry", lambda *a, **k: _Result()
+    )
+    text = summary_mod.generate_closure_chat_summary(
+        _state_with_artifacts(), CLOSURE
+    )
+    assert text == "闭环已闭合。这个竞赛平台能报名、评审。"
+
+
+def test_echo_detector_does_not_flag_audit_app():
+    """反向：真做审计日志的应用，正文提到审计不该被误杀。"""
+    assert summary_mod.summary_looks_like_instruction_echo(
+        "本应用会把每次派工写入审计日志，便于事后追责。"
+    ) is False
+    assert summary_mod.summary_looks_like_instruction_echo(LEAKED_CHECKLIST) is True
+
+
 def test_generate_summary_streams_deltas(monkeypatch):
     import sliderule_llm.client as client_mod
 

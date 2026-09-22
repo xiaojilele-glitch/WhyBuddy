@@ -6,7 +6,7 @@
  * antd（稳定版 5.x）渲染成 Ant Design Pro 风格的后台系统。
  * 零后端、零数据库：状态在 live-runtime 内核 + localStorage。
  *
- * 多端画布：桌面 1440×810（16:9）/ 平板 1112×834 / 手机 390×844，
+ * 多端画布：桌面 1440×810（16:9）/ 平板 1112×834 / 手机 405×720（9:16），
  * 均按固定设计分辨率渲染再 CSS transform 等比缩放（"缩放 iframe"效果）；
  * 手机端换 App 壳（顶栏 + 卡片列表 + 底部标签导航）。弹层经
  * getPopupContainer 挂进画布随缩放（antd 5 trigger 自带 scale 校正）。
@@ -18,6 +18,8 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
+import { ScaleBadge, useScaleToFit, type ScaleFitMode } from "./canvas-scale";
+import { STAGE_FRAME_PAD, STAGE_FRAME_SHADOW } from "./stage-frame-style";
 import {
   Layout,
   Menu,
@@ -51,6 +53,7 @@ import {
   Skeleton,
   Empty,
   Badge,
+  Segmented,
 } from "antd";
 import {
   DashboardOutlined,
@@ -74,6 +77,8 @@ import {
   ThunderboltOutlined,
   ToolOutlined,
 } from "@ant-design/icons";
+import { markConnectorEntities } from "./connector-rows";
+import { connectorEntityIds } from "../connectors-client";
 import type { FiveSystemModel } from "../system-screens/five-system-model";
 import { resolveEntityRef } from "../system-screens/five-system-model";
 import {
@@ -86,6 +91,7 @@ import { deriveLayoutTokens } from "./design-tokens";
 import {
   buildAiActionInputs,
   deriveAppRuntimeSchema,
+  pageFreeformOwnsContent,
   type AppAiActionSchema,
   type AppChartSchema,
   type AppFormFieldSchema,
@@ -104,6 +110,9 @@ import {
 // ECharts 基建走独立 chunk（React.lazy）：主 bundle 不背 echarts，
 // 首个带图表声明的页面打开时才加载。
 const LazyEchartsChart = React.lazy(() => import("./EchartsChart"));
+const LazyProWorkbenchSurface = React.lazy(
+  () => import("./ProWorkbenchSurface")
+);
 // 手机档 UI 基建（antd-mobile）同样独立 chunk：切到手机设备档才加载。
 const LazyPhonePageList = React.lazy(
   () => import("./phone-mobile/PhonePageList")
@@ -141,6 +150,15 @@ const LazyPhoneSeedNotice = React.lazy(
 const LazyPhoneCalendar = React.lazy(
   () => import("./phone-mobile/PhoneCalendar")
 );
+const LazyPhoneExperienceBlock = React.lazy(
+  () => import("./phone-mobile/PhoneExperienceBlock")
+);
+const PHONE_EXPERIENCE_BLOCK_TYPES = new Set([
+  "FilterBar",
+  "MetricGrid",
+  "WorkflowTimeline",
+  "QuickActionPanel",
+]);
 import {
   type RuntimeState,
   type RuntimeRow,
@@ -148,8 +166,9 @@ import {
   addRow,
   deleteRow,
   updateRow,
-  validateRowValues,
+  validateRowFields,
   startInstance,
+  applyHtmlWorkflowAction,
   nodeById,
 } from "./live-runtime";
 import {
@@ -158,7 +177,7 @@ import {
   entityShowsSeed,
   seedRowCount,
 } from "./demo-seed";
-import { normalizeFieldOptions } from "./field-display";
+import { normalizeFieldFormat, normalizeFieldOptions } from "./field-display";
 import {
   loadRuntimeState,
   saveRuntimeState,
@@ -177,7 +196,13 @@ import {
 } from "./rbac-preview";
 import {
   ExperienceBlockBoundary,
+  EXPERIENCE_BLOCK_CAPABILITY_BY_TYPE,
+  EXPERIENCE_BLOCK_TYPES_DRAWING_WORKFLOW,
+  type BlockColumnState,
+  type PageColumnState,
   type PageFilterState,
+  type PageFocusState,
+  type PageSelectionState,
   type FilterFieldOption,
   type QuickActionButtonSpec,
 } from "./block-registry";
@@ -186,15 +211,27 @@ import {
   designRecipeAlgorithms,
   DARK_CANVAS_BG,
 } from "./design-recipes";
+import { INK } from "./business-surface-theme";
+import { deriveWorkflowMainPath } from "./workflow-main-path";
 import { buildColumnFeatures } from "./table-features";
 import { FieldValue } from "./FieldValue";
 import { FieldEditor } from "./FieldEditor";
 import {
-  collectFreeformBlockRefKeys,
   dedupeBlocksByPanelKey,
   dropLegacyPanelsCoveredByBlocks,
 } from "./page-panel-dedupe";
 import { KanbanBoard, CalendarBoard } from "./PageViews";
+import BusinessPageGrid from "./BusinessPageGrid";
+import {
+  BUSINESS_GRID_COLUMNS,
+  PAGE_CONTENT_REF,
+  ensurePageContentItem,
+  resolveBusinessGrid,
+  regionsToGrid,
+  type BusinessRegions,
+  type BusinessGridItem,
+  type BusinessPageBreakpoint,
+} from "./business-page-layout";
 // 看板分组是纯函数，桌面与手机共用同一份——两档各分各的会让同一条记录
 // 在两个档位落进不同的列。
 import {
@@ -219,10 +256,28 @@ import type { AppPageStatSchema } from "./app-runtime-schema";
 import type { XrayTarget } from "../XrayPanel";
 
 // 多端设计分辨率（固定渲染 + 等比缩放）
+//
+// ⚠️ 手机档必须是 **9:16**，与出图画布同比（2026-08-03 修）。
+//
+// 事故形状：手机档此前是 390×844（0.462，iPhone 19.5:9 的物理屏比），而首页
+// 参照板出图是 720×1280（9:16），设计 LLM 是**照着 9:16 那张图排的版式**，
+// 真实渲染却把它铺进一块高出 22% 的画布——版式被拉长，底部多出一截空。
+//
+// 链路上另外三处一直是 9:16，只有这里不是：
+//   · 出图      freeform_block._DEVICE_IMAGE_SIZE.phone = 720x1280
+//   · 卡片画幅  justified-rows.DEVICE_ASPECT.phone      = 720/1280
+//   · 缩略图裁切 thumb-capture.SHOT_CANVAS.phone        = 720x1280
+// 2026-08-01 那次把卡片对齐到出图时，就地记了一笔"手机档 0.462 比 9:16 窄 22%，
+// 正是「移动端看着过长」的来源"——那次只改了卡片，画布留到了现在。
+//
+// 尺寸取 405×720（= 9×45 : 16×45，精确 9:16）。宽度从 390 往**大**挪而不是把
+// 高度压到 693：这块画布的横向一直很紧（antd Modal 默认 520 顶穿两边、
+// PhoneFormPopup 量到右侧溢出 130 设计像素——见那两处注释），往窄了改会把这
+// 类问题全部放大一档，往宽 15px 则只会更宽松。
 const DEVICE_SPECS = {
   desktop: { w: 1440, h: 810, label: "桌面" },
   tablet: { w: 1112, h: 834, label: "平板" },
-  phone: { w: 390, h: 844, label: "手机" },
+  phone: { w: 405, h: 720, label: "手机" },
 } as const;
 type DeviceKey = keyof typeof DEVICE_SPECS;
 
@@ -240,26 +295,40 @@ type DeviceKey = keyof typeof DEVICE_SPECS;
  * 不在每个用到档位的地方各写一遍 `preferredDevice === 'desktop' ? …`，否则
  * 迟早出现"切换条显示手机档、渲染层却没有手机设计"的错位。
  *
- * 判据是**真有没有那份设计**，不只是 preferredDevice 说了什么：
- *   · 声明 phone → 只有手机档
- *   · 声明 desktop → 只有桌面档
- *   · 未声明/tablet（平板已下架 ADR-0001）→ 看总览页有没有挂 mobile 设计；
- *     挂了就两档都给，没挂就只给桌面档
+ * 新模型由 deviceAuthority + preferredDevice 声明唯一档位；只有没有该标记的历史数据
+ * 才按实际已有设计判断：
+ *   · 声明接通的档（desktop / phone / tablet）且 single-v1 → 只开放那一档
+ *   · 未声明 → 看总览页有没有挂 mobile 设计；挂了就两档都给，没挂就只给桌面档
  * 最后那条兜的是老数据：07-30 之前生成的应用 preferredDevice 一律 desktop
  * （那时这个字段没判据、9/9 都是它），但它们**确实有** mobile 设计——按声明
  * 判会把已有的设计藏起来，按"有没有"判才对。
  */
 export function availableDeviceTiers(
-  schema: { identity?: { preferredDevice?: string }; pages?: unknown[] } | null | undefined
+  schema: {
+    identity?: { preferredDevice?: string; deviceAuthority?: string };
+    pages?: unknown[];
+  } | null | undefined
 ): DeviceKey[] {
   const declared = schema?.identity?.preferredDevice;
+  if (schema?.identity?.deviceAuthority === "single-v1") {
+    if (declared === "phone") return ["phone"];
+    if (declared === "tablet") return ["tablet"];
+    return ["desktop"];
+  }
   if (declared === "phone") return ["phone"];
+  if (declared === "tablet") return ["tablet"];
   const hasMobileDesign = (schema?.pages ?? []).some(
     p =>
       !!(p as { freeformOverview?: { mobile?: { root?: unknown } } })?.freeformOverview?.mobile
         ?.root
   );
-  if (hasMobileDesign) return ["desktop", "phone"];
+  const hasBusinessPhoneGrid = (schema?.pages ?? []).some(p => {
+    const phone = (
+      p as { layout?: { grid?: { phone?: unknown } } | null }
+    )?.layout?.grid?.phone;
+    return Array.isArray(phone) && phone.length > 0;
+  });
+  if (hasMobileDesign || hasBusinessPhoneGrid) return ["desktop", "phone"];
   return ["desktop"];
 }
 
@@ -267,11 +336,11 @@ export function availableDeviceTiers(
  * 弹层在各设备画布里的尺寸。
  *
  * antd Modal 是桌面组件：不给 width 默认 520px、垂直偏移 top:100。手机画布
- * 才 390 宽，520 直接顶穿两边——展会上访客点「新建」就能看见。旁边的详情
+ * 才 405 宽，520 直接顶穿两边——展会上访客点「新建」就能看见。旁边的详情
  * Drawer 早就按 isPhone 改成了底部弹起，Modal 这块漏了。
  *
  * 手机上按原生表单页的做法处理：左右各留 16 边距、垂直居中、内容超高自己
- * 滚（画布是固定 390×844 的等比缩放渲染，不是真实视口，所以这里按设计分辨率
+ * 滚（画布是固定 405×720 的等比缩放渲染，不是真实视口，所以这里按设计分辨率
  * 算死值而不是用 vh）。
  */
 export function deviceModalSizing(device: DeviceKey): {
@@ -295,59 +364,11 @@ export function deviceModalSizing(device: DeviceKey): {
   };
 }
 
-/** 容器实测尺寸 → 等比缩放系数（min(宽比, 高比)，letterbox 居中）。 */
-/**
- * 缩放模式（2026-07-30 补 "width"）。
- *
- *   contain — min(w/W, h/H)：保证整个应用可见，代价是宽高比不匹配时留边。
- *             应用舞台要这个：用户要看全。
- *   width   — w/W：**只按宽度算，高度由内容推导**。缩略图墙要这个。
- *
- * 为什么加这一档：作品墙那版设计里卡片大中小交错、宽高比五花八门，用 contain
- * 的结果是每张卡两侧一大片灰（实测 778×272 的卡里应用只有 484px 宽，
- * 383×130 的卡里只有 230px）。
- *
- * 做法照 WordPress Gutenberg 的 ScaledBlockPreview
- * （packages/block-editor/src/components/block-preview/auto.js）：
- *     const scale = containerWidth / viewportWidth;
- *     const aspectRatio = containerWidth / (contentHeight * scale);
- * 它也是缩放真实渲染的组件树（不是 iframe、不是截图），跟这里同一个问题。
- * 关键在**宽度定缩放、高度跟着内容走**，而不是把内容塞进一个固定尺寸的盒子
- * ——后者必然要么留边要么裁切。调用方据此把容器高度设成 designH×scale。
- */
-export type ScaleFitMode = "contain" | "width";
-
-function useScaleToFit(
-  designW: number,
-  designH: number,
-  mode: ScaleFitMode = "contain"
-): {
-  ref: React.RefObject<HTMLDivElement | null>;
-  scale: number;
-} {
-  const ref = React.useRef<HTMLDivElement | null>(null);
-  const [scale, setScale] = React.useState(1);
-  React.useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => {
-      const w = el.clientWidth;
-      const h = el.clientHeight;
-      if (w <= 0) return;
-      if (mode === "width") {
-        setScale(w / designW);
-        return;
-      }
-      if (h > 0) setScale(Math.min(w / designW, h / designH));
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [designW, designH, mode]);
-  return { ref, scale };
-}
+// 缩放画布（useScaleToFit / ScaleFitMode / ScaleBadge）2026-08-14 抽去了
+// ./canvas-scale —— spec-first 那条链路的页面也要同一套等比缩放，两处共用
+// 一份实现而不是各抄一遍（理由见那个文件的头注）。
+// ⚠ 抽走的只是机制，本文件的设计分辨率仍是 DEVICE_SPECS 里那三档。
+export type { ScaleFitMode } from "./canvas-scale";
 
 const MENU_ICONS = [
   TableOutlined,
@@ -376,7 +397,9 @@ const BRAND_ICONS: Record<
 };
 
 // --- 图表（dataviz 规范：墨色文字、细标记、状态色已校验） --------------------
-const INK = { label: "#595959", value: "#262626", faint: "#bfbfbf" };
+// 墨色从 business-surface-theme 来（本文件此前自己写死了一份，faint 还跟令牌
+// 版漂成了两个颜色，见那个文件的说明）。注意 faint 由 #bfbfbf 变成 #8c8c8c：
+// 下面十来处 11px 提示文字原来对白底只有约 2.3:1 的对比度，改完读得清了。
 const STATUS_META: Record<string, { color: string; label: string }> = {
   running: { color: "#1677ff", label: "进行中" },
   completed: { color: "#52c41a", label: "已完成" },
@@ -419,6 +442,21 @@ function applyPageFilter(
   ).filter(([, v]) => Boolean(v));
   for (const [fieldId, value] of activeEnumEntries) {
     out = out.filter(r => String(r.values[fieldId] ?? "") === value);
+  }
+  // 多选标签行（TagFilterRow，2026-08-08）。**空数组 = 不筛这个维度**——
+  // 「全部」取消勾选之后是空数组，那时候该看到全部而不是一条都没有。
+  for (const [fieldId, picked] of Object.entries(filterState.enumMulti ?? {})) {
+    if (!picked || picked.length === 0) continue;
+    out = out.filter(r => picked.includes(String(r.values[fieldId] ?? "")));
+  }
+  // 关键词（SearchBox，2026-08-08）。跨这一行的所有值做子串匹配。
+  const kw = (filterState.keyword ?? "").trim().toLowerCase();
+  if (kw) {
+    out = out.filter(r =>
+      Object.values(r.values ?? {}).some(v =>
+        String(v ?? "").toLowerCase().includes(kw)
+      )
+    );
   }
   if (filterState.dateRange && dateFieldId) {
     const [from, to] = filterState.dateRange;
@@ -512,15 +550,43 @@ export function AppRuntimeScreen({
     [sessionId, model]
   );
   const [state, setState] = React.useState<RuntimeState>(hydrate);
+
+  /*
+   * ⚠ 连接器供数的表，**在这里也不许铺演示种子**（2026-08-25）。
+   *
+   *   上面的 hydrate 里 `loadRuntimeState(sessionId) ?? init...` 看着够了——
+   *   推演机上 SlideRuleStudio 已经把 connectorEntities 存进去了，读回来就有。
+   *   但**换一台机器打开分享出去的应用时存档是空的**，于是 init 出一份干净
+   *   状态，seedRuntimeState 照铺不误：作者自己看是真天气，别人看到的是 12 行
+   *   编的，而且两边都不报错。这正是这条链路要消灭的东西。
+   *
+   *   所以从注册表问一次"哪些实体是连接器供的"，标记上（只标记、不取数——
+   *   取数只有一个写入点），再让 seed 自然跳过。
+   */
+  React.useEffect(() => {
+    let alive = true;
+    void connectorEntityIds().then(ids => {
+      if (!alive || ids.length === 0) return;
+      setState(prev => {
+        const marked = markConnectorEntities(prev, ids, "实时数据源 · 本机还没取过数");
+        return marked === prev ? prev : seedRuntimeState(marked, model);
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [model]);
   const [activePageId, setActivePageId] = React.useState<string>(
     () => schema?.landingPageId ?? "home"
   );
-  // Step 8：preferredDevice 只定默认打开视图，用户仍可手动切换设备档。
-  // 平板档已从切换条下架（见下方档位切换注释），declared "tablet" 时按
-  // 未声明处理，回落 desktop，避免初始态落进一个切换条选不中的档位。
-  const [device, setDevice] = React.useState<DeviceKey>(() =>
-    schema?.identity.preferredDevice === "phone" ? "phone" : "desktop"
-  );
+  // Step 8：新模型的 preferredDevice 是唯一运行时档位；历史模型才保留切换兼容。
+  const [device, setDevice] = React.useState<DeviceKey>(() => {
+    const declared = schema?.identity.preferredDevice;
+    if (declared === "phone" || declared === "tablet" || declared === "desktop") {
+      return declared;
+    }
+    return "desktop";
+  });
   // 这个应用有设计的档位。切换条、代码视图旁的档位按钮都问它，不各自判
   // （见 availableDeviceTiers 的说明）。
   const deviceTiers = React.useMemo(() => availableDeviceTiers(schema), [schema]);
@@ -541,10 +607,33 @@ export function AppRuntimeScreen({
   const [pageFilters, setPageFilters] = React.useState<
     Record<string, PageFilterState>
   >({});
+  /**
+   * 2026-08-08 复盘补的三份页面态。
+   *
+   * 批次 1-4 建的区块里有六个靠它们活着，而这条路径（**真实运行时**）一份
+   * 都没接——装配预览接了，所以一直看着是好的。表现全是"渲染正常但点不动"：
+   * BatchActionBar 永远显示「勾选左侧的行」、表格没有勾选列、列设置说「没有
+   * 连到任何表格」、关联单据表说「先选中一条主记录」。
+   *
+   * 这跟 QuickActionPanel 当初渲染成空气是同一个故事，只是换了四个 prop。
+   */
+  const [selection, setSelection] = React.useState<PageSelectionState>({
+    rowIds: {},
+  });
+  const [columnState, setColumnState] = React.useState<PageColumnState>({});
+  const [focus, setFocus] = React.useState<PageFocusState>({});
   const [formOpen, setFormOpen] = React.useState(false);
   const [formValues, setFormValues] = React.useState<Record<string, unknown>>(
     {}
   );
+  //: 表单当前在改哪一行；null = 新建。**这一维之前根本不存在**——表单只有
+  //: openCreate 一个入口（`setFormValues({})` 恒清空），所以行内那个「编辑」
+  //: 无处可去，被接到了详情抽屉上。见 handleBlockAction 的 editRequest。
+  const [editingRowId, setEditingRowId] = React.useState<string | null>(null);
+  //: 提交被拦下时的字段级问题（fieldId → 提示）。空 fieldId 是整表级的。
+  const [formProblems, setFormProblems] = React.useState<
+    Record<string, string>
+  >({});
   const [detailRow, setDetailRow] = React.useState<RuntimeRow | null>(null);
   // 手机档看板当前选中的状态列（桌面档并排显示所有列，不需要这个 state）
   const [phoneKanbanKey, setPhoneKanbanKey] = React.useState("");
@@ -569,7 +658,15 @@ export function AppRuntimeScreen({
     rationale: string | null;
   } | null>(null);
   const spec = DEVICE_SPECS[device];
-  const { ref: fitRef, scale } = useScaleToFit(spec.w, spec.h, scaleFit);
+  const { ref: fitRef, scale } = useScaleToFit(
+    spec.w,
+    spec.h,
+    scaleFit,
+    false,
+    // 与 spec-first 舞台同一份余量：不扣的话新的 ring + 分层阴影
+    // 会被画布的 overflow:hidden 切掉（2026-08-24 真机量到 gapTop=0）。
+    STAGE_FRAME_PAD
+  );
   // 弹层（Modal/Select/Drawer）挂进画布，跟随 transform 缩放
   const [canvasEl, setCanvasEl] = React.useState<HTMLDivElement | null>(null);
 
@@ -657,6 +754,103 @@ export function AppRuntimeScreen({
    */
   const pageSeedCount = seedRowCount(state, page?.entityId);
 
+  const freeformOwnsPage = page ? pageFreeformOwnsContent(page) : false;
+  const dashboardUsesBusinessGrid =
+    page?.view.kind === "dashboard" && !freeformOwnsPage;
+
+  /**
+   * ── 这一页由积木画，还是由固定骨架画（2026-08-08，三步走的第②步）──
+   *
+   * **翻转默认**：声明了 blocks 就用积木，没声明才回落骨架。骨架从"拥有者"
+   * 变回"兜底"——它本来就该是这个角色。
+   *
+   * 翻之前是反的：桌面档的 workbench/wizard 页一律交给内置 ProTable 骨架，
+   * `blockScaffold` 只在 monitor/dashboard 上摆出来。后果是**列表页上的积木
+   * 一个都不上屏**——而列表页是最常见的页面类型。更难受的是，给模型的
+   * prompt 里那十套「参考排布」有三套推荐 `DataTable` 放 main，模型照做了、
+   * 门禁放行了，运行时又给扔了：我们在教模型生成一个必定被丢掉的东西。
+   *
+   * 判据是"**声明了没有**"，不是"页面形态是什么"。形态决定的是骨架长什么样，
+   * 决定不了这一页该由谁画——那是模型的声明说了算。
+   */
+  const declaredBlocks = (page?.experienceBlocks ?? []).filter(b => !b._fromLegacy);
+  const blocksOwnPage = !freeformOwnsPage && declaredBlocks.length > 0;
+  /**
+   * 积木里有没有真的在"展示这一页的记录"的。
+   *
+   * 没有的话**仍然把内置表格补进版面**：模型只声明了一个 MetricGrid 就把整页
+   * 的表格弄没了，那是"翻转默认"最容易造成的伤害——用户看到的是一张少了东西
+   * 的页面，而不是一个更灵活的页面。兜底比纯粹更重要。
+   *
+   * 判据用 **capability === "entityRows"**，不是 family === "data"。第一版写的
+   * 是后者，台子上当场露馅：MetricGrid 的 family 就是 data（它自己取数、能独立
+   * 存在），于是"只声明了一个指标卡"的页面被判成"记录已经有人展示了"，表格没
+   * 补回来，整页只剩一张卡。**family 回答的是"能不能独立存在"，capability 才
+   * 回答"展示的是什么"** —— 这里要问的是后者。
+   */
+  /**
+   * ── 2026-08-11：判据再补一维——**它落在哪个区域** ──────────────────────
+   *
+   * 上面那段记的是 family → capability 那次修正。线上截图照出同一个 bug 的第三次
+   * 变体：「宠物成长看板」整个主区**一片空白**（约 400px 高的白），卡片在、内容没有。
+   *
+   * 原因是这条判据不看区域。目录里有一批 entityRows 区块**物理上进不了 main**：
+   *
+   *     HeaderEntitySummary / HeaderProgressSummary   regions=headerContent（页头小字）
+   *     AlertRoutingPolicy                            regions=aside,supplement
+   *     RecordComparePanel                            regions=supplement,overlay
+   *     GlobalSearchPalette                           regions=overlay,headerContent
+   *
+   * 一个页面只声明了「页头说明」这种 entityRows，就被判成"记录已经有人展示了"，
+   * 内置表格不补回来——主区于是空着。放在右侧窄栏的 RecordDetail 同理：它显示的是
+   * **一条**记录，替代不了行列表。
+   *
+   * 所以"覆盖了数据"要求区块真的落在**正文带的全宽区域**（main / supplement，
+   * 见 business-page-layout 的 REGIONS_BY_BAND）。aside 是 3~4/12 的窄栏、
+   * headerContent 是页头小字、overlay 点了才出来，都替代不了主区的行列表。
+   *
+   * 没声明 layout 时所有区块都被塞进 main（renderExperienceBlockScaffold 里
+   * `regionSource?.main ?? （没 layout 就是全部）`），那种情况按全部算。
+   */
+  // 正文带的全宽区域（business-page-layout 的 REGIONS_BY_BAND.main 里那两个吃全宽的）。
+  // 直接取字段而不是按字符串索引——AppPageLayoutSchema 是具名字段，不是索引签名。
+  const coveringBlockIds = page?.layout
+    ? new Set([...(page.layout.main ?? []), ...(page.layout.supplement ?? [])])
+    : null;
+  const blocksCoverData = declaredBlocks.some(
+    b =>
+      EXPERIENCE_BLOCK_CAPABILITY_BY_TYPE[b.type] === "entityRows" &&
+      (coveringBlockIds === null || coveringBlockIds.has(b.id))
+  );
+
+  /**
+   * 这一页的积木里有没有已经把 workflow 画出来的（2026-08-11）。
+   *
+   * 向导页顶部有一条内置步骤条（下面 `page.view.kind === "wizard"` 那段），画的
+   * 就是 `model.workflow.nodes`。而 `WorkflowTimeline` 区块画的是同一份数据——
+   * 线上截图里同一页于是叠了**两条流程步骤条**，还各说一套（内置那条按声明序铺，
+   * 把「拒绝兑换」画成正向第 4 步）。有区块画了就让区块画，宿主不再补。
+   *
+   * **不看区域**（跟 blocksCoverData 那条不同）：那条问的是"主区的行列表有没有
+   * 人替代"，所以要求落在正文带；这条问的是"同一个东西是不是画了两遍"，在窄栏
+   * 画一遍也是画了。WorkflowTimeline 的 allowedRegions 是 main/aside/supplement，
+   * 没有 overlay 那种点了才出来的，所以声明了就一定看得见。
+   */
+  const blocksDrawWorkflow = declaredBlocks.some(b =>
+    EXPERIENCE_BLOCK_TYPES_DRAWING_WORKFLOW.has(b.type)
+  );
+
+  /**
+   * 内置步骤条要画的节点：**主链路**，不是 `workflow.nodes` 的声明顺序。
+   *
+   * 跟 WorkflowTimeline 共用 deriveWorkflowMainPath（那里写了为什么按声明序铺
+   * Steps 会把驳回画成正向的下一步）。桌面档和手机档两处内置步骤条都读这一份。
+   */
+  const wizardMainPath = deriveWorkflowMainPath(
+    model?.workflow?.nodes ?? [],
+    model?.workflow?.transitions ?? []
+  ).mainPath;
+
   // Step 6 FilterBar：本页可筛的枚举字段（有声明选项的 enum 字段）+
   // 可选日期范围字段（主实体第一个 date/datetime 字段）。
   const filterableEnumFields: FilterFieldOption[] = page
@@ -697,6 +891,15 @@ export function AppRuntimeScreen({
             patch.dateRange !== undefined
               ? patch.dateRange
               : (cur.dateRange ?? null),
+          // 2026-08-08：这里原来只重建 enumFilters 和 dateRange，于是
+          // TagFilterRow 和 SearchBox 发过来的补丁被**默默丢掉**——区块本身
+          // 渲染得完全正常，点了就是没反应。逐字段重建的写法每加一条通道
+          // 就要回来补一次，漏了不报错，这正是下面那条护栏要挡的事。
+          enumMulti:
+            patch.enumMulti !== undefined
+              ? { ...cur.enumMulti, ...patch.enumMulti }
+              : cur.enumMulti,
+          keyword: patch.keyword !== undefined ? patch.keyword : cur.keyword,
         },
       };
     });
@@ -764,6 +967,57 @@ export function AppRuntimeScreen({
     [model]
   );
 
+  /**
+   * 字段类型的按需查询（2026-08-07，表单族积木用）。
+   *
+   * RecordForm / RecordFormDialog / StepsForm 要按字段类型决定出哪种控件。
+   * 跟 fieldLabelOf 同一条路子：渲染器手里只有 binding 和运行时行数据，
+   * 没有字段定义，所以从模型按需查；**查不到回落 undefined**，渲染器自己
+   * 按 string 处理，不在这里替它猜。
+   */
+  const fieldTypeOf = React.useCallback(
+    (entityId: string, fieldId: string) =>
+      model?.datamodel?.entities
+        ?.find(e => e.id === entityId)
+        ?.fields?.find(f => f.id === fieldId)?.type || undefined,
+    [model]
+  );
+  /**
+   * 字段的**完整声明**，表单族积木专用（2026-08-08，阶段④）。
+   *
+   * 上面 fieldLabelOf / fieldTypeOf 都是从同一个字段对象上摘一样东西下来。
+   * 阶段④要接 `format`（金额/评分/进度…）本来会加第三个，接着 ref 下拉又要
+   * 第四个（`refEntityId`）——每加一样就多一根线、两个宿主各改一处、护栏补
+   * 一条，**漏了不报错**。所以这里改成把字段声明整个传下去。
+   *
+   * 归一化在这里做，不推给渲染器：格式与类型不匹配的声明要丢掉（number 字段
+   * 声明 masked、string 字段声明 money 都是非法的），非法 tone 降级 default。
+   * 这一层的四个读侧消费者无一例外都归一化过，表单侧不该是那个例外——一个坏
+   * 声明就能把手机号字段画成金额框。
+   */
+  const fieldSchemaOf = React.useCallback(
+    (entityId: string, fieldId: string): AppFormFieldSchema | undefined => {
+      const field = model?.datamodel?.entities
+        ?.find(e => e.id === entityId)
+        ?.fields?.find(f => f.id === fieldId);
+      if (!field) return undefined;
+      const type = String(field.type || "string").toLowerCase();
+      const schema: AppFormFieldSchema = {
+        id: field.id,
+        label: field.name || field.id,
+        type,
+      };
+      const options = normalizeFieldOptions(type, field.options);
+      if (options.length > 0) schema.options = options;
+      const format = normalizeFieldFormat(type, (field as { format?: string }).format);
+      if (format) schema.format = format;
+      const refEntityId = (field as { refEntityId?: string }).refEntityId;
+      if (refEntityId) schema.refEntityId = refEntityId;
+      return schema;
+    },
+    [model]
+  );
+
   // antd v5 的静态 message.xxx() 拿不到 ConfigProvider 上下文（控制台明写着
   // 「Static function can not consume context like dynamic theme」）——身份主色、
   // 深色/紧凑档、圆角配方全都下发不到提示条上。改用 hook 版拿带上下文的实例，
@@ -819,11 +1073,36 @@ export function AppRuntimeScreen({
     ];
   };
 
+  const closeForm = () => {
+    setFormOpen(false);
+    setFormValues({});
+    setEditingRowId(null);
+    setFormProblems({});
+  };
+
+  /** 新建与编辑共用一条提交路径——差别只在最后落地那一步是 add 还是 update。 */
   const handleCreate = () => {
     if (!page?.entityId) return;
-    const problems = validateRowValues(model, page.entityId, formValues);
+    // 校验带上 state.entities：ref 字段要能验"指向的记录真的存在"。
+    const problems = validateRowFields(
+      model,
+      page.entityId,
+      formValues,
+      state.entities
+    );
     if (problems.length > 0) {
-      toast("warning", problems.join("；"));
+      // 字段级的红字标在对应那一栏；同时保留 toast，手机档没有 Form.Item 的
+      // 错误位，只靠红字的话那边等于没提示。
+      setFormProblems(
+        Object.fromEntries(problems.map(p => [p.fieldId, p.message]))
+      );
+      toast("warning", problems.map(p => p.message).join("；"));
+      return;
+    }
+    if (editingRowId) {
+      apply(updateRow(state, page.entityId, editingRowId, formValues));
+      closeForm();
+      toast("success", "已保存");
       return;
     }
     // 第一条真实数据落地前，先把这张表的演示种子整批清掉——种子和真实数据
@@ -835,8 +1114,7 @@ export function AppRuntimeScreen({
       new Date().toISOString()
     );
     apply(next);
-    setFormOpen(false);
-    setFormValues({});
+    closeForm();
     toast("success", "已保存");
   };
 
@@ -1045,8 +1323,32 @@ export function AppRuntimeScreen({
     },
   ];
 
-  // 列设置（ProTable 式齿轮）：从实体全字段勾选表格列
-  const columnSettings = page && page.detailFields.length > 0 && (
+  /**
+   * 列设置（ProTable 式齿轮）：从实体全字段勾选表格列。
+   *
+   * ── 三步走的第③步：收掉重复的那一个（2026-08-08）────────────────────
+   *
+   * 这个齿轮改的是 `tableColPrefs` → `page.columns` → **内置表格**的列。
+   * 第②步翻转默认之后，声明了积木且积木里有表格的页面**根本不渲染内置表格**
+   * ——那时候这个齿轮不只是跟 ColumnSettingPanel 重复，它是**完全失效的**：
+   * 点开、勾掉一列，屏幕上什么都不会变。
+   *
+   * 接线台实测（三页并排）：
+   *   积木档   齿轮 1 个 + ColumnSettingPanel 1 个   ← 重复，且齿轮无效
+   *   兜底档   齿轮 1 个（内置表格在，它是唯一的那个）
+   *   骨架档   ProTable 自带的那个（options.setting）
+   *
+   * 所以判据不是"有没有 ColumnSettingPanel"，是"**内置表格在不在屏幕上**"
+   * ——它governs 谁，就跟着谁出现。这跟 pro-components 的分法一致：
+   * 那边 ColumnSetting 是 ProTable `columnsState` 的一个视图，表不在、
+   * 设置面板也就无从谈起。
+   *
+   * 两份列状态**故意不合并**：`tableColPrefs` 按页面 id 存（内置表格没有区块
+   * id），`columnState` 按目标区块 id 存。合并要先给内置表格编一个假 id，
+   * 那是为了对称而对称。等内置表格哪天真的退成一个区块，再合。
+   */
+  const builtInTableOnScreen = !(blocksOwnPage && blocksCoverData);
+  const columnSettings = page && builtInTableOnScreen && page.detailFields.length > 0 && (
     <Popover
       trigger="click"
       placement="bottomRight"
@@ -1102,9 +1404,18 @@ export function AppRuntimeScreen({
   // E40.2 应用身份：主题 token 决定品牌区/主色/内容底色/图表配色；缺省 = azure（老模型渲染与历史一致）。
   // 声明必须在 chartCard 之前——homeContent 是即时求值的 JSX（非函数），
   // 里面 .map(chartCard) 在这一行就会同步执行，晚声明会触发 TDZ 报错。
+  // 第三个参数是**图表配色的挑选键**（2026-08-04）：应用名每个应用不同且稳定，
+  // 所以同一个应用每次打开图表颜色一致，不同应用之间换一套。应用名缺失时退回
+  // 老行为（全站同一套图表色），不去编一个 key——编出来的键会让同一个应用在
+  // 不同渲染路径上拿到不同颜色，比"都一样"更糟。
+  // 第四个参数（2026-08-04）：这个应用参照图上读出来的图表色。验得过就用它，
+  // 第三个参数那套账本色序退为兜底——账本 8 套是同一条 ramp 的 8 个旋转，
+  // 不同应用摆在一起仍然像同一套色，参照图那份才是为这个应用画的。
   const identityTheme = resolveIdentityTheme(
     schema.identity.themeId,
-    schema.identity.generatedTheme
+    schema.identity.generatedTheme,
+    schema.appName || undefined,
+    schema.identity.chartColors
   );
 
   // 工作台内置图：ECharts 基建（与页面级声明图表同一 lazy chunk / 同一套 dataviz 约定）
@@ -1320,13 +1631,22 @@ export function AppRuntimeScreen({
   const OVERVIEW_KINDS = new Set(["monitor", "dashboard"]);
   const KPI_BLOCK_TYPES = new Set(["MetricGrid", "TrendChart"]);
 
-  // 2026-07-29：设计者可以用 blockRef 把排行榜/动态流直接摆进 freeform 版式里
-  //（见 page-panel-dedupe.ts）。摆进去了，外面的脚手架和固定骨架就都不再画
-  // 同一份——否则又是一份数据两张卡，而且破坏它设计的留白节奏。
-  const freeformPlacedKeys = React.useMemo(
-    () => collectFreeformBlockRefKeys(page?.freeformOverview),
-    [page?.freeformOverview]
-  );
+  /**
+   * 总览页由 AI 设计**独占**（2026-08-03 用户裁决：「首页只由 LLM 动态设计，
+   * 参照图上有什么就设计什么，不要固定组件」）。
+   *
+   * 一旦这一页有 freeformOverview，设计树就是这一页的全部内容：脚手架、固定
+   * 榜/流一律让位。逐行内容不再靠固定积木补——设计模型用 rowsRef 自己画，
+   * 真实行数据由渲染端绑进去（见 block-registry.tsx 的 FreeformRowsRef）。
+   *
+   * 为什么渲染端必须也收口、光在生成端收不够：那些积木仍然写在 page.blocks
+   * 里，没被设计安置就会掉到设计区**外面**的脚手架里照样渲染——用户看到的
+   * 固定组件一个没少，只是位置更差，还把本来就超高的版面再撑长一截（真跑
+   * 量到的溢出是 790px，图表整个被裁在画布之外）。
+   *
+   * fail-open 不变：生成失败 → 没有 freeformOverview → 这个开关自动是 false，
+   * 一切照旧走固定骨架，页面不会因此变空。
+   */
 
   // 体验区块渲染：桌面壳与手机壳共用同一份摆法逻辑，只有槽位来源分档。
   // 抽成函数之前它内联在 defaultPageContent 里，于是手机档一个区块都渲染不到。
@@ -1334,11 +1654,139 @@ export function AppRuntimeScreen({
   // 2026-08-01 提到组件层：此前定义在 renderExperienceBlockScaffold 闭包里，
   // 首页设计路径（renderFreeformOverview）够不到它，是下面那份共享 props
   // 一直缺 onAction 的直接原因。
+  /**
+   * ── 页面级管道（2026-08-08，列表页归属三步走的第①步）────────────────
+   *
+   * 三样东西一直**长在固定骨架身上**：新建表单、行详情抽屉、演示数据徽标。
+   * 骨架自己调 setFormOpen / setDetailRow，积木那条路想干同一件事没有入口
+   * ——于是积木永远只能"显示"，不能"打开点什么"。
+   *
+   * 这一步只做一件事：**把这三样从骨架身上摘下来，变成整页共用的服务**。
+   * 骨架照旧调它们（行为一模一样，视觉零变化），积木从今天起也能调。
+   *
+   * 命名和分层照 nocobase 的 ActionContext / ActionContainer
+   *（`schema-component/antd/action/`）：那边的关键一条是
+   * **openMode 决定容器（drawer / modal / page），而不是触发它的那个组件决定**。
+   * 我们这边同理——积木只说"打开这条记录"，落在抽屉还是平板右栏、还是手机
+   * 底部弹层，由页面自己按设备决定，积木不需要知道。
+   */
+  const pagePipes = React.useMemo(
+    () => ({
+      /** 打开「新建」表单（骨架的新建按钮、积木的 createRequest 都走这条）。 */
+      openCreate: () => {
+        setFormValues({});
+        setEditingRowId(null);
+        setFormProblems({});
+        setFormOpen(true);
+      },
+      /**
+       * 打开「编辑」表单：把这一行的值预填进去，落地时走 update 而不是 add。
+       *
+       * 2026-08-13 补。在这之前**编辑根本没有落点**——积木的 editRequest 被
+       * 接到了 openRecordById 上，于是行内点「编辑」弹出来的是详情抽屉。
+       * 一个只读的抽屉顶着「编辑」这个名字，比没有这个按钮更误导。
+       */
+      openEdit: (rowId: string) => {
+        for (const list of Object.values(state.entities)) {
+          const hit = (list ?? []).find(r => r.id === rowId);
+          if (hit) {
+            setFormValues({ ...hit.values });
+            setEditingRowId(rowId);
+            setFormProblems({});
+            setFormOpen(true);
+            return;
+          }
+        }
+      },
+      /** 打开某一行的详情（骨架的行点击、积木的 viewRequest 都走这条）。 */
+      openRecord: (row: RuntimeRow | null | undefined) => {
+        if (row) setDetailRow(row);
+      },
+      /** 按 id 找行再打开 —— 积木事件里带的是 rowId，不是整行。 */
+      openRecordById: (rowId: string) => {
+        for (const list of Object.values(state.entities)) {
+          const hit = (list ?? []).find(r => r.id === rowId);
+          if (hit) {
+            setDetailRow(hit);
+            return;
+          }
+        }
+      },
+    }),
+    [state.entities]
+  );
+
   const handleBlockAction = (
     actionId: string,
     eventData?: Record<string, unknown>
   ) => {
     if (!page) return;
+    // rowSelect 是**区块事件**，不是页面动作。下面那句
+    // `page.pageActions.find(...)` 查不到就 return，所以在这之前处理——
+    // 否则点一行永远什么都不发生（详情和关联单据表就都认不出"这是哪一条"）。
+    if (actionId === "rowSelect") {
+      const rowId = String(eventData?.rowId ?? "");
+      if (!rowId) return;
+      const owner = Object.entries(state.entities).find(([, list]) =>
+        (list ?? []).some(r => r.id === rowId)
+      );
+      if (owner) setFocus(prev => ({ ...prev, [owner[0]]: rowId }));
+      return;
+    }
+    // 积木要打开的那几样，跟骨架走同一条管道（见 pagePipes 的说明）。
+    //
+    // rowSelect 故意**不**弹抽屉：这一页可能已经摆了 RecordDetail 积木，
+    // 点一行的本意是"换一条看"，再弹一个抽屉是同一件事做两遍。
+    //
+    // 2026-08-13 把「看」和「改」分开：以前只有 editRequest 一个入口、还接在
+    // 详情上，结果是**行内两个链接一个没反应、一个名不副实**——「查看」发
+    // rowSelect（只换焦点，页面上已有详情面板时纹丝不动），「编辑」弹出只读
+    // 抽屉。现在 viewRequest 管看，editRequest 管改，各归各位。
+    if (actionId === "viewRequest") {
+      const rowId = String(eventData?.rowId ?? "");
+      if (rowId) pagePipes.openRecordById(rowId);
+      return;
+    }
+    if (actionId === "editRequest") {
+      const rowId = String(eventData?.rowId ?? "");
+      if (rowId) pagePipes.openEdit(rowId);
+      return;
+    }
+    if (actionId === "createRequest") {
+      pagePipes.openCreate();
+      return;
+    }
+    // 转移三种（词表 2026-08-14 晚扩容）：与 HTML 舞台走同一个纯函数
+    // applyHtmlWorkflowAction——角色把关、防重复提交、终态判定只有一份口径。
+    if (
+      actionId === "submitRequest" ||
+      actionId === "approveRequest" ||
+      actionId === "rejectRequest"
+    ) {
+      const rowId = String(eventData?.rowId ?? "");
+      const entityRef = String(eventData?.entityRef ?? "");
+      if (!rowId || !entityRef) return;
+      const kind =
+        actionId === "submitRequest"
+          ? "submitWorkflow"
+          : actionId === "approveRequest"
+            ? "approveWorkflow"
+            : "rejectWorkflow";
+      const res = applyHtmlWorkflowAction(
+        state,
+        model,
+        { kind, entityId: entityRef, rowId },
+        role,
+        new Date().toISOString()
+      );
+      if (res.ok) {
+        apply(res.state);
+        toast("success", res.message);
+      } else {
+        toast("warning", res.message);
+      }
+      return;
+    }
     const action = page.pageActions.find(a => a.id === actionId);
     if (!action) return;
     // 实际权限检查：permissionRef 须在当前角色 grantedActions 里。
@@ -1355,8 +1803,7 @@ export function AppRuntimeScreen({
         // 复用既有「新建」表单：只支持目标实体=本页主实体的场景（表单
         // 字段就是照本页主实体拼的）；指向别的实体如实拒绝，不假装能建。
         if (action.entityRef && action.entityRef === page.entityId) {
-          setFormValues({});
-          setFormOpen(true);
+          pagePipes.openCreate();
         } else {
           toast("info", "该操作指向的实体暂不支持在此页创建");
         }
@@ -1385,13 +1832,26 @@ export function AppRuntimeScreen({
    * 就是这件事，只是当时只在下游做了整包透传，上游两个入口还是各写各的。）
    */
   const sharedBlockRendererProps = {
+    sessionId,
     onAction: handleBlockAction,
     pageActions: quickActionButtons,
     filterState: activePageFilter,
     filterFieldOptions: filterableEnumFields,
     dateRangeField,
     onFilterChange: handlePageFilterChange,
+    selection,
+    onSelectionChange: (entityRef: string, rowIds: string[]) =>
+      setSelection(prev => ({ rowIds: { ...prev.rowIds, [entityRef]: rowIds } })),
+    columnState,
+    onColumnStateChange: (blockId: string, next: BlockColumnState) =>
+      setColumnState(prev => ({ ...prev, [blockId]: next })),
+    focus,
     workflow: model.workflow,
+    // 角色 id → 中文名。不传的后果是流程步骤条底下直接显示 `music_member`
+    // 这类内部标识符（线上截图逮到过）。
+    roleLabelOf: (roleId: string) => schema.roleLabels[roleId],
+    // 注意：这是**未收窄**的全量行。筛选是按区块算的（谁筛我），
+    // 在下面 renderBlock 里按 targets 逐块套上去——见 rowsForBlockOf。
     entityRows: state.entities,
     chartPalette: {
       primary: identityTheme.primary,
@@ -1399,10 +1859,18 @@ export function AppRuntimeScreen({
     },
     enumOptionsOf,
     fieldLabelOf,
+    fieldTypeOf,
+    fieldSchemaOf,
   };
 
-  const renderExperienceBlockScaffold = (forPhone: boolean) => {
+  const renderExperienceBlockScaffold = (
+    forPhone: boolean,
+    pageContent?: React.ReactNode
+  ) => {
     if (!page) return null;
+    // 首页归 AI 设计独占（见 freeformOwnsPage）——设计树没安置的积木不再
+    // 外挂到设计区下面。
+    if (freeformOwnsPage) return null;
         // 保守策略：_fromLegacy 区块只是转换占位，渲染仍走旧路径（statsBand 等）。
         // 真正的新模型 blocks 不带 _fromLegacy，走 ExperienceBlockBoundary。
         const directBlocks = page.experienceBlocks
@@ -1432,9 +1900,15 @@ export function AppRuntimeScreen({
           //
           // 只摘"绑主实体"的那些；绑**别的**实体的 DataTable 是真新增内容
           //（例如库存页上挂一张供应商表），必须留着。
+          //
+          // **2026-08-08 第②步之后这条规矩只在骨架还在的时候生效。** 翻转默认
+          // 以后，声明了积木的页面根本不渲染内置表格，那时候这个 DataTable 就是
+          // 这一页唯一的表——再摘掉的话页面直接空了。当初这条是为了挡"一页两张
+          // 表"，现在"要不要内置表"由 businessPageGrid 那边决定，这里不该再摘。
           .filter(
             b =>
               !(
+                !blocksOwnPage &&
                 b.type === "DataTable" &&
                 page.entityId &&
                 (b.binding as { entityRef?: string } | undefined)?.entityRef ===
@@ -1447,121 +1921,205 @@ export function AppRuntimeScreen({
           // 筛了看不出任何变化；更糟的是它绑单个实体，而总览页的 KPI/图表
           // 通常跨好几个实体（真跑那次跨了 4 个），筛一个也管不着另外三个。
           // 也就是说它在这类页面上是**功能性无效**的，不只是难看。
-          .filter(b => !(OVERVIEW_KINDS.has(page.view.kind) && b.type === "FilterBar"));
+          //
+          // 2026-08-11：判据从"名字叫 FilterBar"换成 **capability === "filter"**。
+          // 上面那段理由一个字都不用改，但它对**所有**筛选类区块都成立。
+          // 按名字挡等于只挡了这一族里最出名的那个：SavedViewTabs / TagFilterRow /
+          // SearchBox 摆到总览页照样上屏、照样按不动。
+          //
+          // ⚠️ 数字更正（2026-08-11 复核）：原注释写"32 个里 31 个只发
+          // filterChange"，真数是 **28/32**。例外是四个——SavedViewTabs 与
+          // SavedSearchPanel 多发 submitRequest，HierarchicalCategoryPicker 多发
+          // itemSelect，ValidatedFormTabs 只发 itemSelect（一个 filterChange 都没有）。
+          //
+          // 那能不能因此放过这 4 个？**不能**，别再往这个方向改：它们多发的事件
+          // 同样到不了岸。`eventBindings`（事件名→动作 id）只在
+          // app-runtime-schema.ts:823 被解析，全仓库没有第二处读它；而
+          // handleBlockAction（:1607）只特判 rowSelect / editRequest /
+          // createRequest，其余一律去 page.pageActions 里找 **id 等于事件名**的
+          // 动作——动作 id 是模型生成的，不会恰好叫 "submitRequest"。放宽只是把
+          // 按不动的控件放回总览页。真要救它们，先把 eventBindings 接上。
+          // 同一条判据现在有三处：目录 pageKinds（filter 区块已剥掉 monitor/
+          // dashboard）、提示词禁令（schema_legal 的 monitor_forbidden_live）、
+          // 这里的渲染层兜底。三处同源同判据，别再各写各的。
+          .filter(
+            b =>
+              !(
+                OVERVIEW_KINDS.has(page.view.kind) &&
+                EXPERIENCE_BLOCK_CAPABILITY_BY_TYPE[b.type] === "filter"
+              )
+          )
+          // 同一条"一页一个主人"的规矩，第四例：**新建入口不许出现两个**
+          //（2026-08-11 线上产物截图照出来的）。
+          //
+          // 现场：「团长管理」页右上角有脚手架的「+ 新建」，表格底下又有一个
+          // 「新增团长」按钮——后者是 RecordFormDialog{title:"新增团长"} 画的。
+          // 两个按钮打开的是同一张表单、写的是同一个实体，用户不知道该点哪个。
+          //
+          // 成因跟 DataTable 那条完全一样：**模型不知道这一页已经自带新建入口**，
+          // 只当页面是张白纸。所以判据也照抄那条——只摘"绑本页主实体"的，
+          // 绑**别的**实体的弹层表单是真新增内容（例如在团长页上新建自提点），
+          // 必须留着。
+          //
+          // 同样只在脚手架还在的时候摘：`canCreate` 为假（无权限）或本页没有
+          // 主实体时，脚手架那个按钮根本不出现，这时候它就是唯一的入口。
+          .filter(
+            b =>
+              !(
+                b.type === "RecordFormDialog" &&
+                page.entityId &&
+                pageAccess.get(page.id)?.canCreate !== false &&
+                (b.binding as { entityRef?: string } | undefined)?.entityRef ===
+                  page.entityId
+              )
+          );
         // 积木内部的自我去重：模型偶尔把同一份榜/流声明两次（见
         // page-panel-dedupe.ts 的内容指纹判定）。
-        const dedupedBlocks = dedupeBlocksByPanelKey(directBlocks, freeformPlacedKeys);
-        if (dedupedBlocks.length === 0) return null;
+        const dedupedBlocks = dedupeBlocksByPanelKey(directBlocks);
+        if (dedupedBlocks.length === 0 && pageContent === undefined) return null;
 
-        const renderBlock = (block: (typeof dedupedBlocks)[number]) => (
-          <ExperienceBlockBoundary
-            key={block.id}
-            {...sharedBlockRendererProps}
-            block={block}
-          />
-        );
+        /**
+         * 列设置面板要列出的字段 —— 从它 targets 指向的那张表来。
+         *
+         * **这一条不能进 sharedBlockRendererProps**：那份是整页共享的一份，
+         * 而这个值是按区块算的。共享 props 那个模式挡的是"漏传"，挡不住
+         * "本来就该按区块算"的东西。
+         */
+        const targetColumnsOf = (b: (typeof dedupedBlocks)[number]) => {
+          const targets = (b.binding?.targets as string[] | undefined) ?? [];
+          if (targets.length === 0) return undefined;
+          const target = dedupedBlocks.find(x => x.id === targets[0]);
+          if (!target) return undefined;
+          const declared = target.binding?.fieldRefs as string[] | undefined;
+          if (Array.isArray(declared) && declared.length > 0) return declared.map(String);
+          const list = state.entities[String(target.binding?.entityRef ?? "")] ?? [];
+          return [...new Set(list.flatMap(r => Object.keys(r.values ?? {})))].slice(0, 8);
+        };
 
-        // Step 7：未声明 layout（或声明后 5 槽位全空，schema 层已判定并回 null）
-        // 时保留原顺序平铺，视觉零变化。
-        if (!page.layout) {
-          return (
-            <div
-              className="mb-3 grid gap-2"
-              data-testid="app-runtime-experience-block-scaffold"
-            >
-              {dedupedBlocks.map(renderBlock)}
-            </div>
+        /**
+         * 一个数据区块**自己**看到的行 —— 只被指向它的筛选收窄。
+         *
+         * 2026-08-08 接线台逮到的：此前区块拿到的是 `state.entities` 全量，
+         * 而 `applyPageFilter` 算出来的 `rows` 只喂给内置骨架那张表。也就是说
+         * **筛选从来没有作用到区块上**——FilterBar / StatusTabs / TagFilterRow /
+         * SearchBox 连着 DataTable 时，勾了、敲了，表一动不动。不是新通道没接，
+         * 是这条路上筛选和区块从一开始就没接通。
+         *
+         * 做法照 ComponentsLibraryPage 的 rowsForBlock（那边一直是对的）：
+         * 筛选区块显式声明自己筛谁（targets），数据区块反过来问"谁在筛我"。
+         */
+        const rowsForBlockOf = (blockId: string) => {
+          const applies = dedupedBlocks.some(b =>
+            (b.binding?.targets as string[] | undefined)?.includes(blockId)
           );
-        }
+          if (!applies) return state.entities;
+          const out: Record<string, RuntimeRow[]> = {};
+          for (const [entityId, list] of Object.entries(state.entities)) {
+            out[entityId] = applyPageFilter(
+              list ?? [],
+              activePageFilter,
+              dateRangeField?.id
+            );
+          }
+          return out;
+        };
+
+        const renderBlock = (block: (typeof dedupedBlocks)[number]) =>
+          forPhone && PHONE_EXPERIENCE_BLOCK_TYPES.has(block.type) ? (
+            <React.Suspense key={block.id} fallback={<Skeleton active paragraph={{ rows: 2 }} />}>
+              <LazyPhoneExperienceBlock
+                {...sharedBlockRendererProps}
+                block={block}
+              />
+            </React.Suspense>
+          ) : (
+            <ExperienceBlockBoundary
+              key={block.id}
+              {...sharedBlockRendererProps}
+              entityRows={rowsForBlockOf(block.id)}
+              targetColumns={targetColumnsOf(block)}
+              block={block}
+            />
+          );
 
         const blockById = new Map(dedupedBlocks.map(b => [b.id, b]));
-        // 手机档用 layout.mobile 覆盖（未声明则退回桌面槽位，同一套摆法）。
+        // 手机档用 layout.mobile 覆盖（未声明则退回桌面区域，同一套摆法）。
         // forPhone 由调用方传入——从前这里读的是 isPhone，而这段代码只在桌面
         // 壳里跑（手机壳走 phonePageContent），isPhone 恒 false，layout.mobile
         // 是死字段：LLM 在生成它、Gate 在校验它，运行时永远读不到。
-        const slotSource =
-          forPhone && page.layout.mobile
+        const regionSource =
+          forPhone && page.layout?.mobile
             ? { ...page.layout, ...page.layout.mobile }
             : page.layout;
-        const slotBlocks = (ids: string[]) =>
-          ids
-            .map(bid => blockById.get(bid))
-            .filter((b): b is NonNullable<typeof b> => !!b);
-        const summaryBlocks = slotBlocks(slotSource.summary ?? []);
-        const primaryBlocks = slotBlocks(slotSource.primary ?? []);
-        const secondaryBlocks = slotBlocks(slotSource.secondary ?? []);
-        const activityBlocks = slotBlocks(slotSource.activity ?? []);
-        const contentBlocks = slotBlocks(slotSource.content ?? []);
-        const placedIds = new Set(
-          [
-            ...summaryBlocks,
-            ...primaryBlocks,
-            ...secondaryBlocks,
-            ...activityBlocks,
-            ...contentBlocks,
-          ].map(b => b.id)
-        );
-        // 声明了 layout 但没被任何槽位引用到的区块：如实照样渲染，不能因为
-        // 没排进槽位就悄悄丢内容——排在末尾，视觉上标为"未分配槽位"。
+        // 没声明 layout 时把所有区块塞进 main —— 让它们整行依次铺开，跟
+        // 从前塞 summary 的效果一样（两者都是全宽），但语义对了：那是页面
+        // 主体内容，不是"页头摘要"。
+        const regions = {
+          header: regionSource?.header ?? [],
+          headerExtra: regionSource?.headerExtra ?? [],
+          headerContent: regionSource?.headerContent ?? [],
+          tabs: regionSource?.tabs ?? [],
+          filters: regionSource?.filters ?? [],
+          metrics: regionSource?.metrics ?? [],
+          charts: regionSource?.charts ?? [],
+          main: regionSource?.main ?? (page.layout ? [] : dedupedBlocks.map(b => b.id)),
+          supplement: regionSource?.supplement ?? [],
+          aside: regionSource?.aside ?? [],
+          footerBar: regionSource?.footerBar ?? [],
+          overlay: regionSource?.overlay ?? [],
+        } as Record<string, string[]>;
+        const placedIds = new Set(Object.values(regions).flat());
+        // 声明了 layout 但没被任何区域引用到的区块：如实照样渲染，不能因为
+        // 没排进区域就悄悄丢内容——排在末尾，视觉上标为"未分配区域"。
         const orphanBlocks = dedupedBlocks.filter(b => !placedIds.has(b.id));
+        const breakpoint: BusinessPageBreakpoint = forPhone
+          ? "phone"
+          : isTablet
+            ? "tablet"
+            : "desktop";
+        const layouts =
+          page.layout?.grid ??
+          regionsToGrid(
+            page.view.kind,
+            {
+              ...(regions as unknown as BusinessRegions),
+              main: [...regions.main, ...orphanBlocks.map(b => b.id)],
+            },
+            // 几何必须知道内置主视图在不在。不告诉它，它就照样给
+            // PAGE_CONTENT_REF 留三行、把正文带排到那三行之后——而这一格
+            // 下面第 2014 行又会被摘掉，留下一片没人认领的空白。
+            { hasPageContent: pageContent !== undefined }
+          );
+        let items = resolveBusinessGrid(layouts, breakpoint);
+        const itemRefs = new Set(items.map(item => item.blockRef));
+        const nextY = items.reduce((max, item) => Math.max(max, item.y + item.h), 0);
+        const missingBlocks: BusinessGridItem[] = dedupedBlocks
+          .filter(block => !itemRefs.has(block.id))
+          .map((block, index) => ({
+            blockRef: block.id,
+            x: 0,
+            y: nextY + index,
+            w: BUSINESS_GRID_COLUMNS[breakpoint],
+            h: 1,
+          }));
+        items = [...items, ...missingBlocks];
+        if (pageContent !== undefined) {
+          items = ensurePageContentItem(items, breakpoint);
+        } else {
+          items = items.filter(item => item.blockRef !== PAGE_CONTENT_REF);
+        }
 
         return (
-          <div
-            className="mb-3 flex flex-col gap-2"
-            data-testid="app-runtime-experience-block-layout"
-          >
-            {summaryBlocks.length > 0 && (
-              <div
-                className="flex flex-wrap gap-2"
-                data-testid="app-runtime-layout-summary"
-              >
-                {summaryBlocks.map(renderBlock)}
-              </div>
-            )}
-            {(primaryBlocks.length > 0 || secondaryBlocks.length > 0) && (
-              <div className="flex flex-col gap-2 md:flex-row md:items-start">
-                {primaryBlocks.length > 0 && (
-                  <div
-                    className="flex min-w-0 flex-[2] flex-col gap-2"
-                    data-testid="app-runtime-layout-primary"
-                  >
-                    {primaryBlocks.map(renderBlock)}
-                  </div>
-                )}
-                {secondaryBlocks.length > 0 && (
-                  <div
-                    className="flex min-w-0 flex-1 flex-col gap-2"
-                    data-testid="app-runtime-layout-secondary"
-                  >
-                    {secondaryBlocks.map(renderBlock)}
-                  </div>
-                )}
-              </div>
-            )}
-            {activityBlocks.length > 0 && (
-              <div
-                className="flex flex-col gap-2"
-                data-testid="app-runtime-layout-activity"
-              >
-                {activityBlocks.map(renderBlock)}
-              </div>
-            )}
-            {contentBlocks.length > 0 && (
-              <div
-                className="flex flex-col gap-2"
-                data-testid="app-runtime-layout-content"
-              >
-                {contentBlocks.map(renderBlock)}
-              </div>
-            )}
-            {orphanBlocks.length > 0 && (
-              <div
-                className="grid gap-2"
-                data-testid="app-runtime-layout-unassigned"
-              >
-                {orphanBlocks.map(renderBlock)}
-              </div>
-            )}
+          <div className="mb-3" data-testid="app-runtime-experience-block-layout">
+            <BusinessPageGrid
+              breakpoint={breakpoint}
+              items={items}
+              renderItem={blockRef => {
+                if (blockRef === PAGE_CONTENT_REF) return pageContent ?? null;
+                const block = blockById.get(blockRef);
+                return block ? renderBlock(block) : null;
+              }}
+            />
           </div>
         );
   };
@@ -1707,9 +2265,7 @@ export function AppRuntimeScreen({
     // 同一份声明的美化版，不是另一份内容。它渲染了，固定骨架的 KPI/图表
     // 就必须让位，否则同样的数字在一屏里出现两遍（桌面档早就是这个规矩，
     // 见 defaultPageContent 里 monitorFreeformOverview 的分支）。
-    const freeformTookOver =
-      Boolean(page.freeformOverview) &&
-      (kind === "monitor" || kind === "dashboard");
+    const freeformTookOver = pageFreeformOwnsContent(page);
     const wantsMetrics =
       !freeformTookOver &&
       (kind === "dashboard" || kind === "monitor" || kind === "workbench");
@@ -1743,9 +2299,12 @@ export function AppRuntimeScreen({
           }))
         : [];
     // wizard：流程节点即步骤条。桌面用横向 Steps，手机竖排更读得下来。
+    // 顺序走主链路、积木画了就让位——跟桌面档同一套判据（见 blocksDrawWorkflow
+    // 和 wizardMainPath 那两段注释）。手机档也渲染声明的积木（下面
+    // renderExperienceBlockScaffold(true)），所以叠两条的问题在这一档一样成立。
     const steps =
-      wantsSteps && (model?.workflow?.nodes?.length ?? 0) > 0
-        ? (model?.workflow?.nodes ?? []).slice(0, 8).map(n => ({
+      wantsSteps && !blocksDrawWorkflow && wizardMainPath.length > 0
+        ? wizardMainPath.slice(0, 8).map(n => ({
             id: n.id,
             title: n.name || n.id,
             description: n.phase,
@@ -1843,6 +2402,89 @@ export function AppRuntimeScreen({
       )
   );
 
+  const phonePrimaryDataView = page && (
+    <React.Suspense
+      fallback={
+        <Skeleton active paragraph={{ rows: 4 }} style={{ padding: "12px 4px" }} />
+      }
+    >
+      <PhoneKanbanShell
+        columns={phoneKanban}
+        activeKey={phoneKanbanKey}
+        onChange={setPhoneKanbanKey}
+      >
+      <PhoneCalendarShell data={phoneCalendar}>
+      <LazyPhonePageList
+        rows={phoneListRows}
+        descFields={page.detailFields
+          .slice(1, 4)
+          .map(f => ({ id: f.id, label: f.label }))}
+        createProbeProps={probe({
+          kind: "action",
+          label: "新建",
+          pageId: page.id,
+          permission: pageAccess.get(page.id)?.createPermission ?? null,
+          granted: pageAccess.get(page.id)?.canCreate !== false,
+          role,
+        })}
+        canCreate={
+          Boolean(page.entityId) &&
+          pageAccess.get(page.id)?.canCreate !== false
+        }
+        createLockedHint={
+          pageAccess.get(page.id)?.canCreate === false
+            ? "当前角色（" + (role ?? "-") + "）无新建权限"
+            : undefined
+        }
+        onCreate={() => {
+          setFormValues({});
+          setFormOpen(true);
+        }}
+        onOpenRow={row => setDetailRow(row as RuntimeRow)}
+        renderRowActions={row => rowActions(row as RuntimeRow)}
+        swipeActions={row => {
+          const r = row as RuntimeRow;
+          const acts: Array<{
+            key: string;
+            text: string;
+            color?: "primary" | "warning" | "danger";
+            onClick: () => void;
+          }> = [];
+          if (page.workflowLinked)
+            acts.push({
+              key: "submit",
+              text: "提交审批",
+              color: "primary",
+              onClick: () =>
+                handleSubmitToWorkflow(
+                  r.id,
+                  String(Object.values(r.values)[0] ?? r.id)
+                ),
+            });
+          acts.push({
+            key: "delete",
+            text: "删除",
+            color: "danger",
+            onClick: () => {
+              void confirmDestructive(
+                "删除这条记录？",
+                "删掉之后无法恢复。",
+                () => canvasEl
+              ).then(ok => {
+                if (!ok) return;
+                apply(deleteRow(state, page.entityId!, r.id));
+                toast("success", "已删除");
+              });
+            },
+          });
+          return acts;
+        }}
+      />
+      </PhoneCalendarShell>
+      </PhoneKanbanShell>
+    </React.Suspense>
+  );
+
   // 手机端业务页：体验区块 + 卡片列表（前 3 字段 + 操作），Pro App 的移动端习惯
   const phonePageContent = page && (
     // data-page-kind：手机档按 pageKind 出不同骨架，把 kind 摆到 DOM 上，
@@ -1856,7 +2498,7 @@ export function AppRuntimeScreen({
           一页只标一处。手机档没有 Card title 的位置，用 antd-mobile 的
           NoticeBar——此前这里是手搓的一个橙字小方块，跟旁边的移动端组件
           不是一套观感（见 PhoneSeedNotice 的注释）。 */}
-      {pageSeedCount > 0 && (
+      {pageSeedCount > 0 && !freeformOwnsPage && (
         <React.Suspense fallback={null}>
           <LazyPhoneSeedNotice count={pageSeedCount} />
         </React.Suspense>
@@ -1874,14 +2516,18 @@ export function AppRuntimeScreen({
           桌面壳会渲染它——专为手机做的版式送不到手机上。
 
           外面套 phone-freeform-scope：设计树是照 preferredDevice 那一档生成的，
-          desktop 档的多列/固定宽度进了 390px 会横向撑爆。强制单列不是跟设计
+          desktop 档的多列/固定宽度进了 405px 会横向撑爆。强制单列不是跟设计
           较劲，正是把 phone 档提示词里那条规矩补执行一遍。 */}
-      {page.freeformOverview && (
+      {freeformOwnsPage && (
         <div className="phone-freeform-scope">
           {renderFreeformOverview(true)}
         </div>
       )}
-      {renderExperienceBlockScaffold(true)}
+      {!freeformOwnsPage && (OVERVIEW_KINDS.has(page.view.kind)
+        ? dashboardUsesBusinessGrid
+          ? renderExperienceBlockScaffold(true, phonePrimaryDataView)
+          : renderExperienceBlockScaffold(true)
+        : renderExperienceBlockScaffold(true, phonePrimaryDataView))}
       {/* pageKind 骨架：schema 有 6 种，手机档此前一种都没有（无论什么 kind
           都渲染成同一个裸列表）。dashboard/monitor 出 KPI + 图表，wizard 出
           流程步骤——形态复用首页那套（Grid 两列 / Steps 竖排）。 */}
@@ -1890,7 +2536,7 @@ export function AppRuntimeScreen({
           <LazyPhonePageSections {...phoneSectionData} />
         </React.Suspense>
       )}
-      <React.Suspense
+      {!freeformOwnsPage && OVERVIEW_KINDS.has(page.view.kind) ? <React.Suspense
         fallback={
           <Skeleton active paragraph={{ rows: 4 }} style={{ padding: "12px 4px" }} />
         }
@@ -1977,7 +2623,7 @@ export function AppRuntimeScreen({
         />
         </PhoneCalendarShell>
         </PhoneKanbanShell>
-      </React.Suspense>
+      </React.Suspense> : null}
     </div>
   );
 
@@ -2648,13 +3294,18 @@ export function AppRuntimeScreen({
   // 声明一遍（真跑逮到：绑定逐字段相同、只有 id 和名字不同），于是首页出
   // 现两张一模一样的卡。撞车时保留积木那份（它带槽位摆放 + 新渲染器），
   // 这里只渲染没被积木覆盖的。判定见 page-panel-dedupe.ts。
-  const dedupedLists = page
-    ? dropLegacyPanelsCoveredByBlocks(
-        { rankings: page.rankings, feeds: page.feeds },
-        page.experienceBlocks,
-        freeformPlacedKeys
-      )
-    : { rankings: [], feeds: [] };
+  //
+  // 2026-08-03：上面那条"两者并列渲染"的老规矩，在**首页**上被用户裁决推翻了
+  //（「首页只 LLM 生成，先不要固定组件」）。首页有 AI 设计时它独占整页，榜/流
+  // 一并让位——首页因此只剩聚合与图表，逐行明细回到各自的业务页。其余页面
+  // （workbench/kanban/…）没有 freeformOverview，这条老规矩原样保留。
+  const dedupedLists =
+    page && !freeformOwnsPage
+      ? dropLegacyPanelsCoveredByBlocks(
+          { rankings: page.rankings, feeds: page.feeds },
+          page.experienceBlocks
+        )
+      : { rankings: [], feeds: [] };
   const monitorDynamicLists =
     page && (dedupedLists.rankings.length > 0 || dedupedLists.feeds.length > 0) ? (
       <div
@@ -2672,37 +3323,201 @@ export function AppRuntimeScreen({
     ) : null;
 
 
+  // 声明了积木的页面不再走 ProTable 骨架（第②步的翻转就落在这一行）
+  const usesProWorkbench = Boolean(
+    page &&
+      !isPhone &&
+      !isTablet &&
+      !blocksOwnPage &&
+      (page.view.kind === "workbench" || page.view.kind === "wizard")
+  );
+
+  const pageDataView = page && (
+    isTablet ? (
+      <div
+        style={{ display: "flex", gap: 12, alignItems: "flex-start" }}
+        data-testid="app-runtime-tablet-split"
+      >
+        <div style={{ flex: 3, minWidth: 0 }}>
+          <Table
+            size="small"
+            rowKey="id"
+            columns={
+              columns
+                .slice(0, Math.min(4, columns.length - 1))
+                .concat(columns.slice(-1)) as any
+            }
+            dataSource={rows}
+            onRow={row => ({
+              onClick: () => setDetailRow(row as RuntimeRow),
+              style: { cursor: "pointer" },
+            })}
+            rowClassName={row =>
+              (row as RuntimeRow).id === detailRow?.id
+                ? "ant-table-row-selected"
+                : ""
+            }
+            pagination={rows.length > 10 ? { pageSize: 10 } : false}
+            locale={{ emptyText: "暂无数据 — 点「新建」写入第一条真实数据" }}
+          />
+        </div>
+        <Card
+          size="small"
+          title={detailRow ? "详情" : "详情 · 未选中"}
+          style={{ flex: 2, minWidth: 0 }}
+          data-testid="app-runtime-tablet-detail"
+        >
+          {detailRow ? (
+            detailBody
+          ) : (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="点击左侧行查看详情与 AI 能力"
+              style={{ padding: "16px 0" }}
+            />
+          )}
+        </Card>
+      </div>
+    ) : page.view.kind === "kanban" && kanbanStatusField ? (
+      <KanbanBoard
+        rows={rows}
+        statusField={kanbanStatusField}
+        cardFields={page.columns.filter(f => f.id !== kanbanStatusField.id)}
+        onOpenRow={setDetailRow}
+      />
+    ) : page.view.kind === "calendar" && page.view.dateFieldId ? (
+      <CalendarBoard
+        rows={rows}
+        dateFieldId={page.view.dateFieldId}
+        colorByField={page.detailFields.find(
+          f => f.id === page.view.colorByFieldId
+        )}
+        titleFieldId={
+          page.columns.find(f => f.id !== page.view.dateFieldId)?.id
+        }
+        onOpenRow={setDetailRow}
+      />
+    ) : usesProWorkbench ? (
+      <React.Suspense fallback={<Skeleton active paragraph={{ rows: 8 }} />}>
+        <LazyProWorkbenchSurface
+          surface={page.surface}
+          title={page.title}
+          fields={page.formFields}
+          rows={rows}
+          canCreate={Boolean(
+            page.entityId && pageAccess.get(page.id)?.canCreate !== false
+          )}
+          // 走页面级管道，不再自己 setState —— 跟积木那条路同源
+          onCreate={pagePipes.openCreate}
+          onOpenRow={pagePipes.openRecord}
+          onSaveRow={row => {
+            if (!page.entityId) return;
+            apply(updateRow(state, page.entityId, row.id, row.values));
+          }}
+        />
+      </React.Suspense>
+    ) : (
+      <Table
+        size={page.view.kind === "dashboard" ? "small" : "middle"}
+        rowKey="id"
+        columns={columns as any}
+        dataSource={rows}
+        /**
+         * 列多了让表格**横向滚动**，而不是把每列挤成省略号（2026-08-11）。
+         *
+         * 线上截图里 9 列挤在约 740px 的卡里，每列剩 ~80px，于是「加分事项」
+         * 显示成"加分事..."、「行为说明」成"行为说..."、「AI行为分析」成
+         * "AI行为..."——几乎每一列都截断到读不出内容，表头「AI建议积分」还折成
+         * 两行。列上开着 `ellipsis: true` 但没有任何宽度提示，antd 默认把容器
+         * 宽度均分，列数一多必然如此。
+         *
+         * `x: "max-content"` 让每列按内容取自然宽度、整表横向滚动——这是 antd
+         * 对多列表格的标准做法，而且这个仓库**早就在用**（EntityDataPanel.tsx
+         * 那张表、DataImportWizard / 资源配置那两个区块都是这么写的），只有
+         * 页面内置表格一直漏着。
+         */
+        scroll={{ x: "max-content" }}
+        onRow={row => ({
+          onClick: () => setDetailRow(row as RuntimeRow),
+          style: { cursor: "pointer" },
+        })}
+        pagination={
+          page.view.kind === "dashboard"
+            ? rows.length > 5 && { pageSize: 5 }
+            : rows.length > 8 && { pageSize: 8 }
+        }
+        locale={{ emptyText: "暂无数据 — 点「新建」写入第一条真实数据" }}
+      />
+    )
+  );
+
   // 一次求值、多处摆位（见下方 D1 注释）
   const blockScaffold = renderExperienceBlockScaffold(false);
+  const businessPageGrid = usesProWorkbench
+    ? pageDataView
+    : renderExperienceBlockScaffold(
+        false,
+        // 积木拥有这一页、且它们里面确实有展示行数据的 → 不再塞内置表格，
+        // 否则一页两张表（这也正是"绑主实体的 DataTable 会被摘掉"那条规矩
+        // 当初要挡的事——翻转之后由这里决定，不再靠摘积木）。
+        blocksOwnPage && blocksCoverData ? undefined : pageDataView
+      );
+
+  /**
+   * 演示数据徽标 —— 第三样从骨架身上摘下来的（2026-08-08，第①步）。
+   *
+   * 它此前只写在 `defaultPageContent` 的 Card 标题里，而那个标题在
+   * `usesProWorkbench` 为真时是 `undefined`——也就是说**桌面档的列表页
+   * 今天根本看不到这个徽标**，而列表页恰恰是用户最会看到演示行的地方。
+   *
+   * 这一步只把它抽成一个可复用的节点、挂载点原样不动（承诺了这一步不改
+   * 视觉）。要不要在列表页也挂上，是第②步翻转默认时一并决定的事。
+   */
+  const seedNotice = pageSeedCount > 0 && (
+    <Tooltip
+      title={`本页 ${allRows.length} 条记录里有 ${pageSeedCount} 条是自动铺的演示数据；点「新建」写入第一条真实记录后即被整批取代`}
+    >
+      <Tag
+        color="orange"
+        style={{ marginInlineEnd: 0, fontWeight: 400 }}
+        data-testid="app-runtime-seed-tag"
+      >
+        示例数据 {pageSeedCount}
+      </Tag>
+    </Tooltip>
+  );
 
   const defaultPageContent = page && (
     <Card
       size="small"
+      bordered={page.presentation === "marketing-landing" ? false : !usesProWorkbench}
+      styles={
+        usesProWorkbench || page.presentation === "marketing-landing"
+          ? { body: { padding: 0 } }
+          : undefined
+      }
       title={
-        <Space size={6}>
+        usesProWorkbench || page.presentation === "marketing-landing" ? undefined : <Space size={6}>
           <span>{page.title}</span>
-          {pageSeedCount > 0 && (
-            <Tooltip
-              title={`本页 ${allRows.length} 条记录里有 ${pageSeedCount} 条是自动铺的演示数据；点「新建」写入第一条真实记录后即被整批取代`}
-            >
-              <Tag
-                color="orange"
-                style={{ marginInlineEnd: 0, fontWeight: 400 }}
-                data-testid="app-runtime-seed-tag"
-              >
-                示例数据 {pageSeedCount}
-              </Tag>
-            </Tooltip>
-          )}
+          {seedNotice}
         </Space>
       }
       extra={
-        <Space size="small">
-          {page.actions.slice(0, 3).map(a => (
-            <Tag key={a} color="blue" style={{ marginInlineEnd: 0 }}>
-              {a}
-            </Tag>
-          ))}
+        usesProWorkbench || page.presentation === "marketing-landing" ? undefined : <Space size="small">
+          {/* 权限标识符只在 X 光（检查模式）下露出（2026-08-11）。
+              线上截图里业务页头挂着 `student:read` `pet:read` `redemption:create`
+              这类蓝标签——那是**内部标识符**，交付给终端用户的应用里没人看得懂，
+              而且泄漏了权限命名。它本来是开发期的自查affordance，可这个仓库早就
+              有正经通道了：X 光模式的 probe() 悬停上报（含 permission/granted），
+              信息更全还不占版面。所以不是删掉，是收进 X 光里。
+              顺带说一句 `.slice(0, 3)`：页面有 5 条权限时它只显示前 3 条，
+              既不完整也不说明被截断了——这种"看着像全量其实是抽样"的展示比不展示更糟。 */}
+          {xrayActive &&
+            page.actions.map(a => (
+              <Tag key={a} color="blue" style={{ marginInlineEnd: 0 }}>
+                {a}
+              </Tag>
+            ))}
           {columnSettings}
           <span
             {...probe({
@@ -2751,13 +3566,25 @@ export function AppRuntimeScreen({
           脚手架只求值一次、在下面每个分支里显式摆位——不这么写就得在
           "总览页"那个条件外面再判一次 kind，dashboard 没有 freeformOverview
           时会掉进最末的兜底分支、积木一个都渲染不出来（第一版就是这个洞）。 */}
-      {!OVERVIEW_KINDS.has(page.view.kind) && blockScaffold}
+      {!freeformOwnsPage &&
+        (!OVERVIEW_KINDS.has(page.view.kind) || dashboardUsesBusinessGrid) &&
+        businessPageGrid}
+      {/* 向导页顶部的内置步骤条。
+          两处修正（2026-08-11，线上截图 #8）：
+
+          ① **积木已经画了流程就不画**（blocksDrawWorkflow）。原来无条件画，
+             于是声明了 WorkflowTimeline 的向导页上叠着两条步骤条。
+          ② **顺序按图走，不按声明数组走**。原来是 `nodes.slice(0, 8).map(...)`，
+             把驳回节点铺成正向的下一步——跟 WorkflowTimeline 修过的是同一个 bug，
+             只是这一份漏掉了。现在两处共用 deriveWorkflowMainPath，分支出口不
+             进步骤条（这里只画主链路，分支明细留给 WorkflowTimeline 区块）。 */}
       {page.view.kind === "wizard" &&
-        (model?.workflow?.nodes?.length ?? 0) > 0 && (
+        !blocksDrawWorkflow &&
+        wizardMainPath.length > 0 && (
           <Steps
             size="small"
             current={0}
-            items={(model?.workflow?.nodes ?? []).slice(0, 8).map(n => ({
+            items={wizardMainPath.slice(0, 8).map(n => ({
               title: n.name || n.id,
               description: n.phase,
             }))}
@@ -2765,7 +3592,9 @@ export function AppRuntimeScreen({
             data-testid="app-runtime-wizard-steps"
           />
         )}
-      {page.view.kind === "monitor" ? (
+      {freeformOwnsPage ? (
+        <>{monitorFreeformOverview}</>
+      ) : page.view.kind === "monitor" ? (
         monitorFreeformOverview ? (
           <>
             {monitorFreeformOverview}
@@ -2773,21 +3602,56 @@ export function AppRuntimeScreen({
             {monitorDynamicLists}
           </>
         ) : (
+          // 没有设计版式时的兜底。**顺序必须跟上面那一支一致**：聚合在前，
+          // 积木垫后（2026-08-07 修）。
+          //
+          // 此前这里是 blockScaffold → statsBand → monitorCombinedRow，
+          // 跟产品自己定的首页信息架构正好相反。那套架构写在喂给设计 LLM 的
+          // brief 里（freeform_block._monitor_overview_design_brief）：
+          //
+          //     必须包含的 KPI 统计卡：…
+          //     必须包含的图表：…
+          //     这一页还声明了这些逐行内容（blockRef）：…
+          //
+          // 即「先给聚合结论 → 再给分布 → 最后才是明细」。上面那一支
+          // （monitorFreeformOverview → blockScaffold → monitorDynamicLists）
+          // 是照这个顺序来的，2026-07-28 的 D1 就是为此把脚手架挪到设计版式
+          // 后面的；但**当时只改了有设计版式的那一支**，兜底支原样留着。
+          //
+          // 平时 LLM 都能画出设计版式，所以没人踩到；关掉生图、或者预算不够
+          // （freeformOverviewStatus=deferred_budget）才掉进兜底支，老毛病
+          // 才露出来。实测（药联协同，1920 宽）：
+          //
+          //     快捷操作卡   392→507   115px
+          //     处方处理流程 515→601    86px
+          //     预警动态     610→921   311px   ← 512px 积木压在上面
+          //     KPI 行       929        71px   ← 总览页最该先看的，掉出首屏
+          //     图表        1036       …
+          //
+          // 一个总览页，最该看的数字全在屏幕外。
           <>
-            {blockScaffold}
             {statsBand}
             {monitorCombinedRow}
+            {blockScaffold}
           </>
         )
       ) : page.view.kind === "dashboard" && monitorFreeformOverview ? (
         // 2026-07-27：dashboard 页也吃 freeformOverview——此前只有 monitor
         // 一个 kind 走得到设计版式，LLM 把总览页写成 dashboard 时整条
         // "照参考图设计"的产出送不到页面上（首页恒回固定骨架的根因之一）。
-        // dashboard 特有的 widgetsBand（快速入口等）保留，不被设计版式吞掉。
+        //
+        // ⚠ 2026-08-03 补漏：这里原本还渲染 widgetsBand，注释写的是"dashboard
+        // 特有的快速入口保留，不被设计版式吞掉"。但 widgetsBand 渲染的其实就是
+        // page.rankings / page.feeds——跟 monitorDynamicLists 同一批榜/流，只是
+        // 数据源直接读原始字段、绕过了 dedupedLists 那道闸。于是总览页收口只在
+        // monitor 档生效（那条分支里没有 widgetsBand），dashboard 档的排行榜/
+        // 动态流照旧冒出来。真实数据里 13 个 dashboard 页有 11 个带设计版式、
+        // 其中 3 个同时带榜/流，是真会撞上的。
+        // 设计版式独占整页，这里跟着一起让位。
         <>
           {monitorFreeformOverview}
           {blockScaffold}
-          {widgetsBand}
+          {freeformOwnsPage ? null : widgetsBand}
           {monitorDynamicLists}
         </>
       ) : pageHasKpiBlocks ? (
@@ -2800,13 +3664,15 @@ export function AppRuntimeScreen({
           {/* dashboard 页没有 freeformOverview 时会走到这里（pageHasKpiBlocks
               要求非总览页，所以 dashboard 永远不满足上一支）。总览页的脚手架
               在上面被跳过了，得在这里补回来，否则积木整页消失。 */}
-          {OVERVIEW_KINDS.has(page.view.kind) ? blockScaffold : null}
+          {OVERVIEW_KINDS.has(page.view.kind) && !dashboardUsesBusinessGrid
+            ? blockScaffold
+            : null}
           {statsBand}
           {widgetsBand}
           {chartsBand}
         </>
       )}
-      {isTablet ? (
+      {OVERVIEW_KINDS.has(page.view.kind) && !dashboardUsesBusinessGrid && (isTablet ? (
         // 平板范式：紧凑双栏（iPad 式主从视图）——左列表右详情，详情不走 Drawer
         <div
           style={{ display: "flex", gap: 12, alignItems: "flex-start" }}
@@ -2881,6 +3747,7 @@ export function AppRuntimeScreen({
           rowKey="id"
           columns={columns as any}
           dataSource={rows}
+          scroll={{ x: "max-content" }}
           onRow={row => ({
             onClick: () => setDetailRow(row as RuntimeRow),
             style: { cursor: "pointer" },
@@ -2892,7 +3759,7 @@ export function AppRuntimeScreen({
           }
           locale={{ emptyText: "暂无数据 — 点「新建」写入第一条真实数据" }}
         />
-      )}
+      ))}
     </Card>
   );
 
@@ -2920,10 +3787,25 @@ export function AppRuntimeScreen({
     // 哪一页有货、哪一页是空的要挨个点进去才知道；有了计数，应用一打开就
     // 有"这套系统里已经有数据在跑"的实感。锁住的页不显示——那是权限信息，
     // 不该从计数里泄出去。
+    //
+    // 2026-08-11：**只数真实数据，演示种子不计**。
+    //
+    // 线上产物截图照出来的：左侧六个菜单项后面**全是 12**。因为种子生成器给
+    // 每个实体都铺同样多的行，于是这个徽标对每一页说同一个数——
+    // **每项都一样的数字等于没有信息**，只剩噪音，而且长得像未读消息角标。
+    //
+    // 上面那句"哪一页有货、哪一页是空的"正是这条的初衷，而种子把每一页都
+    // 变成"有货"，初衷当场落空。页面里本来就另有一个「示例数据 N」徽标如实
+    // 标着种子，侧栏再数一遍是把同一份假数据吹两次。
+    //
+    // 所以判据换成真实行数：全是种子时侧栏干干净净，用户写下第一条真数据
+    // 之后徽标才出现——那一刻它才真的在说"这套系统里有数据在跑"。
     const rowCount = (() => {
       if (locked || m.pageId === "home") return 0;
       const entityId = schema.pages.find(p => p.id === m.pageId)?.entityId;
-      return entityId ? (state.entities[entityId]?.length ?? 0) : 0;
+      if (!entityId) return 0;
+      const total = state.entities[entityId]?.length ?? 0;
+      return Math.max(0, total - seedRowCount(state, entityId));
     })();
     return {
       key: m.pageId,
@@ -3035,7 +3917,7 @@ export function AppRuntimeScreen({
             style={{ minWidth: 140 }}
             value={role}
             onChange={changeRole}
-            options={schema.roles.map(r => ({ value: r, label: r }))}
+            options={schema.roles.map(r => ({ value: r, label: schema.roleLabels[r] ?? r }))}
             data-testid="app-runtime-role"
           />
           <Avatar
@@ -3118,7 +4000,7 @@ export function AppRuntimeScreen({
           style={{ minWidth: 140 }}
           value={role}
           onChange={changeRole}
-          options={schema.roles.map(r => ({ value: r, label: r }))}
+          options={schema.roles.map(r => ({ value: r, label: schema.roleLabels[r] ?? r }))}
           data-testid="app-runtime-role"
         />
         <Avatar
@@ -3175,6 +4057,7 @@ export function AppRuntimeScreen({
             <React.Suspense fallback={<span style={{ width: 96, height: 24 }} />}>
               <LazyPhoneRolePicker
                 roles={schema.roles}
+                roleLabels={schema.roleLabels}
                 value={role}
                 onChange={changeRole}
                 getContainer={() => canvasEl ?? document.body}
@@ -3286,7 +4169,7 @@ export function AppRuntimeScreen({
               : identityTheme.contentBg,
             borderRadius: isPhone ? 12 : 5,
             overflow: "hidden",
-            boxShadow: "0 8px 32px rgba(60,50,30,0.18)",
+            boxShadow: STAGE_FRAME_SHADOW,
           }}
         >
           <ConfigProvider
@@ -3297,6 +4180,7 @@ export function AppRuntimeScreen({
             locale={zhCN}
             getPopupContainer={() => canvasEl ?? document.body}
             theme={{
+              cssVar: true,
               // E40.2：身份主题的主色一把翻全部 antd 组件（按钮/选中态/链接…）
               // Step 9：配方叠加圆角 + 深色/紧凑 algorithm；高对比额外加深边框、
               // 略增字号（无障碍场景，antd token 全局生效，不用逐组件改）。
@@ -3369,18 +4253,18 @@ export function AppRuntimeScreen({
 
             {/* 新建表单：手机档走 antd-mobile Popup（底部弹起），桌面档留 antd
                 Modal。同一份 formFields / formValues / handleCreate，只换容器
-                和录入控件——PC 弹框塞进 390 画布会顶穿两边，实测过。 */}
+                和录入控件——PC 弹框塞进 405 画布会顶穿两边，实测过。 */}
             {isPhone ? (
               <React.Suspense fallback={null}>
                 <LazyPhoneFormPopup
                   open={formOpen}
-                  title={`新建 · ${page?.title ?? ""}`}
+                  title={`${editingRowId ? "编辑" : "新建"} · ${page?.title ?? ""}`}
                   fields={page?.formFields ?? []}
                   values={formValues}
                   onChange={(fieldId, v) =>
                     setFormValues(prev => ({ ...prev, [fieldId]: v }))
                   }
-                  onCancel={() => setFormOpen(false)}
+                  onCancel={closeForm}
                   onSubmit={handleCreate}
                   refRowsFor={refRowsFor}
                   enumOptionsFor={enumOptionsFor}
@@ -3399,10 +4283,10 @@ export function AppRuntimeScreen({
               </React.Suspense>
             ) : (
               <Modal
-                title={`新建 · ${page?.title ?? ""}`}
+                title={`${editingRowId ? "编辑" : "新建"} · ${page?.title ?? ""}`}
                 open={formOpen}
                 onOk={handleCreate}
-                onCancel={() => setFormOpen(false)}
+                onCancel={closeForm}
                 okText="保存"
                 cancelText="取消"
                 destroyOnHidden
@@ -3423,18 +4307,33 @@ export function AppRuntimeScreen({
                     Form.Item 一律**不给 name**：值仍由 formValues 这个受控
                     state 持有（handleCreate 照旧读它）。不带 name 的 Form.Item
                     在 antd 里就是纯布局容器（form-item.js:213 直接走
-                    renderLayout），跟父级受控的值兼容，不会来抢数据。 */}
+                    renderLayout），跟父级受控的值兼容，不会来抢数据。
+
+                    校验也因此**不能用 Form 的 rules**（rules 挂在 name 上，这里
+                    没有 name）。所以走 validateRowFields + 受控的 validateStatus/
+                    help：提交时算一次，红字标在出问题那一栏。这跟"值由父级持有"
+                    是同一个取舍的两面，不是偷懒。 */}
                 <Form
                   layout="vertical"
                   size="small"
                   requiredMark
                   style={{ paddingTop: 8 }}
                 >
+                  {formProblems[""] && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message={formProblems[""]}
+                      style={{ marginBottom: 12 }}
+                    />
+                  )}
                   {(page?.formFields ?? []).map(f => (
                     <Form.Item
                       key={f.id}
                       label={f.label}
                       style={{ marginBottom: 14 }}
+                      validateStatus={formProblems[f.id] ? "error" : undefined}
+                      help={formProblems[f.id]}
                     >
                       {/* 游标探针挂在内层 div，不挂 Form.Item——Form.Item 的
                           props 是它自己的一套（onReset 等签名跟 DOM 事件不兼容），
@@ -3515,41 +4414,25 @@ export function AppRuntimeScreen({
                 只剩一档时**这一档的按钮仍然要在**：它同时是「从代码视图回到
                 应用视图」的唯一入口（旁边的「代码」按钮只负责进去）。一度想
                 过一档就把整条收起来，那会把人留在代码视图里出不来。 */}
-            {deviceTiers.map(key => (
-              <button
-                key={key}
-                type="button"
-                data-testid={`app-device-${key}`}
-                onClick={() => {
+            <Segmented
+              size="small"
+              value={codeView ? "code" : device}
+              options={[
+                ...deviceTiers.map(key => ({
+                  value: key,
+                  label: <span data-testid={`app-device-${key}`}>{DEVICE_SPECS[key].label}</span>,
+                })),
+                { value: "code", label: <span data-testid="app-device-code">代码</span> },
+              ]}
+              onChange={value => {
+                if (value === "code") {
+                  setCodeView(true);
+                } else if (deviceTiers.includes(value as (typeof deviceTiers)[number])) {
                   setCodeView(false);
-                  setDevice(key);
-                }}
-                className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
-                  !codeView && device === key
-                    ? "bg-white text-stone-800 shadow-sm"
-                    : inBar
-                      ? "text-stone-500 hover:text-stone-700"
-                      : "text-white/85 hover:text-white"
-                }`}
-              >
-                {DEVICE_SPECS[key].label}
-              </button>
-            ))}
-            <button
-              type="button"
-              data-testid="app-device-code"
-              onClick={() => setCodeView(true)}
-              title="schema 的确定性代码投影（只读）"
-              className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
-                codeView
-                  ? "bg-white text-stone-800 shadow-sm"
-                  : inBar
-                    ? "text-stone-500 hover:text-stone-700"
-                    : "text-white/85 hover:text-white"
-              }`}
-            >
-              代码
-            </button>
+                  setDevice(value as (typeof deviceTiers)[number]);
+                }
+              }}
+            />
           </div>
         );
         if (!inBar) return gearBar;
@@ -3558,12 +4441,7 @@ export function AppRuntimeScreen({
           : null;
       })()}
       {!codeView && showScaleBadge && (
-        <span
-          className="absolute bottom-2 right-3 rounded-full bg-black/30 px-2 py-0.5 font-mono text-[9px] text-white/90"
-          title={`固定 ${spec.w}×${spec.h} 设计分辨率，按容器等比缩放显示`}
-        >
-          {spec.w}×{spec.h} · {Math.round(scale * 100)}%
-        </span>
+        <ScaleBadge w={spec.w} h={spec.h} scale={scale} />
       )}
     </div>
   );

@@ -1,5 +1,11 @@
+
+from plan_approval_support import approved_execution_payload
 import json
+import threading
+
 import pytest
+
+from conftest import TEST_USER_ID
 
 from models.v5_state import V5SessionState
 from services.persistence import (
@@ -285,7 +291,7 @@ def test_python_session_responses_report_state_authority_and_normalized_fields(m
         "turnId": "env-t1",
         "userText": "",
     }
-    drive_resp = client.post("/api/sliderule/drive-turn", json=drive_payload, headers=headers)
+    drive_resp = client.post("/api/sliderule/drive-turn", json=approved_execution_payload(drive_payload), headers=headers)
     assert drive_resp.status_code == 200
     drive_env = drive_resp.json()
 
@@ -346,6 +352,9 @@ def test_put_sanitize_prevents_client_forging_coverageGate_trustLevel_capability
     server_state = V5SessionState(
         sessionId=sid,
         goal={"text": "sanitize goal", "status": "needs_refinement"},
+        # 归属必须写上：会话恒为 private，无主的只有超管读得到 —— 这几条测的是
+        # PUT 的清洗/防覆盖/并发守卫，不是"匿名能不能读别人的会话"。
+        ownerId=TEST_USER_ID,
         artifacts=[trusted_artifact],
         capabilityRuns=[
             CapabilityRun(id="run-s1", capabilityId="evidence.search", turnId="t-s1", outputs=["art-server-1"], gateResults=[{"gateId": "ground", "status": "passed"}])
@@ -502,6 +511,9 @@ def test_put_does_not_overwrite_server_replay_via_client_body(monkeypatch):
     server_state = V5SessionState(
         sessionId=sid,
         goal={"text": "replay put test", "status": "needs_refinement"},
+        # 归属必须写上：会话恒为 private，无主的只有超管读得到 —— 这几条测的是
+        # PUT 的清洗/防覆盖/并发守卫，不是"匿名能不能读别人的会话"。
+        ownerId=TEST_USER_ID,
         artifacts=[],
         capabilityRuns=[],
         coverageGaps=[],
@@ -649,6 +661,9 @@ def test_persistence_guard_prevents_older_lastturn_from_overwriting_newer_state(
     newer = V5SessionState(
         sessionId=sid,
         goal={"text": "newer authoritative goal", "status": "needs_refinement"},
+        # 归属必须写上：会话恒为 private，无主的只有超管读得到 —— 这几条测的是
+        # PUT 的清洗/防覆盖/并发守卫，不是"匿名能不能读别人的会话"。
+        ownerId=TEST_USER_ID,
         artifacts=[],
         capabilityRuns=[{"id": "r-new", "capabilityId": "x", "turnId": "t10"}],
         coverageGaps=[],
@@ -670,6 +685,7 @@ def test_persistence_guard_prevents_older_lastturn_from_overwriting_newer_state(
     older = V5SessionState(
         sessionId=sid,
         goal={"text": "stale old goal should be rejected", "status": "needs_refinement"},
+        ownerId=newer.ownerId,
         artifacts=[],
         capabilityRuns=[],
         coverageGaps=[],
@@ -709,6 +725,9 @@ def test_put_route_returns_409_on_stale_lastturn_and_does_not_overwrite(monkeypa
     # Seed server state at higher turn (via service to have full)
     server_newer = V5SessionState(
         sessionId=sid,
+        # 同上：无主会话谁都读不到，PUT 会先在归属判定上 404，根本走不到
+        # 并发守卫那一步——而这条测的正是并发守卫。
+        ownerId=TEST_USER_ID,
         goal={"text": "server-newer", "status": "needs_refinement"},
         artifacts=[],
         capabilityRuns=[],
@@ -746,6 +765,68 @@ def test_put_route_returns_409_on_stale_lastturn_and_does_not_overwrite(monkeypa
     assert got["lastTurnId"] == "t20"
 
     # cleanup
+    client.delete(f"/api/sliderule/sessions/{sid}", headers=headers)
+    sess_mod._sessions.pop(sid, None)
+    route_mod._sessions.pop(sid, None)
+
+
+def test_put_does_not_advance_last_turn_or_pin_stale_versions(monkeypatch):
+    """过夜：落库失败后库是 mv-1/t1，前端 PUT 带 t99。合并若吃 lastTurnId，
+    旧版本被钉在新 turn 上，下一轮守卫以为已经赶上。
+
+    lastTurnId 必须留在服务端；409 仍拒更旧的 PUT（上一条）。
+    """
+    try:
+        from fastapi.testclient import TestClient
+        from app import app
+        import routes.sliderule_full as route_mod
+        import services.slide_rule_session as sess_mod
+        from models.v5_state import V5SessionState
+        from services.persistence import save_session_record
+    except Exception as e:
+        pytest.skip(f"imports for put pin test: {e}")
+
+    client = TestClient(app)
+    headers = {"X-Internal-Key": "dev-slide-rule-internal"}
+    sid = "put-pin-stale-001"
+    server = V5SessionState(
+        sessionId=sid,
+        ownerId=TEST_USER_ID,
+        goal={"text": "server-live", "status": "needs_refinement"},
+        artifacts=[],
+        capabilityRuns=[],
+        coverageGaps=[],
+        conversation=[],
+        lastTurnId="t1",
+        currentModelVersionId="mv-1",
+        modelVersions=[{"id": "mv-1", "model": {"a": 1}}],
+    )
+    sess_mod._sessions[sid] = server
+    route_mod._sessions[sid] = server
+    save_session_record(server)
+
+    put_resp = client.put(
+        f"/api/sliderule/sessions/{sid}",
+        json={
+            "sessionId": sid,
+            "goal": {"text": "client-should-not-move-turn"},
+            "artifacts": [],
+            "capabilityRuns": [],
+            "coverageGaps": [],
+            "conversation": [],
+            "lastTurnId": "t99",
+            "currentModelVersionId": "mv-1",
+        },
+        headers=headers,
+    )
+    assert put_resp.status_code == 200, put_resp.text
+    get_resp = client.get(f"/api/sliderule/sessions/{sid}", headers=headers)
+    assert get_resp.status_code == 200
+    got = get_resp.json()["state"]
+    assert got["lastTurnId"] == "t1", f"PUT 把 lastTurnId 推到了 {got['lastTurnId']}"
+    assert got["currentModelVersionId"] == "mv-1"
+    assert (got.get("modelVersions") or [{}])[0].get("id") == "mv-1"
+
     client.delete(f"/api/sliderule/sessions/{sid}", headers=headers)
     sess_mod._sessions.pop(sid, None)
     route_mod._sessions.pop(sid, None)
@@ -1109,3 +1190,281 @@ def test_drive_reasoning_turn_nonempty_selected_writes_gated_artifacts_capruns_a
     # cleanup
     pers.delete_session_record(sid, store_file=store_file)
     sess_mod._sessions.pop(sid, None)
+
+
+def test_sessions_list_carries_the_bound_app_and_its_cover(monkeypatch):
+    """GET /sessions 的每条会话要带上它绑定那版应用的 appId + 缩略图三件套。
+
+    ## 这条判据钉的是什么
+
+    应用中心把「全部会话」和「**一页**应用」合并去重（前端 mergeGalleryItems
+    按 session_id 认领）。会话列表一次拉全、应用是 limit=14 的一页——认不到自己
+    应用的那些会话各摆一张没有封面的空卡。真机 2026-08-24：66 张卡只有 14 张
+    有图，而库里 67 张图都在。
+
+    ⚠ 正反两条一起写（本仓第三条）：名单里有字段 ≠ 值真的接上了，
+      没绑应用的会话也**不许**凭空长出 appId。
+    """
+    try:
+        from fastapi.testclient import TestClient
+        from app import app
+    except Exception as e:
+        pytest.skip(f"app import failed: {e}")
+
+    client = TestClient(app)
+    headers = {"X-Internal-Key": "dev-slide-rule-internal"}
+
+    import services.persistence as persistence
+
+    # ⚠ 路由是**在函数体里** `from services.persistence import ...`，所以补丁要打
+    #   在 persistence 模块上，打在 routes.sliderule_full 上不生效。
+    # ⚠ 归属必须给：会话恒为 private（连无主的也是，见 app_access.session_record
+    #   那段 2026-08-06 的裁决），不带 ownerId 的假数据会被列表过滤器全部滤掉，
+    #   现象是 KeyError 而不是断言失败。
+    monkeypatch.setattr(
+        persistence,
+        "list_session_summaries",
+        lambda: [
+            {
+                "sessionId": "s-bound",
+                "goal": "有绑定应用",
+                "artifactCount": 1,
+                "ownerId": TEST_USER_ID,
+            },
+            {
+                "sessionId": "s-loose",
+                "goal": "没绑定应用",
+                "artifactCount": 0,
+                "ownerId": TEST_USER_ID,
+            },
+        ],
+    )
+    import services.app_store as store
+
+    monkeypatch.setattr(
+        store,
+        "session_covers",
+        lambda: {
+            "s-bound": {
+                "app_id": "app-abc",
+                "version": 2,
+                "device": "phone",
+                "has_preview": True,
+                "preview_source": "shot",
+                "preview_tag": "shot.123",
+            }
+        },
+    )
+
+    body = client.get("/api/sliderule/sessions", headers=headers).json()
+    rows = {r["sessionId"]: r for r in body["sessions"]}
+
+    bound = rows["s-bound"]
+    assert bound["appId"] == "app-abc"
+    assert bound["version"] == 2
+    assert bound["device"] == "phone"
+    assert bound["has_preview"] is True
+    assert bound["preview_tag"] == "shot.123"
+    # 字段名必须与应用摘要（_mark_previews）一致——前端那条 shouldUseSheetThumb
+    # 不该分两套判定。
+    assert "preview_source" in bound
+
+    # 反向：没绑应用的会话不许凭空长出这些字段
+    loose = rows["s-loose"]
+    assert "appId" not in loose
+    assert "has_preview" not in loose
+    assert loose["goal"] == "没绑定应用"
+
+
+def test_sessions_list_survives_a_broken_cover_index(monkeypatch):
+    """封面索引炸了，会话列表照常给（fail-open，本仓第七条）。
+
+    缩略图是增强类。GET /sessions 是侧栏和应用中心共用的那条路，把它拖成 500
+    等于整个工作台白屏——比没有封面严重得多。
+    """
+    try:
+        from fastapi.testclient import TestClient
+        from app import app
+    except Exception as e:
+        pytest.skip(f"app import failed: {e}")
+
+    import services.app_store as store
+    import services.persistence as persistence
+
+    monkeypatch.setattr(
+        persistence,
+        "list_session_summaries",
+        lambda: [
+            {
+                "sessionId": "s-solo",
+                "goal": "只要列得出来",
+                "artifactCount": 0,
+                "ownerId": TEST_USER_ID,
+            }
+        ],
+    )
+
+    def boom():
+        raise RuntimeError("索引挂了")
+
+    monkeypatch.setattr(store, "session_covers", boom)
+
+    resp = TestClient(app).get(
+        "/api/sliderule/sessions", headers={"X-Internal-Key": "dev-slide-rule-internal"}
+    )
+    assert resp.status_code == 200, "封面挂了不许把会话列表拖成 500"
+    assert [r["sessionId"] for r in resp.json()["sessions"]] == ["s-solo"]
+
+
+def test_sessions_list_fetches_summaries_and_covers_concurrently(monkeypatch):
+    """摘要和封面索引必须并发发，不许串行。
+
+    真机（2026-08-24，HTTPS SQL 网关）：摘要 140ms、封面 145ms。串行 ~420ms、
+    并发 ~145ms。GET /sessions 是侧栏和应用中心共用的首屏接口，改回串行不报错
+    不变红，只是每个人每次开工作台多等 280ms。
+
+    用真的阻塞时间判，不 grep 源码——写法可以变，"别串行"不变。
+    """
+    try:
+        from fastapi.testclient import TestClient
+        from app import app
+    except Exception as e:
+        pytest.skip(f"app import failed: {e}")
+
+    import time
+    import services.app_store as store
+    import services.persistence as persistence
+
+    DELAY = 0.25
+
+    def slow_summaries():
+        time.sleep(DELAY)
+        return [{"sessionId": "s1", "goal": "g", "artifactCount": 0, "ownerId": TEST_USER_ID}]
+
+    def slow_covers():
+        time.sleep(DELAY)
+        return {}
+
+    monkeypatch.setattr(persistence, "list_session_summaries", slow_summaries)
+    monkeypatch.setattr(store, "session_covers", slow_covers)
+
+    client = TestClient(app)
+    started = time.time()
+    resp = client.get(
+        "/api/sliderule/sessions", headers={"X-Internal-Key": "dev-slide-rule-internal"}
+    )
+    elapsed = time.time() - started
+
+    assert resp.status_code == 200
+    assert [r["sessionId"] for r in resp.json()["sessions"]] == ["s1"]
+    assert elapsed < DELAY * 1.6, (
+        f"摘要与封面看起来是串行取的：{elapsed:.2f}s ≥ {DELAY * 1.6:.2f}s"
+    )
+
+
+def test_sessions_list_still_fails_closed_when_summaries_break(monkeypatch):
+    """摘要那条**不许** fail-open —— 它是这个接口的正事。
+
+    增强类 fail-open、主链路 fail-closed，两者不能混（本仓第七条）。封面拿不到
+    就画空态没关系；会话摘要拿不到却假装"你没有会话"，是端出一份**假的空列表**，
+    比报错严重得多。并发化之后特别容易顺手把它一起包进 try 里，这条钉住它。
+    """
+    try:
+        from fastapi.testclient import TestClient
+        from app import app
+    except Exception as e:
+        pytest.skip(f"app import failed: {e}")
+
+    import services.persistence as persistence
+
+    def boom():
+        raise RuntimeError("摘要查询挂了")
+
+    monkeypatch.setattr(persistence, "list_session_summaries", boom)
+
+    with pytest.raises(RuntimeError):
+        TestClient(app).get(
+            "/api/sliderule/sessions",
+            headers={"X-Internal-Key": "dev-slide-rule-internal"},
+        )
+
+
+def test_startup_warms_storage_backends_in_the_background(monkeypatch):
+    """启动时**后台**把两个存储后端建起来，而且不许阻塞启动。
+
+    ## 钉的是什么
+
+    两个后端都是懒加载单例，第一次用到才建。真机 2026-08-24：建 session 后端
+    1525ms、建 app_store 后端 2409ms，建完之后每次查询 ~140ms —— 也就是重启后
+    第一个开工作台的人要付 3.9 秒，全花在建连接和建表上，跟他要的数据无关
+    （GET /sessions 冷启动 4.7s vs 稳态 843ms）。
+
+    ⚠ 反向同样重要：**不许在启动里 await 它**。2026-08-19 有过相反方向的教训
+      （启动 load_all 把每条会话 blob 拉进进程，dev:all 卡在 "Application
+      startup complete" 起不来）。所以下面既验"确实被触发了"，也验"启动函数
+      自己没被拖住"。
+    """
+    try:
+        import app as app_module
+    except Exception as e:
+        pytest.skip(f"app import failed: {e}")
+
+    import time
+
+    built: list[str] = []
+    gate = threading.Event()
+
+    def slow_blob_store(_store_file=None):
+        gate.wait(2.0)
+        built.append("session store")
+        return None
+
+    def slow_get_backend():
+        gate.wait(2.0)
+        built.append("app store")
+        return None
+
+    import services.persistence as persistence
+    import services.app_store as store
+
+    monkeypatch.setattr(persistence, "_blob_store", slow_blob_store)
+    monkeypatch.setattr(store, "get_backend", slow_get_backend)
+
+    started = time.time()
+    app_module._warm_storage_backends()
+    returned_in = time.time() - started
+
+    # ① 立刻返回 —— 预热在后台，启动不被 IO 拖住
+    assert returned_in < 0.5, f"预热阻塞了启动 {returned_in:.2f}s"
+    assert built == [], "还没放行就建完了？那说明它是同步跑的"
+
+    # ② 放行之后两个后端都真的被建了（正向：不是只写了个函数没人调）
+    gate.set()
+    deadline = time.time() + 5
+    while len(built) < 2 and time.time() < deadline:
+        time.sleep(0.02)
+    assert sorted(built) == ["app store", "session store"]
+
+
+def test_warm_up_failure_falls_back_to_lazy_loading(monkeypatch):
+    """预热建不起来 → 打一行日志走人，绝不把启动带崩。
+
+    预热纯属提速：失败就退回原来的懒加载，第一个请求自己建，行为零回退。
+    """
+    try:
+        import app as app_module
+    except Exception as e:
+        pytest.skip(f"app import failed: {e}")
+
+    import time
+    import services.persistence as persistence
+    import services.app_store as store
+
+    def boom(*_a, **_kw):
+        raise RuntimeError("网关连不上")
+
+    monkeypatch.setattr(persistence, "_blob_store", boom)
+    monkeypatch.setattr(store, "get_backend", boom)
+
+    app_module._warm_storage_backends()  # 不抛就是通过
+    time.sleep(0.3)

@@ -9,6 +9,12 @@
 import json
 from pathlib import Path
 
+import pytest
+
+# 整个文件测的就是内置演示域夹具本身，前提是夹具快路径开着。
+# 该开关 2026-08-10 起默认关（见 _demo_fixture_enabled 头注）。
+pytestmark = pytest.mark.usefixtures("demo_fixture_path")
+
 from services.v5_capability_executor import (
     DOMAIN_INTENT_MARKERS,
     _build_per_skill_evidence,

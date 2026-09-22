@@ -130,11 +130,13 @@ export interface LegacyPanelLists {
  */
 export function dropLegacyPanelsCoveredByBlocks(
   lists: LegacyPanelLists,
-  blocks: readonly ExperienceBlockInstance[],
-  /** freeform 设计树里 blockRef 摆过的指纹（嵌了就外面不画） */
-  alreadyPlaced?: ReadonlySet<string>
+  blocks: readonly ExperienceBlockInstance[]
 ): LegacyPanelLists {
-  const taken = new Set<string>(alreadyPlaced ?? []);
+  // 2026-08-03：原本还接一个 alreadyPlaced（freeform 设计树里 blockRef 摆过的
+  // 指纹，"嵌了就外面不画"）。blockRef 整条通道已删除——逐行内容现在由设计
+  // 模型用 rowsRef 自己画，不再有"同一份榜既在设计树里又在 page.blocks 里"
+  // 这种三处并存的局面，参数随之取消。
+  const taken = new Set<string>();
   for (const b of blocks) {
     const key = blockPanelKey(b);
     if (key) taken.add(key);
@@ -153,57 +155,17 @@ export function dropLegacyPanelsCoveredByBlocks(
 }
 
 /**
- * 走一遍 freeformOverview 的设计树，把里面 blockRef 摆的积木指纹收出来。
- *
- * 2026-07-29：有了 blockRef 之后，同一份榜/流可能出现在**三个**位置——
- * freeform 设计树里、page.blocks 里、page.rankings/feeds 里。语义是
- * **「嵌了就外面不画」**：设计者已经把它摆进版式了，外面再来一张就是重复，
- * 而且破坏它设计的留白节奏。
- *
- * 深度上限跟渲染层同值（FREEFORM_MAX_DEPTH=6 那套的保守值），坏数据不至于
- * 把这里转晕；不认识的形状一律跳过，不抛。
- */
-export function collectFreeformBlockRefKeys(
-  freeformContent: { root?: unknown } | null | undefined
-): Set<string> {
-  const keys = new Set<string>();
-  const walk = (node: unknown, depth: number) => {
-    if (depth > 8 || !node || typeof node !== "object") return;
-    const n = node as {
-      blockRef?: {
-        type?: string;
-        binding?: Record<string, unknown>;
-        props?: Record<string, unknown>;
-      };
-      children?: unknown;
-    };
-    if (n.blockRef?.type) {
-      const key = blockPanelKey({
-        type: String(n.blockRef.type),
-        binding: (n.blockRef.binding ?? {}) as ExperienceBlockInstance["binding"],
-        // props 也要带上：WorkflowTimeline 的身份是 props.chainRef，不带就
-        // 恒等于主链路指纹，指向别的链路的那个会被误去重掉。
-        props: (n.blockRef.props ?? {}) as ExperienceBlockInstance["props"],
-      });
-      if (key) keys.add(key);
-    }
-    if (Array.isArray(n.children)) for (const c of n.children) walk(c, depth + 1);
-  };
-  walk(freeformContent?.root, 0);
-  return keys;
-}
-
-/**
  * 积木自己内部也可能重复（模型把同一份榜声明两次）——同指纹只留第一个。
  * 指纹为 null 的（其余区块类型）一律保留，不参与去重。
  *
- * `alreadyPlaced` 是已经在别处（freeform 设计树里）摆过的指纹，一并跳过。
+ * 2026-08-03：原本还接一个 alreadyPlaced（"已经在 freeform 设计树里摆过的
+ * 指纹一并跳过"）。blockRef 通道已删除，设计树里不再摆现成积木，那个参数
+ * 恒为空集，随之取消。
  */
 export function dedupeBlocksByPanelKey(
-  blocks: readonly ExperienceBlockInstance[],
-  alreadyPlaced?: ReadonlySet<string>
+  blocks: readonly ExperienceBlockInstance[]
 ): ExperienceBlockInstance[] {
-  const seen = new Set<string>(alreadyPlaced ?? []);
+  const seen = new Set<string>();
   const out: ExperienceBlockInstance[] = [];
   for (const b of blocks) {
     const key = blockPanelKey(b);

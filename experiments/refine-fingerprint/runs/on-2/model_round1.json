@@ -1,0 +1,318 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder_profile",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "profile_no",
+      "name": "档案编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "gender",
+      "name": "性别",
+      "type": "string"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "string"
+     },
+     {
+      "id": "care_level",
+      "name": "健康照护等级",
+      "type": "string"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     },
+     {
+      "id": "grid",
+      "name": "所属网格",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "assignee",
+      "name": "指派人员",
+      "type": "string"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约时间",
+      "type": "date"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_consultant",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "role_worker",
+    "name": "上门服务人员"
+   },
+   {
+    "id": "role_supervisor",
+    "name": "运营主管"
+   }
+  ],
+  "permissions": [
+   "elder_profile:create",
+   "elder_profile:read",
+   "elder_profile:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "work_order:approve",
+   "work_order:reject",
+   "work_order:export",
+   "work_order:manage"
+  ],
+  "menus": [
+   {
+    "id": "menu_elder",
+    "label": "老人档案管理",
+    "roleRefs": [
+     "role_consultant",
+     "role_supervisor"
+    ],
+    "permissionRefs": [
+     "elder_profile:read"
+    ]
+   },
+   {
+    "id": "menu_order",
+    "label": "服务工单中心",
+    "roleRefs": [
+     "role_worker",
+     "role_supervisor"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_dispatch",
+    "name": "待派发",
+    "assigneeRole": "role_consultant",
+    "phase": "派发阶段"
+   },
+   {
+    "id": "node_execute",
+    "name": "服务中",
+    "assigneeRole": "role_worker",
+    "phase": "执行阶段"
+   },
+   {
+    "id": "node_review",
+    "name": "质量审核",
+    "assigneeRole": "role_supervisor",
+    "phase": "审核阶段"
+   },
+   {
+    "id": "node_completed",
+    "name": "已完成",
+    "assigneeRole": "role_supervisor",
+    "phase": "结单阶段"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_dispatch",
+    "to": "node_execute",
+    "condition": "养老顾问完成工单派发并指定上门服务人员"
+   },
+   {
+    "from": "node_execute",
+    "to": "node_review",
+    "condition": "上门服务人员提交服务过程与结果"
+   },
+   {
+    "from": "node_review",
+    "to": "node_completed",
+    "condition": "运营主管审核服务质量通过"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "登录工作台",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder_profile.profile_no"
+    ],
+    "actionPermissions": [
+     "elder_profile:read"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder_profile.profile_no",
+     "elder_profile.elder_name",
+     "elder_profile.gender",
+     "elder_profile.age",
+     "elder_profile.care_level",
+     "elder_profile.emergency_contact",
+     "elder_profile.grid"
+    ],
+    "actionPermissions": [
+     "elder_profile:create",
+     "elder_profile:read",
+     "elder_profile:update"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "服务工单中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_type",
+     "work_order.elder_name",
+     "work_order.assignee",
+     "work_order.appointment_time",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:read",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "运营数据大屏与报表",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "work_order.status",
+     "work_order.service_type"
+    ],
+    "actionPermissions": [
+     "work_order:export"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_elder_summary",
+    "name": "老人档案智能分析",
+    "inputFields": [
+     "elder_profile.elder_name",
+     "elder_profile.care_level"
+    ],
+    "outputField": "elder_profile.emergency_contact",
+    "roleRefs": [
+     "role_consultant"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p3",
+    "workflowRef": "node_dispatch"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "main_flow"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_consultant",
+   "role_worker",
+   "role_supervisor"
+  ],
+  "dataModelRefs": [
+   "elder_profile",
+   "work_order"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_order_elder",
+    "statement": "服务工单必须关联存在的老人档案信息",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "elder_profile",
+     "node_dispatch"
+    ]
+   },
+   {
+    "id": "inv_status_transition",
+    "statement": "工单状态变更必须符合预定的工作流节点流转规则",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "work_order.status",
+     "node_execute",
+     "node_review"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

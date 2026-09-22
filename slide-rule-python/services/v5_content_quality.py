@@ -22,6 +22,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from .rbac_roles import role_ids
+
 
 def _as_list(v: Any) -> List[Any]:
     return v if isinstance(v, list) else []
@@ -38,7 +40,10 @@ def _finding(code: str, severity: str, detail: str) -> Dict[str, str]:
 def _role_permissions(model: Dict[str, Any]) -> Dict[str, set]:
     """角色 → 权限并集（rbac.menus 的 roleRefs × permissionRefs，与客户端口径一致）。"""
     rbac = _as_dict(model.get("rbac"))
-    roles = [r for r in _as_list(rbac.get("roles")) if isinstance(r, str)]
+    # ⚠ 别写成 `if isinstance(r, str)`。2026-08-05 角色补了中文名之后是
+    # `{"id","name"}` 对象，那种写法会**静默过滤成零个角色**——下面每一条
+    # 质量检查都跟着失效，而且一个 finding 都不报，看起来像"全都合格"。
+    roles = role_ids(rbac)
     grants: Dict[str, set] = {r: set() for r in roles}
     for menu in _as_list(rbac.get("menus")):
         menu = _as_dict(menu)
@@ -59,7 +64,7 @@ def analyze_content_quality(model: Dict[str, Any]) -> Dict[str, Any]:
     entity_ids = [e.get("id") for e in entities if isinstance(e.get("id"), str)]
 
     rbac = _as_dict(model.get("rbac"))
-    roles = [r for r in _as_list(rbac.get("roles")) if isinstance(r, str)]
+    roles = role_ids(rbac)  # 两种写法都吃，见 services/rbac_roles.py
     declared_permissions = [p for p in _as_list(rbac.get("permissions")) if isinstance(p, str)]
     role_perms = _role_permissions(model)
 

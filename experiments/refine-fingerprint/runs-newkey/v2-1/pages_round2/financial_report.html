@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="zh-CN" class="w-full h-full bg-[#F4F6F8]">
+<head><style id="sliderule-desktop-fill">html,body{margin:0!important;width:100%!important;height:100%!important;min-height:100%!important;max-width:none!important;overflow:hidden!important}body{align-items:stretch!important;justify-content:flex-start!important;padding:0!important}body>[class*="mx-auto"]{max-width:none!important;width:100%!important;height:100%!important;margin:0!important;box-sizing:border-box!important;border-radius:0!important;box-shadow:none!important}body>div[class*="min-h-screen"],body>div[class*="justify-center"]{display:flex!important;align-items:stretch!important;justify-content:flex-start!important;width:100%!important;height:100%!important;max-width:none!important;padding:0!important;margin:0!important;box-sizing:border-box!important}body>div[class*="min-h-screen"]>[class*="mx-auto"],body>div[class*="min-h-screen"]>[class*="max-w-"],body>div[class*="justify-center"]>[class*="mx-auto"],body>div[class*="justify-center"]>[class*="max-w-"]{max-width:none!important;width:100%!important;height:100%!important;margin:0!important;box-sizing:border-box!important;border-radius:0!important;box-shadow:none!important}</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安养通 - 财务结算报表</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2B7A78',
+                        accent: '#E07A5F',
+                        bgLight: '#F4F6F8',
+                    }
+                }
+            }
+        }
+    </script>
+<style>aside [aria-current="page"]{background-color:color-mix(in srgb, var(--primary, currentColor) 16%, transparent);color:var(--chrome-fg, inherit);font-weight:600}header nav[aria-label="Breadcrumb"] [aria-current="page"]{background-color:transparent;color:var(--chrome-fg, inherit);font-weight:600}</style><style id="sliderule-theme">:root{--background:#e7f9f8;--foreground:#0f172a;--chrome:#f2fffe;--chrome-fg:#0f172a;--card:#ffffff;--card-fg:#0f172a;--primary:#2b7a78;--primary-fg:#f8fafc;--muted:#e1f3f2;--border:#d1e2e1;--radius:8px;}html,body{background-color:var(--background)!important;color:var(--foreground)!important}header,aside,nav.fixed{background-color:var(--chrome)!important;color:var(--chrome-fg)!important}html[data-theme="light"] main .bg-black,html[data-theme="light"] main .bg-slate-800,html[data-theme="light"] main .bg-slate-900,html[data-theme="light"] main .bg-slate-950,html[data-theme="light"] main .bg-gray-800,html[data-theme="light"] main .bg-gray-900,html[data-theme="light"] main .bg-gray-950,html[data-theme="light"] main .bg-zinc-800,html[data-theme="light"] main .bg-zinc-900,html[data-theme="light"] main .bg-zinc-950,html[data-theme="light"] main .bg-neutral-800,html[data-theme="light"] main .bg-neutral-900,html[data-theme="light"] main .bg-neutral-950,html[data-theme="light"] main .bg-stone-800,html[data-theme="light"] main .bg-stone-900,html[data-theme="light"] main .bg-stone-950{background-color:var(--card)!important;color:var(--card-fg)!important;border-color:var(--border)!important}html[data-theme="light"] header .text-white,html[data-theme="light"] header .text-slate-100,html[data-theme="light"] header .text-slate-200,html[data-theme="light"] header .text-gray-100,html[data-theme="light"] aside .text-white,html[data-theme="light"] aside .text-slate-100,html[data-theme="light"] aside .text-slate-200,html[data-theme="light"] aside .text-gray-100{color:var(--chrome-fg,#0f172a)!important}html[data-theme="light"] header .bg-black,html[data-theme="light"] header .bg-slate-800,html[data-theme="light"] header .bg-slate-900,html[data-theme="light"] header .bg-slate-950,html[data-theme="light"] header .bg-gray-800,html[data-theme="light"] header .bg-gray-900,html[data-theme="light"] header .bg-gray-950,html[data-theme="light"] header .bg-zinc-800,html[data-theme="light"] header .bg-zinc-900,html[data-theme="light"] header .bg-zinc-950,html[data-theme="light"] header .bg-neutral-800,html[data-theme="light"] header .bg-neutral-900,html[data-theme="light"] header .bg-neutral-950,html[data-theme="light"] header .bg-stone-800,html[data-theme="light"] header .bg-stone-900,html[data-theme="light"] header .bg-stone-950{background-color:var(--muted)!important;color:var(--chrome-fg,#0f172a)!important}aside nav a{box-sizing:border-box;width:100%;display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside>:first-child:not(nav):not(:has(nav)){display:flex!important;flex-direction:row!important;align-items:center!important;gap:.5rem}aside :is(img,svg){flex-shrink:0}aside:has(nav a){min-width:16rem!important;box-sizing:border-box}aside[class*="fixed"]:has(nav a),aside[class*="absolute"]:has(nav a){width:16rem!important}aside[class*="fixed"]:has(nav a)~*,aside[class*="absolute"]:has(nav a)~*{margin-left:16rem!important}aside [aria-current="page"]{background-color:color-mix(in srgb,var(--primary,currentColor) 16%,var(--chrome,transparent))!important;color:var(--chrome-fg,inherit)!important;font-weight:600}header nav[aria-label="Breadcrumb"] [aria-current="page"],header nav[aria-label="breadcrumb"] [aria-current="page"]{background-color:transparent!important;color:var(--chrome-fg,inherit)!important;font-weight:600}</style><script>
+/* sliderule-theme-tokens */
+tailwind.config = { theme: { extend: { colors: {
+  background: '#e7f9f8',
+  foreground: '#0f172a',
+  chrome: '#f2fffe',
+  card: '#ffffff',
+  primary: '#2b7a78',
+  muted: '#e1f3f2',
+  border: '#d1e2e1'
+} } } };
+</script></head>
+<body class="w-full h-full flex overflow-hidden text-zinc-800 font-sans antialiased bg-[#F4F6F8]">
+
+    <!-- 左侧导航 -->
+    <aside class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 h-full">
+        <div class="flex items-center px-6 h-16 border-b border-slate-100">
+            <div class="w-8 h-8 rounded-lg bg-[#2B7A78] flex items-center justify-center text-white font-bold mr-3 shadow-sm">安</div>
+            <span class="text-lg font-bold tracking-wide text-[#2B7A78]">安养通</span>
+        </div>
+        <nav class="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto text-sm">
+<a data-page-id="elderly_list" href="#" class="flex items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 mr-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg><span>老人档案列表</span></a>
+<a data-page-id="work_order_dispatch" href="#" class="flex items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 mr-3 text-[#2B7A78]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg><span>服务工单调度</span></a>
+<a data-page-id="operation_dashboard" href="#" class="flex items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 mr-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg><span>运营数据总览看板</span></a>
+<a aria-current="page" data-page-id="financial_report" href="#" class="bg-[#2B7A78]/10 flex font-medium items-center px-4 py-3 rounded-lg text-[#2B7A78]"><svg class="w-5 h-5 mr-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg><span>财务结算报表</span></a>
+<a data-page-id="my_tasks" href="#" class="flex items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 mr-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg><span>我的任务</span></a>
+</nav>
+        <div class="p-4 border-t border-slate-100">
+            <div class="flex items-center px-3 py-2 bg-slate-50 rounded-lg">
+                <img src="https://placehold.co/40x40" alt="Consultant avatar portrait" class="w-9 h-9 rounded-full mr-3 object-cover">
+                <div class="overflow-hidden">
+                    <p class="text-xs font-medium text-slate-800 truncate">李顾问 (东湖社区)</p>
+                    <p class="text-[11px] text-slate-400 truncate">社区养老顾问</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 右侧主体区域 -->
+    <div class="flex-1 flex flex-col h-full overflow-hidden">
+        
+        <!-- 顶部 Header -->
+        <header class="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0">
+            <nav aria-label="Breadcrumb">
+                <ol class="flex items-center space-x-2 text-sm">
+                    <li><a href="#" class="text-slate-500 hover:text-[#2B7A78]">安养通</a></li>
+                    <li class="text-slate-300">/</li>
+                    <li><a href="#" aria-current="page" class="text-slate-800 font-medium">财务结算报表</a></li>
+                </ol>
+            </nav>
+            <div class="flex items-center space-x-3">
+                <div class="inline-flex bg-slate-100 p-1 rounded-lg text-xs font-medium text-slate-600">
+                    <button class="px-3 py-1.5 bg-white text-slate-800 rounded-md shadow-sm">全部社区</button>
+                    <button class="px-3 py-1.5 hover:text-slate-800 transition-colors">阳光社区</button>
+                    <button class="px-3 py-1.5 hover:text-slate-800 transition-colors">幸福里</button>
+                </div>
+                <div class="relative">
+                    <span class="absolute -top-1 -right-1 w-2 h-2 bg-[#E07A5F] rounded-full"></span>
+                    <button class="p-2 text-slate-500 hover:text-slate-700 rounded-lg border border-slate-200 bg-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 正文 <main> -->
+        <main class="flex-1 overflow-y-auto p-8 space-y-6">
+            
+            <!-- 核心数据指标看板 (8px 圆角卡片化容器) -->
+            <div class="grid grid-cols-4 gap-6">
+                <!-- 卡片 1 -->
+                <div class="bg-white p-6 rounded-lg border border-zinc-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-zinc-500">本月营业收入</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-medium">同比 +12.4%</span>
+                    </div>
+                    <div class="my-4">
+                        <span class="text-[24px] font-bold text-zinc-900" data-value="financial_settlement" data-aggregate="sum:fee_amount">¥ 128,500</span>
+                    </div>
+                    <div class="text-xs text-zinc-400 flex items-center justify-between pt-2 border-t border-zinc-50">
+                        <span>上期结算额</span>
+                        <span class="text-zinc-600">¥ 114,300</span>
+                    </div>
+                </div>
+
+                <!-- 卡片 2 -->
+                <div class="bg-white p-6 rounded-lg border border-zinc-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-zinc-500">已到账服务费</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-medium">回款率 94.2%</span>
+                    </div>
+                    <div class="my-4">
+                        <span class="text-[24px] font-bold text-zinc-900">¥ 121,040</span>
+                    </div>
+                    <div class="text-xs text-zinc-400 flex items-center justify-between pt-2 border-t border-zinc-50">
+                        <span>待收回账款</span>
+                        <span class="text-zinc-600">¥ 7,460</span>
+                    </div>
+                </div>
+
+                <!-- 卡片 3 -->
+                <div class="bg-white p-6 rounded-lg border border-zinc-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-zinc-500">补贴核销总额</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">政府民政</span>
+                    </div>
+                    <div class="my-4">
+                        <span class="text-[24px] font-bold text-zinc-900" data-value="financial_settlement" data-aggregate="sum:subsidy_amount">¥ 45,200</span>
+                    </div>
+                    <div class="text-xs text-zinc-400 flex items-center justify-between pt-2 border-t border-zinc-50">
+                        <span>核销人数</span>
+                        <span class="text-zinc-600"><span data-value="elderly_resident" data-aggregate="count">128</span> 位老人</span>
+                    </div>
+                </div>
+
+                <!-- 卡片 4 -->
+                <div class="bg-white p-6 rounded-lg border border-zinc-200 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-zinc-500">异常告警账单</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-rose-50 text-[#E07A5F] font-medium">需人工复核</span>
+                    </div>
+                    <div class="my-4">
+                        <span class="text-[24px] font-bold text-[#E07A5F]" data-value="financial_settlement" data-aggregate="count">3 笔</span>
+                    </div>
+                    <div class="text-xs text-zinc-400 flex items-center justify-between pt-2 border-t border-zinc-50">
+                        <span>涉及金额</span>
+                        <span class="text-zinc-600">¥ 3,280</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据趋势与图表区域 -->
+            <div class="grid grid-cols-3 gap-6">
+                <!-- 趋势折线图 (纯SVG绘制) -->
+                <div class="col-span-2 bg-white p-6 rounded-lg border border-zinc-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="font-bold text-zinc-900">近半年财务收支趋势</h3>
+                            <p class="text-xs text-zinc-500 mt-0.5">统计周期：20XX年05月 - 20XX年10月</p>
+                        </div>
+                        <div class="flex items-center gap-4 text-xs text-zinc-600">
+                            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[#2B7A78] inline-block"></span> 收入</span>
+                            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[#E07A5F] inline-block"></span> 支出</span>
+                        </div>
+                    </div>
+                    <!-- 内联 SVG 趋势图 -->
+                    <div class="h-64 w-full flex items-end pt-4">
+                        <svg class="w-full h-full overflow-visible" viewBox="0 0 600 200" preserveAspectRatio="none" data-chart="donut" data-entity="financial_settlement" data-dimension="service_type" data-metric="count">
+                            <!-- 网格线 -->
+                            <line x1="0" y1="0" x2="600" y2="0" stroke="#f1f5f9" stroke-width="1" />
+                            <line x1="0" y1="50" x2="600" y2="50" stroke="#f1f5f9" stroke-width="1" />
+                            <line x1="0" y1="100" x2="600" y2="100" stroke="#f1f5f9" stroke-width="1" />
+                            <line x1="0" y1="150" x2="600" y2="150" stroke="#f1f5f9" stroke-width="1" />
+                            <line x1="0" y1="200" x2="600" y2="200" stroke="#e2e8f0" stroke-width="1" />
+
+                            <!-- 收入折线 -->
+                            <path d="M 0 140 Q 100 80 200 110 T 400 40 T 600 20" fill="none" stroke="#2B7A78" stroke-width="3" />
+                            <!-- 支出折线 -->
+                            <path d="M 0 170 Q 100 130 200 150 T 400 90 T 600 70" fill="none" stroke="#E07A5F" stroke-width="3" />
+
+                            <!-- 节点圆圈 -->
+                            <circle cx="0" cy="140" r="4" fill="#2B7A78" />
+                            <circle cx="120" cy="95" r="4" fill="#2B7A78" />
+                            <circle cx="240" cy="120" r="4" fill="#2B7A78" />
+                            <circle cx="360" cy="60" r="4" fill="#2B7A78" />
+                            <circle cx="480" cy="50" r="4" fill="#2B7A78" />
+                            <circle cx="600" cy="20" r="4" fill="#2B7A78" />
+                        </svg>
+                    </div>
+                    <div class="flex justify-between text-xs text-zinc-400 mt-4 px-1">
+                        <span>20XX-05</span>
+                        <span>20XX-06</span>
+                        <span>20XX-07</span>
+                        <span>20XX-08</span>
+                        <span>20XX-09</span>
+                        <span>20XX-10</span>
+                    </div>
+                </div>
+
+                <!-- 社区服务项目收入占比 -->
+                <div class="bg-white p-6 rounded-lg border border-zinc-200 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-bold text-zinc-900">服务项目收入占比</h3>
+                        <p class="text-xs text-zinc-500 mt-0.5">本月各养老服务模块营收分布</p>
+                    </div>
+                    <div class="space-y-4 my-auto">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="font-medium text-zinc-700">居家上门照料服务</span>
+                                <span class="text-zinc-500">45.0%</span>
+                            </div>
+                            <div class="w-full bg-zinc-100 h-2 rounded-full overflow-hidden">
+                                <div class="bg-[#2B7A78] h-full rounded-full" style="width: 45%;"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="font-medium text-zinc-700">日间照料中心餐饮</span>
+                                <span class="text-zinc-500">28.5%</span>
+                            </div>
+                            <div class="w-full bg-zinc-100 h-2 rounded-full overflow-hidden">
+                                <div class="bg-[#2B7A78] h-full rounded-full" style="width: 28.5%;"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="font-medium text-zinc-700">康复护理与理疗</span>
+                                <span class="text-zinc-500">16.5%</span>
+                            </div>
+                            <div class="w-full bg-zinc-100 h-2 rounded-full overflow-hidden">
+                                <div class="bg-[#2B7A78] h-full rounded-full" style="width: 16.5%;"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="font-medium text-zinc-700">适老化改造与租赁</span>
+                                <span class="text-zinc-500">10.0%</span>
+                            </div>
+                            <div class="w-full bg-zinc-100 h-2 rounded-full overflow-hidden">
+                                <div class="bg-[#E07A5F] h-full rounded-full" style="width: 10%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-xs text-zinc-400 pt-4 border-t border-zinc-100 text-center">
+                        数据实时同步自安养通结算系统
+                    </div>
+                </div>
+            </div>
+
+            <!-- 财务结算明细列表 -->
+            <div class="bg-white rounded-lg border border-zinc-200 shadow-sm overflow-hidden">
+                <div class="p-6 border-b border-zinc-100 flex items-center justify-between">
+                    <div>
+                        <h3 class="font-bold text-zinc-900">社区长者服务账单明细</h3>
+                        <p class="text-xs text-zinc-500 mt-0.5">显示当前社区所有已生成结算的账单记录</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="relative">
+                            <input type="text" placeholder="搜索长者姓名/单号..." class="text-xs pl-8 pr-4 py-2 border border-zinc-200 rounded-lg focus:outline-none focus:border-[#2B7A78] w-64">
+                            <svg class="w-4 h-4 text-zinc-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        </div>
+                        <button class="px-3 py-2 border border-zinc-200 text-zinc-600 rounded-lg text-xs font-medium hover:bg-zinc-50 transition-colors flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                            筛选
+                        </button>
+                        <button class="px-3 py-2 border border-zinc-200 text-zinc-600 rounded-lg text-xs font-medium hover:bg-zinc-50 transition-colors flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                            导出报表
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 表格 -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-zinc-50 text-zinc-500 text-xs font-semibold uppercase tracking-wider border-b border-zinc-200">
+                                <th class="py-3 px-6">结算单号</th>
+                                <th class="py-3 px-6">长者姓名</th>
+                                <th class="py-3 px-6">服务类型</th>
+                                <th class="py-3 px-6">结算金额</th>
+                                <th class="py-3 px-6">政府补贴</th>
+                                <th class="py-3 px-6">结算日期</th>
+                                <th class="py-3 px-6">付款状态</th>
+                                <th class="py-3 px-6 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-100 text-sm text-zinc-700" data-rows="financial_settlement" data-sort="settlement_no" data-order="desc" data-limit="8">
+                            <tr class="hover:bg-zinc-50/50 transition-colors">
+                                <td class="py-4 px-6 font-mono text-xs text-zinc-500" data-field="settlement_no">BILL-20XX-1001</td>
+                                <td class="py-4 px-6 font-medium text-zinc-900" data-field="target">张大爷 (82岁)</td>
+                                <td class="py-4 px-6" data-field="service_type">居家上门照料服务</td>
+                                <td class="py-4 px-6 font-semibold" data-field="fee_amount">¥ 1,200</td>
+                                <td class="py-4 px-6 text-zinc-500" data-field="subsidy_amount">¥ 300</td>
+                                <td class="py-4 px-6 text-zinc-500">20XX-10-24</td>
+                                <td class="py-4 px-6"><span class="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600" data-field="status">已到账</span></td>
+                                <td class="py-4 px-6 text-right space-x-2">
+                                    <button class="text-[#2B7A78] hover:underline font-medium text-xs" data-action="openRecord" data-entity="financial_settlement">详情</button>
+                                    <button class="text-zinc-400 hover:text-zinc-600 text-xs">打印</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页底部 -->
+                <div class="px-6 py-4 border-t border-zinc-100 flex items-center justify-between text-xs text-zinc-500">
+                    <div>显示第 1 到 5 条，共 128 条记录</div>
+                    <div class="flex items-center space-x-2">
+                        <button class="px-3 py-1.5 border border-zinc-200 rounded hover:bg-zinc-50 disabled:opacity-50" disabled>上一页</button>
+                        <button class="px-3 py-1.5 bg-[#2B7A78] text-white rounded font-medium">1</button>
+                        <button class="px-3 py-1.5 border border-zinc-200 rounded hover:bg-zinc-50">2</button>
+                        <button class="px-3 py-1.5 border border-zinc-200 rounded hover:bg-zinc-50">3</button>
+                        <span class="px-1">...</span>
+                        <button class="px-3 py-1.5 border border-zinc-200 rounded hover:bg-zinc-50">26</button>
+                        <button class="px-3 py-1.5 border border-zinc-200 rounded hover:bg-zinc-50">下一页</button>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+</body>
+</html>

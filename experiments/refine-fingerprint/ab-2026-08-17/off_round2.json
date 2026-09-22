@@ -1,0 +1,264 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "string"
+     },
+     {
+      "id": "risk_level",
+      "name": "风险等级标签",
+      "type": "enum"
+     }
+    ]
+   },
+   {
+    "id": "health_record",
+    "name": "健康建档",
+    "fields": [
+     {
+      "id": "measure_time",
+      "name": "最近测量时间",
+      "type": "date"
+     },
+     {
+      "id": "vital_signs",
+      "name": "核心体征",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elder"
+     }
+    ]
+   },
+   {
+    "id": "service_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "服务对象",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约时间",
+      "type": "date"
+     },
+     {
+      "id": "task_type",
+      "name": "任务类型",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "流转状态",
+      "type": "enum"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_specialist",
+    "name": "社区养老专员角色"
+   },
+   {
+    "id": "role_family",
+    "name": "家属角色"
+   }
+  ],
+  "permissions": [
+   "service_order:create",
+   "service_order:read",
+   "service_order:update",
+   "service_order:assign",
+   "elder:read",
+   "elder:create",
+   "health_record:read",
+   "health_record:create"
+  ],
+  "menus": [
+   {
+    "id": "menu_family",
+    "label": "家属服务",
+    "roleRefs": [
+     "role_family"
+    ],
+    "permissionRefs": [
+     "service_order:create"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_start",
+    "name": "提交预约",
+    "assigneeRole": "role_family",
+    "phase": "创建阶段"
+   },
+   {
+    "id": "node_process",
+    "name": "专员处理",
+    "assigneeRole": "role_specialist",
+    "phase": "处理阶段"
+   },
+   {
+    "id": "node_end",
+    "name": "服务完成",
+    "assigneeRole": "role_specialist",
+    "phase": "结束阶段"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_start",
+    "to": "node_process",
+    "condition": "家属提交服务预约工单后"
+   },
+   {
+    "from": "node_process",
+    "to": "node_end",
+    "condition": "专员处理完毕并归档"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "family_service_center",
+    "name": "家属服务中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "service_order.order_no",
+     "service_order.status"
+    ],
+    "actionPermissions": [
+     "service_order:read",
+     "service_order:create"
+    ]
+   },
+   {
+    "id": "health_monitor_board",
+    "name": "健康监测看板",
+    "kind": "monitor",
+    "fieldBindings": [
+     "health_record.vital_signs",
+     "health_record.measure_time"
+    ],
+    "actionPermissions": [
+     "health_record:read"
+    ]
+   },
+   {
+    "id": "specialist_workbench",
+    "name": "专员工作台",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.risk_level"
+    ],
+    "actionPermissions": [
+     "elder:read",
+     "service_order:assign"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "cap_risk",
+    "name": "智能风险评估",
+    "inputFields": [
+     "health_record.vital_signs"
+    ],
+    "outputField": "elder.risk_level",
+    "roleRefs": [
+     "role_specialist"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "family_service_center",
+    "workflowRef": "node_start"
+   },
+   {
+    "pageRef": "health_monitor_board",
+    "workflowRef": "node_process"
+   },
+   {
+    "pageRef": "specialist_workbench",
+    "workflowRef": "node_end"
+   }
+  ],
+  "landingPageRef": "family_service_center",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_specialist",
+   "role_family"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "health_record",
+   "service_order"
+  ],
+  "appIdentity": {
+   "appName": "安颐通"
+  },
+  "invariants": [
+   {
+    "id": "inv_service_elder",
+    "statement": "服务工单必须关联一个有效的服务对象老人",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "service_order",
+     "service_order.elder_ref",
+     "elder"
+    ]
+   },
+   {
+    "id": "inv_workflow_assignment",
+    "statement": "专员处理节点必须由社区养老专员角色进行处理",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "role_specialist",
+     "node_process"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

@@ -118,8 +118,8 @@ function BrandWordmark({ copy }: { copy: typeof CHINESE_COPY }) {
       data-testid="loading-brand-wordmark"
     >
       <img
-        src="/brand/logo.png"
-        alt="SlideRule"
+        src="/brand/miantuan-mark.png"
+        alt="面团 AI"
         className="h-16 w-auto object-contain"
       />
       <h1

@@ -1,8 +1,14 @@
 """跑一个全新话题的完整链路，并把**参考图**落盘，供跟真实渲染做对比。
 
-链路跟 v5_capability_executor 里那段一模一样，一步不减：
+链路跟 v5_capability_executor 里**老链路那一支**一模一样，一步不减：
     generate_five_system_model → validate_five_system_model
     → enrich_identity_theme → enrich_freeform_blocks → enrich_monitor_page_overviews
+
+⚠ 2026-08-14 起这句话只对**老链路**成立。主轴现在先试 spec-first 七步
+（默认开），走通了就**跳过两段 enrich_***——版式来自第 3 步的真 HTML，
+再 enrich 一遍等于把画好的页面重做一次（架构图 ⚑⚑B）。
+本脚本仍然无条件跑 enrich，因为它的用途就是给**老链路**落参考图做对比；
+但**别再把它当成"主轴现在长什么样"的样本**，那是它 08-14 之前的身份。
 
 参考图在生产路径上是**刻意不落盘**的（`_generate_reference_image_b64` 的
 docstring 写得很清楚：图上的"数字"都是占位假象，不能当真实数据源，也不该

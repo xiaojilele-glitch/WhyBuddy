@@ -133,7 +133,7 @@ def test_phone_only_overview_sheet_carries_the_portrait_canvas_as_fact():
 
 
 def test_block_reference_prompt_forbids_drawing_technical_identifiers():
-    """单区块参照图也必须禁画 blockRef / 字段 id 这类技术标识。
+    """单区块参照图也必须禁画 rowsRef / 字段 id 这类技术标识。
 
     这条明令原本只写在总览参照板那支里，单区块这支漏了——而两边**会吃到同一
     份 brief**：总览页正常走参照板，但 _generate_overview_sheet_b64 任何一步
@@ -146,7 +146,7 @@ def test_block_reference_prompt_forbids_drawing_technical_identifiers():
         "测试区块", _EMPTY_DATAMODEL, theme_id="tangerine", device="desktop"
     )
     assert "技术标识" in prompt
-    assert "blockRef" in prompt, "要点名 blockRef，模型才知道那串东西不是文案"
+    assert "rowsRef" in prompt, "要点名 rowsRef，模型才知道那串东西不是文案"
 
 
 def test_both_devices_still_fill_the_canvas():

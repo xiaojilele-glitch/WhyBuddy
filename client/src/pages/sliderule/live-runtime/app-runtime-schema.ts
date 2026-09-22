@@ -7,9 +7,11 @@
  */
 
 import {
-  guessRefEntityId,
+  normalizeRoles,
+  resolveRefEntityId,
   type FiveSystemModel,
   type FiveSystemField,
+  type PageReconstructionEvidence,
 } from "../system-screens/five-system-model";
 import {
   normalizeFieldFormat,
@@ -17,7 +19,17 @@ import {
   type FieldFormat,
   type NormalizedFieldOption,
 } from "./field-display";
+import type {
+  PageSurfaceDensity,
+  PageSurfaceSpec,
+  PageSurfaceType,
+} from "../system-screens/five-system-model";
 import { DESIGN_RECIPE_IDS } from "./design-recipes";
+import {
+  PAGE_CONTENT_REF,
+  normalizeBusinessGrid,
+  type BusinessGridLayouts,
+} from "./business-page-layout";
 
 export interface AppFormFieldSchema {
   id: string;
@@ -176,6 +188,12 @@ export type AppPageKind =
   | "wizard"
   | "monitor";
 
+export interface AppPageSurfaceSchema {
+  type: PageSurfaceType;
+  density: PageSurfaceDensity;
+  source: "model" | "inferred";
+}
+
 export interface AppPageViewSchema {
   kind: AppPageKind;
   /** kanban：看板列字段 id（主实体 enum 字段，列来自其 options） */
@@ -189,6 +207,7 @@ export interface AppPageViewSchema {
 export interface AppPageSchema {
   id: string;
   title: string;
+  presentation: "application" | "marketing-landing";
   /** 本页主实体（fieldBindings 中出现最多的实体）；无绑定时 null → 渲染器显示空页 */
   entityId: string | null;
   /** 数据表列（主实体字段） */
@@ -213,6 +232,7 @@ export interface AppPageSchema {
   charts: AppPageChartSchema[];
   /** 页面范式（视图骨架；绑定失效已降级 workbench） */
   view: AppPageViewSchema;
+  surface: AppPageSurfaceSchema;
   /** 体验区块过渡声明；旧页面为空，不参与现有内容渲染。 */
   experienceBlocks: AppExperienceBlockSchema[];
   /** 页面级动作实例（Step 5）；空数组对旧模型兼容 */
@@ -224,9 +244,8 @@ export interface AppPageSchema {
    * stats/charts/rankings/feeds 骨架，不是互相替代关系。原样透传不做
    * 类型收窄（跟 identity.generatedTheme 同一个"渲染器内部再校验"套路）。 */
   /**
-   * 总览页的 AI 设计版式。默认那份按 appbundle.preferredDevice 生成
-   * （通常是桌面），`mobile` 是手机档的覆盖（2026-07-29 起 Python 侧会
-   * 多设计一版单列的）。
+   * 总览页的 AI 设计版式。当前只按 appbundle.preferredDevice 生成唯一设备档；
+   * `mobile` 仅用于兼容历史双档快照。
    *
    * 形状照 react-grid-layout 的 `layouts={{lg,md,sm}}`：同一份内容、每档
    * 一份布局，取用时"有本档用本档、没有就往更大的档回退"。老快照只有 root，
@@ -236,22 +255,175 @@ export interface AppPageSchema {
     root: Record<string, unknown>;
     mobile?: { root: Record<string, unknown> };
   };
+  /** 从完整首页视觉稿解析出的可审查契约与确定性还原提示词。 */
+  pageReconstruction?: PageReconstructionEvidence;
 }
 
 /** Step 7：页面布局 5 槽位——每个槽位是有序区块 id 列表；mobile 为手机端覆盖。 */
 export interface AppPageLayoutSchema {
-  summary: string[];
-  primary: string[];
-  secondary: string[];
-  activity: string[];
-  content: string[];
+  header: string[];
+  headerExtra: string[];
+  headerContent: string[];
+  tabs: string[];
+  filters: string[];
+  metrics: string[];
+  charts: string[];
+  main: string[];
+  supplement: string[];
+  aside: string[];
+  footerBar: string[];
+  overlay: string[];
   mobile?: {
-    summary?: string[];
-    primary?: string[];
-    secondary?: string[];
-    activity?: string[];
-    content?: string[];
+    header?: string[];
+    headerExtra?: string[];
+    headerContent?: string[];
+    tabs?: string[];
+    filters?: string[];
+    metrics?: string[];
+    charts?: string[];
+    main?: string[];
+    supplement?: string[];
+    aside?: string[];
+    footerBar?: string[];
+    overlay?: string[];
   };
+  /** RGL-compatible responsive placements rendered with native CSS Grid. */
+  grid?: BusinessGridLayouts;
+}
+
+/**
+ * 表格列去掉"反规范化副本"（2026-08-11）。
+ *
+ * ## 现场
+ *
+ * 线上产物截图里同一张表并排两列：
+ *
+ *     自提点        精选自提点
+ *     自提点名称     定制自提点     ← 同一件事说两遍，值还对不上
+ *
+ * 值对不上那半已经在种子侧修了（副本跟着 ref 的解析结果走）。剩下这半是
+ * **两列本来就该只出一列**：`pickup_point_ref` 与 `pickup_point_name` 是
+ * 模型刻意做的反规范化——存引用的同时冗余一份显示名，免得每次关联查。
+ * 那是数据层的正当设计，**不该原样端到界面上**。
+ *
+ * ## 留哪个
+ *
+ * 留 `_ref`，摘掉 `_name`。理由是 ref 那一列**带着关系**（refEntityId 已解析，
+ * 下拉、跳转、筛选都挂在它身上），而 name 只是一份快照文本。
+ * 这跟 react-admin 的 `<ReferenceField>` / Django admin 拿 FK 的 `__str__`
+ * 当列显示是同一个取舍：**列上显示人话，但那一列的身份仍是那个引用**。
+ *
+ * ## 只动表格列，不动详情
+ *
+ * `detailFields` 原样保留——摘列是为了别在一屏里说两遍，不是要把字段藏起来。
+ * 点进某一行仍然能看到冗余副本的值，数据没有变得不可达。
+ * 这条边界很重要：渲染层可以决定"别挤在一起"，但没有资格决定"你看不到"。
+ */
+export function dedupeDenormalizedColumns(
+  fields: AppFormFieldSchema[]
+): AppFormFieldSchema[] {
+  const keep = new Set(
+    dedupeDenormalizedFieldIds(
+      fields.map(f => f.id),
+      id => fields.some(f => f.id === id && f.type === "ref")
+    )
+  );
+  return keep.size === fields.length ? fields : fields.filter(f => keep.has(f.id));
+}
+
+/**
+ * 同一条判据的**只认字段 id** 版本。
+ *
+ * 2026-08-12：上面那个只接了页面内置表格。用户圈空白那张截图上，「自提点 /
+ * 自提点名称」两列**照样并排**——因为那张表是 `DataTable` 积木画的，它自己
+ * 从真实行的键里派生列，根本不经过 `dedupeDenormalizedColumns`。
+ * 判据钉在一个调用点上，换条渲染路径就漏；所以判据下沉到 id 这一层，两条
+ * 路共用。
+ *
+ * `isRef` 是可选的类型旁证：拿得到字段类型就用（`type === "ref"` 最硬），
+ * 拿不到就只靠 `_ref` 后缀——积木那边只有键名，没有 schema。
+ */
+export function dedupeDenormalizedFieldIds(
+  ids: string[],
+  isRef?: (id: string) => boolean
+): string[] {
+  const refStems = new Set(
+    ids
+      .filter(id => isRef?.(id) || /_ref$/.test(id))
+      .map(id => id.replace(/(_ref|_id|Ref|Id)$/, ""))
+      .filter(stem => stem)
+  );
+  if (refStems.size === 0) return ids;
+  return ids.filter(id => {
+    const m = /^(.+?)(_name|_title|_label|Name|Title|Label)$/.exec(id);
+    // 词干必须完全相同才算副本 —— 跟种子侧同一条判据，宁可漏一个不许摘错
+    return !(m && refStems.has(m[1]));
+  });
+}
+
+export function pageFreeformOwnsContent(
+  page: Pick<AppPageSchema, "presentation" | "view" | "freeformOverview">
+): boolean {
+  return Boolean(page.freeformOverview) && (
+    page.presentation === "marketing-landing" ||
+    page.view.kind === "monitor" ||
+    page.view.kind === "dashboard"
+  );
+}
+
+const SURFACE_TYPES = new Set<PageSurfaceType>([
+  "table",
+  "editable-table",
+  "split-list",
+  "queue",
+]);
+const SURFACE_DENSITIES = new Set<PageSurfaceDensity>([
+  "compact",
+  "default",
+  "comfortable",
+]);
+
+function surfaceText(page: { id?: string; name?: string }): string {
+  return `${page.id ?? ""} ${page.name ?? ""}`.toLowerCase();
+}
+
+export function inferPageSurface(page: {
+  id?: string;
+  name?: string;
+  kind?: string;
+  surface?: PageSurfaceSpec;
+  workflowLinked?: boolean;
+}): AppPageSurfaceSchema {
+  const declaredType = page.surface?.type;
+  const declaredDensity = page.surface?.density;
+  if (
+    declaredType &&
+    SURFACE_TYPES.has(declaredType) &&
+    (!declaredDensity || SURFACE_DENSITIES.has(declaredDensity))
+  ) {
+    return {
+      type: declaredType,
+      density: declaredDensity ?? "default",
+      source: "model",
+    };
+  }
+
+  const text = surfaceText(page);
+  if (
+    /coach|staff|employee|trainer|\u6559\u7ec3|\u5458\u5de5|\u4eba\u5458/.test(text)
+  ) {
+    return { type: "split-list", density: "default", source: "inferred" };
+  }
+  const inferredType: PageSurfaceType =
+    /check[-_ ]?in|attendance|签到|考勤|inventory|stock|盘点/.test(text)
+      ? "editable-table"
+      : /renewal|payment|reconcile|approval|audit|续费|对账|审核|审批|跟进/.test(text) ||
+          page.workflowLinked === true
+        ? "queue"
+        : /coach|staff|employee|trainer|教练|员工|人员/.test(text)
+          ? "split-list"
+          : "table";
+  return { type: inferredType, density: "default", source: "inferred" };
 }
 
 export interface AppStatCardSchema {
@@ -291,13 +463,27 @@ export interface AppRuntimeSchema {
     nav: "side" | "top";
     /** Step 8：默认设备视口偏好；老模型缺省不指定，运行时按现有默认值走。 */
     preferredDevice?: "desktop" | "tablet" | "phone";
+    /** New generated models use one authoritative device; absent on historic dual layouts. */
+    deviceAuthority?: "single-v1";
     /** Step 9：视觉配方引用；老模型/未声明为 undefined，运行时按 "default" 处理。 */
     designRecipeRef?: string;
     /** 2026-07-24：生图驱动生成的身份主题 token；未声明/校验不过时降级到
      * themeId 对应的 8 预设之一（resolveIdentityTheme 内部处理）。 */
     generatedTheme?: Record<string, unknown>;
+    /** 2026-08-04：从这个应用的参照图上读出来的图表分类色（sheet_palette 写入）。
+     * 未声明/校验不过时退回账本色序（resolveIdentityTheme 内部处理）。
+     * 原样透传不收窄类型——存量快照没走过这一版门禁，形状在渲染器里再验。 */
+    chartColors?: unknown;
   };
+  /** 角色**引用键**。所有比较（roleRefs.includes、assigneeRole===）都用它。 */
   roles: string[];
+  /**
+   * 引用键 → 显示名。刻意跟 `roles` 分开放：合成一个对象数组的话，
+   * 各处的 `roles.includes(role)` 会静默变成"永远为 false"，而 TS 在
+   * `string[]` → `{id,label}[]` 这步能报错的地方并不多。分开就不可能拿错。
+   * 补字段之前生成的应用这里是 id→id。
+   */
+  roleLabels: Record<string, string>;
   /** 应用首次打开的页面；老模型缺省为 home。 */
   landingPageId: string;
   home: AppHomeSchema;
@@ -361,55 +547,73 @@ export function buildAiActionInputs(
   return inputs;
 }
 
-/** 5 槽位键。用字面量元组是为了保住 Record<LayoutSlotKey, …> 的类型推导
- * ——直接从目录 JSON 导入会退化成 string。与目录 allowedSlots 的一致性由
- * __tests__/ssot-parity.test.ts 哨兵锁死（谁改目录不改这里，CI 立刻红）。 */
-export const LAYOUT_SLOT_KEYS = [
-  "summary",
-  "primary",
-  "secondary",
-  "activity",
-  "content",
+/**
+ * 页面区域键。
+ *
+ * 2026-08-08 第三轮：旧的五个槽位（summary/primary/secondary/activity/content）
+ * 整套退休。实测量过它们在 12 栅格里的宽度——summary 与 primary 一样（12）、
+ * secondary 与 activity 一样（4）、content 随页型在 12 和 4 之间变，也就是
+ * **五个名字只有两种行为，还有一个是不定项**；而 12 个已存应用里 secondary 和
+ * content 一次都没被用过。换成照 ant-design/pro-blocks 那 29 个真实页面定出来
+ * 的区域名，每一个都有出处（见目录 pageRegions 的 evidence 字段）。
+ *
+ * 仍用字面量元组是为了保住 Record<LayoutRegionKey, …> 的类型推导——直接从目录
+ * JSON 导入会退化成 string。与目录 pageRegions 的一致性由
+ * __tests__/ssot-parity.test.ts 哨兵锁死（谁改目录不改这里，CI 立刻红）。
+ */
+export const LAYOUT_REGION_KEYS = [
+  "header",
+  "headerExtra",
+  "headerContent",
+  "tabs",
+  "filters",
+  "metrics",
+  "charts",
+  "main",
+  "supplement",
+  "aside",
+  "footerBar",
+  "overlay",
 ] as const;
-type LayoutSlotKey = (typeof LAYOUT_SLOT_KEYS)[number];
+type LayoutRegionKey = (typeof LAYOUT_REGION_KEYS)[number];
 
 /**
- * 槽位表偶发被模型多包一层 `slots`（`layout: { slots: { summary: [...] } }`）。
+ * 区域表偶发被模型多包一层 `slots`（`layout: { slots: { summary: [...] } }`）。
  * 生成侧的 prompt 和 Gate 都已经按"摊平"来管了，但**已经落库的模型改不动**，
- * 而这层包装漏过来的后果是静默的：5 个槽位一个都读不到 → hasAny=false →
+ * 而这层包装漏过来的后果是静默的：区域一个都读不到 → hasAny=false →
  * deriveLayout 返回 null → 渲染层判定为"没声明 layout"退回顺序平铺，模型的
  * 排版意图全丢，页面照常渲染、没有任何报错。
  *
- * 解包的判定是确定的，不是猜：`slots` 不在合法槽位名里，而合法槽位的值是
+ * 解包的判定是确定的，不是猜：`slots` 不在合法区域名里，而合法区域的值是
  * 数组、这里是对象——两条同时成立时不存在别的解释。
  */
 function unwrapNestedSlots(raw: unknown): unknown {
   if (!raw || typeof raw !== "object") return raw;
   const nested = (raw as Record<string, unknown>).slots;
   if (!nested || typeof nested !== "object" || Array.isArray(nested)) return raw;
-  const hasRealSlot = LAYOUT_SLOT_KEYS.some(k => Array.isArray((raw as Record<string, unknown>)[k]));
-  // 外层已经有真槽位时以外层为准，不拿包装层去覆盖它。
-  return hasRealSlot ? raw : { ...(raw as Record<string, unknown>), ...nested };
+  const hasRealRegion = LAYOUT_REGION_KEYS.some(k => Array.isArray((raw as Record<string, unknown>)[k]));
+  // 外层已经有真区域时以外层为准，不拿包装层去覆盖它。
+  return hasRealRegion ? raw : { ...(raw as Record<string, unknown>), ...nested };
 }
 
 function normalizeLayoutSlotMap(
   raw: unknown,
   validBlockIds: Set<string>
-): Record<LayoutSlotKey, string[]> {
+): Record<LayoutRegionKey, string[]> {
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const out = {} as Record<LayoutSlotKey, string[]>;
-  for (const slot of LAYOUT_SLOT_KEYS) {
-    const ids = Array.isArray(obj[slot]) ? (obj[slot] as unknown[]) : [];
-    out[slot] = ids.map(v => String(v)).filter(idStr => validBlockIds.has(idStr));
+  const out = {} as Record<LayoutRegionKey, string[]>;
+  for (const region of LAYOUT_REGION_KEYS) {
+    const ids = Array.isArray(obj[region]) ? (obj[region] as unknown[]) : [];
+    out[region] = ids.map(v => String(v)).filter(idStr => validBlockIds.has(idStr));
   }
   return out;
 }
 
 /**
- * Step 7：页面布局 5 槽位派生。Gate 已校验槽位合法 + 引用不悬空，这里仍做
+ * Step 7：页面布局区域派生。Gate 已校验槽位合法 + 引用不悬空，这里仍做
  * 防御性二次过滤（悬空引用/非法槽位如实丢弃，不炸渲染，只信任模型直接
  * 声明的 page.blocks——legacy 转换来的合成块不参与布局）。未声明 layout
- * 或过滤后 5 槽位全空时返回 null，渲染层回退旧的顺序平铺。
+ * 或过滤后所有区域全空时返回 null，渲染层回退旧的顺序平铺。
  */
 function deriveLayout(
   rawLayout: unknown,
@@ -421,14 +625,18 @@ function deriveLayout(
   );
   if (directIds.size === 0) return null;
   const layout = unwrapNestedSlots(rawLayout);
-  const slots = normalizeLayoutSlotMap(layout, directIds);
+  const regions = normalizeLayoutSlotMap(layout, directIds);
+  const grid = normalizeBusinessGrid(
+    (layout as Record<string, unknown>).grid,
+    new Set([...directIds, PAGE_CONTENT_REF])
+  );
   const mobileRaw = (layout as Record<string, unknown>).mobile;
   const mobile = mobileRaw
     ? normalizeLayoutSlotMap(unwrapNestedSlots(mobileRaw), directIds)
     : undefined;
-  const hasAny = LAYOUT_SLOT_KEYS.some(k => slots[k].length > 0);
+  const hasAny = LAYOUT_REGION_KEYS.some(k => regions[k].length > 0) || Boolean(grid);
   if (!hasAny) return null;
-  return { ...slots, mobile };
+  return { ...regions, mobile, grid };
 }
 
 export function deriveAppRuntimeSchema(
@@ -472,13 +680,17 @@ export function deriveAppRuntimeSchema(
     const id = page.id || `page-${index + 1}`;
     const entityId = dominantEntityId(page.fieldBindings);
     const entity = entityId ? entityById.get(entityId) : undefined;
-    const allFields = (entity?.fields ?? []).map(toFieldSchema);
+    // 索引对齐由 `.map` 保证：allFields[i] 就是 rawFields[i] 投影出来的那个。
+    const rawFields = entity?.fields ?? [];
+    const allFields = rawFields.map(toFieldSchema);
 
-    // ref 字段解析目标实体（"xxx_ref"/type ref → 词干唯一匹配），供下拉渲染。
-    for (const f of allFields) {
+    // ref 字段解析目标实体，供下拉渲染。**模型声明的 refEntity 优先**，没声明
+    // 才回落到词干猜测（存量模型全靠它）——见 resolveRefEntityId 里的度量。
+    // 自引用只认声明的那种（猜到自己身上多半是命名巧合）。
+    for (const [fi, f] of allFields.entries()) {
       if (f.type === "ref" || /_ref$/.test(f.id)) {
-        const guess = guessRefEntityId(f.id, entityById.keys());
-        if (guess && guess !== entityId) f.refEntityId = guess;
+        const { target, declared } = resolveRefEntityId(rawFields[fi], entityById.keys());
+        if (target && (declared || target !== entityId)) f.refEntityId = target;
       }
     }
 
@@ -716,16 +928,21 @@ export function deriveAppRuntimeSchema(
       ];
     })();
 
+    const workflowLinked =
+      workflowLinkedPages.has(id) || workflowLinkedPages.has(page.id ?? "");
+
     return {
       id,
       title: page.name || id,
+      presentation:
+        page.presentation === "marketing-landing" ? "marketing-landing" : "application",
       entityId: entity ? entityId : null,
-      columns: allFields.slice(0, 6),
+      columns: dedupeDenormalizedColumns(allFields).slice(0, 6),
       detailFields: allFields,
       formFields: boundFields.length > 0 ? boundFields : allFields,
       actions: (page.actionPermissions ?? []).map(String),
-      workflowLinked:
-        workflowLinkedPages.has(id) || workflowLinkedPages.has(page.id ?? ""),
+      workflowLinked,
+      surface: inferPageSurface({ ...page, workflowLinked }),
       aiActions: entityId ? (aiActionsByEntity.get(entityId) ?? []) : [],
       stats,
       rankings,
@@ -733,6 +950,7 @@ export function deriveAppRuntimeSchema(
       charts,
       view,
       freeformOverview: page.freeformOverview,
+      pageReconstruction: page.pageReconstruction,
       // 体验区块：优先用模型直接声明的 page.blocks；若无声明，从现有
       // stats/charts/rankings/feeds 自动转换（零视觉变化路径，三阶段接入前
       // AppRuntimeScreen 会过滤掉 _fromLegacy 块，仍走旧渲染路径）。
@@ -830,6 +1048,7 @@ export function deriveAppRuntimeSchema(
       : "";
   const legacyNav = String(rawIdentity?.nav ?? "").trim();
   const preferredDeviceRaw = String(model?.appbundle?.preferredDevice ?? "").trim();
+  const deviceAuthorityRaw = String(model?.appbundle?.deviceAuthority ?? "").trim();
   const designRecipeRefRaw = String(rawIdentity?.designRecipeRef ?? "").trim();
   const identity = {
     themeId: String(rawIdentity?.theme ?? "").trim() || "azure",
@@ -838,6 +1057,7 @@ export function deriveAppRuntimeSchema(
     preferredDevice: (["desktop", "tablet", "phone"].includes(preferredDeviceRaw)
       ? preferredDeviceRaw
       : undefined) as "desktop" | "tablet" | "phone" | undefined,
+    deviceAuthority: deviceAuthorityRaw === "single-v1" ? ("single-v1" as const) : undefined,
     // Step 9：门禁已校验合法域；这里防御性二次过滤，悬空/非法值当未声明处理。
     designRecipeRef: DESIGN_RECIPE_IDS.includes(designRecipeRefRaw)
       ? designRecipeRefRaw
@@ -847,12 +1067,17 @@ export function deriveAppRuntimeSchema(
     // 原样透传不做类型收窄（跟 freeformContent 同一个"渲染器内部再校验"
     // 的处理方式）。
     generatedTheme: rawIdentity?.generatedTheme as Record<string, unknown> | undefined,
+    // 2026-08-04：参照图取到的图表色，同样原样透传（校验在 identity-palette）。
+    chartColors: rawIdentity?.chartColors,
   };
+
+  const normalizedRoles = normalizeRoles(model);
 
   return {
     appName: productName || appName,
     identity,
-    roles: model?.rbac?.roles ?? [],
+    roles: normalizedRoles.map(r => r.id),
+    roleLabels: Object.fromEntries(normalizedRoles.map(r => [r.id, r.label])),
     landingPageId,
     home,
     menus: [

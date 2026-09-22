@@ -1,0 +1,385 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder_profile",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "room_no",
+      "name": "房号",
+      "type": "string"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "string"
+     },
+     {
+      "id": "care_level",
+      "name": "健康照护等级",
+      "type": "string"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "档案状态",
+      "type": "enum"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "assignee",
+      "name": "指派人员",
+      "type": "string"
+     },
+     {
+      "id": "emergency_degree",
+      "name": "紧急程度",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "enum"
+     },
+     {
+      "id": "appointment_time",
+      "name": "期望完成时间",
+      "type": "date"
+     }
+    ]
+   },
+   {
+    "id": "community_branch",
+    "name": "社区网点",
+    "fields": [
+     {
+      "id": "branch_name",
+      "name": "社区网点名称",
+      "type": "string"
+     },
+     {
+      "id": "elder_count",
+      "name": "在册老人",
+      "type": "string"
+     },
+     {
+      "id": "service_total_count",
+      "name": "服务总次数",
+      "type": "string"
+     },
+     {
+      "id": "completion_rate",
+      "name": "工单完成率",
+      "type": "string"
+     },
+     {
+      "id": "staff_count",
+      "name": "一线护理员数",
+      "type": "string"
+     },
+     {
+      "id": "satisfaction_score",
+      "name": "满意度评分",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_consultant",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "role_worker",
+    "name": "上门服务人员"
+   },
+   {
+    "id": "role_supervisor",
+    "name": "运营主管"
+   }
+  ],
+  "permissions": [
+   "elder_profile:create",
+   "elder_profile:read",
+   "elder_profile:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "work_order:approve",
+   "work_order:reject",
+   "community_branch:read",
+   "community_branch:export"
+  ],
+  "menus": [
+   {
+    "id": "menu_workbench",
+    "label": "工作台",
+    "roleRefs": [
+     "role_consultant",
+     "role_worker",
+     "role_supervisor"
+    ],
+    "permissionRefs": [
+     "elder_profile:read"
+    ]
+   },
+   {
+    "id": "menu_elder",
+    "label": "老人档案",
+    "roleRefs": [
+     "role_consultant",
+     "role_supervisor"
+    ],
+    "permissionRefs": [
+     "elder_profile:read"
+    ]
+   },
+   {
+    "id": "menu_work_order",
+    "label": "工单中心",
+    "roleRefs": [
+     "role_worker",
+     "role_supervisor"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "menu_dashboard",
+    "label": "运营大屏",
+    "roleRefs": [
+     "role_supervisor"
+    ],
+    "permissionRefs": [
+     "community_branch:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_dispatch",
+    "name": "待派发",
+    "assigneeRole": "role_consultant",
+    "phase": "派发阶段"
+   },
+   {
+    "id": "node_execute",
+    "name": "服务中",
+    "assigneeRole": "role_worker",
+    "phase": "执行阶段"
+   },
+   {
+    "id": "node_review",
+    "name": "质量审核",
+    "assigneeRole": "role_supervisor",
+    "phase": "审核阶段"
+   },
+   {
+    "id": "node_completed",
+    "name": "已完成",
+    "assigneeRole": "role_supervisor",
+    "phase": "结束阶段"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_dispatch",
+    "to": "node_execute",
+    "condition": "顾问确认并指派工单"
+   },
+   {
+    "from": "node_execute",
+    "to": "node_review",
+    "condition": "服务人员完成服务并提交审核"
+   },
+   {
+    "from": "node_review",
+    "to": "node_completed",
+    "condition": "运营主管审核通过工单"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1_workbench",
+    "name": "登录工作台",
+    "kind": "workbench",
+    "fieldBindings": [],
+    "actionPermissions": [
+     "elder_profile:read",
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "p2_elder_profile",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder_profile.elder_name",
+     "elder_profile.room_no",
+     "elder_profile.age",
+     "elder_profile.care_level",
+     "elder_profile.emergency_contact",
+     "elder_profile.status"
+    ],
+    "actionPermissions": [
+     "elder_profile:create",
+     "elder_profile:read",
+     "elder_profile:update"
+    ]
+   },
+   {
+    "id": "p3_work_order_center",
+    "name": "服务工单中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_type",
+     "work_order.elder_name",
+     "work_order.assignee",
+     "work_order.emergency_degree",
+     "work_order.status",
+     "work_order.appointment_time"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:read",
+     "work_order:update",
+     "work_order:assign",
+     "work_order:approve",
+     "work_order:reject"
+    ]
+   },
+   {
+    "id": "p4_dashboard",
+    "name": "运营数据大屏与报表",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "community_branch.branch_name",
+     "community_branch.elder_count",
+     "community_branch.service_total_count",
+     "community_branch.completion_rate",
+     "community_branch.staff_count",
+     "community_branch.satisfaction_score"
+    ],
+    "actionPermissions": [
+     "community_branch:read",
+     "community_branch:export"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_elder_summary",
+    "name": "老人档案智能摘要",
+    "inputFields": [
+     "elder_profile.age",
+     "elder_profile.care_level"
+    ],
+    "outputField": "elder_profile.emergency_contact",
+    "roleRefs": [
+     "role_consultant",
+     "role_supervisor"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p3_work_order_center",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p3_work_order_center",
+    "workflowRef": "node_dispatch"
+   }
+  ],
+  "landingPageRef": "p1_workbench",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_consultant",
+   "role_worker",
+   "role_supervisor"
+  ],
+  "dataModelRefs": [
+   "elder_profile",
+   "work_order",
+   "community_branch"
+  ],
+  "appIdentity": {
+   "appName": "安养云"
+  },
+  "invariants": [
+   {
+    "id": "inv_order_flow",
+    "statement": "工单状态流转必须经过待派发、服务中、质量审核最终到达已完成状态",
+    "systems": [
+     "workflow",
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.status",
+     "node_dispatch",
+     "node_completed"
+    ]
+   },
+   {
+    "id": "inv_consultant_profile",
+    "statement": "社区养老顾问负责维护老人档案数据",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "role_consultant",
+     "elder_profile",
+     "elder_profile.status"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

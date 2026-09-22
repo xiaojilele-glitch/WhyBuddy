@@ -1,0 +1,362 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人姓名与性别年龄",
+      "type": "string"
+     },
+     {
+      "id": "room",
+      "name": "房间号与社区",
+      "type": "string"
+     },
+     {
+      "id": "care_level",
+      "name": "照护等级",
+      "type": "enum"
+     },
+     {
+      "id": "disease",
+      "name": "主要慢性病",
+      "type": "text"
+     },
+     {
+      "id": "contact",
+      "name": "紧急联系人与电话",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "service_item",
+      "name": "服务项目",
+      "type": "string"
+     },
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "assignee",
+      "name": "指派人员",
+      "type": "string"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约时间",
+      "type": "date"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "enum"
+     }
+    ]
+   },
+   {
+    "id": "emergency_alert",
+    "name": "紧急救援告警",
+    "fields": [
+     {
+      "id": "trigger_type",
+      "name": "触发类型",
+      "type": "string"
+     },
+     {
+      "id": "address",
+      "name": "地址",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "service_item",
+    "name": "服务项目",
+    "fields": [
+     {
+      "id": "title",
+      "name": "套餐名称",
+      "type": "string"
+     },
+     {
+      "id": "price",
+      "name": "单价",
+      "type": "number"
+     },
+     {
+      "id": "duration",
+      "name": "服务时长",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_consultant",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "role_family",
+    "name": "家属"
+   },
+   {
+    "id": "role_staff",
+    "name": "服务人员"
+   }
+  ],
+  "permissions": [
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "emergency_alert:create",
+   "emergency_alert:read",
+   "service_item:read"
+  ],
+  "menus": [
+   {
+    "id": "menu_archive",
+    "label": "老人档案",
+    "roleRefs": [
+     "role_consultant"
+    ],
+    "permissionRefs": [
+     "elder:read"
+    ]
+   },
+   {
+    "id": "menu_dispatch",
+    "label": "紧急调度",
+    "roleRefs": [
+     "role_consultant",
+     "role_staff"
+    ],
+    "permissionRefs": [
+     "emergency_alert:read"
+    ]
+   },
+   {
+    "id": "menu_family",
+    "label": "家属预约",
+    "roleRefs": [
+     "role_family"
+    ],
+    "permissionRefs": [
+     "service_item:read",
+     "work_order:create"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "待派单",
+    "assigneeRole": "role_consultant",
+    "phase": "创建"
+   },
+   {
+    "id": "node_processing",
+    "name": "服务执行中",
+    "assigneeRole": "role_staff",
+    "phase": "执行"
+   },
+   {
+    "id": "node_visit",
+    "name": "回访待办",
+    "assigneeRole": "role_consultant",
+    "phase": "回访"
+   },
+   {
+    "id": "node_finished",
+    "name": "已完成",
+    "assigneeRole": "role_consultant",
+    "phase": "结束"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_processing",
+    "condition": "服务人员接单"
+   },
+   {
+    "from": "node_processing",
+    "to": "node_visit",
+    "condition": "服务人员提交凭证"
+   },
+   {
+    "from": "node_visit",
+    "to": "node_finished",
+    "condition": "养老顾问完成回访"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.room",
+     "elder.care_level",
+     "elder.disease",
+     "elder.contact"
+    ],
+    "actionPermissions": [
+     "elder:create",
+     "elder:read",
+     "elder:update"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "紧急救援调度页",
+    "kind": "monitor",
+    "fieldBindings": [
+     "emergency_alert.trigger_type",
+     "emergency_alert.address"
+    ],
+    "actionPermissions": [
+     "emergency_alert:read"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "服务工单大厅页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_item",
+     "work_order.elder_name",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "家属端服务预约页",
+    "kind": "wizard",
+    "fieldBindings": [
+     "service_item.title",
+     "service_item.price",
+     "work_order.appointment_time"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "service_item:read"
+    ]
+   },
+   {
+    "id": "p5",
+    "name": "服务人员工作台页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_item",
+     "work_order.assignee",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_care_recommend",
+    "name": "护理等级智能推荐",
+    "inputFields": [
+     "elder.disease"
+    ],
+    "outputField": "elder.care_level",
+    "roleRefs": [
+     "role_consultant"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p4",
+    "workflowRef": "node_created"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_consultant",
+   "role_family",
+   "role_staff"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "work_order",
+   "emergency_alert",
+   "service_item"
+  ],
+  "appIdentity": {
+   "appName": "安欣社区养老通"
+  },
+  "invariants": [
+   {
+    "id": "inv_1",
+    "statement": "服务工单必须包含老人姓名和预约时间",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.elder_name",
+     "work_order.appointment_time"
+    ]
+   },
+   {
+    "id": "inv_2",
+    "statement": "待派单状态的工单必须由社区养老顾问进行指派操作",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "node_created",
+     "role_consultant"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

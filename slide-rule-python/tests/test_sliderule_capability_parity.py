@@ -21,6 +21,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import Optional
+import pytest
 from unittest.mock import patch
 
 from models.v5_state import ExecuteCapabilityResult, V5SessionState
@@ -342,15 +343,73 @@ def test_synthesis_merge_does_not_forge_trust():
     # Results do not carry or forge trust; trust elevation + ledger linkage via driver/gates only.
 
 
+# structure.decompose 在 2026-08-13 换了实现：从 f-string 占位换成真 spec 生成。
+#
+# 旧的分段标记（Requirements / Risks / Deliverables / Root:）是那份 f-string 的
+# 形状，**它们本身就是被替换掉的东西**，所以这里跟着换。查过了：没有任何运行时
+# 代码读旧的 tree.requirements / risks / deliverables，只有这几条用例在钉。
 STRUCTURE_SECTION_MARKERS = (
     "SPEC Tree",
-    "Requirements",
-    "Risks",
-    "Deliverables",
-    "evidenceRef",
-    "requirement",
-    "Root:",
+    "成功判据",
+    "需求",
+    "设计",
+    "任务",
+    "页面清单",
+    "依据",
 )
+
+# 一份能过契约校验的最小 spec。
+#
+# 这份夹具存在的理由：换实现之后 structure.decompose 是**第一个真需要 LLM**
+# 的能力（其余能力走 rag_service.generate_with_rag，那是个不联网的模板桩）。
+# 测试环境没有 LLM，不注入的话每条用例量到的都是失败分支。
+_FAKE_SPEC = {
+    "rootNodeId": "n0",
+    "version": 3,
+    "appName": "权限哨",
+    "personas": [{"id": "u1", "name": "系统管理员", "goals": ["盯住越权风险"]}],
+    "successCriteria": [{"id": "sc1", "text": "管理员可在一处看到全部越权风险项。"}],
+    "nodes": [
+        {
+            "id": "n0", "parentId": None, "type": "requirement",
+            "title": "提供权限风险总览",
+            "acceptance": "当管理员打开总览页时，系统应列出当前所有越权风险项。",
+            "coversCriteria": ["sc1"], "evidenceRefs": ["nE1"],
+        },
+        {
+            "id": "n1", "parentId": "n0", "type": "design",
+            "title": "风险清单表格", "notes": "按严重度排序，支持按角色筛选。",
+            "evidenceRefs": ["nE1"],
+        },
+        {
+            "id": "n2", "parentId": "n1", "type": "task",
+            "title": "定义风险项数据模型", "verify": "新增一条风险后能在清单里看到。",
+        },
+        {
+            "id": "nE1", "parentId": "n0", "type": "evidence",
+            "title": "用户要求权限系统结构拆解", "source": "user_input:permission system",
+        },
+    ],
+    "pages": [{
+        "id": "p1", "name": "权限风险总览", "audience": "管理员",
+        "purpose": "一屏看到全部越权风险项并能按角色筛选。", "coversNodes": ["n0", "n1"],
+    }],
+}
+
+
+@pytest.fixture(autouse=True)
+def _fake_spec_llm(monkeypatch):
+    """给 structure.decompose 注入一份现成 spec，绕开真 LLM。
+
+    ⚠ 只替生成那一步，**校验器照常跑**——夹具本身要真的过得了契约校验，
+    否则这些用例就退化成"只要返回个 dict 就行"，跟没有一样。
+    """
+    from services.spec_tree import SpecTree
+
+    monkeypatch.setattr(
+        "services.spec_tree.generate_spec_tree",
+        lambda goal, **kw: SpecTree.model_validate(_FAKE_SPEC),
+    )
 
 
 def test_structure_decompose_registered_and_not_shared_mcp_skill():
@@ -360,31 +419,20 @@ def test_structure_decompose_registered_and_not_shared_mcp_skill():
     assert "skill.invoke" in CAPABILITY_EXECUTORS
 
 
-def test_structure_decompose_python_owned_returns_structured_schema_python_rag_and_sources():
+def test_structure_decompose_python_owned_returns_structured_schema_and_sources():
     state = _make_state("analyze permission system risks and produce final report")
 
     result = execute_capability("structure.decompose", state, [], "architecture", "t-struct-1")
 
     assert isinstance(result, ExecuteCapabilityResult)
-    assert result.provenance == "python-rag"
+    assert result.provenance == "python-spec"
     assert "spec" in result.title.lower() or "tree" in result.title.lower()
     assert isinstance(result.sources, list) and len(result.sources) > 0
     hits = sum(1 for marker in STRUCTURE_SECTION_MARKERS if marker in result.content)
-    assert hits >= 4, f"structure.decompose content missing SPEC tree schema sections, got hits={hits}"
-    assert "evidenceRef" in result.content
+    assert hits >= 4, f"structure.decompose 正文缺分段，got hits={hits}"
     assert result.degraded is False
     assert "python" in result.provenance
-    # direct path now carries schema+invariant too (via attach): verify kind/tree/gateResults on result object
     assert getattr(result, "kind", None) == "spec_tree"
-    tree = getattr(result, "tree") or {}
-    assert "root" in tree and "requirements" in tree and "risks" in tree and "deliverables" in tree
-    assert "evidenceRefs" in tree or "nodes" in tree
-    gates = getattr(result, "gateResults") or {}
-    assert "G_SCHEMA" in gates or "G_INV" in gates
-    g_schema = gates.get("G_SCHEMA", {})
-    g_inv = gates.get("G_INV", {})
-    assert g_schema.get("status") in ("passed", "failed")
-    assert "checks" in g_inv or "status" in g_inv
 
 
 def test_structure_decompose_via_mapped_capability_produces_kind_tree_and_gate_results():
@@ -393,23 +441,30 @@ def test_structure_decompose_via_mapped_capability_produces_kind_tree_and_gate_r
     out = execute_mapped_capability("structure.decompose", state, [], "architecture", "t-struct-2")
 
     assert isinstance(out, dict)
-    assert out.get("provenance") == "python-rag"
+    assert out.get("provenance") == "python-spec"
     assert out.get("kind") == "spec_tree"
     assert isinstance(out.get("sources"), list) and len(out["sources"]) >= 1
     hits = sum(1 for marker in STRUCTURE_SECTION_MARKERS if marker in out.get("content", ""))
     assert hits >= 4
-    assert "evidenceRef" in out.get("content", "")
-    # verifiable schema fields
+    # 新契约的可验证字段：判据 / 节点树 / 页面清单
     tree = out.get("tree") or {}
-    assert "root" in tree and "requirements" in tree and "risks" in tree and "deliverables" in tree
-    assert "evidenceRefs" in tree or "nodes" in tree
-    # invariant gate results or failure semantics present
+    assert "successCriteria" in tree and "nodes" in tree and "pages" in tree
+    assert tree.get("rootNodeId") == "n0"
     gates = out.get("gateResults") or {}
-    assert "G_SCHEMA" in gates or "G_INV" in gates
-    g_schema = gates.get("G_SCHEMA", {})
-    g_inv = gates.get("G_INV", {})
-    assert g_schema.get("status") in ("passed", "failed")
-    assert "checks" in g_inv or "status" in g_inv
+    assert gates.get("G_SCHEMA", {}).get("status") == "passed"
+    assert "checks" in gates.get("G_INV", {})
+
+
+def test_structure_decompose_summary_reports_real_counts():
+    """摘要要报**真实数量**。
+
+    旧实现恒定 1 需求 1 风险 1 交付物，摘要写什么都一样；现在这三个数随
+    题目变，是判断"这一步到底有没有在干活"最省事的一眼。
+    """
+    out = execute_mapped_capability("structure.decompose", _make_state("x"), [], "架构", "t-s3")
+    assert "1 条成功判据" in out["summary"]
+    assert "1 个需求" in out["summary"]
+    assert "1 页" in out["summary"]
 
 
 def test_structure_decompose_does_not_forge_trust():
@@ -418,9 +473,31 @@ def test_structure_decompose_does_not_forge_trust():
     result = execute_capability("structure.decompose", state, [], "role", "t-struct-t")
 
     assert not hasattr(result, "trustLevel") or getattr(result, "trustLevel", None) is None
-    assert result.provenance == "python-rag"
+    assert result.provenance == "python-spec"
     assert any(marker in result.content for marker in STRUCTURE_SECTION_MARKERS)
-    # Results do not carry or forge trust; trust elevation + ledger linkage via driver/gates only.
+
+
+def test_structure_decompose_失败时如实报_不回落占位(monkeypatch):
+    """生成失败**不许**回落成一份看着像那么回事的假 spec。
+
+    被替换那份最大的问题不是写得糙，是它**永远成功**——一份恒定
+    1 需求 1 风险 1 交付物的假树，看起来跟真的一样，还能过自己的闸，
+    于是没有任何一处会发现它是假的。这条用例钉住新实现不再犯同一个错。
+    """
+    from services.spec_tree import SpecGenerationError
+
+    def boom(goal, **kw):
+        raise SpecGenerationError("pages 不能为空——第 3 步要按页逐张出图")
+
+    monkeypatch.setattr("services.spec_tree.generate_spec_tree", boom)
+    out = execute_mapped_capability("structure.decompose", _make_state("x"), [], "架构", "t-s4")
+
+    assert out["kind"] == "spec_tree"
+    assert out["gateResults"]["G_SCHEMA"]["status"] == "failed"
+    assert out["gateResults"]["G_INV"]["status"] == "failed"
+    assert "pages 不能为空" in out["summary"]
+    # 失败态**不带 tree**：带一棵空树就又变成"看起来有东西"了
+    assert "tree" not in out
 
 
 # Dialogue family tests (dialogue, intent.clarify, gap.ask, question.expand)

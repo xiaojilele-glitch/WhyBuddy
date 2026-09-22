@@ -23,12 +23,6 @@ export interface DatabaseConfig {
   mysql: MysqlConfig;
 }
 
-export interface SessionConfig {
-  secret: string;
-  cookieName: string;
-  ttlDays: number;
-}
-
 export interface RedisConfig {
   enabled: boolean;
   host: string;
@@ -41,7 +35,6 @@ export interface RedisConfig {
 
 export interface PersistenceConfig {
   database: DatabaseConfig;
-  session: SessionConfig;
   redis: RedisConfig;
   queueRedis: RedisConfig;
 }
@@ -128,11 +121,6 @@ export function readPersistenceConfig(env: EnvSource = process.env): Persistence
         pool: mysqlPool,
       },
     },
-    session: {
-      secret: readOptionalString(env, "SESSION_SECRET"),
-      cookieName: readString(env, "SESSION_COOKIE_NAME", "cube_office_session"),
-      ttlDays: readInteger(env, "SESSION_TTL_DAYS", 30, { min: 1 }),
-    },
     redis,
     queueRedis,
   };
@@ -150,10 +138,6 @@ export function redactPersistenceConfig(config: PersistenceConfig): PersistenceC
         ...config.database.mysql,
         password: redactSecret(config.database.mysql.password),
       },
-    },
-    session: {
-      ...config.session,
-      secret: redactSecret(config.session.secret),
     },
     redis: {
       ...config.redis,

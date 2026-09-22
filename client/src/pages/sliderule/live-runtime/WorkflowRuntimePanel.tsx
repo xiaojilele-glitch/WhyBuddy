@@ -7,6 +7,8 @@
  */
 
 import React from "react";
+import { Button, Card, Flex, List, Radio, Steps, Tag, Typography } from "antd";
+import { CheckOutlined, CloseOutlined, PlayCircleOutlined } from "@ant-design/icons";
 import type { FiveSystemModel } from "../system-screens/five-system-model";
 import {
   type RuntimeState,
@@ -27,13 +29,8 @@ function compatibleWithModel(state: RuntimeState, model: FiveSystemModel): boole
 }
 
 function StatusPill({ status }: { status: WorkflowInstance["status"] }) {
-  const map = {
-    running: "bg-[#e6f4ff] text-[#0958d9]",
-    completed: "bg-emerald-50 text-emerald-700",
-    rejected: "bg-red-50 text-red-600",
-  } as const;
   const label = { running: "进行中", completed: "已完成", rejected: "已驳回" }[status];
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${map[status]}`}>{label}</span>;
+  return <Tag color={status === "running" ? "blue" : status === "completed" ? "success" : "error"}>{label}</Tag>;
 }
 
 export function WorkflowRuntimePanel({
@@ -105,109 +102,105 @@ export function WorkflowRuntimePanel({
   };
 
   const nodeName = (id: string) => nodeById(model, id)?.name || id;
+  const logTitle = (log: WorkflowInstance["log"][number]) => {
+    if (log.action === "start") return `发起 · 停在「${nodeName(log.nodeId)}」`;
+    if (log.action === "approve")
+      return `「${nodeName(log.nodeId)}」通过${log.byRole ? ` · @${log.byRole}` : ""}`;
+    if (log.action === "reject")
+      return `「${nodeName(log.nodeId)}」驳回${log.byRole ? ` · @${log.byRole}` : ""} · 流程终止`;
+    return "流程完成 ✓";
+  };
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-auto p-4" data-testid="workflow-runtime-panel">
+    <Flex vertical gap="middle" className="h-full overflow-auto p-4" data-testid="workflow-runtime-panel">
       {/* 当前实例操作区 */}
       {running && currentNode ? (
-        <div className="rounded-md border border-[#e5e7eb] bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-stone-800">{running.title}</span>
-            <StatusPill status={running.status} />
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-stone-500">当前节点</span>
-            <span className="rounded bg-[#eef0f4] px-2.5 py-1 font-medium text-stone-800">
-              {currentNode.name || currentNode.id}
-            </span>
+        <Card size="small" title={running.title} extra={<StatusPill status={running.status} />}>
+          <Flex vertical gap="middle">
+            <Flex align="center" gap="small" wrap>
+              <Typography.Text type="secondary">当前节点</Typography.Text>
+              <Tag>{currentNode.name || currentNode.id}</Tag>
             {currentNode.assigneeRole && (
-              <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[11px] text-orange-700 ring-1 ring-orange-200">
-                @{currentNode.assigneeRole}
-              </span>
+              <Tag color="orange">@{currentNode.assigneeRole}</Tag>
             )}
-          </div>
+            </Flex>
           {branches.length > 1 && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-stone-500">通过后走向</span>
-              {branches.map((b, i) => (
-                <button
-                  key={`${b.to}-${i}`}
-                  type="button"
-                  onClick={() => setBranchChoice(i)}
-                  className={`rounded-full px-2.5 py-1 ring-1 transition-colors ${
-                    branchChoice === i
-                      ? "bg-[#e6f4ff] text-[#0958d9] ring-[#1677ff]/40"
-                      : "bg-white text-stone-600 ring-[#e5e7eb] hover:bg-[#eef0f4]"
-                  }`}
-                >
-                  {b.condition || nodeName(b.to)} → {nodeName(b.to)}
-                </button>
-              ))}
-            </div>
+            <Radio.Group
+              optionType="button"
+              buttonStyle="solid"
+              value={branchChoice}
+              onChange={event => setBranchChoice(event.target.value)}
+              options={branches.map((b, i) => ({
+                value: i,
+                label: `${b.condition || nodeName(b.to)} → ${nodeName(b.to)}`,
+              }))}
+            />
           )}
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
+          <Flex gap="small">
+            <Button
+              type="primary"
+              icon={<CheckOutlined />}
               onClick={() => handleAdvance("approve")}
               data-testid="runtime-approve"
-              className="rounded bg-[var(--app-primary,#1677ff)] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[var(--app-primary-hover,#0958d9)]"
             >
               通过（{currentNode.assigneeRole || "当前角色"}）
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              danger
+              icon={<CloseOutlined />}
               onClick={() => handleAdvance("reject")}
               data-testid="runtime-reject"
-              className="rounded border border-[#e5e7eb] bg-white px-4 py-1.5 text-sm text-stone-600 transition-colors hover:bg-red-50 hover:text-red-600"
             >
               驳回
-            </button>
-          </div>
-        </div>
+            </Button>
+          </Flex>
+          </Flex>
+        </Card>
       ) : (
-        <div className="flex flex-col items-start gap-3 rounded-md border border-dashed border-[#d3d8e0] bg-[#f7f8fa] p-5">
-          <div className="text-sm text-stone-600">
+        <Card size="small">
+          <Flex vertical align="start" gap="middle">
+            <Typography.Text type="secondary">
             这是模型驱动的真实状态机：发起一个实例，按节点审批人逐步推进，走完整个业务闭环。
-          </div>
-          <button
-            type="button"
+            </Typography.Text>
+          <Button
+            type="primary"
+            icon={<PlayCircleOutlined />}
             onClick={handleStart}
             data-testid="runtime-start"
-            className="rounded bg-[var(--app-primary,#1677ff)] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[var(--app-primary-hover,#0958d9)]"
           >
             发起实例
-          </button>
-        </div>
+          </Button>
+          </Flex>
+        </Card>
       )}
 
       {/* 实例列表 + 日志 */}
       {state.instances.length > 0 && (
-        <div className="rounded-md border border-[#e5e7eb] bg-white p-4 shadow-sm">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-            实例与日志
-          </div>
-          <div className="mt-2 space-y-3">
-            {[...state.instances].reverse().map((inst) => (
-              <div key={inst.id}>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="font-medium text-stone-700">{inst.title}</span>
+        <Card size="small" title="实例与日志">
+          <List
+            size="small"
+            dataSource={[...state.instances].reverse()}
+            renderItem={inst => (
+              <List.Item key={inst.id}>
+                <Flex vertical gap="small" style={{ width: "100%" }}>
+                  <Flex align="center" gap="small">
+                    <Typography.Text strong>{inst.title}</Typography.Text>
                   <StatusPill status={inst.status} />
-                </div>
-                <ul className="mt-1 space-y-0.5 border-l border-[#e8eaee] pl-3">
-                  {inst.log.map((l, i) => (
-                    <li key={i} className="text-[11px] leading-5 text-stone-500">
-                      {l.action === "start" && `发起 · 停在「${nodeName(l.nodeId)}」`}
-                      {l.action === "approve" && `「${nodeName(l.nodeId)}」通过${l.byRole ? ` · @${l.byRole}` : ""}`}
-                      {l.action === "reject" && `「${nodeName(l.nodeId)}」驳回${l.byRole ? ` · @${l.byRole}` : ""} · 流程终止`}
-                      {l.action === "complete" && "流程完成 ✓"}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
+                  </Flex>
+                  <Steps
+                    size="small"
+                    direction="vertical"
+                    items={inst.log.map((l, i) => ({
+                      key: String(i),
+                      title: logTitle(l),
+                    }))}
+                  />
+                </Flex>
+              </List.Item>
+            )}
+          />
+        </Card>
       )}
-    </div>
+    </Flex>
   );
 }

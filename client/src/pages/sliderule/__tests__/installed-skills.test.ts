@@ -59,43 +59,15 @@ describe("installed-skills 本地层", () => {
 describe("推演注入载荷（技能库六期）", () => {
   beforeEach(() => memStore.clear());
 
-  it("瘦身为 {name, description, channel}、上限 6 条、超长截断", async () => {
+  it("六字段仍带空数组，localStorage 安装不再冒充目录", async () => {
     const { installedSkillsDrivePayload } = await import("../installed-skills");
     expect(installedSkillsDrivePayload()).toEqual([]);
-
-    let list: ReturnType<typeof loadInstalledSkills> = [];
-    for (let i = 0; i < 8; i++) {
-      list = installSkill(list, {
-        ...SKILL,
-        repo: `github.com/x/skill-${i}`,
-        name: `技能${i}`.padEnd(80, "长"),
-        description: "d".repeat(300),
-      });
-    }
-    const payload = installedSkillsDrivePayload();
-    expect(payload).toHaveLength(6);
-    expect(payload[0].name.length).toBeLessThanOrEqual(60);
-    expect(payload[0].description.length).toBe(160);
-    // channel 决定服务端把它拼进哪个 prompt 块；SKILL 夹具没标 channel，
-    // 按存量安装记录的降级规则走 unbound（不发注定绑不上的硬要求）。
-    expect(Object.keys(payload[0])).toEqual(["name", "description", "channel"]);
-    expect(payload[0].channel).toBe("unbound");
-  });
-
-  it("带 binding 的技能把绑定形状一并带给服务端", async () => {
-    const { installedSkillsDrivePayload } = await import("../installed-skills");
-    const list = installSkill([], {
+    installSkill([], {
       ...SKILL,
-      channel: "aigc",
-      binding: { inputTypes: ["number", "number"], outputType: "enum" },
+      repo: "github.com/x/skill-1",
+      name: "不该进载荷",
     });
-    expect(list).toHaveLength(1);
-    const payload = installedSkillsDrivePayload();
-    expect(payload[0].channel).toBe("aigc");
-    expect(payload[0].binding).toEqual({
-      inputTypes: ["number", "number"],
-      outputType: "enum",
-    });
+    expect(installedSkillsDrivePayload()).toEqual([]);
   });
 });
 
@@ -122,21 +94,13 @@ describe("注入开关（输入条 + 菜单就地勾选）", () => {
     });
 
     expect(loadInjectDisabledKeys()).toEqual([]);
-    expect(installedSkillsDrivePayload().map(s => s.name)).toEqual([
-      "技能A",
-      "技能B",
-    ]);
+    expect(installedSkillsDrivePayload()).toEqual([]);
 
-    // 关掉 A → 载荷只剩 B；关名单持久化
     toggleInjectDisabled("github.com/x/a");
     expect(loadInjectDisabledKeys()).toEqual(["github.com/x/a"]);
-    expect(installedSkillsDrivePayload().map(s => s.name)).toEqual(["技能B"]);
+    expect(installedSkillsDrivePayload()).toEqual([]);
 
-    // 再 toggle → 恢复注入
     toggleInjectDisabled("github.com/x/a");
-    expect(installedSkillsDrivePayload().map(s => s.name)).toEqual([
-      "技能A",
-      "技能B",
-    ]);
+    expect(installedSkillsDrivePayload()).toEqual([]);
   });
 });

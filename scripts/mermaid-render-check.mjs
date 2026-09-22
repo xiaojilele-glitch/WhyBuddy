@@ -85,7 +85,13 @@ const result = await page.evaluate(async graph => {
 console.log(graphs.length > 1 ? `[块 ${idx + 1}] ${JSON.stringify(result)}` : JSON.stringify(result, null, 2));
 if (!result.ok) failed++;
 if (result.ok && out && idx === 0) {
-  const svg = await page.locator("#host svg").evaluate(el => el.outerHTML);
+  // ⚠ 落盘 SVG 必须走 XMLSerializer，不能用 outerHTML（2026-08-18 实测）：
+  // outerHTML 是 **HTML 序列化**，foreignObject 里的 <br> 不自闭合——嵌在网页里
+  // 没事，但单独打开 .svg 时浏览器按 XML 解析，直接报
+  // "Opening and ending tag mismatch: br"，整张图只渲染到第一个 <br> 为止。
+  const svg = await page
+    .locator("#host svg")
+    .evaluate(el => new XMLSerializer().serializeToString(el));
   writeFileSync(out.replace(/\.png$/, ".svg"), svg);
   await page.locator("#host svg").screenshot({ path: out });
   console.log("已落盘:", out);

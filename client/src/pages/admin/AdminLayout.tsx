@@ -18,7 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useAuthStore } from "@/lib/auth-store";
+import { useAuth } from "@/lib/use-auth";
 import { cn } from "@/lib/utils";
 
 interface AdminLayoutProps {
@@ -26,12 +26,12 @@ interface AdminLayoutProps {
 }
 
 const adminNavItems = [
-  { href: "/admin", label: "Overview", icon: BarChart3 },
-  { href: "/admin/users", label: "Users", icon: Users },
-  { href: "/admin/projects", label: "Projects", icon: FolderKanban },
-  { href: "/admin/runs", label: "Runs", icon: Activity },
-  { href: "/admin/failures", label: "Failures", icon: AlertTriangle },
-  { href: "/admin/audit", label: "Audit", icon: ClipboardList },
+  { href: "/admin", label: "总览", icon: BarChart3 },
+  { href: "/admin/users", label: "用户", icon: Users },
+  { href: "/admin/projects", label: "项目", icon: FolderKanban },
+  { href: "/admin/runs", label: "运行", icon: Activity },
+  { href: "/admin/failures", label: "失败", icon: AlertTriangle },
+  { href: "/admin/audit", label: "审计", icon: ClipboardList },
 ];
 
 function AdminAccessCard({
@@ -60,29 +60,38 @@ function AdminAccessCard({
 }
 
 export function AdminLayout({ children }: AdminLayoutProps) {
-  const currentUser = useAuthStore(state => state.currentUser);
-  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
-  const isAdmin = useAuthStore(state => state.isAdmin);
+  const { user: currentUser, ready } = useAuth();
 
-  if (!isAuthenticated()) {
+  // 还没问出登录态时不要下结论：直接判"未登录"会让已登录的管理员先看到一屏
+  // "Sign in required"，再闪回控制台。
+  if (!ready) {
     return (
       <AdminAccessCard
-        title="Sign in required"
-        description="Use an authenticated admin session to open the management console."
+        title="正在确认登录"
+        description="打开管理台前先确认账号。"
+      />
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <AdminAccessCard
+        title="需要登录"
+        description="请用超管账号登录后再打开管理台。"
         action={
           <Button asChild size="sm">
-            <a href="/login">Go to sign in</a>
+            <a href="/signin?next=/admin">去登录</a>
           </Button>
         }
       />
     );
   }
 
-  if (!isAdmin()) {
+  if (!currentUser.isSuperuser) {
     return (
       <AdminAccessCard
-        title="Admin access required"
-        description="Your current account can use the workspace, but the management console is restricted to admins."
+        title="需要超管权限"
+        description="当前账号可以用工作台，管理台只对超管开放。"
       />
     );
   }
@@ -97,13 +106,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 <Shield className="size-4" />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">Admin Console</p>
+                <p className="truncate text-sm font-semibold">管理台</p>
                 <p className="truncate text-xs text-slate-500">
                   {currentUser?.email}
                 </p>
               </div>
             </div>
-            <nav aria-label="Admin navigation" className="space-y-1">
+            <nav aria-label="管理导航" className="space-y-1">
               {adminNavItems.map(item => {
                 const Icon = item.icon;
                 return (
@@ -127,13 +136,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <header className="mb-4 flex flex-col gap-3 rounded-lg border bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-lg font-semibold">Admin Console</h1>
+                <h1 className="text-lg font-semibold">管理台</h1>
                 <Badge variant="secondary" className="rounded-md">
-                  Read only
+                  超管
                 </Badge>
               </div>
               <p className="text-sm text-slate-500">
-                Users, projects, runs, failures, and audit visibility.
+                用户、用量与停用。对照 Gitea 后台用户页，不是菜单权限。
               </p>
             </div>
             <nav

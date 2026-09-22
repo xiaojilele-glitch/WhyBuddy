@@ -1,0 +1,111 @@
+{
+  "$comment": "流水线阶段账本——阶段的人话、分组、耗时预估的单一真相源（2026-08-30）。此前后端两份（turn_narration._SPEC_FIRST_LABELS 与 v5_full_driver._ENRICH_STAGE_LABELS）、前端三份（useSlideRuleSession 文案表、stage-authority 权属表、blueprint-stage-signal 场景词表），共五份，且前端那份 3D 场景词表与后端只有 spec_tree 一个词对得上。后端加一步 → 前端显示原始 id；后端删一步 → 前端那条永远不亮，没人发现。抄 grok 的 xai-grok-session-events：typed 自描述事件——前端不该有翻译表，事件自己带人话。",
+  "version": 1,
+  "$comment_eta": "⚠ 耗时区间取**实测**（08-14 端到端：spec 65s / pages 190s(5页并发) / structure 60s / semantics 62s / assemble 36s / bind 552s(5页) / 整轮 1103s）。bind 原写「3~4 分钟」实测 9.2 分钟，差一倍多——这类提示写窄了比不写更糟：用户等到第 5 分钟会以为卡死，而它只是还在正常跑。区间宁可写宽。",
+  "$comment_missing": "⚠ specfirst.shell（外壳统一）**故意不在表里**：零 LLM、实测 0.004 秒，start/end 背靠背发出去只在左栏闪一下。名单外的阶段不报——这是有意的，不是漏了。",
+  "$order": [
+    "specfirst.spec",
+    "specfirst.design",
+    "specfirst.pagescope",
+    "specfirst.graphscope",
+    "specfirst.pages",
+    "specfirst.structure",
+    "specfirst.semantics",
+    "specfirst.assemble",
+    "specfirst.bind",
+    "model.generate",
+    "model.regenerate",
+    "monitor.sheet",
+    "monitor.palette",
+    "monitor.design"
+  ],
+  "stages": {
+    "specfirst.spec": {
+      "label": "起草规格：成功判据、需求节点与页面清单",
+      "group": "起草",
+      "eta": "通常 60~90 秒",
+      "productStep": 2
+    },
+    "specfirst.design": {
+      "label": "定这个应用的设计语言",
+      "group": "起草",
+      "eta": "通常 10~20 秒",
+      "productStep": 2
+    },
+    "specfirst.pagescope": {
+      "label": "判断这次要改哪几页",
+      "group": "划范围",
+      "eta": "通常 5~15 秒",
+      "refineOnly": true,
+      "productStep": 3
+    },
+    "specfirst.graphscope": {
+      "label": "分析这次修改牵扯的范围",
+      "group": "划范围",
+      "eta": "通常 3~10 秒",
+      "refineOnly": true,
+      "productStep": 3
+    },
+    "specfirst.pages": {
+      "label": "逐页画界面（并发）",
+      "group": "画界面",
+      "eta": "通常 3~4 分钟，页数越多越久",
+      "productStep": 3
+    },
+    "specfirst.structure": {
+      "label": "从界面反推数据模型与关联关系",
+      "group": "反推模型",
+      "eta": "通常 60~120 秒",
+      "productStep": 4
+    },
+    "specfirst.semantics": {
+      "label": "推导权限、工作流与不变式",
+      "group": "反推模型",
+      "eta": "通常 60~120 秒",
+      "productStep": 5
+    },
+    "specfirst.assemble": {
+      "label": "汇合五系统模型并过结构闸",
+      "group": "收口",
+      "eta": "通常 20~40 秒",
+      "productStep": 6
+    },
+    "specfirst.bind": {
+      "label": "给界面接上数据",
+      "group": "收口",
+      "eta": "较慢，通常 4~10 分钟，页数越多越久",
+      "productStep": 6
+    },
+    "model.generate": {
+      "label": "生成五系统模型",
+      "eta": "通常 3~4 分钟",
+      "group": "老链·建模",
+      "pipeline": "legacy"
+    },
+    "model.regenerate": {
+      "label": "按结构闸的意见重做模型",
+      "eta": "通常 3~4 分钟",
+      "group": "老链·建模",
+      "pipeline": "legacy"
+    },
+    "monitor.sheet": {
+      "label": "生成首页参照图",
+      "eta": "通常 80~110 秒，偶尔要 4 分钟",
+      "group": "老链·视觉",
+      "pipeline": "legacy"
+    },
+    "monitor.palette": {
+      "label": "从参照图读取配色",
+      "eta": "通常 15~25 秒",
+      "group": "老链·视觉",
+      "pipeline": "legacy"
+    },
+    "monitor.design": {
+      "label": "照着参照图设计页面版式",
+      "eta": "通常 55~100 秒，偶尔要 4~5 分钟",
+      "group": "老链·视觉",
+      "pipeline": "legacy"
+    }
+  },
+  "$comment_legacy": "⚠ model.* / monitor.* 属**老生成链**（spec-first 之前那条），不是 spec-first 流水线的步骤。它们仍在 _ENRICH_STAGE_LABELS 里发事件，所以必须在账本里，否则左栏会漏出内部 id。标 pipeline=legacy 区分——2026-08-30 建账本时我第一版只抓了 specfirst.* ，把这五条弄丢了，全量测试当场红（test_enrich_stage_visibility）。**只抓自己认识的那一半，就是丢掉另一半。**"
+}

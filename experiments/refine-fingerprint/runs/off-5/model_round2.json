@@ -1,0 +1,384 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "work_order",
+    "name": "工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elderly_name",
+      "name": "长辈姓名",
+      "type": "string"
+     },
+     {
+      "id": "service_item",
+      "name": "服务项目",
+      "type": "string"
+     },
+     {
+      "id": "urgency",
+      "name": "紧急程度",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "string"
+     },
+     {
+      "id": "dispatch_time",
+      "name": "派单时间",
+      "type": "date"
+     }
+    ]
+   },
+   {
+    "id": "elderly_monitor",
+    "name": "长辈健康监控",
+    "fields": [
+     {
+      "id": "name",
+      "name": "长辈姓名",
+      "type": "string"
+     },
+     {
+      "id": "room",
+      "name": "房间号",
+      "type": "string"
+     },
+     {
+      "id": "heart_rate",
+      "name": "实时心率",
+      "type": "string"
+     },
+     {
+      "id": "blood_pressure",
+      "name": "实时血压",
+      "type": "string"
+     },
+     {
+      "id": "blood_oxygen",
+      "name": "血氧饱和度",
+      "type": "string"
+     },
+     {
+      "id": "device_status",
+      "name": "设备状态",
+      "type": "string"
+     },
+     {
+      "id": "alarm_status",
+      "name": "最新告警处理状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "service_ledger",
+    "name": "服务台账",
+    "fields": [
+     {
+      "id": "record_no",
+      "name": "记录编号",
+      "type": "string"
+     },
+     {
+      "id": "service_date",
+      "name": "服务日期",
+      "type": "date"
+     },
+     {
+      "id": "elderly_name",
+      "name": "长辈姓名",
+      "type": "string"
+     },
+     {
+      "id": "service_item",
+      "name": "服务项目",
+      "type": "string"
+     },
+     {
+      "id": "service_person",
+      "name": "服务人员",
+      "type": "string"
+     },
+     {
+      "id": "service_duration",
+      "name": "服务时长",
+      "type": "string"
+     },
+     {
+      "id": "fee_status",
+      "name": "费用状态",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_staff",
+    "name": "社区养老专员角色"
+   },
+   {
+    "id": "role_family",
+    "name": "家属角色"
+   }
+  ],
+  "permissions": [
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "elderly_monitor:read",
+   "elderly_monitor:update",
+   "service_ledger:read",
+   "service_ledger:export"
+  ],
+  "menus": [
+   {
+    "id": "menu_workbench",
+    "label": "工作台",
+    "roleRefs": [
+     "role_staff",
+     "role_family"
+    ],
+    "permissionRefs": [
+     "work_order:read",
+     "elderly_monitor:read"
+    ]
+   },
+   {
+    "id": "menu_order",
+    "label": "工单管理",
+    "roleRefs": [
+     "role_staff"
+    ],
+    "permissionRefs": [
+     "work_order:read",
+     "work_order:create",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "menu_monitor",
+    "label": "长辈健康监控",
+    "roleRefs": [
+     "role_staff",
+     "role_family"
+    ],
+    "permissionRefs": [
+     "elderly_monitor:read"
+    ]
+   },
+   {
+    "id": "menu_ledger",
+    "label": "服务台账报表",
+    "roleRefs": [
+     "role_staff"
+    ],
+    "permissionRefs": [
+     "service_ledger:read",
+     "service_ledger:export"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "待派单",
+    "assigneeRole": "role_staff",
+    "phase": "发起阶段"
+   },
+   {
+    "id": "node_assigned",
+    "name": "已派单",
+    "assigneeRole": "role_staff",
+    "phase": "处理阶段"
+   },
+   {
+    "id": "node_completed",
+    "name": "已完成",
+    "assigneeRole": "role_staff",
+    "phase": "结案阶段"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_assigned",
+    "condition": "完成智能派单或人工指派"
+   },
+   {
+    "from": "node_assigned",
+    "to": "node_completed",
+    "condition": "服务执行完毕并确认结案"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "工作台首页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.status",
+     "elderly_monitor.alarm_status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "elderly_monitor:read"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "工单管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elderly_name",
+     "work_order.service_item",
+     "work_order.urgency",
+     "work_order.status",
+     "work_order.dispatch_time"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:read",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "长辈健康监控页",
+    "kind": "monitor",
+    "fieldBindings": [
+     "elderly_monitor.name",
+     "elderly_monitor.room",
+     "elderly_monitor.heart_rate",
+     "elderly_monitor.blood_pressure",
+     "elderly_monitor.blood_oxygen",
+     "elderly_monitor.device_status",
+     "elderly_monitor.alarm_status"
+    ],
+    "actionPermissions": [
+     "elderly_monitor:read",
+     "elderly_monitor:update"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "服务台账报表页",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "service_ledger.record_no",
+     "service_ledger.service_date",
+     "service_ledger.elderly_name",
+     "service_ledger.service_item",
+     "service_ledger.service_person",
+     "service_ledger.service_duration",
+     "service_ledger.fee_status"
+    ],
+    "actionPermissions": [
+     "service_ledger:read",
+     "service_ledger:export"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "aigc_health_analysis",
+    "name": "健康指标智能分析",
+    "inputFields": [
+     "elderly_monitor.heart_rate",
+     "elderly_monitor.blood_pressure",
+     "elderly_monitor.blood_oxygen"
+    ],
+    "outputField": "elderly_monitor.alarm_status",
+    "roleRefs": [
+     "role_staff"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p2",
+    "workflowRef": "node_created"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "node_assigned"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "node_completed"
+   },
+   {
+    "pageRef": "p1",
+    "workflowRef": "main_flow"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_staff",
+   "role_family"
+  ],
+  "dataModelRefs": [
+   "work_order",
+   "elderly_monitor",
+   "service_ledger"
+  ],
+  "appIdentity": {
+   "appName": "安居颐养云"
+  },
+  "invariants": [
+   {
+    "id": "inv_dispatch_time",
+    "statement": "工单进入已派单状态时必须记录派单时间",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.dispatch_time",
+     "node_assigned"
+    ]
+   },
+   {
+    "id": "inv_order_status",
+    "statement": "工单的当前状态字段必须与工作流节点保持一致",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.status",
+     "role_staff"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

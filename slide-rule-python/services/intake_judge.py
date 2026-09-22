@@ -48,19 +48,24 @@
 """
 
 from __future__ import annotations
+from .archetype_legal import device_rubric_bullets as _device_rubric_bullets
+from .archetype_legal import judge_device_domain_bar as _judge_device_domain_bar
+from .archetype_legal import valid_judge_devices as _valid_judge_devices
+from .closed_tools import is_closed_tool_command, is_factory_hop_command
 
 import os
 import re
 from dataclasses import dataclass, field
 from typing import Any, Literal, Optional
 
+from sliderule_llm.config import default_max_tokens
+
 Verdict = Literal["real", "iteration", "vague", "off_topic", "meta", "out_of_scope"]
 Action = Literal["proceed", "hint"]
-# 设备档。**只有三个取值，没有 tablet**——appbundle.preferredDevice 的合法域是
-# desktop/tablet/phone 三档，但平板范式的渲染代码已下架（ADR-0001），这里判出
-# tablet 下游也没有对应的设计与外壳，不如不给这个选项（能力面纪律：不许判出
-# 系统做不到的东西）。unspecified 见 Judgement.device 的说明。
-Device = Literal["desktop", "phone", "unspecified"]
+# 设备档。合法域同源于账本（接通的设备 + unspecified 哨兵）。
+# 2026-08-30：删掉手写 Literal——账本接通 tablet 而这里没跟上，判定会输出
+# 闸不认的值，或反过来把已经接通的档判成非法。unspecified 见 Judgement.device。
+Device = str
 
 _ENABLED_ENV = "SLIDERULE_INTAKE_JUDGE_ENABLED"
 _BLOCKING_ENV = "SLIDERULE_INTAKE_JUDGE_BLOCKING"
@@ -69,14 +74,16 @@ _BLOCKING_ENV = "SLIDERULE_INTAKE_JUDGE_BLOCKING"
 def judge_enabled() -> bool:
     """默认开（判定本身不阻断，开着只多一次 1~2s 的调用换到诊断数据）。
     显式 0/false/no/off 关掉。"""
-    raw = (os.getenv(_ENABLED_ENV) or "").strip().lower()
-    return raw not in ("0", "false", "no", "off")
+    from .env_flags import flag
+
+    return flag(_ENABLED_ENV, default=True)
 
 
 def blocking_enabled() -> bool:
     """第一版默认关：判定只提示不拦。误判率收敛后再显式打开。"""
-    raw = (os.getenv(_BLOCKING_ENV) or "").strip().lower()
-    return raw in ("1", "true", "yes", "on")
+    from .env_flags import flag
+
+    return flag(_BLOCKING_ENV, default=False)
 
 
 # ── 第 0 层：确定性预判（零成本零延迟，只挡闭眼都知道的）────────────
@@ -130,7 +137,7 @@ class Judgement:
         }
 
 
-def precheck(text: str) -> Optional[Judgement]:
+def precheck(text: str, *, has_app: bool = False) -> Optional[Judgement]:
     """确定性层。命中返回判定，否则 None（交给 LLM 层）。"""
     t = (text or "").strip()
     if not t:
@@ -158,6 +165,17 @@ def precheck(text: str) -> Optional[Judgement]:
             reason="内容过短，无法判断意图",
             guidance="再多说两句？比如涉及哪些角色、要走什么流程。",
         )
+    # 已有应用：工厂单跳 / 闭集芯片（含 refine）不是新话题。
+    # 空会话不走这条——「闭环发布管理系统」仍交给 LLM 当新产品。
+    if has_app:
+        if is_factory_hop_command(t) or is_closed_tool_command(t):
+            return Judgement(
+                verdict="iteration",
+                action="proceed",
+                source="precheck",
+                reason="工厂单跳指令",
+                confidence=1.0,
+            )
     return None
 
 
@@ -229,11 +247,10 @@ def _out_of_scope_block() -> str:
 _DEVICE_RUBRIC = (
     "顺带判一件事：这个系统主要该在**哪种设备**上用。判据是**使用姿态**"
     "（人在什么状态下操作），不是句子里出现了什么词。\n"
-    "  · phone —— 站着、走动、单手、在现场、即时上报：扫码/拍照/打卡/签字/"
-    "随手记一笔，或者使用者是个人在日常生活里用（记账、日程、情绪、预约、下单）。\n"
-    "  · desktop —— 坐着、长时段、多列对照、批量操作、审批与配置：看板/中台/"
-    "后台/分析/汇总/对账/排产/关系图/权限分级，使用者是在工位上处理一批事的人。\n"
-    "  · unspecified —— **没有姿态信号就必须选这个**。别硬猜。\n"
+    # ⚠ 设备条目由账本生成（加设备只改 JSON，提示词自动跟上）。
+    #   下面五行「容易判错的例子」是**标定过的**，手写保留——
+    #   生成它等于把标定丢给模板。判据 test_rubric_逐字不变 钉住整串。
+    + _device_rubric_bullets() + "\n"
     "两个方向的坑（这两组最容易判错，判的是谁在什么状态下用，不是词）：\n"
     "  「外卖骑手运力调度看板」有「骑手」，但用的人是调度员坐在后台 → desktop\n"
     "  「员工打卡的月度汇总与补卡审批」有「打卡」，但汇总审批是 HR 坐着做 → desktop\n"
@@ -391,7 +408,7 @@ def build_messages(text: str, *, has_app: bool, app_summary: str = "") -> list[d
         '  "guidance": "给用户看的引导话术（verdict 不是 real/iteration 时必填，'
         '中文，友好、具体、不说教，直接告诉他可以怎么说）",\n'
         '  "rewrite": ["改写示例1", "改写示例2"],\n'
-        '  "device": desktop|phone|unspecified,\n'
+        f'  "device": {_judge_device_domain_bar()},\n'
         '  "deviceReason": "一句中文，说明按什么姿态判的"\n'
         "}\n\n"
         f"{_DEVICE_RUBRIC}\n\n"
@@ -418,7 +435,8 @@ def build_messages(text: str, *, has_app: bool, app_summary: str = "") -> list[d
 
 
 _VALID_VERDICTS = {"real", "iteration", "vague", "off_topic", "meta", "out_of_scope"}
-_VALID_DEVICES = {"desktop", "phone", "unspecified"}
+#: ⚠ 判定输出域 = 闸的合法域 + unspecified 哨兵。同源于账本（第四条）。
+_VALID_DEVICES = _valid_judge_devices()
 
 
 def _coerce(payload: dict[str, Any], *, has_app: bool) -> Judgement:
@@ -496,7 +514,7 @@ def judge_turn(
                          action="proceed", source="degraded",
                          degraded_reason="judge disabled by env")
 
-    hit = precheck(text)
+    hit = precheck(text, has_app=has_app)
     if hit is not None:
         return hit
 
@@ -510,7 +528,7 @@ def judge_turn(
 
             payload = structured_llm_json(
                 messages, required_keys=_REQUIRED_KEYS,
-                temperature=0.0, max_tokens=800, max_retries=1,
+                temperature=0.0, max_tokens=default_max_tokens(), max_retries=1,
             )
         if not isinstance(payload, dict):
             raise ValueError("payload 不是对象")

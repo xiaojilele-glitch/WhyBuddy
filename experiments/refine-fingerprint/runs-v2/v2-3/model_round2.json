@@ -1,0 +1,273 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "emergency_alert",
+    "name": "紧急求助报警",
+    "fields": [
+     {
+      "id": "alert_time",
+      "name": "求助时间",
+      "type": "string"
+     },
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "trigger_source",
+      "name": "报警触发源",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "elder_info",
+      "name": "老人姓名与头像",
+      "type": "string"
+     },
+     {
+      "id": "age_gender",
+      "name": "年龄与性别",
+      "type": "string"
+     },
+     {
+      "id": "community",
+      "name": "居住社区",
+      "type": "string"
+     },
+     {
+      "id": "health_level",
+      "name": "健康等级标签",
+      "type": "string"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "caregiver",
+    "name": "护理员",
+    "fields": [
+     {
+      "id": "completed_orders",
+      "name": "本月完成单量",
+      "type": "number"
+     },
+     {
+      "id": "attendance_days",
+      "name": "考勤天数",
+      "type": "number"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_consultant",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "role_caregiver",
+    "name": "护理员"
+   },
+   {
+    "id": "role_manager",
+    "name": "养老中心运营主管"
+   }
+  ],
+  "permissions": [
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "emergency_alert:create",
+   "emergency_alert:read",
+   "emergency_alert:update",
+   "emergency_alert:approve",
+   "caregiver:read",
+   "caregiver:update",
+   "caregiver:manage"
+  ],
+  "menus": [
+   {
+    "id": "menu_workbench",
+    "label": "工作台",
+    "roleRefs": [
+     "role_manager",
+     "role_consultant",
+     "role_caregiver"
+    ],
+    "permissionRefs": [
+     "emergency_alert:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_pending",
+    "name": "待处理报警",
+    "assigneeRole": "role_manager",
+    "phase": "报警"
+   },
+   {
+    "id": "node_handling",
+    "name": "服务执行中",
+    "assigneeRole": "role_caregiver",
+    "phase": "执行"
+   },
+   {
+    "id": "node_closed",
+    "name": "处理完成",
+    "assigneeRole": "role_manager",
+    "phase": "归档"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_pending",
+    "to": "node_handling",
+    "condition": "主管确认报警并发起派单"
+   },
+   {
+    "from": "node_handling",
+    "to": "node_closed",
+    "condition": "护理员到达打卡并完成救援"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "运营工作台首页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "emergency_alert.alert_time",
+     "emergency_alert.elder_name"
+    ],
+    "actionPermissions": [
+     "emergency_alert:read"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.elder_info",
+     "elder.age_gender",
+     "elder.community",
+     "elder.health_level",
+     "elder.emergency_contact"
+    ],
+    "actionPermissions": [
+     "elder:read",
+     "elder:create"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "护理员移动端任务页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "caregiver.completed_orders",
+     "caregiver.attendance_days"
+    ],
+    "actionPermissions": []
+   },
+   {
+    "id": "p4",
+    "name": "数据统计与报表页",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "emergency_alert.trigger_source"
+    ],
+    "actionPermissions": [
+     "emergency_alert:read"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_health_assess",
+    "name": "健康评估分析",
+    "inputFields": [
+     "elder.elder_info",
+     "elder.health_level"
+    ],
+    "outputField": "elder.age_gender",
+    "roleRefs": [
+     "role_consultant"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p1",
+    "workflowRef": "node_pending"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "node_handling"
+   },
+   {
+    "pageRef": "p4",
+    "workflowRef": "node_closed"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_manager",
+   "role_consultant",
+   "role_caregiver"
+  ],
+  "dataModelRefs": [
+   "emergency_alert",
+   "elder",
+   "caregiver"
+  ],
+  "appIdentity": {
+   "appName": "颐安云"
+  },
+  "invariants": [
+   {
+    "id": "inv_emergency_alert",
+    "statement": "紧急求助报警进入待处理状态时必须包含求助时间与触发源",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "emergency_alert",
+     "emergency_alert.alert_time",
+     "emergency_alert.trigger_source",
+     "node_pending"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

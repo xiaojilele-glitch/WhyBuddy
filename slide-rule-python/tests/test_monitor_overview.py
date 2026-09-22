@@ -16,15 +16,71 @@
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.freeform_block import (  # noqa: E402
     FreeformGenerationError,
     _build_overview_sheet_facts,
+    _build_marketing_page_prompt,
+    _marketing_landing_design_brief,
     _monitor_overview_design_brief,
     _sheet_image_size_for_device,
     enrich_monitor_page_overviews,
 )
+
+
+def test_marketing_landing_brief_is_not_an_operations_dashboard():
+    page = {
+        "id": "home",
+        "name": "星野营地",
+        "kind": "monitor",
+        "presentation": "marketing-landing",
+        "stats": [{"id": "bookings", "name": "预订数", "entity": "order", "metric": "count"}],
+        "charts": [{"id": "trend", "name": "趋势", "type": "line", "dimension": "order.created_at", "metric": "count"}],
+    }
+
+    brief = _marketing_landing_design_brief(page, _datamodel(), audience="image")
+
+    assert "沉浸式首屏主视觉" in brief
+    assert "主要行动按钮" in brief
+    assert "KPI" not in brief
+    assert "图表" not in brief
+    assert "运营总览" not in brief
+    assert "完整首页视觉稿" in brief
+    assert "不要在图片里绘制网页文字" not in brief
+
+
+def test_generation_contract_exposes_marketing_landing_presentation():
+    from services.v5_llm_generate import _SCHEMA_INSTRUCTION
+
+    assert '"presentation": "marketing-landing|application"' in _SCHEMA_INSTRUCTION
+    assert "consumer-facing or public landing page" in _SCHEMA_INSTRUCTION
+    assert "MUST NOT be coerced into an operations monitor" in _SCHEMA_INSTRUCTION
+
+
+def test_marketing_page_prompt_requests_a_complete_homepage_visual():
+    prompt = _build_marketing_page_prompt(
+        "星野营地提供沙漠观星住宿体验", device="desktop"
+    )
+
+    assert "完整首页视觉稿" in prompt
+    assert "桌面端" in prompt
+    assert "真实摄影主视觉" in prompt
+    assert "可读中文文案" in prompt
+    assert "主要行动按钮" in prompt
+    assert "下一内容区" in prompt
+    assert "只画一张 Hero" not in prompt
+    assert "不要出现任何文字" not in prompt
+
+
+# ── 逐行内容：由设计模型自己画（2026-08-03）
+#
+# blockRef（从固定积木清单里挑一个嵌进设计树）整条通道已删除。逐行内容改由
+# 设计模型用 rowsRef 自己画——版式它定，真实行数据由渲染端绑。所以这份 brief
+# 仍然要列出"这一页有哪些逐行内容"，只是措辞从"照抄这段 blockRef JSON"变成
+# 业务语言描述（实体 + 排序字段），具体长什么样交给模型按参照图决定。
 
 
 def _datamodel():
@@ -73,6 +129,65 @@ def _monitor_page():
     }
 
 
+def test_sheet_canvas_is_the_2560_tier_and_decoupled_from_block_reference_images():
+    """参照板 2560x1440 档，且**不再跟区块级参照图共用一张尺寸表**（2026-08-03）。
+
+    两件事各自钉住：
+
+    · **16 的倍数**——端点硬校验，两边不整除 16 直接 400（所以拿不到
+      1920x1080：1080÷16=67.5，而 2560x1440 反而合法）。不写成测试的话，
+      下次有人手改成一个"看起来更标准"的尺寸，会在生图那一步才炸，报的还是
+      400 不是超时，很容易被当成鉴权或网络问题去查。
+    · **和区块级参照图分开**——那张图每个区块生一次、且要喂进视觉 LLM 当输入，
+      图越大输入 token 越多越贵；参照板整页只生一次。两者的成本账不一样，
+      合用一张表迟早会为了省其中一个而误伤另一个。
+    """
+    from services.freeform_block import _image_size_for_device, _sheet_image_size_for_device
+
+    for device in ("desktop", "tablet", "phone", ""):
+        w, h = (int(x) for x in _sheet_image_size_for_device(device).split("x"))
+        assert w % 16 == 0 and h % 16 == 0, (device, w, h)
+        assert w * h >= 2560 * 1440, (device, w, h)   # 不许悄悄降回小档
+        # 区块级那张仍然是小档，两者必须是两个数
+        assert _sheet_image_size_for_device(device) != _image_size_for_device(device)
+
+    # 档位形状不能弄反：桌面横版、手机竖版
+    dw, dh = (int(x) for x in _sheet_image_size_for_device("desktop").split("x"))
+    pw, ph = (int(x) for x in _sheet_image_size_for_device("phone").split("x"))
+    assert dw > dh and ph > pw
+
+
+def test_refine_system_prompt_carries_the_placeholder_rules():
+    """占位写法必须写进**改写系统提示词**，不能只留在区块级那份常量里。
+
+    这条防的是一次真实复发（2026-08-03）：07-31 参照板提示词从写死模板改成
+    「LLM 现写」，那五段常量——含占位写法与末尾信息层级清单——一条都没搬过来。
+    出图里数值那一类于是退化成**灰色横条**（KPI 数值、环图中心、坐标轴刻度
+    全是灰条）。
+
+    为什么这不只是"不好看"：参照板的读者是设计模型，它看图学的是「这一格该放
+    什么形状的内容」。一根灰条什么都没说——分不清那格装的是三位数计数、金额
+    还是日期，列宽/对齐/字号全学不到，信息层级也塌了。
+
+    V5.7 架构图当时就写下了这个风险："改写 LLM 漏掉哪一条，那一张图就会复发
+    对应的老 bug。" 所以这里两头都钉：既要有占位形状，也要点名禁掉灰条。
+    """
+    from services.freeform_block import _SHEET_PROMPT_REFINE_SYSTEM as sys_prompt
+
+    # ① 按字段形状占位——各类字段至少给出范例
+    for shape in ("20XX-XX-XX", "¥ ××,×××", "××.×%", "×,×××"):
+        assert shape in sys_prompt, shape
+    # ② 点名禁掉那个具体的退化形态
+    assert "灰色横条" in sys_prompt
+    assert "留空" in sys_prompt
+    # ③ 信息层级要画满——坐标轴刻度这类最容易被省掉的也点名
+    assert "坐标轴刻度" in sys_prompt
+    # ④ 不能因此把「不许出现真实数据」那条挤掉——两条是一组，只留一条就会
+    #    从"画灰条"翻车成"编一套自洽的假数据"（真机撞过：环图各段加起来正好
+    #    等于 KPI 总数）。
+    assert "不能出现任何真实数据" in sys_prompt
+
+
 def test_design_brief_covers_stats_and_charts():
     brief = _monitor_overview_design_brief(_monitor_page(), _datamodel())
     assert "订单总数" in brief
@@ -83,96 +198,24 @@ def test_design_brief_covers_stats_and_charts():
     assert "状态" in brief
 
 
-def test_design_brief_excludes_rankings_and_feeds():
-    """rankings/feeds 不进「必须包含」清单——身份是"可摆的积木"，不是"必须画的内容"。
+def test_design_brief_lists_row_content_outside_the_mandatory_section():
+    """rankings/feeds 不进「必须包含」清单，但要作为**可画的逐行内容**列出来。
 
-    2026-07-29 语义分成了两层，这条断言也跟着分层：
-    - **不在**必须清单里：dataRef 表达不了逐行记录，把它们写成"必须画出来"
-      只会逼模型画空表身（这一条没变，是这个函数原本的用意）；
-    - **在**可选的 blockRef 候选清单里：见下一个用例。
+    两层语义（2026-08-03 起）：
+    - **不在**必须清单里：必须画的只有 KPI 与图表，逐行内容看参照图有没有；
+    - **在**逐行内容清单里：模型得知道这一页有哪些一行一行的东西可画、
+      数据绑哪个实体哪个字段，否则它只能瞎猜或干脆不画。
     """
     brief = _monitor_overview_design_brief(_monitor_page(), _datamodel())
-    required_section = brief.split("这一页还声明了下面这些")[0]
+    required_section = brief.split("这一页还有下面这些")[0]
     assert "金额排行" not in required_section
     assert "工单动态" not in required_section
-
-
-def test_design_brief_offers_row_content_as_blockref_candidates():
-    """逐行内容以**现成绑定**的形式给出来，模型照抄就能摆。
-
-    第一版只写了一句泛泛的"适合的话就摆一个"，真跑生成出来 blockRef 一个都
-    没有——模型压根不知道这一页有哪些逐行内容可摆（必须清单里刻意只放了
-    stats/charts）。补上具体清单和现成 binding 之后，同一个模型立刻摆了两个。
-    """
-    brief = _monitor_overview_design_brief(_monitor_page(), _datamodel())
-    assert "这一页还声明了下面这些" in brief
-    # 给的是可直接照抄的 blockRef 形状，不是自然语言描述
-    assert '"type": "RankedList"' in brief
-    assert '"type": "ActivityFeed"' in brief
-    assert '"entityRef": "order"' in brief
-    assert '"sortByRef": "amount"' in brief
-
-
-def test_design_brief_dedupes_row_content_candidates():
-    """同一份逐行内容常被 feeds 和 blocks 各声明一遍（真跑逮到过）——
-    喂给模型之前先按内容指纹去重，否则等于让它把同一张卡摆两次。"""
-    page = _monitor_page()
-    page["blocks"] = [
-        {
-            "id": "dup_feed",
-            "type": "ActivityFeed",
-            # 与 feeds[0] 绑定逐字段相同，只有 id/名字不同
-            "binding": {"entityRef": "ticket", "timeFieldRef": "created_at"},
-        }
-    ]
-    brief = _monitor_overview_design_brief(page, _datamodel())
-    candidates = [l for l in brief.split("\n") if l.startswith("- ")]
-    assert sum(1 for l in candidates if "ActivityFeed" in l) == 1, candidates
-
-
-def test_design_brief_points_row_content_at_blockref():
-    """2026-07-29：这里原来断言的是一句硬禁令「不要画排行榜/动态流」。
-
-    禁令本身没错（模型确实画不了逐行），但代价是那些内容被赶到设计之外
-    单独渲染成外挂卡，首页变成"AI 设计区 + 两张外挂卡"，主次和留白都由不得
-    设计者。有了 blockRef 之后语义改成：逐行内容仍然不由它画，但**由它决定
-    摆在哪、占多大**，渲染交给积木自己的真渲染器。所以断言从"不许"改成
-    "指向 blockRef"。
-    """
-    brief = _monitor_overview_design_brief(_monitor_page(), _datamodel())
-    assert "blockRef" in brief
-    # 仍然要拦住"自己用 CSS 画"这条歧路
-    assert "不要自己用 CSS 去画这类内容" in brief
-
-
-def test_design_brief_frames_blocks_as_a_real_choice():
-    """安置语义在 2026-08-01 反转过两次，这条用例记录最终形态与理由。
-
-    ① 最初是**许可式**："如果这一页还适合……就摆一个……用不上就完全不用"。
-    ② 当天改成**祈使式**："不是备选项，你必须全部安置"。理由是：不安置并不能
-       让积木消失，它只会掉到设计区外面的固定骨架里，主次和留白由不得设计者。
-    ③ 当天再次反转回**备选语义**——②的问题在于，它把一个架构缺陷固化成了对
-       模型的命令。"这一页用不用得上这个积木"本来就该由设计者判断，而它是链路
-       上信息最全的一环（刚把整页版式排完）；声明这些积木的五系统生成反而信息
-       更少。真正该修的是"不摆没有出口"，不是逼它全摆。
-
-    所以现在：积木是备选项，**不摆 = 真的移除**（见 _prune_unplaced_blocks）。
-    锁死两件事：说明白是备选、且说明白不摆的真实后果——否则那是一次没有信息
-    的取舍。②那句"不会消失"必须已撤，它描述的是旧行为。
-    """
-    brief = _monitor_overview_design_brief(_monitor_page(), _datamodel())
-    assert "会被移除" in brief
-    assert "不会消失" not in brief
-    assert "用不上就完全不用" not in brief
-
-    # ④ 作用域必须咬死在积木上（2026-08-01 真跑修）。上一版写"上面列出的积木
-    # 是备选项……别为了凑齐而硬塞"，而"上面"之上还有"必须包含的 KPI/图表"清单
-    # 与"不能遗漏任何一项"——两句字面冲突，模型把 KPI/图表也当成了可选：一轮
-    # 真跑声明 3 个 KPI + 3 张图表，设计只画出 1 个数字、0 张图表。
-    assert "不在取舍范围内" in brief
-    assert "KPI 与图表照单全画" in brief
-    # 可选项要指名道姓，不能靠"上面列出的"这种相对指代
-    assert "可选的只有这几个积木" in brief
+    # 但在逐行内容那一段里要出现，并且给出数据来源
+    assert "金额排行" in brief and "工单动态" in brief
+    assert "rowsRef" in brief
+    # 用业务语言给数据来源，不再是可照抄的 blockRef JSON
+    assert '"type": "RankedList"' not in brief
+    assert "blockRef" not in brief
 
 
 def test_choice_scope_never_swallows_the_mandatory_lists():
@@ -263,32 +306,25 @@ def test_enrich_writes_freeform_overview_on_success(monkeypatch):
     fake_content = {"root": {"tag": "div", "style": {}, "children": []}}
     captured_kwargs = {}
 
-    # 2026-07-29（方案 B）：一个总览页现在设计两版——先按 preferredDevice
-    # 那一档，再补一版 phone。所以这里逐次记录，不能只看最后一次的 kwargs。
     calls = []
 
     def fake_generate(brief, datamodel, **kwargs):
         captured_kwargs.update(kwargs)
         calls.append(kwargs.get("device"))
         assert "订单总数" in brief
-        # 每次返回**新对象**：返回同一个 dict 的话，挂 mobile 时会造出自引用
         return {"root": dict(fake_content["root"])}
 
     monkeypatch.setattr("services.freeform_block.generate_freeform_block", fake_generate)
     model = {
         "datamodel": _datamodel(),
-        # 2026-07-30：这条测的是「两档都设计」，所以**不能**声明 preferredDevice
-        # ——明说 desktop 现在会跳过手机档（那条路径由下面两条新测试覆盖）。
         "appbundle": {"appIdentity": {"theme": "forest"}},
         "page": {"pages": [_monitor_page()]},
     }
     result = enrich_monitor_page_overviews(model)
     overview = result["page"]["pages"][0]["freeformOverview"]
-    # 默认那份仍是 preferredDevice 档的设计
     assert overview["root"] == fake_content["root"]
-    # 手机档另挂一份（形状照 react-grid-layout 的 layouts 键控回退）
-    assert overview["mobile"]["root"] == fake_content["root"]
-    assert calls == ["", "phone"]  # 未声明设备档 → 默认档 + 手机档
+    assert "mobile" not in overview
+    assert calls == ["desktop"]
     assert captured_kwargs["theme_id"] == "forest"
     # 原有固定骨架字段必须原样保留——freeformOverview 是追加，不是替换
     assert result["page"]["pages"][0]["stats"]
@@ -326,8 +362,7 @@ def test_enrich_covers_dashboard_pages(monkeypatch):
         "page": {"pages": [{"id": "d1", "kind": "dashboard", "stats": [{"id": "s"}]}]},
     }
     result = enrich_monitor_page_overviews(model)
-    # 一页两次：默认档（未声明 preferredDevice → 空串）+ 手机档（方案 B）
-    assert called == ["", "phone"]
+    assert called == ["desktop"]
     assert "freeformOverview" in result["page"]["pages"][0]
 
 
@@ -367,7 +402,7 @@ def test_sheet_size_matches_prompt_canvas():
 
 
 def test_facts_carry_only_what_the_model_cannot_derive():
-    """事实清单只装四类事实，**一条做法都不许有**。
+    """事实清单只装**三类**事实，一条做法都不许有。
 
     2026-07-31 重构：此前这里钉的是"砍四类留四类"那份写死模板的边界。那套
     模板每一条都有出图证据，问题出在它对每个应用说同一句话——实测两个完全
@@ -381,17 +416,23 @@ def test_facts_carry_only_what_the_model_cannot_derive():
     facts = _build_overview_sheet_facts(
         "测试", {"entities": []}, theme_id="tangerine", device="desktop"
     )
-    # 四类事实都在
+    # 三类事实都在
     assert "画布：" in facts
     assert "设备档：" in facts
     assert "这一页要覆盖的内容范围" in facts
-    assert "身份色板" in facts and "主色" in facts
+
+    # 色板已从事实里拿掉（2026-08-03，用户裁决：首页生图自由发挥）。
+    # 此前会附一句"运行时外壳已经按这套渲染了，别偏色"——现在外壳是统一的
+    # 白菜单 + 白 Header + 一个品牌主色，参照图的职责只剩版式，不必迁就配色。
+    # 这条断言的方向是反的（不许回流），因为把手铐加回去不会有任何报错。
+    assert "身份色板" not in facts
+    assert "主色 #" not in facts
 
     # 做法一条都不许有
     for banned in (
         "顶部一行", "最多 2 张图", "多列横向排布",     # 版式处方
         "20XX-XX-XX", "138-", "一个真实数据都不许出现",  # 占位写法
-        "技术标识", "blockRef",                        # 技术标识禁令
+        "技术标识", "rowsRef",                         # 技术标识禁令
         "水印", "画面撑满画布",                        # 水印/铺满
         "信息层级必须画满", "一项都不许漏",             # 信息层级清单
         "字高", "Ant Design",                          # 密度预算 / 控件形态
@@ -458,7 +499,7 @@ def test_refine_meta_prompt_still_guards_the_two_proven_bugs():
     """
     from services.freeform_block import _SHEET_PROMPT_REFINE_SYSTEM as sys_prompt
 
-    assert "技术标识" in sys_prompt and "blockRef" in sys_prompt
+    assert "技术标识" in sys_prompt and "rowsRef" in sys_prompt
     assert "不能出现任何真实数据" in sys_prompt
     assert "占位形状" in sys_prompt
     # 版式要交给业务性质决定，且明确反掉通用后台网格
@@ -515,6 +556,8 @@ def test_sheet_generation_receives_the_declared_device(monkeypatch):
 
     monkeypatch.setattr("services.freeform_block._generate_overview_sheet_b64", fake_sheet)
     monkeypatch.setattr("services.freeform_block._supports_image_content_parts", lambda: True)
+    # 2026-08-03：参照板的开关是"配没配生图 key"，测试里显式打开
+    monkeypatch.setattr("services.freeform_block._image_generation_configured", lambda: True)
     monkeypatch.setattr(
         "services.freeform_block.generate_freeform_block",
         lambda brief, datamodel, **kw: {"root": {"tag": "div", "children": []}},
@@ -579,12 +622,8 @@ def test_declared_desktop_skips_the_phone_layout(monkeypatch):
     assert "mobile" not in overview, "桌面档不该挂 mobile 设计"
 
 
-def test_unspecified_device_still_designs_both(monkeypatch):
-    """判不出来时仍然两档都生成——**只在明确的时候才砍**。
-
-    宁可多花一分钟，也不要让用户切到手机档看见一个被 CSS 掰弯的桌面版式。
-    这条纪律跟入站判定那侧同源（device 缺省是 unspecified 而不是 desktop）。
-    """
+def test_unspecified_device_deterministically_designs_desktop_only(monkeypatch):
+    """历史/部分模型进入增强时也只能走一个确定性兜底，不得恢复双生成。"""
     calls = []
     monkeypatch.setattr(
         "services.freeform_block.generate_freeform_block",
@@ -597,8 +636,174 @@ def test_unspecified_device_still_designs_both(monkeypatch):
         "appbundle": {"appIdentity": {"theme": "forest"}},
         "page": {"pages": [_monitor_page()]},
     }
-    enrich_monitor_page_overviews(model)
-    assert "phone" in calls, f"未声明设备档时应仍设计手机版式: {calls}"
+    result = enrich_monitor_page_overviews(model)
+    assert calls == ["desktop"]
+    assert "mobile" not in result["page"]["pages"][0]["freeformOverview"]
+
+
+def test_monitor_progress_reports_one_authoritative_device(monkeypatch):
+    from services import enrich_timing
+
+    events = []
+    monkeypatch.setattr(
+        "services.freeform_block.generate_freeform_block",
+        lambda brief, datamodel, **kw: {"root": {"tag": "div", "children": []}},
+    )
+    monkeypatch.setattr("services.freeform_block._generate_overview_sheet_b64", lambda *a, **k: None)
+    enrich_timing.set_stage_sink(
+        lambda phase, name, fields: events.append((phase, name, dict(fields)))
+    )
+    try:
+        enrich_monitor_page_overviews(
+            {
+                "datamodel": _datamodel(),
+                "appbundle": {
+                    "appIdentity": {"theme": "forest"},
+                    "preferredDevice": "phone",
+                    "deviceAuthority": "single-v1",
+                },
+                "page": {"pages": [_monitor_page()]},
+            }
+        )
+    finally:
+        enrich_timing.set_stage_sink(None)
+
+    design_starts = [
+        fields
+        for phase, name, fields in events
+        if phase == "start" and name == "monitor.design"
+    ]
+    assert design_starts == [
+        {"page": "home", "device": "phone", "current": 1, "total": 1}
+    ]
+
+
+def test_reference_image_is_analyzed_persisted_and_passed_to_page_generation(monkeypatch):
+    from services import freeform_block, page_reconstruction, sheet_palette
+
+    seen = {"analysis": 0, "prompt": None}
+
+    def fake_analysis(image, **kwargs):
+        seen["analysis"] += 1
+        assert image == "sheet-image"
+        assert kwargs["device"] == "desktop"
+        return {
+            "version": "page-reconstruction-v1",
+            "status": "ready",
+            "spec": {"device": "desktop", "regions": [{"id": "hero"}]},
+            "prompt": "RECONSTRUCT hero at x=0.000 width=1.000",
+            "diagnostic": "",
+        }
+
+    def fake_design(brief, datamodel, **kwargs):
+        seen["prompt"] = kwargs.get("reconstruction_prompt")
+        return {"root": {"tag": "div", "children": []}}
+
+    monkeypatch.setattr(freeform_block, "_image_generation_configured", lambda: True)
+    monkeypatch.setattr(freeform_block, "_supports_image_content_parts", lambda: True)
+    monkeypatch.setattr(freeform_block, "_generate_overview_sheet_b64", lambda *a, **k: "sheet-image")
+    monkeypatch.setattr(page_reconstruction, "analyze_page_reference", fake_analysis)
+    monkeypatch.setattr(sheet_palette, "extract_chart_palette", lambda image: [])
+    monkeypatch.setattr(freeform_block, "generate_freeform_block", fake_design)
+
+    model = {
+        "datamodel": _datamodel(),
+        "appbundle": {"landingPageRef": "home", "preferredDevice": "desktop"},
+        "page": {"pages": [_monitor_page()]},
+    }
+    page = enrich_monitor_page_overviews(model)["page"]["pages"][0]
+
+    assert seen == {
+        "analysis": 1,
+        "prompt": "RECONSTRUCT hero at x=0.000 width=1.000",
+    }
+    assert page["pageReconstruction"]["status"] == "ready"
+    assert page["pageReconstruction"]["spec"]["regions"][0]["id"] == "hero"
+
+
+def test_missing_reference_image_persists_skipped_reconstruction(monkeypatch):
+    from services import freeform_block
+
+    seen = []
+    monkeypatch.setattr(freeform_block, "_generate_overview_sheet_b64", lambda *a, **k: None)
+    monkeypatch.setattr(
+        freeform_block,
+        "generate_freeform_block",
+        lambda brief, datamodel, **kwargs: (
+            seen.append(kwargs.get("reconstruction_prompt"))
+            or {"root": {"tag": "div", "children": []}}
+        ),
+    )
+    model = {
+        "datamodel": _datamodel(),
+        "appbundle": {"landingPageRef": "home", "preferredDevice": "phone"},
+        "page": {"pages": [_monitor_page()]},
+    }
+
+    page = enrich_monitor_page_overviews(model)["page"]["pages"][0]
+
+    assert seen == [None]
+    assert page["pageReconstruction"] == {
+        "version": "page-reconstruction-v1",
+        "status": "skipped",
+        "spec": None,
+        "prompt": "",
+        "diagnostic": "reference image unavailable",
+    }
+
+
+def test_marketing_landing_separates_full_page_reference_from_hero_media(monkeypatch):
+    from services import freeform_block, page_reconstruction, sheet_palette
+    from services.app_preview import OverviewPreviewSink
+
+    generated = []
+    design_kwargs = {}
+
+    def fake_image(*args, **kwargs):
+        generated.append((kwargs.get("marketing_page"), kwargs.get("marketing_hero")))
+        return "full-page-reference" if kwargs.get("marketing_page") else "hero-media"
+
+    def fake_analysis(image, **kwargs):
+        assert image == "full-page-reference"
+        return {
+            "version": "page-reconstruction-v1",
+            "status": "ready",
+            "spec": {"device": "desktop", "regions": [{"id": "hero"}]},
+            "prompt": "FULL PAGE CONTRACT",
+            "diagnostic": "",
+        }
+
+    def fake_design(*args, **kwargs):
+        design_kwargs.update(kwargs)
+        return {"root": {"tag": "div", "children": []}}
+
+    monkeypatch.setattr(freeform_block, "_image_generation_configured", lambda: True)
+    monkeypatch.setattr(freeform_block, "_supports_image_content_parts", lambda: True)
+    monkeypatch.setattr(freeform_block, "_generate_overview_sheet_b64", fake_image)
+    monkeypatch.setattr(page_reconstruction, "analyze_page_reference", fake_analysis)
+    monkeypatch.setattr(sheet_palette, "extract_chart_palette", lambda image: [])
+    monkeypatch.setattr(freeform_block, "generate_freeform_block", fake_design)
+    sink = OverviewPreviewSink()
+    page = {
+        "id": "home",
+        "name": "星野营地",
+        "kind": "monitor",
+        "presentation": "marketing-landing",
+    }
+    model = {
+        "datamodel": _datamodel(),
+        "appbundle": {"landingPageRef": "home", "preferredDevice": "desktop"},
+        "page": {"pages": [page]},
+    }
+
+    enrich_monitor_page_overviews(model, preview_sink=sink)
+
+    assert sorted(generated) == [(False, True), (True, False)]
+    assert sink.png_b64 == "hero-media"
+    assert design_kwargs["reference_image_b64"] == "full-page-reference"
+    assert design_kwargs["landing_media_b64"] == "hero-media"
+    assert design_kwargs["full_page_visual"] is True
+    assert design_kwargs["reconstruction_prompt"] == "FULL PAGE CONTRACT"
 
 
 def test_generation_contract_teaches_how_to_pick_the_device():
@@ -608,15 +813,29 @@ def test_generation_contract_teaches_how_to_pick_the_device():
     死的，下游那个省时判断（明说桌面就跳过手机档）也就无从做起。两个方向的
     坑也要在正文里——只教一个方向，模型会把所有现场词都往那一边推。
     """
-    from services.schema_legal import experience_block_prompt_block
+    from services.v5_llm_generate import _SCHEMA_INSTRUCTION
 
-    body = experience_block_prompt_block()
+    # 钉通电的插座：模块级指令才是生成侧真用的。只测
+    # experience_block_prompt_block() 会让叶子占位符路径假绿。
+    body = _SCHEMA_INSTRUCTION
     assert "preferredDevice" in body
     assert "POSTURE" in body.upper(), "判据必须是姿态，不是关键词"
     assert "courier" in body and "dispatcher" in body, "缺「带现场词的后台需求」这一向"
     assert "inspection work order" in body and "walking around" in body, \
         "缺「带后台词的现场需求」这一向"
-    assert "OMIT the field" in body, "没告诉模型判不出来就别写——那才是默认两档都生成的入口"
+    assert "MUST choose exactly one" in body
+    assert "NEVER omit" in body
+    from services.archetype_legal import device_domain_bar
+
+    bar = device_domain_bar()
+    assert f"preferredDevice '{bar}'" in body
+    assert "tablet" in bar
+    assert "emit an unsupported device" in body
+    # ⚠ 2026-08-30：不能 `assert "watch" not in body`。Step 8 前文有
+    # "watching live state"，子串会误伤。钉的是带引号的设备词。
+    step8 = body.split("Step 9")[0]
+    assert "'watch'" not in step8
+    assert '"watch"' not in step8
 
 
 # ── monitor 页放开 page.blocks（2026-07-31）─────────────────────────────
@@ -629,38 +848,6 @@ def _monitor_page_with_blocks():
         {"id": "wf", "type": "WorkflowTimeline", "props": {"title": "审批流程", "chainRef": "chain_main"}},
     ]
     return page
-
-
-def test_brief_lists_binding_free_blocks_without_an_empty_binding():
-    """不吃 binding 的积木不能被拼成 "binding": {}。
-
-    QuickActionPanel 的按钮来自 page.actions、WorkflowTimeline 的节点从 workflow
-    机械派生（见目录里两者的 bindingSchema.note）。给它们摆一个空 binding，等于
-    在提示模型"这里该填点什么"，而它填什么都是错的——下游 blockRef 深校验会以
-    unknown key 拒掉，整块设计白生成一轮。
-    """
-    brief = _monitor_overview_design_brief(_monitor_page_with_blocks(), _datamodel())
-    assert '"type": "QuickActionPanel"' in brief
-    assert '"type": "WorkflowTimeline"' in brief
-    assert '"binding": {}' not in brief
-    # chainRef 是 props 不是 binding，要原样带出去，否则模型只能瞎猜画哪条链路
-    assert '"chainRef": "chain_main"' in brief
-    # 吃 binding 的那一类照旧带 binding
-    assert '"type": "ActivityFeed"' in brief
-    assert '"entityRef": "ticket"' in brief
-
-
-def test_brief_separates_row_content_from_action_and_process_blocks():
-    """两类积木分段写——「逐行内容」这个说法套不到动作面/流程面上。
-
-    合在一段的代价不是措辞难看：设计 LLM 是按"这是什么内容"决定放哪的，
-    把一排操作按钮说成"逐行内容"，它就会照着逐行内容的惯例塞到页面最下面。
-    """
-    brief = _monitor_overview_design_brief(_monitor_page_with_blocks(), _datamodel())
-    assert "非数据面的成品积木" in brief
-    row_section = brief.split("这一页还声明了下面这些**非数据面")[0]
-    assert "QuickActionPanel" not in row_section, "动作面不该混进逐行内容那一段"
-    assert "ActivityFeed" in row_section
 
 
 def test_generation_contract_no_longer_exempts_monitor_pages_from_blocks():
@@ -678,10 +865,24 @@ def test_generation_contract_no_longer_exempts_monitor_pages_from_blocks():
     # KPI/趋势区块的禁令仍在，且明确写清它只管这两类，不是禁掉整个 page.blocks
     assert "Do NOT emit MetricGrid or TrendChart blocks there" in text
     assert "not a ban on page.blocks for overview pages" in text
-    # 放行名单从目录派生，且不含被 CHANNEL OWNERSHIP 挡掉的三类
+    # 放行名单从目录派生，且不含被 CHANNEL OWNERSHIP 挡掉的三类。
+    #
+    # ⚠ 按**逗号切出来的整名**比，不能用子串（2026-08-10 修）。
+    #
+    # 原来是 `assert banned not in seg`。目录涨到 359 个区块之后名单里出现了
+    # `ReleaseAdoptionTrendChart` —— 它**包含**子串 "TrendChart"，于是这条断言
+    # 判它违规。可它是一个独立区块，跟被禁的 TrendChart 毫无关系。
+    #
+    # 这是本仓记过一次的同一类错误（v5_capability_executor 的域识别注释：裸子串
+    # 让 "sla" 命中 translation / island / slack）。判据该是"名单里有没有这一项"，
+    # 不是"这串字符出现过没有"。
+    seg = text.split("monitor / dashboard pages are NOT exempt")[1].split("\n")[0]
+    allowed = {name.strip() for name in seg.replace(":", ",").split(",")}
     for banned in ("MetricGrid", "TrendChart", "DataTable"):
-        seg = text.split("monitor / dashboard pages are NOT exempt")[1].split("\n")[0]
-        assert banned not in seg, f"{banned} 不该出现在总览页的放行名单里"
+        assert banned not in allowed, (
+            f"{banned} 不该出现在总览页的放行名单里；"
+            f"名单里形近的有：{sorted(n for n in allowed if banned in n)}"
+        )
 
 
 def test_generation_contract_json_skeleton_exposes_blocks():
@@ -716,31 +917,6 @@ def test_image_audience_brief_carries_no_technical_identifiers():
         assert forbidden not in img, f"出图 brief 混进了技术标识: {forbidden}"
 
 
-def test_image_audience_brief_describes_blocks_visually():
-    """同一批积木要以**画得出来**的形态告诉生图模型，不能只是删掉技术形态。
-
-    只清理不补描述的话，参照板会缺掉这一页真实存在的内容，设计 LLM 拿到的
-    参照图就与它自己的 brief 对不上。
-    """
-    page = _monitor_page()
-    page["blocks"] = [
-        {"id": "acts", "type": "QuickActionPanel", "props": {"title": "常用操作"}},
-        {"id": "flow", "type": "WorkflowTimeline", "props": {}},
-    ]
-    img = _monitor_overview_design_brief(page, _datamodel(), audience="image")
-    assert "一排常用操作按钮" in img
-    assert "一条横向流程阶段条" in img
-
-
-def test_design_audience_keeps_blockref_mechanics():
-    """设计 LLM 那一份必须保留技术形态——它的产出要能被渲染器认出来。"""
-    page = _monitor_page()
-    page["blocks"] = [{"id": "acts", "type": "QuickActionPanel", "props": {"title": "常用操作"}}]
-    des = _monitor_overview_design_brief(page, _datamodel())
-    assert "blockRef" in des
-    assert '{"type"' in des
-
-
 # ── 设计者的否决权（2026-08-01，方案 B）────────────────────────────
 #
 # 语义：设计 LLM 没有摆进版式的可嵌积木 = 它判断这一页用不上 → 真的移除。
@@ -771,16 +947,6 @@ def _run_enrich(page, design, monkeypatch):
         "page": {"pages": [page]},
     }
     return enrich_monitor_page_overviews(model)["page"]["pages"][0]
-
-
-def test_unplaced_block_is_removed(monkeypatch):
-    """只摆了 QuickActionPanel → WorkflowTimeline 视为不需要，移除。"""
-    page = _run_enrich(_page_with_blocks(), _design_with("QuickActionPanel"), monkeypatch)
-    ids = [b["id"] for b in page["blocks"]]
-    assert ids == ["acts"], ids
-    # layout 里的悬空引用一并清掉，否则渲染层拿着一个不存在的 id
-    assert page["layout"]["primary"] == []
-    assert page["layout"]["summary"] == ["acts"]
 
 
 def test_all_placed_keeps_everything(monkeypatch):

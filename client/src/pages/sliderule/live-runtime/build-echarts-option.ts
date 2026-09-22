@@ -23,7 +23,11 @@ const GRID_ANTI_CLIP = { outerBoundsMode: "same", outerBoundsContain: "all" } as
 import type { AppPageChartSchema } from "./app-runtime-schema";
 import type { RuntimeRow } from "./live-runtime";
 
-const INK = { label: "#595959", value: "#262626", faint: "#bfbfbf" };
+// ECharts 画在 canvas 上，`var(--ant-...)` 对它只是认不出的字符串，所以这里
+// 取**字面量**那一份（INK_HEX）。跟 DOM 那份同一张表派生，不会再各写各的。
+import { INK_HEX } from "./business-surface-theme";
+
+const INK = { label: INK_HEX.label, value: INK_HEX.value, faint: INK_HEX.ghost };
 const SINGLE_HUE = "#1677ff";
 /** 固定次序分类色（validate_palette.js 全查通过；只按序取用，不循环生成）
  * ——没传身份主题色板时的兜底默认值，老调用方不传 palette 视觉零变化。 */

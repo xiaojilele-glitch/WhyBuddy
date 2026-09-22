@@ -7,11 +7,12 @@
  */
 
 import React from "react";
-import { Picker } from "antd-mobile";
-import { DownOutlined } from "@ant-design/icons";
+import { Button, Picker } from "antd-mobile";
+import { DownOutline } from "antd-mobile-icons";
 
 export interface PhoneRolePickerProps {
   roles: string[];
+  roleLabels: Record<string, string>;
   value: string | undefined;
   onChange: (role: string) => void;
   getContainer?: () => HTMLElement;
@@ -19,28 +20,26 @@ export interface PhoneRolePickerProps {
 
 export default function PhoneRolePicker({
   roles,
+  roleLabels,
   value,
   onChange,
   getContainer,
 }: PhoneRolePickerProps) {
   const [open, setOpen] = React.useState(false);
-  const columns = [roles.map(r => ({ value: r, label: r }))];
+  const columns = [roles.map(r => ({ value: r, label: roleLabels[r] ?? r }))];
+  const selectedLabel = value ? (roleLabels[value] ?? value) : "选择角色";
 
   return (
     <>
-      <a
+      <Button
+        fill="none"
+        size="small"
+        shape="rounded"
         onClick={() => setOpen(true)}
         data-testid="app-runtime-role"
         style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4,
           maxWidth: 120,
-          fontSize: 13,
-          color: "#262626",
-          background: "#f5f5f5",
-          borderRadius: 14,
-          padding: "3px 10px",
+          "--background-color": "var(--adm-color-fill-content)",
         }}
       >
         <span
@@ -50,10 +49,10 @@ export default function PhoneRolePicker({
             whiteSpace: "nowrap",
           }}
         >
-          {value ?? "选择角色"}
+          {selectedLabel}
         </span>
-        <DownOutlined style={{ fontSize: 9, color: "#999", flexShrink: 0 }} />
-      </a>
+        <DownOutline fontSize={12} />
+      </Button>
       {/* 弹层给一个 testid：触发器与桌面档同名（app-runtime-role），但弹层内容
           是 antd-mobile 内部结构，没有抓手。缺了它，手机档换角色只能去点
           `.adm-picker-*` 这类内部类名——版本一升就断，而且脚本作者根本不知道

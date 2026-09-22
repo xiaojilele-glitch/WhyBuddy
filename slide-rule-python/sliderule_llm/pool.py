@@ -393,7 +393,7 @@ def call_pool(
     *,
     pool: PoolConfig | None = None,
     temperature: float = 0.3,
-    max_tokens: int = 2000,
+    max_tokens: int | None = None,
 ) -> LlmResult | None:
     """Run the request across pool keys. None if disabled/unconfigured/exhausted."""
     p = pool or get_pool_config()
@@ -420,7 +420,7 @@ def call_pool_json(
     *,
     pool: PoolConfig | None = None,
     temperature: float = 0.3,
-    max_tokens: int = 2000,
+    max_tokens: int | None = None,
 ) -> tuple[dict[str, Any], LlmResult] | None:
     """call_pool variant that parses JSON. None if pool produced nothing parseable."""
     p = pool or get_pool_config()

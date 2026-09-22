@@ -19,6 +19,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from sliderule_llm.config import default_max_tokens
+
 OVERRIDE_PATH = Path(__file__).resolve().parent.parent / ".llm-override.json"
 
 # UI 字段 → 环境变量（只开放这三项；wire/timeout 等仍归 .env 管）
@@ -135,7 +137,7 @@ def test_channel(timeout_ms: int = 20_000) -> Dict[str, Any]:
         result = call_llm(
             [{"role": "user", "content": "这是一次连接测试，请回复两个字：正常"}],
             temperature=0.0,
-            max_tokens=600,
+            max_tokens=default_max_tokens(),
             timeout_ms=timeout_ms,
         )
     except LlmError as exc:

@@ -39,6 +39,12 @@ export interface FiveSystemField {
   options?: FieldOption[];
   /** 展示格式：number → money|percent|progress|score|rating；string → masked */
   format?: string;
+  /**
+   * ref 字段指向的实体 id（2026-08-11 加进契约）。**只有 `type:"ref"` 该带它**，
+   * 悬空/越位由门禁标红（v5_model_gate.py）。缺席时运行时回落到
+   * `guessRefEntityId` 的命名猜测——存量模型全都没有这个字段。
+   */
+  refEntity?: string;
 }
 
 export interface FiveSystemEntity {
@@ -220,6 +226,39 @@ export interface PageLayoutSpec {
   content?: string[];
   /** 手机端槽位覆盖（可选，不填则与桌面相同）：槽位名 → 区块 id 列表 */
   mobile?: Partial<Omit<PageLayoutSpec, "mobile">>;
+  /** 响应式 12/8/4 列网格；page-content 是本页表格/看板/日历保留节点。 */
+  grid?: Partial<
+    Record<
+      "desktop" | "tablet" | "phone",
+      Array<{
+        blockRef: string;
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+      }>
+    >
+  >;
+}
+
+export type PageSurfaceType =
+  | "table"
+  | "editable-table"
+  | "split-list"
+  | "queue";
+export type PageSurfaceDensity = "compact" | "default" | "comfortable";
+
+export interface PageSurfaceSpec {
+  type: PageSurfaceType;
+  density?: PageSurfaceDensity;
+}
+
+export interface PageReconstructionEvidence {
+  version: "page-reconstruction-v1";
+  status: "ready" | "skipped" | "failed";
+  spec: Record<string, unknown> | null;
+  prompt: string;
+  diagnostic: string;
 }
 
 export interface PageModelDef {
@@ -227,6 +266,10 @@ export interface PageModelDef {
   name?: string;
   /** 页面范式（加厚 schema 二期）：workbench(缺省)|kanban|calendar|dashboard */
   kind?: string;
+  /** 页面呈现目的：营销落地页与登录后的业务应用使用不同的视觉契约。 */
+  presentation?: "application" | "marketing-landing";
+  /** Ant Design Pro workbench surface; omitted on old models and inferred locally. */
+  surface?: PageSurfaceSpec;
   /** kanban 的看板列字段（"entity.field"，必须是本页主实体的 enum 字段） */
   statusField?: string;
   /** calendar 的日期字段（"entity.field"，必须是本页主实体的 date 字段） */
@@ -246,6 +289,8 @@ export interface PageModelDef {
    * 用页面已选定的 stats/charts/rankings/feeds 当设计输入生成，跟这些
    * 固定字段并存——后者是生成失败时的诚实兜底，不是被这个字段取代。 */
   freeformOverview?: { root: Record<string, unknown> };
+  /** 首页参考图的独立解析产物；用于审查视觉理解，不参与运行时信任判定。 */
+  pageReconstruction?: PageReconstructionEvidence;
   /** 页面级动作实例（Step 5），与 actionPermissions 的权限字符串独立 */
   actions?: PageActionSpec[];
   /** 区块布局声明（Step 7）；未填时由渲染器按 kind 默认排布 */
@@ -342,8 +387,10 @@ export interface AppBundleSection {
    * 新模型填此字段；老模型由 appIdentity.nav 自动编译，不影响旧快照。
    */
   experienceShell?: ExperienceShellSpec;
-  /** 默认设备视口偏好（Step 8）：desktop | tablet | phone；只控制首次打开默认视图 */
+  /** 设备视口。新模型只生成 desktop | phone；tablet 仅保留历史读取兼容。 */
   preferredDevice?: "desktop" | "tablet" | "phone";
+  /** 新生成模型的单一设备权威标记；历史双布局没有该字段。 */
+  deviceAuthority?: "single-v1";
 }
 
 /** 应用身份段（E40.2）：千人千面的第一层——每个应用自己的"脸"。 */
@@ -363,11 +410,78 @@ export interface AppIdentitySection {
   /** 2026-07-24：生图驱动生成的身份主题 token（Python identity_theme_gen.py
    * 生成后写回），未声明/校验不过时降级到 theme 对应的 8 预设之一。 */
   generatedTheme?: Record<string, unknown>;
+  /** 2026-08-04：从这个应用的参照图上读出来的图表分类色（Python
+   * services/sheet_palette.py 取色后写回）。参照图每个应用都会生成，此前只被
+   * 用来学版式、配色画完就丢；这个字段把那一段接回来，让不同应用的图表色
+   * 真的不一样。未声明/校验不过时退回账本里那 8 套已验证色序。
+   *
+   * 类型是 unknown 而不是 string[]：存量快照没走过这一版门禁，形状不可信，
+   * 校验在渲染侧（lib/identity-palette 的 validExtractedCharts）。 */
+  chartColors?: unknown;
+}
+
+/**
+ * 角色在模型里的两种写法。
+ *
+ * 新生成的是 `{id, name}`（2026-08-05 起，与实体/字段/菜单一致——在那之前
+ * 角色是模型里**唯一**没有中文名的概念，所以界面上只能显示 warehouse_keeper）。
+ * 内置域夹具和线上库里已有的应用全是字符串，一条都不迁移（它们数据里就没有
+ * 中文名，迁移只能瞎编），所以两种形态永远共存。
+ */
+export type RawRbacRole = string | { id?: string; name?: string; label?: string };
+
+/** 归一之后的角色：`id` 是引用键，`label` 是给人看的。 */
+export interface RbacRole {
+  id: string;
+  label: string;
+}
+
+/**
+ * 两种写法 → `{id, label}[]`。判断只在这里做一次。
+ *
+ * 没有中文名时 label 回落成 id：显示英文总好过显示空白，而且一眼能看出
+ * "这个应用是补字段之前生成的"。
+ */
+export function normalizeRoles(
+  model: FiveSystemModel | null | undefined
+): RbacRole[] {
+  const out: RbacRole[] = [];
+  const seen = new Set<string>();
+  for (const raw of model?.rbac?.roles ?? []) {
+    let id = "";
+    let label = "";
+    if (typeof raw === "string") {
+      id = raw.trim();
+      label = id;
+    } else if (raw && typeof raw === "object") {
+      id = String(raw.id ?? raw.name ?? "").trim();
+      label = String(raw.name ?? raw.label ?? "").trim() || id;
+    }
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, label });
+  }
+  return out;
+}
+
+/** 引用键 → 显示名；认不出来就把引用键原样吐回去。 */
+export function roleLabel(
+  roleId: string | null | undefined,
+  model: FiveSystemModel | null | undefined
+): string {
+  const ref = String(roleId ?? "").trim();
+  if (!ref) return "";
+  return normalizeRoles(model).find(r => r.id === ref)?.label ?? ref;
 }
 
 export interface FiveSystemModel {
   datamodel?: { entities?: FiveSystemEntity[] };
-  rbac?: { roles?: string[]; permissions?: string[]; menus?: RbacMenu[] };
+  rbac?: {
+    /** 两种写法并存，永远。用 `normalizeRoles` 读，别直接当 string[] 使 */
+    roles?: RawRbacRole[];
+    permissions?: string[];
+    menus?: RbacMenu[];
+  };
   workflow?: WorkflowSection;
   page?: { pages?: PageModelDef[] };
   aigc?: { capabilities?: AigcCapability[]; pipelines?: AigcPipeline[] };
@@ -450,6 +564,22 @@ function detectBareSection(
   return null;
 }
 
+function sectionsFromPlainObject(
+  candidate: Record<string, unknown>
+): FiveSystemModel | null {
+  const sections: FiveSystemModel = {};
+  let found = false;
+  for (const key of MODEL_KEYS) {
+    const section = candidate[key];
+    if (isPlainObject(section)) {
+      (sections as Record<string, unknown>)[key] = section;
+      found = true;
+    }
+  }
+  if (found) return sections;
+  return detectBareSection(candidate);
+}
+
 /**
  * Parse a raw string that may contain a five-system model (full model JSON,
  * fenced JSON, or a bare single-section JSON). Returns null when nothing
@@ -461,18 +591,8 @@ export function parseFiveSystemModel(
   if (!raw || !raw.trim()) return null;
   for (const candidate of jsonCandidates(raw)) {
     if (!isPlainObject(candidate)) continue;
-    const sections: FiveSystemModel = {};
-    let found = false;
-    for (const key of MODEL_KEYS) {
-      const section = candidate[key];
-      if (isPlainObject(section)) {
-        (sections as Record<string, unknown>)[key] = section;
-        found = true;
-      }
-    }
-    if (found) return sections;
-    const bare = detectBareSection(candidate);
-    if (bare) return bare;
+    const parsed = sectionsFromPlainObject(candidate);
+    if (parsed) return parsed;
   }
   return null;
 }
@@ -523,6 +643,45 @@ export function parseFiveSystemModelFromPerSkillEvidence(
     }
   }
   return model;
+}
+
+/** 版本史里一条快照。舞台只取 `model`；id 用来认当前指针。 */
+export interface ModelVersionSnapLike {
+  id?: string;
+  model?: unknown;
+}
+
+/**
+ * 从 `modelVersions` 取出当前那份五系统模型。
+ *
+ * ⚠ 2026-09-07 社区烘焙坊进销存 sr-20260907143221：bind 5/5、mv-1 六段齐，
+ *   舞台徽章却写「打过孔但没填上数据」。Python 记快照就是为了「闭环没跑完，
+ *   模型别蒸发」（model_versions.record_model_snapshot 头注）；前端只读
+ *   SSE skillContents + publishClosure.perSkillEvidence。那场停在
+ *   max_loops，publishClosure 是空的，货架上的模型没人取。
+ *
+ * 指针认 currentId（◀▶ 回退）；没有或那一版没有 model 就读队尾——
+ * 与 Python `latest_model_snapshot` 同一句话：队尾是最新的。
+ */
+export function parseFiveSystemModelFromVersionHistory(
+  versions:
+    | ReadonlyArray<ModelVersionSnapLike | null | undefined>
+    | null
+    | undefined,
+  currentId?: string | null
+): FiveSystemModel | null {
+  if (!versions?.length) return null;
+  const list = versions.filter((v): v is ModelVersionSnapLike => !!v);
+  if (!list.length) return null;
+  const pick =
+    (currentId
+      ? list.find(v => v.id === currentId && isPlainObject(v.model))
+      : undefined) ??
+    (isPlainObject(list[list.length - 1]?.model)
+      ? list[list.length - 1]
+      : undefined);
+  if (!pick || !isPlainObject(pick.model)) return null;
+  return sectionsFromPlainObject(pick.model);
 }
 
 /**
@@ -659,26 +818,46 @@ export function mergeFiveSystemModels(
 /**
  * 「这个会话到底有没有一个成形的应用」的唯一判据。
  *
- * 两个来源合并：本轮 SSE 的 skill 原文（skillContents）+ 持久化闭环证据里的
- * modelSection（刷新/重载路径）。非空即意味着舞台能真的跑起应用——
- * SlideRuleStudio 的 stage === "app" 就是这么判的。
+ * 三个来源合并，前两个段优先、第三源补缺：
+ *   1. 本轮 SSE 的 skill 原文（skillContents）
+ *   2. 持久化闭环证据里的 modelSection（刷新/重载路径）
+ *   3. 版本史 `modelVersions[].model`（闭环没落到会话上时的货架）
+ *
+ * 非空即意味着舞台能真的跑起应用——SlideRuleStudio 的 stage === "app"
+ * 就是这么判的。
  *
  * 注意它跟"有没有目标文案"不是一回事：用户敲完目标、推演还没出模型时，
  * goal 已经有值但应用并不存在。凡是要区分"还没应用" / "已有应用"的地方
  * （入站判定的 hasApp 语境、舞台判定）都该用这个，别用 Boolean(goal)。
  *
  * 起草中的部分模型（llmDraft 流式解析）不算——那是预览，不是成品。
+ *
+ * ⚠ 第三源不是可选项。2026-09-07 烘焙坊那场：模型在 mv-1，闭环是空的，
+ *   只读前两源 = 舞台手里没有模型 = 孔在、数不灌、样板 HTML 还挂着。
+ *   Python 侧早就把模型记进版本史了；漏读等于装在不通电的插座上。
  */
 export function deriveSettledFiveSystemModel(
   skillContents: Partial<Record<string, string>> | null | undefined,
   perSkillEvidence:
     | Partial<Record<string, { modelSection?: unknown } | undefined>>
     | null
-    | undefined
+    | undefined,
+  versionHistory?: {
+    versions?:
+      | ReadonlyArray<ModelVersionSnapLike | null | undefined>
+      | null;
+    currentId?: string | null;
+  } | null
 ): FiveSystemModel | null {
   return mergeFiveSystemModels(
-    parseFiveSystemModelFromContents(skillContents ?? {}),
-    parseFiveSystemModelFromPerSkillEvidence(perSkillEvidence)
+    mergeFiveSystemModels(
+      parseFiveSystemModelFromContents(skillContents ?? {}),
+      parseFiveSystemModelFromPerSkillEvidence(perSkillEvidence)
+    ),
+    parseFiveSystemModelFromVersionHistory(
+      versionHistory?.versions,
+      versionHistory?.currentId
+    )
   );
 }
 
@@ -726,11 +905,13 @@ export function resolveRoleRef(
   model: FiveSystemModel | null | undefined
 ): RefResolution {
   const ref = String(role ?? "").trim();
-  const roles = model?.rbac?.roles ?? [];
+  const hit = normalizeRoles(model).find(r => r.id === ref);
   return {
     ref,
-    resolved: ref.length > 0 && roles.includes(ref),
-    label: ref || "—",
+    resolved: ref.length > 0 && hit !== undefined,
+    // 与 resolveEntityRef / resolveFieldRef 同款：显示名优先，回落 id。
+    // 这个 label 位一直留着，只是角色以前没有名字可填。
+    label: hit?.label || ref || "—",
   };
 }
 
@@ -862,6 +1043,51 @@ export function guessRefEntityId(
   return contains.length === 1 ? contains[0] : null;
 }
 
+/**
+ * ref 字段 → 目标实体：**声明优先，猜测兜底**（2026-08-11）。
+ *
+ * ## 为什么不能只靠上面那个猜测
+ *
+ * 猜测是从字段名反推的，而字段名跟实体名对不上是常态。拿 181 个真实存过的模型
+ * 量了一遍：1689 个 `type:"ref"` 字段，`guessRefEntityId` 只认出 691 个（41%），
+ * 剩下 998 个（59%）返回 null。典型认不出来的三种：
+ *
+ *   assigned_team   → 目标实体叫 oncall_teams   （词干根本不同）
+ *   route_group_id  → 目标实体叫 on_call_group  （词干是目标的子串之一，但不唯一）
+ *   alert_ref       → alert_event / alert_route_rule 两个都沾（歧义，按"宁可不画"返回 null）
+ *
+ * 认不出来的代价不是少画一根线，而是**关系字段退化成纯文本框**：渲染器靠
+ * `refEntityId` 去取候选行（block-registry 的 `entityRows[schema.refEntityId]`），
+ * 拿不到就只剩一个 Input，用户得手打一个行 id 进去。
+ *
+ * 所以现在让模型自己声明 `refEntity`，猜测降级为存量模型的兜底——**不删猜测**，
+ * 补字段之前生成的那些应用还得能跑。
+ *
+ * ## 返回值里为什么要带 `declared`
+ *
+ * 声明和猜测在"自引用"上待遇不同。**猜**到自己身上多半是命名巧合（字段
+ * `order_ref` 长在实体 `order` 上），历史上一直丢弃；而**声明**是模型的明确
+ * 表态（`merged_into` 指回同一张工单表这种是真的），运行时偷偷改掉它，只会让
+ * 门禁的绿灯跟界面上的现象对不上——该管的是门禁，不是这里。
+ *
+ * 调用方拿 `declared` 自己决定：表单下拉认自引用（同表选行完全能用），
+ * ER 图/mermaid 一律不认（那两条路画不了自环边，跟改动前保持一致）。
+ *
+ * 声明悬空（指向的实体不在这个 datamodel 里）时返回 null 而**不**回落去猜——
+ * 模型已经明确说了指向谁，猜一个别的只会盖掉它的错，让门禁的标红对不上现象。
+ */
+export function resolveRefEntityId(
+  field: FiveSystemField,
+  entityIds: Iterable<string>
+): { target: string | null; declared: boolean } {
+  const ids = [...entityIds];
+  const declared = String(field.refEntity ?? "").trim();
+  if (declared) {
+    return { target: ids.includes(declared) ? declared : null, declared: true };
+  }
+  return { target: guessRefEntityId(field.id, ids), declared: false };
+}
+
 // --- ER 图数据（G6 渲染路径；与 datamodelToMermaid 同一套关联推断） --------
 
 export interface ErGraphField {
@@ -902,7 +1128,9 @@ export function deriveErGraphData(
       const isRef =
         String(field.type || "").toLowerCase() === "ref" ||
         /_ref$/.test(field.id);
-      const target = isRef ? guessRefEntityId(field.id, entityIds) : null;
+      // 声明优先，猜测兜底（见 resolveRefEntityId）。自引用这条路画不出自环边，
+      // 声明的也一样丢弃——跟加 refEntity 之前的行为保持一致。
+      const target = isRef ? resolveRefEntityId(field, entityIds).target : null;
       const refTarget = target && target !== entity.id ? target : null;
       fields.push({
         id: field.id,
@@ -944,7 +1172,11 @@ export interface LinkageEdge {
     | "page-workflow"
     | "node-role"
     | "aigc-entity"
-    | "aigc-role";
+    | "aigc-role"
+    // ⚠ 2026-08-17 补。这个联合类型此前缺 role-page，是"架构图少一手权限"
+    //   在类型上的形态——下沉那两段边时编译器当场把它点了出来。
+    //   六种边的词汇表以 shared/app-graph/edge-contract.json 为准。
+    | "role-page";
 }
 
 export interface LinkageGroup {
@@ -958,6 +1190,45 @@ export interface LinkageGroup {
  * 排布由渲染器负责），跨系统引用连线。只画模型里真实存在且解析得到的
  * 引用（悬空引用不入图——各屏已负责标红）。少于 2 个非空组返回 null。
  */
+/**
+ * 角色经**菜单**持有哪些权限。
+ *
+ * ⚠ 口径以 `rbac.menus` 为准，不是 `rbac.rolePermissions`——48 份真机模型里
+ *   后者**键根本不存在**，真实数据一条不落全在 menus 里。走错口径的表现是
+ *   "每个角色都没有任何权限"，而没有任何一处会报错。
+ *   契约：shared/app-graph/edge-contract.json 的 role-perms-intersect-page-actions。
+ *
+ * ⚠ 2026-08-17 从 live-runtime/rbac-preview.ts 搬到这里，rbac-preview 再导出。
+ *   原因：这张图的 role→page 边要用它，而 rbac-preview 又引本文件的
+ *   normalizeRoles——直接反向引会成环。搬过来是为了让**图的唯一事实源**
+ *   自给自足，不是为了省一个 import。
+ */
+export interface RoleAccess {
+  role: string;
+  /** roleRefs 含该角色的菜单的 permissionRefs 并集 */
+  permissions: string[];
+  /** 该角色可见的 rbac 菜单标签（证据侧口径，供预览展示） */
+  menuLabels: string[];
+  /** 给人看的角色名；补中文名之前生成的应用回落成 role 本身 */
+  label: string;
+}
+
+export function deriveRoleAccess(model: FiveSystemModel | null | undefined): RoleAccess[] {
+  // 归一后取 **id**：menu.roleRefs 里存的是引用键，拿显示名去 includes
+  // 会全部落空，表现为"每个角色都没有任何权限"。
+  const roles = normalizeRoles(model);
+  const menus = model?.rbac?.menus ?? [];
+  return roles.map(({ id: role, label }) => {
+    const roleMenus = menus.filter((m) => (m.roleRefs ?? []).includes(role));
+    return {
+      role,
+      label,
+      permissions: [...new Set(roleMenus.flatMap((m) => m.permissionRefs ?? []))],
+      menuLabels: roleMenus.map((m) => m.label || m.id || "").filter(Boolean),
+    };
+  });
+}
+
 export function deriveSystemLinkageGraph(
   model: FiveSystemModel | null | undefined
 ): { groups: LinkageGroup[]; edges: LinkageEdge[] } | null {
@@ -965,7 +1236,7 @@ export function deriveSystemLinkageGraph(
   const entities = model.datamodel?.entities ?? [];
   const pages = model.page?.pages ?? [];
   const wfNodes = model.workflow?.nodes ?? [];
-  const roles = model.rbac?.roles ?? [];
+  const roles = normalizeRoles(model);
   const caps = model.aigc?.capabilities ?? [];
 
   const key = (system: LinkageSystem, id: string) => `${system}:${id}`;
@@ -1006,7 +1277,7 @@ export function deriveSystemLinkageGraph(
     mkGroup(
       "rbac",
       "权限 · RBAC",
-      roles.map(r => ({ id: r, name: r }))
+      roles.map(r => ({ id: r.id, name: r.label }))
     ),
     mkGroup(
       "aigc",
@@ -1062,8 +1333,9 @@ export function deriveSystemLinkageGraph(
       push(key("page", b.pageRef), key("workflow", start.id), "page-workflow");
     }
   }
+  const roleIdSet = new Set(roles.map(r => r.id));
   for (const n of wfNodes) {
-    if (n.assigneeRole && roles.includes(n.assigneeRole)) {
+    if (n.assigneeRole && roleIdSet.has(n.assigneeRole)) {
       push(key("workflow", n.id), key("rbac", n.assigneeRole), "node-role");
     }
   }
@@ -1079,8 +1351,50 @@ export function deriveSystemLinkageGraph(
       );
     }
     for (const r of c.roleRefs ?? []) {
-      if (roles.includes(r))
+      if (roleIdSet.has(r))
         push(key("aigc", cid), key("rbac", r), "aigc-role");
+    }
+  }
+
+  // ★ 2026-08-17：下面两段原本在 sandbox-graph.ts 里，只有沙盘看得到。
+  //   架构图（linkageToMermaid）走的是本函数，于是**同一份模型两个视图画出来
+  //   不是同一张网**。拿仓里 48 份真机模型量到的差距：
+  //
+  //       边种类           沙盘    架构图    差
+  //       page-entity     262    202     +60
+  //       role-page       306      0     +306   ← 整种边缺失
+  //       合计            990    624     架构图少 36%
+  //
+  //   用户切到「架构图」看到的是打了 36% 折的网，**没有任何一处提示他少了什么**。
+  //   而这个产品的核心主张恰恰是"整张网可以被整体看见、整体校验"。
+  //
+  //   ⚠ 修法是把增量**下沉到这里**，不是让架构图改吃 deriveSandboxGraph。
+  //     后者一行就能改完，但会留下一个"故意不完整的底"，下一个调它的人照样
+  //     拿到残图。事实源只能有一份。沙盘那边现在只剩它自己特有的断线体检。
+
+  // 页→实体：fieldBindings 里出现过的**每个**实体都画。
+  // 上面那段只画了"主导实体"（占比最高的那个），一页绑多个实体时其余全丢——
+  // 这就是 page-entity 少 60 条的来源。
+  for (const [i, p] of pages.entries()) {
+    const pid = p.id || `page-${i}`;
+    for (const b of p.fieldBindings ?? []) {
+      const dot = b.indexOf(".");
+      if (dot > 0) push(key("page", pid), key("datamodel", b.slice(0, dot)), "page-entity");
+    }
+  }
+
+  // 角色→页面（可进入）：页面声明的动作权限 ∩ 角色经菜单持有的权限非空。
+  // 判据与 rbac-preview.pageAccessForRole 的可见性同源，口径由
+  // shared/app-graph/edge-contract.json 钉死。
+  const access = deriveRoleAccess(model);
+  for (const [i, p] of pages.entries()) {
+    const pid = p.id || `page-${i}`;
+    const declared = p.actionPermissions ?? [];
+    if (declared.length === 0) continue; // 公共页不画：人人可进 = 全连接 = 零信息量
+    for (const a of access) {
+      if (a.permissions.some((perm) => declared.includes(perm))) {
+        push(key("rbac", a.role), key("page", pid), "role-page");
+      }
     }
   }
 
@@ -1162,13 +1476,54 @@ export function derivePhaseLanes(
 
 // --- 五系统整体架构图（Mermaid flowchart，AppBundle 屏「架构图」视图） -------
 
-const LINKAGE_EDGE_LABEL: Record<LinkageEdge["kind"], string> = {
+export const LINKAGE_EDGE_LABEL: Record<LinkageEdge["kind"], string> = {
   "page-entity": "字段绑定",
   "page-workflow": "发起流程",
   "node-role": "审批人",
   "aigc-entity": "写回字段",
   "aigc-role": "可用角色",
+  "role-page": "可进入",
 };
+
+export interface BundledLinkageEdge {
+  fromSystem: LinkageSystem;
+  toSystem: LinkageSystem;
+  kind: LinkageEdge["kind"];
+  count: number;
+  label: string;
+}
+
+/**
+ * C4 L2：成员边捆成组间边。沙盘默认面和 Mermaid 架构图共用，
+ * 不许两处各聚一次（条数对不上不会报错，只会看起来像两张网）。
+ */
+export function bundleLinkageEdges(
+  edges: Array<{ from: string; to: string; kind: string }>
+): BundledLinkageEdge[] {
+  const bundled = new Map<string, BundledLinkageEdge>();
+  for (const e of edges) {
+    const fromCut = e.from.indexOf(":");
+    const toCut = e.to.indexOf(":");
+    if (fromCut < 1 || toCut < 1) continue;
+    const fromSystem = e.from.slice(0, fromCut) as LinkageSystem;
+    const toSystem = e.to.slice(0, toCut) as LinkageSystem;
+    const kind = e.kind as LinkageEdge["kind"];
+    const sig = `${fromSystem}|${toSystem}|${kind}`;
+    const cur = bundled.get(sig);
+    if (cur) {
+      cur.count += 1;
+    } else {
+      bundled.set(sig, {
+        fromSystem,
+        toSystem,
+        kind,
+        count: 1,
+        label: LINKAGE_EDGE_LABEL[kind] ?? kind,
+      });
+    }
+  }
+  return [...bundled.values()];
+}
 
 /**
  * 五系统整体架构图：Mermaid flowchart —— 每个系统一个 subgraph 分组
@@ -1225,19 +1580,9 @@ export function linkageToMermaid(
     lines.push("  end");
     lines.push(`  class ${g.items.map(i => nid(i.key)).join(",")} ${g.system}`);
   }
-  // 组间捆扎边：同 (来源系统, 目标系统, 语义) 聚合为一条，标注条数
-  const bundled = new Map<string, number>();
-  for (const e of data.edges) {
-    const fromSys = e.from.slice(0, e.from.indexOf(":"));
-    const toSys = e.to.slice(0, e.to.indexOf(":"));
-    const sig = `${fromSys}|${toSys}|${e.kind}`;
-    bundled.set(sig, (bundled.get(sig) ?? 0) + 1);
-  }
-  for (const [sig, count] of bundled) {
-    const [fromSys, toSys, kind] = sig.split("|");
-    const label = LINKAGE_EDGE_LABEL[kind as LinkageEdge["kind"]];
+  for (const b of bundleLinkageEdges(data.edges)) {
     lines.push(
-      `  sg_${fromSys} -->|"${mermaidLabel(label)} ×${count}"| sg_${toSys}`
+      `  sg_${b.fromSystem} -->|"${mermaidLabel(b.label)} ×${b.count}"| sg_${b.toSystem}`
     );
   }
   return lines.join("\n");
@@ -1267,7 +1612,8 @@ export function datamodelToMermaid(
         String(field.type || "").toLowerCase() === "ref" ||
         /_ref$/.test(field.id);
       if (!isRef) continue;
-      const target = guessRefEntityId(field.id, entityIds);
+      // 声明优先，猜测兜底；自引用同上不画。
+      const target = resolveRefEntityId(field, entityIds).target;
       if (!target || target === entity.id) continue;
       const key = `${entity.id}->${target}:${field.id}`;
       if (seen.has(key)) continue;
@@ -1371,7 +1717,7 @@ export function summarizeClosureForChat(
   const nodes = model.workflow?.nodes ?? [];
   const transitions = model.workflow?.transitions ?? [];
   const phaseCount = new Set(nodes.map(n => n.phase).filter(Boolean)).size;
-  const roles = model.rbac?.roles ?? [];
+  const roles = normalizeRoles(model);
   const perms = model.rbac?.permissions ?? [];
   const pages = model.page?.pages ?? [];
   const bindingCount = pages.reduce(
@@ -1406,8 +1752,11 @@ export function summarizeClosureForChat(
         (wfBindings ? `；页面↔流程绑定 ${wfBindings} 处。` : "。")
     );
   }
+  // ⚠ 2026-08-24：这句原先写"顶栏「沙盘」"，而顶栏那片 tab 已经撤了（与
+  // 「透视」里的入口重复）。指路文案和真实 UI 是**生成侧/消费侧**那一对，
+  // 只改按钮不改文案 = 教用户去点一个不存在的东西，且没有任何报错。
   lines.push(
-    "右侧应用已在运行：可录入数据、提交审批、切换角色、试 AI 写回；开「游标」能透视每个界面背后的声明。"
+    "右侧应用已在运行：可录入数据、提交审批、切换角色、试 AI 写回；开「透视」对准页面元素，能看到它背后的数据、流程和权限，侧栏顶上的「打开沙盘」是五系统接线总图。"
   );
   return lines.join("\n");
 }

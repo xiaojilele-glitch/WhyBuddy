@@ -426,14 +426,32 @@ def resolve_coverage_gaps_from_state(state: V5SessionState) -> V5SessionState:
 
 
 def _set_gap(gap: Any, **fields: Any) -> None:
+    """往 gap 上写字段。dict 与 CoverageGap 两种形态都支持。
+
+    ## 这里原来是 `except Exception: pass`，改掉了（2026-08-09）
+
+    缺口的 `updatedAt` / `resolvedByArtifactId` 就是从这儿写进去的，而
+    `CoverageGap` 当时**没有声明这两个字段**。pydantic v2 对未声明字段的
+    setattr 直接抛 `ValueError: "CoverageGap" object has no field "updatedAt"`，
+    被那个 `pass` 一口吞掉——于是同一次调用，**gap 是 dict 就写进去了、
+    是模型对象就静默丢掉**，两种形态行为不一致，而且丢的那一份没有任何痕迹。
+
+    丢的是审计信息："这个缺口是被哪个产物填上的"。它不报错、不告警、
+    也不影响当轮跑通，只在事后追溯时表现为"不知道"。
+
+    字段已补进 `CoverageGap`，所以**现有的每一处写入都不会再抛**。此后再抛
+    就只有一个含义：写入方又加了模型没声明的字段，也就是同一个分叉重演。
+    那种情况必须当场炸，不能再吞——吞掉的代价上面写着。
+
+    ⚠️ `reconcile_coverage` 在驱动主循环里是**没有 try 包裹**地调用的
+    （v5_full_driver.py:942 / :1540），所以这里抛出去会中止整轮推演。
+    这是有意的取舍：宁可一次跑崩在分叉发生的那一行，也不要长期悄悄丢审计字段。
+    """
     for key, value in fields.items():
         if isinstance(gap, dict):
             gap[key] = value
         else:
-            try:
-                setattr(gap, key, value)
-            except Exception:
-                pass
+            setattr(gap, key, value)
 
 
 def _last_trusted_artifact_for_cap(state: Any, cap_id: str) -> Optional[str]:

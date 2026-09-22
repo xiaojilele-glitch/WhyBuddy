@@ -67,11 +67,6 @@ function safeErrorMessage(error: unknown): string {
 function mysqlConfigSummary(config: DatabaseConfig): MysqlHealthSnapshot["config"] {
   const redacted = redactPersistenceConfig({
     database: config,
-    session: {
-      secret: "",
-      cookieName: "",
-      ttlDays: 1,
-    },
     redis: {
       enabled: false,
       host: "",

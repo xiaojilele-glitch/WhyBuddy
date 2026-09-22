@@ -28,7 +28,14 @@ def _has_capability_output(state: V5SessionState, capability_id: str) -> bool:
             if isinstance(produced_by, dict)
             else getattr(produced_by, "capabilityId", None)
         )
-        if produced_capability == capability_id and artifact.provenance.startswith("python-rag"):
+        # 判据是「这条能力有没有 Python 侧的产出」，不是「产出是不是 RAG 生成的」。
+        #
+        # 2026-08-13：原来写的是 startswith("python-rag")。structure.decompose 换成
+        # 真 spec 生成之后 provenance 变成 "python-spec"，**会静默掉出这个判断**——
+        # 表现是调度核认为这条能力从没产出过，于是每一轮都重新排它，无限重跑，
+        # 而且不报任何错。这类「按具体取值分支、加一个新取值就悄悄失效」的判断，
+        # 跟本仓踩过的几次同型（合法域账本抄四处、手写 uses 声明、pageKinds）。
+        if produced_capability == capability_id and artifact.provenance.startswith("python-"):
             return True
     return False
 

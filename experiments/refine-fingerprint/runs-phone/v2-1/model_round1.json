@@ -1,0 +1,271 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "training_task",
+    "name": "训练任务",
+    "fields": [
+     {
+      "id": "task_title",
+      "name": "任务标题",
+      "type": "string"
+     },
+     {
+      "id": "intensity",
+      "name": "强度",
+      "type": "string"
+     },
+     {
+      "id": "duration",
+      "name": "预计耗时",
+      "type": "number"
+     },
+     {
+      "id": "target_distance",
+      "name": "目标距离",
+      "type": "number"
+     },
+     {
+      "id": "calorie_burn",
+      "name": "消耗估算",
+      "type": "number"
+     },
+     {
+      "id": "heart_rate",
+      "name": "心率区间",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "checkin_record",
+    "name": "打卡记录",
+    "fields": [
+     {
+      "id": "record_title",
+      "name": "项目名称",
+      "type": "string"
+     },
+     {
+      "id": "record_date",
+      "name": "训练日期",
+      "type": "date"
+     },
+     {
+      "id": "record_duration",
+      "name": "耗时",
+      "type": "number"
+     },
+     {
+      "id": "record_result",
+      "name": "打卡结果",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "recruitment_application",
+    "name": "招募报名表单",
+    "fields": [
+     {
+      "id": "real_name",
+      "name": "真实姓名",
+      "type": "string"
+     },
+     {
+      "id": "phone",
+      "name": "联系电话 (手机号)",
+      "type": "string"
+     },
+     {
+      "id": "experience",
+      "name": "铁三/耐力运动经验",
+      "type": "enum"
+     },
+     {
+      "id": "specialty",
+      "name": "最擅长/主攻项目",
+      "type": "enum"
+     },
+     {
+      "id": "target_event",
+      "name": "2024目标赛事",
+      "type": "string"
+     },
+     {
+      "id": "declaration",
+      "name": "铁人宣言 / 个人寄语",
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_trainee",
+    "name": "健身学员"
+   }
+  ],
+  "permissions": [
+   "training_task:read",
+   "checkin_record:create",
+   "checkin_record:read",
+   "recruitment_application:create",
+   "recruitment_application:read"
+  ],
+  "menus": [
+   {
+    "id": "menu_1",
+    "label": "铁人打卡",
+    "roleRefs": [
+     "role_trainee"
+    ],
+    "permissionRefs": [
+     "training_task:read",
+     "checkin_record:create"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_pending",
+    "name": "待打卡",
+    "assigneeRole": "role_trainee",
+    "phase": "未开始"
+   },
+   {
+    "id": "node_finished",
+    "name": "已打卡",
+    "assigneeRole": "role_trainee",
+    "phase": "已完成"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_pending",
+    "to": "node_finished",
+    "condition": "学员点击每日训练任务的打卡按钮"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "铁人打卡 - 训练",
+    "kind": "workbench",
+    "fieldBindings": [
+     "training_task.task_title",
+     "training_task.intensity",
+     "training_task.duration"
+    ],
+    "actionPermissions": [
+     "training_task:read"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "铁人打卡 - 记录",
+    "kind": "workbench",
+    "fieldBindings": [
+     "checkin_record.record_title",
+     "checkin_record.record_date",
+     "checkin_record.record_duration"
+    ],
+    "actionPermissions": [
+     "checkin_record:create",
+     "checkin_record:read"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "铁人打卡 - 招募报名",
+    "kind": "wizard",
+    "fieldBindings": [
+     "recruitment_application.real_name",
+     "recruitment_application.phone",
+     "recruitment_application.declaration"
+    ],
+    "actionPermissions": [
+     "recruitment_application:create"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "cap_1",
+    "name": "智能训练分析",
+    "inputFields": [
+     "training_task.duration",
+     "training_task.target_distance"
+    ],
+    "outputField": "training_task.calorie_burn",
+    "roleRefs": [
+     "role_trainee"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p1",
+    "workflowRef": "node_pending"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "node_finished"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "main_flow"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "phone",
+  "roleRefs": [
+   "role_trainee"
+  ],
+  "dataModelRefs": [
+   "training_task",
+   "checkin_record",
+   "recruitment_application"
+  ],
+  "appIdentity": {
+   "appName": "铁人打卡"
+  },
+  "invariants": [
+   {
+    "id": "inv_1",
+    "statement": "打卡记录必须填写训练日期",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "checkin_record",
+     "checkin_record.record_date"
+    ]
+   },
+   {
+    "id": "inv_2",
+    "statement": "招募报名表单必须填写联系电话",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "recruitment_application",
+     "recruitment_application.phone"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

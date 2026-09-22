@@ -33,7 +33,7 @@
  */
 
 import type { FiveSystemEntity, FiveSystemModel } from "../system-screens/five-system-model";
-import { guessRefEntityId } from "../system-screens/five-system-model";
+import { resolveRefEntityId } from "../system-screens/five-system-model";
 import {
   CITIES,
   CODE_LETTERS,
@@ -47,6 +47,7 @@ import {
 import { fieldRandom, type SeededRandom } from "./demo-seed-random";
 import { semanticOf } from "./demo-seed-semantics";
 import { normalizeFieldFormat, normalizeFieldOptions } from "./field-display";
+import { isConnectorBound } from "./connector-rows";
 import type { RuntimeRow, RuntimeState } from "./live-runtime";
 
 /** 每个空实体铺几行。12：够触发表格分页（>10）、够排行取前 5、够趋势图有形状。 */
@@ -118,6 +119,17 @@ function genericName(label: string, index: number, qualifiers: readonly string[]
   // 修饰词用完一轮后加序号区分，避免第 13 行起重名
   const round = Math.floor(index / qualifiers.length);
   return round === 0 ? `${q}${stem}` : `${q}${stem} ${round + 1}`;
+}
+
+/**
+ * 摘要/说明这类字段的示例值。
+ *
+ * 跟 `text` 档共用一句模板，但**带上行序号**——12 行全是同一句话时，表格看着
+ * 像渲染坏了（用户分不清是"数据一样"还是"没渲染"）。序号是最轻的区分，
+ * 也不假装内容真的不同。
+ */
+function proseValue(label: string, index: number): string {
+  return `「${label}」的示例内容 ${index + 1}，用于展示版式与信息密度。`;
 }
 
 function emailValue(r: SeededRandom, index: number): string {
@@ -213,6 +225,9 @@ function seedColumn(
     else if (semantic === "phone") out.push(phoneValue(r));
     else if (semantic === "email") out.push(emailValue(r, i));
     else if (semantic === "code") out.push(codeValue(r, nowMs));
+    // 摘要/说明/建议这类要的是一句话。走跟 text 档同一句模板——**不编具体内容**，
+    // 只如实说"这是示例"。编一句像模像样的经营建议，看的人会当真。
+    else if (semantic === "prose") out.push(proseValue(label, i));
     else out.push(genericName(label, i, qualifiers));
   }
   return out;
@@ -323,7 +338,8 @@ function resolveSeedRefs(
 
     for (const field of refFields) {
       const fieldId = String(field.id);
-      const targetId = guessRefEntityId(fieldId, allIds);
+      // 声明优先，猜测兜底。这里自引用也认——同表挑一行的显示名照样是合法种子。
+      const targetId = resolveRefEntityId(field, allIds).target;
       const targetDef = targetId ? byId.get(targetId) : undefined;
       const targetRows = targetId ? entities[targetId] : undefined;
       const r = fieldRandom(def.id, `${fieldId}#ref`);
@@ -336,13 +352,46 @@ function resolveSeedRefs(
           row.values[fieldId] = `${field.name || fieldId} ${r.int(1, SEED_ROW_COUNT)}`;
           continue;
         }
-        row.values[fieldId] = displayNameOfRow(
+        const display = displayNameOfRow(
           targetRows[r.int(0, targetRows.length - 1)],
           targetDef
         );
+        row.values[fieldId] = display;
+        // 冗余副本跟着对齐（2026-08-11）。
+        //
+        // 线上截图：同一行里「自提点: 精选自提点」而「自提点名称: 定制自提点」
+        // ——两个词互相矛盾，看着像数据错了。
+        //
+        // 成因不是 bug 而是模型**刻意做的反规范化**：存了 `pickup_point_ref`
+        // 还冗余一份 `pickup_point_name`，免得每次都去关联查。这在业务模型里
+        // 是常规做法，问题只在**种子把这两个格子当成两个独立字段各填各的**。
+        //
+        // 反规范化副本的定义就是"跟着源走"，所以这里让它跟着 ref 的解析结果走。
+        // 出处是同一条老规矩：factory_boy 的 SubFactory + SelfAttribute ——
+        // 先造出被引用的对象，派生字段从**那个对象**上取，而不是另起一个随机流。
+        //
+        // ⚠ 只认**词干完全相同**的兄弟字段（pickup_point_ref → pickup_point_name）。
+        // 模糊匹配会猜错：同一个模型里还有 `group_buy_ref` 配 `group_title`，
+        // 词干对不上，这里就放过它——**宁可漏一个，不许把不相干的字段改写掉**。
+        for (const sib of denormalizedSiblings(def, fieldId)) {
+          if (row.values[sib] !== undefined) row.values[sib] = display;
+        }
       }
     }
   }
+}
+
+/** `X_ref` 旁边那些"存一份显示名"的兄弟字段（词干必须完全相同）。 */
+function denormalizedSiblings(def: FiveSystemEntity, refFieldId: string): string[] {
+  const stem = refFieldId.replace(/(_ref|_id|Ref|Id)$/, "");
+  if (!stem || stem === refFieldId) return [];
+  const wanted = new Set([
+    `${stem}_name`, `${stem}_title`, `${stem}_label`,
+    `${stem}Name`, `${stem}Title`, `${stem}Label`,
+  ]);
+  return (def.fields ?? [])
+    .map(f => String(f?.id ?? ""))
+    .filter(id => wanted.has(id));
 }
 
 /**
@@ -374,6 +423,18 @@ export function seedRuntimeState(
     if (seen[entity.id]) continue; // 这个实体已经做过决定了
     seen[entity.id] = true;
     changed = true;
+    /*
+     * ⚠ 绑了连接器的实体**永远不铺**（2026-08-25，见 connector-rows.ts）。
+     *
+     *   种子的存在前提是"零行 = 一片空壳，展会上不好看"。那对普通实体成立；
+     *   对连接器实体不成立——用户接连接器就是为了不要假数据，种子在这里正好
+     *   是它要消灭的东西。取数失败时这张表必须停在**诚实空态**，页面自己会
+     *   出「数据源没接上」，而不是铺 12 行编出来的漂亮数字。
+     *
+     *   这一条最容易被无声破坏：删掉这两行不报错、页面还更好看，只有数字是
+     *   假的。判据 connector-rows.test.ts 里有正反两条钉着它。
+     */
+    if (isConnectorBound(state, entity.id)) continue;
     const existing = next[entity.id];
     if (Array.isArray(existing) && existing.length > 0) continue; // 已有真实数据 → 永不铺
     next[entity.id] = buildSeedRows(entity, nowMs);

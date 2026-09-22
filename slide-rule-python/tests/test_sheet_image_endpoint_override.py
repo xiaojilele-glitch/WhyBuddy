@@ -13,6 +13,8 @@
 装配正确（不同服务商字段名不一样）。**不碰任何真实凭证，全程 monkeypatch。**
 """
 
+import base64
+import pytest
 import sys
 from pathlib import Path
 
@@ -158,3 +160,75 @@ def test_sheet_generation_without_override_passes_none(monkeypatch):
     fb._generate_overview_sheet_b64("测试", {"entities": []}, theme_id="tangerine", device="desktop")
     assert seen["cfg"] is None
     assert seen["size"] == fb._SHEET_IMAGE_SIZE
+
+
+class Test端点返回形状要两种都认:
+    """`response_format: "b64_json"` 端点**不保证照办**（2026-08-13 实测）。
+
+    api.gpt.ge + gpt-image-2：同一个尺寸 1024x1024 连着探两次，第一次返回
+    `data[0].b64_json`，第二次返回 `data[0].url`；五个尺寸各探一次时全是 `url`。
+    不是"某些尺寸走 url"，是**同一路请求随机返两种**。
+
+    只认 b64_json 的后果不是"报错好查"，是**随机失败**——生图这条链是
+    fail-open 的（失败静默退回纯文字设计），表现成"有时候有参照图有时候没有"，
+    没有任何一处会说为什么。所以两种都得认，且各自钉一条用例。
+    """
+
+    def test_b64_json_形状(self):
+        from sliderule_llm.image_client import _png_from_payload
+
+        payload = {"data": [{"b64_json": base64.b64encode(b"PNGBYTES").decode()}]}
+        assert _png_from_payload(payload, timeout=5) == b"PNGBYTES"
+
+    def test_url_形状_会去取一次(self, monkeypatch):
+        import sliderule_llm.image_client as ic
+
+        取到的 = {}
+
+        class _Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return b"PNGFROMURL"
+
+        def fake_urlopen(url, timeout=None):
+            取到的["url"] = url
+            取到的["timeout"] = timeout
+            return _Resp()
+
+        monkeypatch.setattr(ic.urllib.request, "urlopen", fake_urlopen)
+        out = ic._png_from_payload({"data": [{"url": "https://x/y.png"}]}, timeout=7)
+        assert out == b"PNGFROMURL"
+        assert 取到的["url"] == "https://x/y.png"
+        # 这一跳的超时跟生图请求共用同一个数——单独给它更长的超时等于绕开总预算闸
+        assert 取到的["timeout"] == 7
+
+    def test_b64_优先于_url(self, monkeypatch):
+        """两个字段都在时走 b64——少一次网络往返。"""
+        import sliderule_llm.image_client as ic
+
+        def boom(*a, **k):
+            raise AssertionError("有 b64_json 时不该再去取 url")
+
+        monkeypatch.setattr(ic.urllib.request, "urlopen", boom)
+        payload = {"data": [{"b64_json": base64.b64encode(b"B").decode(), "url": "https://x"}]}
+        assert ic._png_from_payload(payload, timeout=5) == b"B"
+
+    def test_两个都没有时报清楚缺什么(self):
+        from sliderule_llm.image_client import ImageGenError, _png_from_payload
+
+        with pytest.raises(ImageGenError) as exc:
+            _png_from_payload({"data": [{"revised_prompt": "x"}]}, timeout=5)
+        # 报错要说清拿到的是什么字段，否则下次换端点又得重新抓包
+        assert "revised_prompt" in str(exc.value)
+
+    def test_data_为空时不抛_KeyError(self):
+        from sliderule_llm.image_client import ImageGenError, _png_from_payload
+
+        for junk in ({}, {"data": []}, {"data": ["不是字典"]}):
+            with pytest.raises(ImageGenError):
+                _png_from_payload(junk, timeout=5)

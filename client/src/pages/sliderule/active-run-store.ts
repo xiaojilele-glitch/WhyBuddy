@@ -8,6 +8,7 @@
 
 export interface ActiveRunRecord {
   runId: string;
+  kind?: "control";
   userText: string;
   startedAt: string;
 }
@@ -37,6 +38,7 @@ export function loadActiveRun(sessionId: string): ActiveRunRecord | null {
     }
     return {
       runId: parsed.runId,
+      ...(parsed.kind === "control" ? { kind: "control" as const } : {}),
       userText: typeof parsed.userText === "string" ? parsed.userText : "",
       startedAt:
         typeof parsed.startedAt === "string" ? parsed.startedAt : "",

@@ -1,0 +1,331 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "appointment_time",
+      "name": "预约时间",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "string"
+     },
+     {
+      "id": "assignee",
+      "name": "指派人员",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "bill",
+    "name": "财务账单",
+    "fields": [
+     {
+      "id": "bill_no",
+      "name": "账单编号",
+      "type": "string"
+     },
+     {
+      "id": "work_order_ref",
+      "name": "工单关联号",
+      "type": "ref",
+      "refEntity": "work_order"
+     },
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "service_detail",
+      "name": "服务明细",
+      "type": "string"
+     },
+     {
+      "id": "subsidy_amount",
+      "name": "补贴金额",
+      "type": "number"
+     },
+     {
+      "id": "personal_amount",
+      "name": "个人自付",
+      "type": "number"
+     },
+     {
+      "id": "status",
+      "name": "结算状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "alert",
+    "name": "安全告警",
+    "fields": [
+     {
+      "id": "content",
+      "name": "告警内容",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_admin",
+    "name": "社区养老管理员"
+   },
+   {
+    "id": "role_worker",
+    "name": "一线服务人员"
+   }
+  ],
+  "permissions": [
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "bill:create",
+   "bill:read",
+   "bill:update",
+   "alert:read",
+   "alert:manage"
+  ],
+  "menus": [
+   {
+    "id": "menu_admin",
+    "label": "管理端菜单",
+    "roleRefs": [
+     "role_admin"
+    ],
+    "permissionRefs": [
+     "work_order:assign",
+     "bill:update",
+     "alert:manage"
+    ]
+   },
+   {
+    "id": "menu_worker",
+    "label": "员工端菜单",
+    "roleRefs": [
+     "role_worker"
+    ],
+    "permissionRefs": [
+     "work_order:read",
+     "work_order:update"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "工单已创建",
+    "assigneeRole": "role_admin",
+    "phase": "scheduling"
+   },
+   {
+    "id": "node_assigned",
+    "name": "已指派人员",
+    "assigneeRole": "role_admin",
+    "phase": "dispatch"
+   },
+   {
+    "id": "node_checked_in",
+    "name": "已签到服务中",
+    "assigneeRole": "role_worker",
+    "phase": "execution"
+   },
+   {
+    "id": "node_completed",
+    "name": "服务已完成",
+    "assigneeRole": "role_worker",
+    "phase": "finished"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_assigned",
+    "condition": "管理员指派服务人员"
+   },
+   {
+    "from": "node_assigned",
+    "to": "node_checked_in",
+    "condition": "服务人员到达现场签到"
+   },
+   {
+    "from": "node_checked_in",
+    "to": "node_completed",
+    "condition": "服务人员完成服务并记录"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1_page",
+    "name": "运营指挥大屏",
+    "kind": "monitor",
+    "fieldBindings": [
+     "work_order.status",
+     "alert.content"
+    ],
+    "actionPermissions": [
+     "alert:read",
+     "alert:manage"
+    ]
+   },
+   {
+    "id": "p2_page",
+    "name": "服务工单管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_name",
+     "work_order.service_type",
+     "work_order.appointment_time",
+     "work_order.status",
+     "work_order.assignee"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:read",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p3_page",
+    "name": "移动端服务工作台",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_name",
+     "work_order.service_type",
+     "work_order.appointment_time",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update"
+    ]
+   },
+   {
+    "id": "p4_page",
+    "name": "财务结算与账单页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "bill.bill_no",
+     "bill.work_order_ref",
+     "bill.elder_name",
+     "bill.service_detail",
+     "bill.subsidy_amount",
+     "bill.personal_amount",
+     "bill.status"
+    ],
+    "actionPermissions": [
+     "bill:create",
+     "bill:read",
+     "bill:update"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_service_match",
+    "name": "智能服务匹配",
+    "inputFields": [
+     "work_order.elder_name",
+     "work_order.service_type"
+    ],
+    "outputField": "work_order.assignee",
+    "roleRefs": [
+     "role_admin"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p2_page",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p3_page",
+    "workflowRef": "node_checked_in"
+   }
+  ],
+  "landingPageRef": "p1_page",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_admin",
+   "role_worker"
+  ],
+  "dataModelRefs": [
+   "work_order",
+   "bill",
+   "alert"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_1",
+    "statement": "工单状态变更必须关联有效的指派人员",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.assignee",
+     "node_assigned"
+    ]
+   },
+   {
+    "id": "inv_2",
+    "statement": "财务账单必须关联对应的服务工单",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "bill",
+     "bill.work_order_ref",
+     "work_order"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

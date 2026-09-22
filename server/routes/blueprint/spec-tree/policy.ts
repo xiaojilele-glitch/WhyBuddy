@@ -93,7 +93,13 @@ export function createDefaultSpecTreeLlmPolicy(): SpecTreeLlmPolicy {
       "x-github-token",
       "openai-api-key",
     ],
-    redactedEmailPattern: /[\w.+-]+@[\w.-]+/g,
+    // ReDoS 修复：原式 /[\w.+-]+@[\w.-]+/g 在「一长串合法本地部字符但没有 @」的
+    // 输入上是**二次**复杂度——每个起始位置都先吞到底再逐字符回退。实测 160KB 要
+    // 14.5s，5MB 折算约 4 小时（policy.test.ts 的 ReDoS 哨兵一直挂在这儿）。
+    // 两处收口：① 前置负向后顾，让匹配只能从本地部的真实起点开始，非起点位置 O(1)
+    // 直接否掉；② 按 RFC 5321 给本地部/域名上界（64 / 255），把回退量钉成常数。
+    // 实测 5MB 从 ~4 小时降到 ~20ms，且对合法邮箱的脱敏结果与原式逐例一致。
+    redactedEmailPattern: /(?<![\w.+-])[\w.+-]{1,64}@[\w.-]{1,255}/g,
     redactedApiKeyPattern: /\b(sk-[A-Za-z0-9]{20,}|clp_[A-Za-z0-9]{20,})\b/g,
     redactedGithubPatPattern:
       /\b(gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})\b/g,
@@ -129,8 +135,10 @@ function escapeRegex(value: string): string {
  * mutates input. Non-string / empty inputs are returned as-is for defensive
  * ergonomics.
  *
- * ReDoS safety: all patterns are linear-time (no nested quantifiers, no
- * overlapping alternations). A 5MB string must complete in < 200ms.
+ * ReDoS safety: A 5MB string must complete in < 200ms。注意「没有嵌套量词」并不
+ * 蕴含线性——`X+Y` 里 X 能吞而 Y 等不到时，逐起点回退就是二次的（邮箱式曾中招，
+ * 见 redactedEmailPattern 上的注释）。加新模式时要么给量词上界、要么用后顾把起点
+ * 钉死，并让哨兵用例真的跑到 5MB。
  */
 export function applySpecTreeRedaction(
   value: string,

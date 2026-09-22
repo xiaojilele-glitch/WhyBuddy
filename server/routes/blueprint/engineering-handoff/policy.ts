@@ -86,10 +86,17 @@ const DEFAULT_REDACTION_KEYWORDS: readonly string[] = [
 ];
 
 /**
- * Matches emails. Intentionally simple and linear-time safe (no nested
- * quantifiers). Covers the vast majority of real-world addresses.
+ * Matches emails. Covers the vast majority of real-world addresses.
+ *
+ * 「没有嵌套量词」并不等于线性：原式 /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g 在一长串
+ * 合法本地部字符、却始终等不到 `@` 的输入上是**二次**复杂度（每个起始位置都吞到
+ * 结尾再逐字符回退），5MB 折算约 4 小时——正是 policy.test.ts 那条 ReDoS 哨兵一直
+ * 卡住的原因。这里两处收口：① 前置负向后顾，匹配只能从本地部真实起点开始，其余
+ * 位置 O(1) 否掉；② 按 RFC 5321 给本地部/域名上界（64 / 255），回退量变成常数。
+ * 实测 5MB ~17ms，且对合法邮箱的脱敏结果与原式逐例一致。
  */
-const DEFAULT_EMAIL_PATTERN = /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g;
+const DEFAULT_EMAIL_PATTERN =
+  /(?<![\w.+-])[\w.+-]{1,64}@[\w.-]{1,255}\.[A-Za-z]{2,}/g;
 
 /**
  * Matches OpenAI-style API keys (`sk-` prefix, 20+ alphanumeric/dash chars)
@@ -253,8 +260,12 @@ export function applyEngineeringHandoffRedaction(
 
   // 4. Key-value pairs: keyword: "value" / keyword=value / keyword: value
   for (const keyword of policy.redactionKeywords) {
+    // 值部取到下一个换行/逗号/分号为止，而不是到下一个空白为止：带 scheme 前缀的
+    // 凭据（`Authorization: Bearer <jwt>`）只脱到空白就只盖掉 "Bearer"，JWT 本体
+    // 原样漏出去。同目录的 spec-tree/policy.ts 一直是 `[^"\r\n,;]+`，这里对齐。
+    // （本文件的 ReDoS 哨兵此前一直跑不完，把这条断言一并挡在了后面。）
     const pattern = new RegExp(
-      `(${escapeRegex(keyword)})\\s*[:=]\\s*"?[^"\\s,;]+"?`,
+      `(${escapeRegex(keyword)})\\s*[:=]\\s*"?[^"\\r\\n,;]+"?`,
       "gi",
     );
     const lowerKeyword = keyword.toLowerCase();

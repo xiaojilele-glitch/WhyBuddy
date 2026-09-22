@@ -1,0 +1,345 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "id_card",
+      "name": "身份证号",
+      "type": "string"
+     },
+     {
+      "id": "gender_age",
+      "name": "性别与年龄",
+      "type": "string"
+     },
+     {
+      "id": "room",
+      "name": "房间床位",
+      "type": "string"
+     },
+     {
+      "id": "nursing_level",
+      "name": "护理等级",
+      "type": "enum"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     },
+     {
+      "id": "health_tags",
+      "name": "核心健康标签",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "service_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "enum"
+     },
+     {
+      "id": "urgency",
+      "name": "紧急程度",
+      "type": "enum"
+     },
+     {
+      "id": "assigned_staff",
+      "name": "指派护理员",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "enum"
+     },
+     {
+      "id": "create_time",
+      "name": "创建时间",
+      "type": "date"
+     }
+    ]
+   },
+   {
+    "id": "health_record",
+    "name": "健康记录",
+    "fields": [
+     {
+      "id": "elder_ref",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "blood_pressure",
+      "name": "血压",
+      "type": "string"
+     },
+     {
+      "id": "heart_rate",
+      "name": "心率",
+      "type": "number"
+     },
+     {
+      "id": "blood_glucose",
+      "name": "血糖均值",
+      "type": "number"
+     },
+     {
+      "id": "health_score",
+      "name": "健康评分",
+      "type": "number"
+     },
+     {
+      "id": "measure_time",
+      "name": "测量时间",
+      "type": "date"
+     }
+    ]
+   },
+   {
+    "id": "service_appointment",
+    "name": "服务预约",
+    "fields": [
+     {
+      "id": "elder_ref",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "service_item",
+      "name": "服务项目",
+      "type": "enum"
+     },
+     {
+      "id": "appointment_date",
+      "name": "预约日期",
+      "type": "date"
+     },
+     {
+      "id": "time_slot",
+      "name": "服务时段",
+      "type": "enum"
+     },
+     {
+      "id": "remark",
+      "name": "备注",
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "advisor_role",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "family_role",
+    "name": "家属"
+   }
+  ],
+  "permissions": [
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "elder:delete",
+   "service_order:create",
+   "service_order:read",
+   "service_order:update",
+   "service_order:assign",
+   "health_record:create",
+   "health_record:read",
+   "service_appointment:create",
+   "service_appointment:read"
+  ],
+  "menus": [
+   {
+    "id": "menu_archive",
+    "label": "档案管理",
+    "roleRefs": [
+     "advisor_role"
+    ],
+    "permissionRefs": [
+     "elder:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "order_created",
+    "name": "工单已创建",
+    "assigneeRole": "advisor_role",
+    "phase": "创建"
+   },
+   {
+    "id": "order_assigned",
+    "name": "已指派护理员",
+    "assigneeRole": "advisor_role",
+    "phase": "处理中"
+   },
+   {
+    "id": "order_completed",
+    "name": "工单已完成",
+    "assigneeRole": "advisor_role",
+    "phase": "已完成"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "order_created",
+    "to": "order_assigned",
+    "condition": "顾问确认工单并指派护理员"
+   },
+   {
+    "from": "order_assigned",
+    "to": "order_completed",
+    "condition": "上门服务完成并回访"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "elder_archive_page",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.id_card",
+     "elder.room",
+     "elder.nursing_level"
+    ],
+    "actionPermissions": [
+     "elder:read",
+     "elder:update"
+    ]
+   },
+   {
+    "id": "service_order_hall_page",
+    "name": "服务工单大厅",
+    "kind": "workbench",
+    "fieldBindings": [
+     "service_order.order_no",
+     "service_order.service_type",
+     "service_order.status"
+    ],
+    "actionPermissions": [
+     "service_order:read",
+     "service_order:assign"
+    ]
+   },
+   {
+    "id": "family_health_monitor_page",
+    "name": "家属健康监控页",
+    "kind": "monitor",
+    "fieldBindings": [
+     "health_record.blood_pressure",
+     "health_record.heart_rate",
+     "health_record.health_score"
+    ],
+    "actionPermissions": [
+     "health_record:read"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "health_score_eval",
+    "name": "健康综合评估",
+    "inputFields": [
+     "health_record.blood_pressure",
+     "health_record.heart_rate",
+     "health_record.blood_glucose"
+    ],
+    "outputField": "health_record.health_score",
+    "roleRefs": [
+     "advisor_role"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "service_order_hall_page",
+    "workflowRef": "order_created"
+   }
+  ],
+  "landingPageRef": "elder_archive_page",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "advisor_role",
+   "family_role"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "service_order",
+   "health_record",
+   "service_appointment"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_service_elder",
+    "statement": "服务工单必须关联真实的老人档案",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "service_order",
+     "service_order.elder_ref",
+     "elder"
+    ]
+   },
+   {
+    "id": "inv_workflow_flow",
+    "statement": "工单创建后必须先经过指派节点才能进入完成状态",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "order_created",
+     "order_assigned",
+     "order_completed"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

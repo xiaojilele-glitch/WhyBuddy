@@ -94,6 +94,7 @@ export default function FreeformPreviewScreen({ pid }: { pid?: string }) {
       >
         <ExperienceBlockBoundary
           block={block}
+          previewId={pid}
           entityRows={payload.entityRows || {}}
           chartPalette={{ primary: identityTheme.primary, categorical: identityTheme.charts }}
         />

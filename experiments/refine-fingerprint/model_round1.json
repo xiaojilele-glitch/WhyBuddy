@@ -1,0 +1,487 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "age_gender",
+      "name": "年龄/性别",
+      "type": "string"
+     },
+     {
+      "id": "health_level",
+      "name": "健康监护等级",
+      "type": "string"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     },
+     {
+      "id": "medical_history",
+      "name": "主要既往病史",
+      "type": "text"
+     },
+     {
+      "id": "last_eval_time",
+      "name": "最近评估时间",
+      "type": "date"
+     },
+     {
+      "id": "grid",
+      "name": "居住网格",
+      "type": "string"
+     },
+     {
+      "id": "address",
+      "name": "长辈居住地址",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "adl_evaluation",
+    "name": "自理评估",
+    "fields": [
+     {
+      "id": "elder_ref",
+      "name": "评估老人",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "score",
+      "name": "实时测算得分",
+      "type": "number"
+     },
+     {
+      "id": "assessor",
+      "name": "主评人",
+      "type": "string"
+     },
+     {
+      "id": "reviewer",
+      "name": "复核人签名",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "nursing_worker",
+    "name": "护理员",
+    "fields": [
+     {
+      "id": "name",
+      "name": "护理员姓名",
+      "type": "string"
+     },
+     {
+      "id": "star_rating",
+      "name": "星级",
+      "type": "string"
+     },
+     {
+      "id": "today_load",
+      "name": "今日排班空闲",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "老人姓名",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类别",
+      "type": "string"
+     },
+     {
+      "id": "worker_ref",
+      "name": "派发匹配人",
+      "type": "ref",
+      "refEntity": "nursing_worker"
+     },
+     {
+      "id": "status",
+      "name": "状态节点",
+      "type": "string"
+     },
+     {
+      "id": "last_update",
+      "name": "最后更新",
+      "type": "string"
+     },
+     {
+      "id": "feedback_note",
+      "name": "现场服务简述",
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "id": "mall_service",
+    "name": "服务商品",
+    "fields": [
+     {
+      "id": "name",
+      "name": "服务项目名称",
+      "type": "string"
+     },
+     {
+      "id": "price",
+      "name": "价格",
+      "type": "string"
+     },
+     {
+      "id": "description",
+      "name": "描述",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "station_manager",
+    "name": "社区养老站长"
+   },
+   {
+    "id": "nursing_staff",
+    "name": "助老护理员"
+   },
+   {
+    "id": "family_member",
+    "name": "老人及家属"
+   }
+  ],
+  "permissions": [
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "elder:delete",
+   "adl_evaluation:create",
+   "adl_evaluation:read",
+   "adl_evaluation:update",
+   "nursing_worker:read",
+   "nursing_worker:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "mall_service:read"
+  ],
+  "menus": [
+   {
+    "id": "menu_dashboard",
+    "label": "核心综合调度大屏",
+    "roleRefs": [
+     "station_manager"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "menu_elder_archive",
+    "label": "老人健康档案库",
+    "roleRefs": [
+     "station_manager"
+    ],
+    "permissionRefs": [
+     "elder:read"
+    ]
+   },
+   {
+    "id": "menu_dispatch",
+    "label": "智能派单调度中心",
+    "roleRefs": [
+     "station_manager"
+    ],
+    "permissionRefs": [
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "menu_nursing_app",
+    "label": "护理服务终端",
+    "roleRefs": [
+     "nursing_staff"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "menu_family_app",
+    "label": "家属关爱通道",
+    "roleRefs": [
+     "family_member"
+    ],
+    "permissionRefs": [
+     "elder:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "wo_created",
+    "name": "待派单",
+    "assigneeRole": "station_manager",
+    "phase": "服务下单"
+   },
+   {
+    "id": "wo_assigned",
+    "name": "服务中",
+    "assigneeRole": "nursing_staff",
+    "phase": "上门服务"
+   },
+   {
+    "id": "wo_completed",
+    "name": "已服务",
+    "assigneeRole": "family_member",
+    "phase": "服务评价"
+   },
+   {
+    "id": "wo_closed",
+    "name": "工单关闭",
+    "assigneeRole": "station_manager",
+    "phase": "工单归档"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "wo_created",
+    "to": "wo_assigned",
+    "condition": "系统自动匹配或站长人工指派派发匹配人"
+   },
+   {
+    "from": "wo_assigned",
+    "to": "wo_completed",
+    "condition": "护理员现场打卡完成并录入现场服务简述反馈"
+   },
+   {
+    "from": "wo_completed",
+    "to": "wo_closed",
+    "condition": "家属确认评价或系统超时自动关闭"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "核心综合调度大屏",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "elder.grid",
+     "nursing_worker.today_load",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "elder:read",
+     "nursing_worker:read",
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "老人健康档案库",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.age_gender",
+     "elder.health_level",
+     "elder.emergency_contact",
+     "elder.medical_history",
+     "elder.last_eval_time",
+     "adl_evaluation.score",
+     "adl_evaluation.assessor"
+    ],
+    "actionPermissions": [
+     "elder:create",
+     "elder:read",
+     "elder:update",
+     "elder:delete",
+     "adl_evaluation:create",
+     "adl_evaluation:read",
+     "adl_evaluation:update"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "智能派单调度中心",
+    "kind": "monitor",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_ref",
+     "work_order.service_type",
+     "work_order.worker_ref",
+     "work_order.status",
+     "nursing_worker.name",
+     "nursing_worker.today_load"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:read",
+     "work_order:update",
+     "work_order:assign",
+     "nursing_worker:read"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "护理员端小程序",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.status",
+     "work_order.feedback_note",
+     "nursing_worker.name"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update",
+     "nursing_worker:read"
+    ]
+   },
+   {
+    "id": "p5",
+    "name": "家属关爱小程序",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.health_level",
+     "work_order.status",
+     "mall_service.name",
+     "mall_service.price"
+    ],
+    "actionPermissions": [
+     "elder:read",
+     "work_order:read",
+     "mall_service:read"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "aigc_health_assessment",
+    "name": "老人健康评级智能分析",
+    "inputFields": [
+     "elder.medical_history",
+     "adl_evaluation.score"
+    ],
+    "outputField": "elder.health_level",
+    "roleRefs": [
+     "station_manager"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p3",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "wo_created"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "wo_assigned"
+   },
+   {
+    "pageRef": "p4",
+    "workflowRef": "wo_completed"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "wo_closed"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "station_manager",
+   "nursing_staff",
+   "family_member"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "adl_evaluation",
+   "nursing_worker",
+   "work_order",
+   "mall_service"
+  ],
+  "appIdentity": {
+   "appName": "颐家安"
+  },
+  "invariants": [
+   {
+    "id": "inv_adl_score_vs_health_level",
+    "statement": "自理评估实时测算得分变更后必须同步更新对应老人档案的健康监护等级",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "adl_evaluation.score",
+     "elder.health_level"
+    ]
+   },
+   {
+    "id": "inv_assign_must_have_worker",
+    "statement": "处于服务中节点的工单其派发匹配人字段不能为空",
+    "systems": [
+     "workflow",
+     "datamodel"
+    ],
+    "refs": [
+     "work_order.worker_ref",
+     "wo_assigned"
+    ]
+   },
+   {
+    "id": "inv_feedback_required_on_completed",
+    "statement": "工单在流转至已服务状态前必须完成现场服务简述的录入",
+    "systems": [
+     "workflow",
+     "datamodel"
+    ],
+    "refs": [
+     "work_order.feedback_note",
+     "wo_completed"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

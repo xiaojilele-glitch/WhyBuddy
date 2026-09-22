@@ -73,6 +73,12 @@ describe("手机档角色切换的自动化抓手", () => {
   it("弹层带 aria-label，读屏用户知道这是干什么的", () => {
     expect(rolePickerSrc).toContain('aria-label="切换角色"');
   });
+
+  it("角色引用键与显示名分开，手机端不泄漏内部 id", () => {
+    expect(rolePickerSrc).toContain("roleLabels: Record<string, string>");
+    expect(rolePickerSrc).toContain("label: roleLabels[r] ?? r");
+    expect(screenSrc).toContain("roleLabels={schema.roleLabels}");
+  });
 });
 
 describe("手机档 TabBar 的行数徽标", () => {

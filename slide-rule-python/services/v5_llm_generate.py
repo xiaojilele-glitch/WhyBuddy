@@ -16,11 +16,31 @@ North-star discipline (先证通用性，再接 LLM；别把两件事耦合):
 """
 
 from __future__ import annotations
+from .archetype_legal import fill_device_placeholders as _fill_device_placeholders
+from .archetype_legal import required_evidence as _required_evidence
 
+import os
+from contextvars import ContextVar
 from typing import Any, Callable, Dict, List, Optional
 
+from sliderule_llm.config import default_max_tokens, wider_output_budget
+
+from .enrich_timing import stage as _enrich_stage
+
 # Sections the model must contain — mirrors v5_model_gate.SKILL_KEYS.
-_REQUIRED_SECTIONS = ("datamodel", "rbac", "workflow", "page", "aigc", "appbundle")
+#: ⚠ 2026-08-30：第 10 处手抄的六系统词表（生成契约这一份）。生成侧要产哪几段，
+#: 必须与闸要哪几段同源——不同源就是「生成了五段、闸要六段」这类静默 0/6。
+#: 现在从产品原型账本派生。tuple 语义不变（本模块多处 `in _REQUIRED_SECTIONS`）。
+_REQUIRED_SECTIONS = tuple(_required_evidence())
+
+# 生成调用的输出上限走**全局那一个** `default_max_tokens()`。
+#
+# 这里以前有个 `_DEFAULT_GENERATE_MAX_TOKENS = 8000` 和它专属的
+# `LLM_GENERATE_MAX_TOKENS`，**已经删了**。它救不了这条链路：推理模型的思考
+# token 和正文共用 max_tokens，8000 全被思考吃掉、正文一个字没有、
+# finish_reason=length、客户端只看到 `empty content from LLM (stream)`
+# ——而下游还有一堆这个旋钮管不着的写死预算，调它只是把病挪个地方发作。
+# 现在全链路一个 `LLM_MAX_TOKENS`，理由见 sliderule_llm.config.DEFAULT_MAX_TOKENS。
 
 # The JSON contract handed to the LLM. Kept explicit so the model emits exactly
 # the shape the gate validates (cross-refs must be internally consistent).
@@ -39,13 +59,14 @@ Required shape (use these exact keys):
     "entities": [
       {"id": "<snake_case>", "name": "<label>", "fields": [
         {"id": "<snake_case>", "name": "<label>", "type": "string|number|date|ref|enum",
+         "refEntity": "<entity_id>",
          "options": [{"id": "<value>", "label": "<label>", "tone": "__FIELD_TONES__"}],
          "format": "__FIELD_FORMATS__"}
       ]}
     ]
   },
   "rbac": {
-    "roles": ["<role_id>", ...],
+    "roles": [{"id": "<snake_case>", "name": "<label>"}, ...],
     "permissions": ["<resource>:<action>", ...],
     "menus": [{"id": "<id>", "label": "<label>", "roleRefs": ["<role_id>"], "permissionRefs": ["<perm>"]}]
   },
@@ -63,6 +84,8 @@ Required shape (use these exact keys):
   "page": {
     "pages": [{"id": "<id>", "name": "<label>",
                "kind": "__PAGE_KINDS__",
+               "presentation": "marketing-landing|application",
+               "surface": {"type": "__PAGE_SURFACE_TYPES__", "density": "__PAGE_SURFACE_DENSITIES__"},
                "statusField": "<entity_id>.<field_id> (kanban only)",
                "dateField": "<entity_id>.<field_id> (calendar only)",
                "colorBy": "<entity_id>.<field_id> (calendar only, optional)",
@@ -105,6 +128,7 @@ Required shape (use these exact keys):
   "appbundle": {
     "pageBindings": [{"pageRef": "<page_id>", "workflowRef": "<workflow_id_or_node_id>"}],
     "landingPageRef": "<page_id shown first when the app opens>",
+    "preferredDevice": "__PREFERRED_DEVICES__",
     "roleRefs": ["<role_id>"],
     "dataModelRefs": ["<entity_id>"],
     "appIdentity": {"productName": "<2-6字产品名>", "theme": "__IDENTITY_THEMES__",
@@ -118,14 +142,71 @@ Required shape (use these exact keys):
 }
 
 Rules:
-- Every workflow node assigneeRole MUST be in rbac.roles.
+- Every workflow node assigneeRole MUST be one of the rbac.roles[].id values.
+- rbac.roles[].id is the reference key: snake_case ASCII, used by assigneeRole,
+  roleRefs and menu roleRefs. rbac.roles[].name is what humans see — write it in
+  the SAME LANGUAGE as the user's intent (e.g. 仓库管理员, not warehouse_keeper).
+  Never put the display name in the id, and never leave name equal to the id.
 - Every page fieldBinding MUST be "<entityId>.<fieldId>" from datamodel.
 - Every page actionPermission MUST be in rbac.permissions.
+- A BLOCK CAN ONLY BIND FIELDS THE ENTITY ACTUALLY HAS, of the exact type the
+  block's binding contract asks for. Before you place a block, make sure the entity
+  you bind it to CARRIES those fields — if it does not, add them to the entity in
+  datamodel. Two cases keep going wrong; both end as a rejected model:
+  · A recurring time-of-day window (a daily/weekly quiet period, business hours,
+    an on-call shift slot) is a "string" field holding "HH:MM" — NOT a "date".
+    "date" pins one absolute moment, which cannot express "every day 09:00-18:00".
+    Blocks asking for startTimeFieldRef / endTimeFieldRef want that "HH:MM" string,
+    so the entity needs string fields for it.
+  · A threshold, score, count or ranking measure is a "number" field. An enum
+    severity is NOT a threshold and a "ref" is never a measure. If a block needs a
+    numeric field (thresholdFieldRef, sortByRef, …) and the entity has no number
+    field at all, that entity is under-modelled — add the real numeric field.
+  Picking the nearest wrong-typed field does not work: the gate rejects the model
+  and the whole thing is regenerated.
+- PEOPLE NEED A NAME FIELD, not only a relation. Whenever an entity carries a
+  person / team / owner / assignee / recipient party, give that entity a "string"
+  field holding the party's DISPLAY NAME — in addition to any "ref" field you use
+  for the relation (e.g. BOTH assignee_ref of type "ref" AND assignee_name of type
+  "string"). Experience blocks bind people through assigneeFieldRef,
+  memberFieldRef, ownerFieldRef, receiverFieldRef, actorFieldRef and
+  applicantFieldRef, and EVERY one of those requires a "string" field. A "ref"
+  field can never satisfy them: "ref" declares no target entity anywhere in this
+  schema, so nothing downstream can resolve it into a name to display. If the only
+  person-ish field on the entity is a "ref", the block has nothing correct to bind,
+  the structural gate rejects the page, and the whole model is regenerated — this
+  is a rejected deliverable, not a cosmetic warning.
+- A "ref" FIELD MUST DECLARE ITS TARGET: `"refEntity": "<entity_id>"` naming the
+  entity it points at (that entity must exist in this same datamodel). Without it
+  the relation degrades into a plain text box and the user has to TYPE a row id by
+  hand — the runtime can only render a picker when it knows which rows to offer.
+  Measured on 181 real generated models: 1689 "ref" fields, and the id-name
+  heuristic could only resolve 41% of them; the other 998 rendered as free text.
+  Naming alone does not carry it — `assigned_team` pointing at `oncall_teams`,
+  `route_group_id` pointing at `on_call_group`, or `alert_ref` where BOTH
+  `alert_event` and `alert_route_rule` exist are all unresolvable without the
+  declaration. Put "refEntity" on every "ref" field and on no other field.
+- HIERARCHY IS A STRING ID, not a "ref". When an entity forms a tree (parent
+  policy, sub-item, parent node, caller/callee), give it a "string" field holding
+  the PARENT ROW'S id — e.g. parent_policy_id of type "string". Blocks bind
+  hierarchy through parentFieldRef, parentPartFieldRef, spanParentFieldRef,
+  nodeParentFieldRef, operatorParentFieldRef and profileParentFieldRef, and EVERY
+  one of them requires a "string" field. Typing that column "ref" reads as the
+  natural choice and is exactly what gets the model rejected: NO entityFieldRef in
+  the whole catalog accepts "ref" — of 1009 required field types, 447 want string,
+  273 enum, 205 number, 84 date and ZERO want ref — because "ref" declares no
+  target entity anywhere in this schema. Root rows carry an empty parent id; never
+  invent a parent to fill it.
 - Every aigc input/output field MUST be from datamodel; roleRefs from rbac.roles.
 - appbundle pageRef∈pages, workflowRef∈workflow, roleRefs∈roles, dataModelRefs∈entities.
+__WORKFLOWREF_RULE__
 - appbundle.landingPageRef is REQUIRED and MUST equal one page.pages[].id. Pick
   the page that best represents the user's main job when the app opens (for
   example a monitor/dashboard/calendar page), not a generic approval home.
+- appbundle.preferredDevice is REQUIRED and MUST be exactly one of: __PREFERRED_DEVICES_OR__.
+  Follow an explicit device in the user's goal. Otherwise decide once from the
+  complete product, landing-page shape, and primary operating posture. Never omit
+  this field and never request responsive or dual-device generation.
 - Model the SPECIFIC business the intent describes (entities, roles, approval
   steps, pages that fit that domain). Do not emit a generic template.
 - PHASES (swimlanes): give EVERY workflow node a "phase" — a short stage label
@@ -210,6 +291,13 @@ Content-quality rules (checked by a deterministic regression gate):
   step-by-step guided flow (the page MUST be bound to the workflow via
   appbundle.pageBindings workflowRef — its steps ARE the workflow nodes).
   Pick by the page's job, vary across pages — real products mix kinds.
+- WORKBENCH SURFACE (optional, for workbench pages): choose the primary operating
+  structure by the page's actual job. table = searchable read-heavy registry;
+  editable-table = high-frequency inline editing such as attendance or stock;
+  split-list = master list plus persistent detail pane for people/resources;
+  queue = status-segmented processing for payments, approvals, renewals, or
+  exceptions. density is compact/default/comfortable. Do not vary this merely
+  for decoration: pages with different jobs should have different structures.
 - FEEDS (activity/alert stream, optional): overview pages that watch things
   happen (alerts, submissions, escalations) may declare ONE feed: "entity" is
   the row source, "timeField" MUST be a real DATE field (stream orders by it,
@@ -236,6 +324,10 @@ Content-quality rules (checked by a deterministic regression gate):
   every time (a monitor that always has exactly 4 stats reads as a template,
   not a design). "entity" scopes count; sum/avg must target a number field.
   Same field-existence rules as charts. Pure CRUD pages need none.
+- PAGE PRESENTATION: use "marketing-landing" only for a consumer-facing or public landing page
+  whose first job is to explain an offer, establish a brand, and drive one primary action. Such a
+  page MUST NOT be coerced into an operations monitor and MUST NOT declare stats, charts, rankings,
+  feeds, or a workbench surface. Use "application" for authenticated operational product pages.
 - PAGE KIND (view paradigm): pick each page's "kind" by its job — omit or
   "workbench" (default) for CRUD tables; "kanban" when the core object flows
   through stages (跟进/审批/生产状态) — REQUIRES "statusField" naming an enum
@@ -251,9 +343,10 @@ Content-quality rules (checked by a deterministic regression gate):
   focus rather than a fixed quota.
   Use at most one kanban and one calendar page; never force a paradigm the
   domain doesn't need.
-- LANDING PAGE: appbundle.landingPageRef SHOULD point to the monitor/overview
-  page (打开应用第一眼看到经营全貌) — unless this business genuinely opens on
-  an action page (e.g. a submit-first tool with no meaningful overview).
+- LANDING PAGE: appbundle.landingPageRef points to the page that should truly open first. For a
+  public/consumer offer, this MUST be the marketing-landing page. For an internal operations app,
+  it usually points to the monitor/overview page. Do not invent an operations dashboard merely to
+  satisfy landingPageRef.
 - INVARIANTS: emit 5-8 entries in "appbundle.invariants" — declarative constraints that
   must always hold, the kind an architect writes after a production incident
   (ordering: "charge before calling the upstream provider"; source of truth:
@@ -265,6 +358,35 @@ Content-quality rules (checked by a deterministic regression gate):
   it constrains. Write statements in the intent's language. No vague platitudes
   ("system should be secure") — each must be checkable against the model.
 """
+
+
+#: appbundle.pageBindings[].workflowRef 的合法域说明（2026-08-10 加，治 B 族）。
+#
+# 曾用 SLIDERULE_EXP_OMIT_WORKFLOWREF_RULE 对这一段做过 A/B，判定完成后开关已撤，
+# 结论留在这里。起因是加了这条之后，**新出现**了一族 chainRef 裁决——
+# `chainRef 'alert_lifecycle' not found in workflow.chains`，而 alert_lifecycle
+# 正是主链 id，也正是这条规则新告诉模型"算 workflow id"的那个东西。怀疑模型把
+# 这条外推到了 chainRef 上（chainRef 恰恰**不认**主链，见
+# _collect_workflow_chain_ids）。
+#
+# A/B 判定（跨 5 个队列共 28 个模型）：非法 chainRef **只出现在**"有本规则、且没有
+# 末尾那句限定域"的那一个队列（2/6 趟），其余 22 个模型零非法，超几何 p≈0.040；
+# 两个非法值都是主链 id `alert_lifecycle`——正是本规则新点名为合法 workflow id 的
+# 那个东西。所以末尾"别外推到 chainRef"那句是**必须留着**的。
+_WORKFLOWREF_RULE = """\
+- appbundle.pageBindings[].workflowRef IS NOT A FREE LABEL and is NOT one per page.
+  It MUST be an id you already defined inside "workflow": the top-level workflow.id,
+  one of workflow.chains[].id, or one of the node ids in either. Nothing else is a
+  workflow id. It is OPTIONAL: set it only on a page the user actually drives that
+  workflow from, and OMIT it everywhere else. Never invent a per-page process name
+  and never copy the pageRef into it. Omitting the field is correct and costs
+  nothing; a value that is not one of those ids is a dangling reference that gets the
+  whole model rejected and regenerated. The one exception: a page with kind "wizard"
+  MUST be bound here with a real workflowRef, because the wizard's steps are read
+  from that workflow — a wizard without it cannot render.
+  This paragraph is about workflowRef ONLY. Do NOT carry it over to a block's
+  props.chainRef: chainRef accepts ONLY a workflow.chains[].id — the top-level
+  workflow.id and node ids are NOT valid there."""
 
 
 def _render_schema_instruction(template: str) -> str:
@@ -284,11 +406,14 @@ def _render_schema_instruction(template: str) -> str:
     field_ref = "<entity_id>.<field_id>"
     chart_metrics = "|".join(list(METRIC_BARE) + [f"{p}{field_ref}" for p in CHART_METRIC_PREFIXES])
     stat_metrics = "|".join(list(METRIC_BARE) + [f"{p}{field_ref}" for p in STAT_METRIC_PREFIXES])
-    return (
+    rendered = (
         template
+        .replace("__WORKFLOWREF_RULE__", _WORKFLOWREF_RULE)
         .replace("__FIELD_TONES__", enum_str("fieldTones"))
         .replace("__FIELD_FORMATS__", enum_str("numberFormats", "stringFormats"))
         .replace("__PAGE_KINDS__", enum_str("pageKinds"))
+        .replace("__PAGE_SURFACE_TYPES__", enum_str("pageSurfaceTypes"))
+        .replace("__PAGE_SURFACE_DENSITIES__", enum_str("pageSurfaceDensities"))
         .replace("__STAT_FORMATS__", enum_str("statFormats"))
         .replace("__CHART_TYPES__", enum_str("chartTypes"))
         .replace("__STAT_METRIC_FORMS__", stat_metrics)
@@ -297,13 +422,17 @@ def _render_schema_instruction(template: str) -> str:
         .replace("__IDENTITY_ICONS__", enum_str("identityIcons"))
         .replace("__IDENTITY_NAVS__", enum_str("identityNavs"))
     )
+    return _fill_device_placeholders(rendered)
 
 
 def _append_experience_block_catalog(instruction: str) -> str:
     """二阶段：从同一目录注入过渡说明，不让 Prompt 另写一份区块清单。"""
     from .schema_legal import experience_block_prompt_block
 
-    return f"{instruction.rstrip()}\n\n{experience_block_prompt_block()}\n"
+    return (
+        f"{instruction.rstrip()}\n\n"
+        f"{_fill_device_placeholders(experience_block_prompt_block())}\n"
+    )
 
 
 _SCHEMA_INSTRUCTION = _append_experience_block_catalog(
@@ -311,33 +440,211 @@ _SCHEMA_INSTRUCTION = _append_experience_block_catalog(
 )
 
 
+def schema_instruction_for(goal: str) -> str:
+    """这一次生成实际用的系统指令。
+
+    窄化关（默认）→ 原样返回模块级那份全量常量，行为与从前逐字相同。
+    窄化开 → 按题意挑一批区块，**每次请求重新组装**目录段。
+
+    为什么不能沿用模块级常量：`_SCHEMA_INSTRUCTION` 是 import 那一刻就固化的，
+    而窄化的结果依赖 goal。所以窄化必须在请求期组装——这也是它唯一的代价
+    （多拼一次字符串，相对 100s+ 的生成可忽略）。
+
+    fail-open：窄化过程里任何异常都退回全量指令。窄化是优化，不该让生成不可用。
+    """
+    try:
+        from .block_narrowing import (
+            derive_goal_presets,
+            narrowing_enabled,
+            narrowing_limit,
+            preset_block_names,
+            select_blocks,
+        )
+
+        if not narrowing_enabled() or not (goal or "").strip():
+            return _SCHEMA_INSTRUCTION
+
+        from .schema_legal import (
+            EXPERIENCE_BLOCKS,
+            PAGE_KIND_PRESETS,
+            PAGE_KINDS,
+            experience_block_prompt_block,
+        )
+
+        enabled = [b for b in EXPERIENCE_BLOCKS if b.get("generationEnabled")]
+        picked = select_blocks(
+            enabled,
+            goal,
+            limit=narrowing_limit(),
+            mandatory=preset_block_names(PAGE_KIND_PRESETS),
+        )
+        # select_blocks 原样退回全量（自适应判定为"目录没覆盖这个域"、goal 空、
+        # 依赖缺失…）时，**返回模块级那份常量本身**，而不是照 enabled 重建一遍。
+        #
+        # 差别是真实的：`enabled` 只含通电区块，而全量那份 prompt 是拿
+        # EXPERIENCE_BLOCKS（含 schema-only 那档）建的。照 enabled 重建会把
+        # schema-only 的详情段丢掉——退回路径本该"什么都没变"，却悄悄少了一段
+        # 禁令上下文。测试 test_零覆盖域的系统指令与全量逐字相同 抓的就是这个。
+        if len(picked) == len(enabled):
+            return _SCHEMA_INSTRUCTION
+        # 第 2 层：按题意派生几档预设追加到 PROVEN LAYOUTS 后面。窄化只把对题件
+        # 送进可达区（第 1 层），而选材仍被预设形状主导——实测选中数停在 4.5/16。
+        derived = derive_goal_presets(picked, PAGE_KIND_PRESETS, PAGE_KINDS)
+        base = _render_schema_instruction(_SCHEMA_INSTRUCTION_TEMPLATE)
+        catalog = _fill_device_placeholders(
+            experience_block_prompt_block(picked, extra_presets=derived)
+        )
+        return f"{base.rstrip()}\n\n{catalog}\n"
+    except Exception as exc:  # noqa: BLE001 — 窄化失败不得让生成挂掉
+        print(f"[v5_llm_generate] catalog narrowing skipped: {str(exc)[:160]}")
+        return _SCHEMA_INSTRUCTION
+
+
+# ── 请求域状态（2026-08-06 从模块级全局改过来）──────────────────────
+#
+# 下面这几项原本是**普通模块级全局**，等于整个进程共用一份。单人本地开发看
+# 不出问题，多租户并发下三条全部实测复现（并发探针，两个请求 + 三个并行 worker）：
+#
+#   _delta_sink            → 用户 A 生成的内容实时出现在用户 B 的页面上，
+#                            A 自己那边一片空白。**跨用户内容泄漏。**
+#   _installed_skills      → A 装的技能没进 A 的生成，B 的技能进去了。
+#   _last_call_error       → 三个并行 worker 互相覆盖，报错张冠李戴
+#                            （datamodel 挂了却报 rbac 挂了）。
+#   last_generate_diagnostic → 同上，跨请求互相覆盖。
+#
+# ## 为什么用 ContextVar，以及为什么其中一个必须存「可变容器」
+#
+# ContextVar 是 PEP 567 给的标准答案，且**与现有并行实现天然配套**：
+# v5_parallel_generate._run_wave 已经用 `copy_context()` + `ctx.run(...)` 把
+# 上下文传进 worker（与 OpenTelemetry 的 `context.get_current()` /
+# `context.attach()` 是同一套语义，见 opentelemetry-instrumentation-threading
+# 的 __wrap_thread_pool_submit）。
+#
+# 但那套复制的是 ContextVar 的**值**——worker 里 `var.set(x)` **不会**回传给
+# 父线程。这对 sink / skills 无所谓（父设、子读），对 _last_call_error 却是
+# 致命的：它恰恰是 worker 写、主线程读，存值会让主线程永远读到空。
+#
+# 解法照抄两个成熟实现共用的那一招：**ContextVar 存的是可变容器的引用，
+# 不是值本身**。父子共享同一个 dict，worker 改 dict 主线程看得见；不同请求
+# 各拿各的 dict，天然隔离。出处：
+#   · OpenTelemetry —— ContextVar 存 Span 引用，子任务改 Span 属性，父任务读得到
+#   · asgiref.local._CVar —— ContextVar 存 _Storage，真正的数据在 _Storage.data
+#     这个可变 dict 里（django/asgiref，asgiref/local.py）
+#
+# 顺带：容器还让「三个 worker 互相覆盖」这件事也解决了——按 section 分键存，
+# 谁的错就是谁的，不用抢同一个格子。
+
 # 最近一次生成的诊断（供 publish closure 的 blocker 面向用户透出失败原因；
 # fail-closed 判定完全不读它——它只是留痕，不参与 trust/gate）。
-last_generate_diagnostic: Dict[str, Any] = {}
+_diagnostic_var: ContextVar[Optional[Dict[str, Any]]] = ContextVar(
+    "sliderule_generate_diagnostic", default=None
+)
 
 # 实时增量回调（推演可观测性）：驱动层注册后，五系统 LLM 生成的内容增量会
 # 逐块推给它（SSE llm_delta → 前端左栏实时草稿）。只是观测钩子——不参与
 # 生成结果、gate、trust 判定；回调异常被吞掉，永不影响调用本身。
-# 注意：模块级单 sink，多会话并发时增量会交织（本地单人 dev 可接受）。
-_delta_sink: Optional[Callable[[str], None]] = None
+_delta_sink_var: ContextVar[Optional[Callable[[str], None]]] = ContextVar(
+    "sliderule_generate_delta_sink", default=None
+)
+
+# 每请求一个的错误簿：worker 线程写、主线程读，所以必须是可变容器（理由见上）。
+# 键是 section 名（并行路径）或 "default"（串行路径）。
+_error_book_var: ContextVar[Optional[Dict[str, str]]] = ContextVar(
+    "sliderule_generate_error_book", default=None
+)
+
+
+def _error_book() -> Dict[str, str]:
+    """拿到本请求的错误簿；没有就建一个并绑上去。
+
+    懒建而不是在请求入口建：这个模块有一堆入口（评测脚本、测试、直接调
+    generate_five_system_model），要求每个入口都记得初始化必然会漏，
+    漏了就退回"读不到任何错误原因"——比串号更难查。
+    """
+    book = _error_book_var.get()
+    if book is None:
+        book = {}
+        _error_book_var.set(book)
+    return book
+
+
+def _section_label(required_keys: "tuple[str, ...]") -> str:
+    """并行 worker 的错误按段归档，别让三个 worker 抢同一个格子。
+
+    并行路径每个 worker 的 required_keys 就是 (section,)，直接拿来当键。
+    """
+    return required_keys[0] if len(required_keys) == 1 else "default"
+
+
+def _record_call_error(detail: str, *, section: str = "default") -> None:
+    _error_book()[section] = detail
+
+
+def _read_call_error() -> str:
+    """汇总本请求记下的错误。并行路径下多个 section 都失败时逐条列出。"""
+    book = _error_book_var.get() or {}
+    if not book:
+        return ""
+    if len(book) == 1:
+        return next(iter(book.values()))
+    return "；".join(f"{sec}: {msg}" for sec, msg in sorted(book.items()))
 
 
 def set_generate_delta_sink(sink: "Optional[Callable[[str], None]]") -> None:
-    global _delta_sink
-    _delta_sink = sink
+    _delta_sink_var.set(sink)
 
 
-# 已安装技能（技能库六期"推演注入"）：/drive-full(-stream) 在请求进入时设置、
-# 结束后清空——与 _delta_sink 同一请求域上下文模式（同样的单进程并发注意事项）。
-_installed_skills: List[Dict[str, str]] = []
+def generate_delta_sink_scope(sink):
+    """装了自带卸的写法（抄 grok 的 SinkGuard，见 sliderule_llm/scoped.py）。
+
+    调用方优先用这个，别用上面那个裸 setter——裸 setter 要人肉记得去别处
+    补一行卸载，而且卸成 None 而不是还原成原来那个。
+    """
+    from sliderule_llm.scoped import sink_scope
+
+    return sink_scope(_delta_sink_var, sink)
 
 
-# 消费通道（2026-07-27）。此前所有已安装技能走同一条硬要求："必须落成一条
-# aigc.capabilities，字段绑定到真实实体"。对设计指导类技能这是必然的门禁
-# 失败——它们产出的是"这一页该长什么样"，不是某个实体字段的值。128 条技能
-# 逐条判定的结果见 docs/skills-triage.jsonl。
-_SKILL_CHANNELS = ("aigc", "experience", "unbound")
-_DEFAULT_SKILL_CHANNEL = "unbound"
+def get_generate_diagnostic() -> Dict[str, Any]:
+    """本请求最近一次生成的诊断。
+
+    从模块属性 `last_generate_diagnostic` 换成访问器（2026-08-06）：属性读法
+    在多租户下会读到别的请求的结果。调用方原本写的是
+    `from .v5_llm_generate import last_generate_diagnostic as _diag`——那是
+    函数内 import，每次拿的是当时的模块属性，正好跨请求串。
+    """
+    return _diagnostic_var.get() or {}
+
+
+def set_generate_diagnostic(diag: Optional[Dict[str, Any]]) -> None:
+    """给测试/评测脚本用的显式写入口（生产路径由生成函数自己写）。"""
+    _diagnostic_var.set(diag)
+
+
+# 已安装技能 / 连接器的**请求域存储与读侧**已搬到叶子 services.turn_context
+# （2026-08-29）。这里只留带注册表的清洗——搬清洗过去会让叶子不再是叶子。
+#
+# ⚠ 别在这个文件里再补一个同名 ContextVar：setter 写 A、getter 读 B 是
+#   **静默失效**（技能注入不生效 / 连接器实体没进 prompt，页面每格填「—」，
+#   不报错不告警）。判据见 tests/test_turn_context_leaf.py。
+from .turn_context import (  # noqa: F401  （下游按老路径 import，保持可用）
+    DEFAULT_SKILL_CHANNEL as _DEFAULT_SKILL_CHANNEL,
+    MAX_CONNECTORS as _MAX_CONNECTORS,
+    MAX_INSTALLED_SKILLS as _MAX_INSTALLED_SKILLS,
+    SKILL_CHANNELS as _SKILL_CHANNELS,
+    _clarifications_var,
+    _connectors_var,
+    _installed_skills_var,
+    active_connectors,
+    approved_plan_prompt_block,
+    clarification_prompt_block,
+    connector_prompt_block,
+    installed_skills_for_channel,
+    set_active_connectors_cleaned as _store_connectors,
+    set_clarifications,
+    set_approved_plan,
+    set_installed_skills_cleaned as _store_installed_skills,
+)
 
 
 def _clean_binding(raw: Any) -> str:
@@ -363,6 +670,81 @@ def _clean_binding(raw: Any) -> str:
     return f"{' + '.join(ins)} -> {out}"
 
 
+# 本轮挂着的连接器（2026-08-25）。跟 _installed_skills 同一请求域模式：
+# /drive-full(-stream) 进来时设置、结束必清空。
+#
+# ⚠ 它跟技能注入**不是同一件事**，别合并：
+#   技能给的是"这一页该怎么设计"（影响生成），
+#   连接器给的是"这张表的数据从哪来、有哪些字段"（影响运行时填什么）。
+#   所以连接器进 prompt 的是一份**逐字段的实体声明**，要求模型原样收录——
+#   字段 id 差一个字，生成期取回来的真数据就填不进页面上的孔
+#   （derive-binding-source 会老老实实每格填「—」，而 problems 是空的）。
+#（`_connectors_var` / `_MAX_CONNECTORS` 在 services.turn_context，见上面那段注释）
+
+
+def set_active_connectors(connectors: "Optional[List[Dict[str, Any]]]") -> None:
+    """设置本轮挂着的连接器（清洗后进 prompt）。传 None / 空即清空。
+
+    ⚠ 只收**后端注册表认识**的连接器 id。前端传什么都照单全收的话，
+      模型会为一个根本不存在的数据源建一张表，生成期取不到数，页面上多出
+      一张永远空着的表——不报错、不告警。
+    """
+    cleaned: List[Dict[str, Any]] = []
+    try:
+        from .connectors import get_connector
+    except Exception:
+        _store_connectors([])
+        return
+    for raw in connectors or []:
+        cid = ""
+        if isinstance(raw, str):
+            cid = raw.strip()
+        elif isinstance(raw, dict):
+            cid = str(raw.get("id") or raw.get("key") or "").strip()
+        spec = get_connector(cid) if cid else None
+        if not spec or not spec.available():
+            continue
+        if any(c["id"] == spec.id for c in cleaned):
+            continue
+        cleaned.append(
+            {
+                "id": spec.id,
+                "name": spec.name,
+                "source": spec.source,
+                "entity": spec.entity_declaration(),
+            }
+        )
+        if len(cleaned) >= _MAX_CONNECTORS:
+            break
+    _store_connectors(cleaned)
+    # 真机自证：仓里的老办法（"想验证这条还通电，在这行打一句 log"）。
+    # 一轮推演要跑十几分钟，事后翻日志比重新加探针便宜得多。
+    if cleaned:
+        print(
+            "[connectors] 本轮挂上 "
+            + "、".join(f"{c['id']}→{c['entity']['id']}" for c in cleaned),
+            flush=True,
+        )
+
+
+def clarifications_from_state(state: Any) -> List[Dict[str, str]]:
+    """从状态里捡出**答过的**澄清问答（resolved 且留了答案的 open_question）。
+
+    ⚠ 只认留了答案的。光把缺口置 resolved 不记答案，等于闸绿了而模型什么也
+      没多知道——那正是 2026-08-27 之前澄清"问了等于没问"的形态。
+    """
+    out: List[Dict[str, str]] = []
+    for gap in getattr(state, "coverageGaps", None) or []:
+        get = gap.get if isinstance(gap, dict) else lambda k, _g=gap: getattr(_g, k, None)
+        if get("kind") != "open_question" or get("status") != "resolved":
+            continue
+        q = str(get("label") or "").strip()
+        a = str(get("answer") or "").strip()
+        if q and a:
+            out.append({"q": q, "a": a})
+    return out
+
+
 def set_installed_skills(skills: "Optional[List[Dict[str, Any]]]") -> None:
     """设置本轮推演要注入的已安装技能（清洗：上限 6 条，name/description 截断）。
 
@@ -371,7 +753,6 @@ def set_installed_skills(skills: "Optional[List[Dict[str, Any]]]") -> None:
 
     传 None / 空列表即清空——无安装时生成 prompt 与历史逐字节一致。
     """
-    global _installed_skills
     cleaned: List[Dict[str, str]] = []
     for raw in skills or []:
         if not isinstance(raw, dict):
@@ -391,14 +772,9 @@ def set_installed_skills(skills: "Optional[List[Dict[str, Any]]]") -> None:
         if binding:
             entry["binding"] = binding
         cleaned.append(entry)
-        if len(cleaned) >= 6:
+        if len(cleaned) >= _MAX_INSTALLED_SKILLS:
             break
-    _installed_skills = cleaned
-
-
-def installed_skills_for_channel(channel: str) -> List[Dict[str, str]]:
-    """按通道取本轮已安装技能。体验层（identity_theme_gen）用它取设计指导。"""
-    return [s for s in _installed_skills if s.get("channel") == channel]
+    _store_installed_skills(cleaned)
 
 
 # E29 增量迭代：精修/回退上下文（与 _installed_skills 同一请求域模式）。
@@ -420,10 +796,26 @@ _model_override_var: "ContextVar[Optional[Dict[str, Any]]]" = ContextVar(
 )
 
 
-def set_refine_context(model: "Optional[Dict[str, Any]]", instruction: str = "") -> None:
-    """设置本轮精修上下文：现有五系统模型 + 用户补充指令。传 None 清空。"""
+def set_refine_context(
+    model: "Optional[Dict[str, Any]]",
+    instruction: str = "",
+    pages: "Optional[Dict[str, Any]]" = None,
+) -> None:
+    """设置本轮精修上下文：现有五系统模型 + 用户补充指令 + 上一版页面 HTML。
+
+    传 None 清空。
+
+    pages（2026-08-17 加）：上一版的 `{pageId: html}`，来自 `state.specFirstPages`。
+    给按需重画用——指令没点到的页面**原样照搬，不进 LLM**（见
+    services/refine_page_scope.py）。⚠ 它是**可选**的：取不到就退回全量重画，
+    也就是这条参数出现之前的行为，不许因为缺它就把精修打死。
+    """
     _refine_context_var.set(
-        {"model": model, "instruction": str(instruction or "").strip()[:2000]}
+        {
+            "model": model,
+            "instruction": str(instruction or "").strip()[:2000],
+            "pages": pages if isinstance(pages, dict) else None,
+        }
         if model
         else None
     )
@@ -444,7 +836,7 @@ def get_model_override() -> "Optional[Dict[str, Any]]":
 
 
 def _emit_delta(chunk: str) -> None:
-    sink = _delta_sink
+    sink = _delta_sink_var.get()
     if sink is None:
         return
     try:
@@ -453,10 +845,13 @@ def _emit_delta(chunk: str) -> None:
         pass
 
 # _default_llm_json_fn 内部最近一次调用失败的原因（LlmError / 异常文本）。
-_last_call_error: str = ""
 
 
-def _build_user_content(goal: str) -> str:
+def _build_user_content(
+    goal: str,
+    *,
+    final_instruction: str = "Produce the five-system JSON now.",
+) -> str:
     """用户消息装配：意图 + （命中时）业界参考技能块。
 
     参考块来自宽松协议开源技能语料（v5_skill_reference，技能库二期）——
@@ -481,6 +876,19 @@ def _build_user_content(goal: str) -> str:
             shape = f" [field shape: {skill['binding']}]" if skill.get("binding") else ""
             lines.append(f"- {skill['name']}{desc}{shape}")
         parts.append("\n".join(lines))
+    # ①a 本轮挂着的连接器（硬要求）：实体声明必须原样收录，见
+    # connector_prompt_block 的注释——字段 id 差一个字，真数据就填不进孔。
+    conn_block = connector_prompt_block()
+    if conn_block:
+        parts.append(conn_block)
+    # ①a2 开工前用户答过的澄清（硬约束）：问过就得算数，见
+    # clarification_prompt_block 的注释——不带这块，澄清就只是让用户多点几下。
+    clarify_block = clarification_prompt_block()
+    if clarify_block:
+        parts.append(clarify_block)
+    plan_block = approved_plan_prompt_block()
+    if plan_block:
+        parts.append(plan_block)
     # ①b 未验证绑定的已安装技能（软参考）：明确写"不要为它硬造能力卡"。
     # 从前它们跟上面混在一条 REQUIRED 里，模型只能二选一——要么编一个绑不上
     # 的能力被门禁拦，要么硬塞进无关实体。两种都比不提要求更糟。
@@ -495,8 +903,8 @@ def _build_user_content(goal: str) -> str:
             desc = f" — {skill['description']}" if skill["description"] else ""
             lines.append(f"- {skill['name']}{desc}")
         parts.append("\n".join(lines))
-    # experience 通道不进这条 prompt：它喂的是过门之后的体验层
-    #（identity_theme_gen 读 installed_skills_for_channel("experience")）。
+    # experience 通道不进这条 prompt：活路径是风格段
+    #（design_language.experience_skill_constraint），不当种子色。
     # ②业界参考技能（软参考）：只借命名与 IO 风格
     try:
         from .v5_skill_reference import reference_prompt_block
@@ -529,20 +937,56 @@ def _build_user_content(goal: str) -> str:
         parts.append(
             "REFINE MODE — an approved five-system model for this app already "
             "exists. Apply the user's follow-up instruction as a MINIMAL "
-            "incremental edit on top of it. Keep every id/field not affected "
-            "by the instruction byte-identical. If the instruction does not "
-            "ask for any design change, return the current model unchanged.\n"
+            "incremental edit on top of it.\n"
             f"Current model JSON:\n{model_json}\n"
             f"Follow-up instruction:\n{refine_ctx['instruction']}"
         )
-    parts.append("Produce the five-system JSON now.")
+        # ⚠ 精修模式下**换掉收尾那句**（2026-08-16 线上实测）。
+        #
+        # 默认收尾是 "Produce the complete SystemContract JSON now."——它跟上面
+        # 那段 "return the current model unchanged / keep byte-identical" 直接
+        # 打架，而且它在**最后**。LLM 对末尾指令权重最高，于是照着"产出完整的"
+        # 干，把整份模型重写一遍。
+        #
+        # 真机证据（sr-20260816113435）：用户只说「预警消息中心的消息流没有
+        # 数据」，产出的 mv-2 **六段指纹全变**，一段没留；菜单从
+        # 「守望地图首页/预警消息中心/拐杖参数配置页」换成
+        # 「监护实时看护舱/志愿者接单大厅/安全与硬件设置页」——**用户提的那
+        # 一页直接不存在了**。
+        #
+        # 这跟 build_design_system_prompt_block 当初那个是同一个形状：约束被埋
+        # 在中间，后面的话把它盖掉。那次的修法是把契约挪到最后并写明"冲突时
+        # 以这一节为准"，这里同理——但不动块顺序（顺序会影响别的分支），
+        # 只把最后一句换成不打架的措辞。
+        # ★ 只要补丁，不要整份（2026-08-16 晚，RFC 7386）。
+        #
+        # 上一版这里要的是"完整模型，但只改一处"——线上干净复测
+        # （sr-20260816201658）证明这条路到头了：菜单保住了 3/3，**六段指纹仍
+        # 然全变**，包括跟指令毫不相干的 workflow / rbac，而那轮指令里明写着
+        # 「其他页面不要动」。
+        #
+        # 换成要 Merge Patch：模型**只被允许输出要改的那部分**，其余由代码从基线
+        # 合并。没提到的段想变也变不了——从"求它自觉"变成"结构上做不到"。
+        #
+        # 模型不配合、还是吐了整份时：合并等价于整份替换，行为退化成修复前，
+        # **不会更糟**（见 merge_patch.looks_like_full_model 的说明）。
+        final_instruction = (
+            "Return a JSON Merge Patch (RFC 7386) against the current model "
+            "above — NOT the full model. Include ONLY the keys you need to "
+            "change; every key you omit keeps its current value automatically. "
+            "Keep the same nesting shape as the model (top-level keys are "
+            "datamodel / workflow / rbac / page / aigc / appbundle; include a "
+            "top-level key ONLY if the instruction requires changing inside it). "
+            "Arrays are replaced wholesale, so when you touch an array include "
+            "all of its items. Output the patch object only."
+        )
+    parts.append(final_instruction)
     return "\n\n".join(parts)
 
 
 def _structured_llm_json_fn(messages: list) -> Optional[Dict[str, Any]]:
     """P3 结构化通道（instructor 错误回喂）：校验失败把「上次输出+具体报错」
     拼回消息让模型自我修正——替代盲重采样。失败返回 None（调用方回落/留痕）。"""
-    global _last_call_error
     try:
         from sliderule_llm.structured import (
             StructuredLlmError,
@@ -558,13 +1002,64 @@ def _structured_llm_json_fn(messages: list) -> Optional[Dict[str, Any]]:
             messages,
             required_keys=_REQUIRED_SECTIONS,
             temperature=0.2,
-            max_tokens=8000,
+            max_tokens=default_max_tokens(),
             max_retries=2,
         )
         return parsed if isinstance(parsed, dict) else None
     except StructuredLlmError as exc:
         print(f"[v5_llm_generate] structured channel failed: {str(exc)[:200]}")
-        _last_call_error = f"structured: {str(exc)[:160]}"
+        _record_call_error(f"structured: {str(exc)[:160]}")
+        return None
+
+
+def _parallel_json_call(
+    messages: list[dict[str, str]],
+    required_keys: tuple[str, ...],
+    max_tokens: int | None,
+) -> Optional[Dict[str, Any]]:
+    """Structured, non-streaming worker call used by the bounded model DAG.
+
+    Raw token deltas from concurrent JSON workers cannot be interleaved into one
+    valid preview stream. Progress is exposed through the per-node timing/SSE
+    stages instead; the final assembled model still follows the existing stream.
+    """
+    effective_max_tokens = wider_output_budget(max_tokens, default_max_tokens())
+    try:
+        from sliderule_llm.structured import (
+            StructuredLlmError,
+            structured_llm_enabled,
+            structured_llm_json,
+        )
+
+        if structured_llm_enabled():
+            try:
+                return structured_llm_json(
+                    messages,
+                    required_keys=required_keys,
+                    temperature=0.2,
+                    max_tokens=effective_max_tokens,
+                    max_retries=1,
+                )
+            except StructuredLlmError as exc:
+                _record_call_error(f"structured: {str(exc)[:160]}", section=_section_label(required_keys))
+    except Exception:
+        pass
+
+    try:
+        from sliderule_llm.client import call_llm_json_with_shape
+
+        parsed, _result = call_llm_json_with_shape(
+            messages,
+            required_keys=required_keys,
+            max_shape_retries=1,
+            temperature=0.2,
+            max_tokens=effective_max_tokens,
+            backoff_ms=2000,
+            on_delta=None,
+        )
+        return parsed if isinstance(parsed, dict) else None
+    except Exception as exc:  # noqa: BLE001
+        _record_call_error(f"{type(exc).__name__}: {str(exc)[:160]}", section=_section_label(required_keys))
         return None
 
 
@@ -577,12 +1072,11 @@ def _default_llm_json_fn(goal: str, gate_feedback: Optional[str] = None) -> Opti
     - 有流式 sink（交互 UI 要 llm_delta 直播）：旧流式通道优先保直播，
       失败用结构化通道救场（少看一段直播，换回一个能用的模型）。
     """
-    global _last_call_error
-    _last_call_error = ""
+    _error_book().clear()
     try:
         from sliderule_llm.client import call_llm_json_with_shape, LlmError
     except Exception as exc:
-        _last_call_error = f"llm client unavailable: {str(exc)[:160]}"
+        _record_call_error(f"llm client unavailable: {str(exc)[:160]}")
         return None
     user_content = _build_user_content(goal)
     if gate_feedback:
@@ -595,10 +1089,10 @@ def _default_llm_json_fn(goal: str, gate_feedback: Optional[str] = None) -> Opti
             + gate_feedback
         )
     messages = [
-        {"role": "system", "content": _SCHEMA_INSTRUCTION},
+        {"role": "system", "content": schema_instruction_for(goal)},
         {"role": "user", "content": user_content},
     ]
-    streaming = _delta_sink is not None
+    streaming = _delta_sink_var.get() is not None
     if not streaming:
         parsed = _structured_llm_json_fn(messages)
         if parsed is not None:
@@ -611,12 +1105,13 @@ def _default_llm_json_fn(goal: str, gate_feedback: Optional[str] = None) -> Opti
             temperature=0.2,
             # 多链路 + 不变式后契约变大（原 4000 面向单链路模型）；截断会直接
             # 变成 shape 失败 → 重试 → fail-closed，宁可放宽。
-            max_tokens=8000,
+            # 推理模型还要再放宽一截——思考和正文共用这个预算（见 config.DEFAULT_MAX_TOKENS）。
+            max_tokens=default_max_tokens(),
             # 瞬时错误（网关 502/503/超时）退避拉长：默认 200ms 扛不过几秒级
             # 的网关抖动（线上案例：blackaicoding 502 连吃三发）。
             backoff_ms=2000,
             # sink 已注册时走流式：内容增量实时推给 UI（llm_delta）。
-            on_delta=_emit_delta if _delta_sink is not None else None,
+            on_delta=_emit_delta if _delta_sink_var.get() is not None else None,
         )
         return parsed if isinstance(parsed, dict) else None
     except LlmError as exc:
@@ -630,13 +1125,69 @@ def _default_llm_json_fn(goal: str, gate_feedback: Optional[str] = None) -> Opti
                 return rescued
         from services.llm_error_text import humanize_llm_error
 
-        _last_call_error = f"LlmError: {humanize_llm_error(str(exc))[:180]}"
+        _record_call_error(f"LlmError: {humanize_llm_error(str(exc))[:180]}")
         print(f"[v5_llm_generate] LlmError: {str(exc)[:200]}")
         return None
     except Exception as exc:  # noqa: BLE001
-        _last_call_error = f"{type(exc).__name__}: {str(exc)[:180]}"
+        _record_call_error(f"{type(exc).__name__}: {str(exc)[:180]}")
         print(f"[v5_llm_generate] unexpected error: {str(exc)[:200]}")
         return None
+
+
+def _refine_merge_patch_enabled() -> bool:
+    """默认开。留开关是因为它改的是生成契约本身，线上出事要能一条环境变量退回。
+
+    ⚠ 2026-08-29：原来这里是 `默认 "1"` 配 `in ("1","true","yes","on")` ——
+      **默认开，却拿"开"的词表解析**。拼错一个字母（`ture` / `enable`）落到
+      else，这根应急闸就**把自己静静地扳掉了**，不报错不打日志。
+      收进 env_flags.flag 之后：认不出来的值回落到声明的默认（True），并喊一声。
+    """
+    from .env_flags import flag
+
+    return flag("SLIDERULE_REFINE_MERGE_PATCH", default=True)
+
+
+def _apply_refine_patch(model: "Optional[Dict[str, Any]]") -> "Optional[Dict[str, Any]]":
+    """精修模式：把 LLM 交回的补丁合并回基线；非精修原样放行。
+
+    三条防线，任何一条不成立都退回"原样返回"，绝不把一次能跑的生成搞崩：
+      · 没开开关 / 不在精修模式 / 拿不到基线 → 原样
+      · 模型无视要求吐了整份（六段齐全）→ 合并等价整份替换，行为同修复前
+      · 合并本身抛异常 → 原样（这是优化，不是必经之路）
+    """
+    if not isinstance(model, dict) or not model:
+        return model
+    if not _refine_merge_patch_enabled():
+        return model
+    ctx = get_refine_context()
+    base = (ctx or {}).get("model") if isinstance(ctx, dict) else None
+    if not isinstance(base, dict) or not base:
+        return model
+    try:
+        from .merge_patch import looks_like_full_model, merge_patch, patch_touches
+
+        touched = patch_touches(model)
+        if looks_like_full_model(model, _REQUIRED_SECTIONS):
+            # ⚠ 六段齐全 = 模型没按补丁交付。这时**不能合并**。
+            #
+            # 写这段时我一度以为"合并等价于整份替换，退化成修复前"，测试当场
+            # 打脸：Merge Patch 是**递归**合并，整份补丁会跟基线逐键混合，
+            # 基线里那些新版本本该丢掉的键会留下来——拿到的是缝合怪，
+            # 比整份替换更糟。
+            #
+            # 所以这里按整份走，行为与修复前一致：不配合就优雅降级，不发明
+            # 一个两者都不是的第三种东西。
+            print(f"[v5_llm_generate] 精修：模型交回整份（六段齐全），按整份处理不合并")
+            return model
+        merged = merge_patch(base, model)
+        kept = [s for s in _REQUIRED_SECTIONS if s not in touched]
+        print(
+            f"[v5_llm_generate] 精修合并（RFC 7386）：补丁动了 {touched}，未触及 {kept}"
+        )
+        return merged if isinstance(merged, dict) else model
+    except Exception as exc:  # noqa: BLE001 — 合并是优化，炸了不能拖垮生成
+        print(f"[v5_llm_generate] 精修合并失败，按整份处理：{str(exc)[:160]}")
+        return model
 
 
 def generate_five_system_model(
@@ -657,16 +1208,34 @@ def generate_five_system_model(
     `gate_feedback`（E37）：上一版模型的结构门裁决文本。只作用于默认 LLM
     通道（注入 fn 的测试路径不受影响）——喂回后 LLM 定向改错重生成。
     """
-    global last_generate_diagnostic
-    last_generate_diagnostic = {}
+    _diagnostic_var.set({})
     if not (goal or "").strip():
         return None
     # E29 版本回退：直供模型即生成结果（结构闸仍由调用方照常执行）
     model_override = get_model_override()
     if model_override is not None:
-        last_generate_diagnostic = {"outcome": "ok"}
+        _diagnostic_var.set({"outcome": "ok"})
         return dict(model_override)
-    if llm_json_fn is None and gate_feedback:
+    use_parallel = False
+    if llm_json_fn is None and not gate_feedback and get_refine_context() is None:
+        try:
+            from .v5_parallel_generate import parallel_generation_enabled
+
+            use_parallel = parallel_generation_enabled()
+        except Exception:
+            use_parallel = False
+    if use_parallel:
+        from .v5_parallel_generate import generate_parallel_five_system_model
+
+        fn = lambda g: generate_parallel_five_system_model(
+            g,
+            user_context=_build_user_content(
+                g,
+                final_instruction="Produce the complete SystemContract JSON now.",
+            ),
+            call_json=_parallel_json_call,
+        )
+    elif llm_json_fn is None and gate_feedback:
         fn: Callable[[str], Optional[Dict[str, Any]]] = (
             lambda g: _default_llm_json_fn(g, gate_feedback=gate_feedback)
         )
@@ -674,29 +1243,52 @@ def generate_five_system_model(
         fn = llm_json_fn or _default_llm_json_fn
     # 一次有界重试：并发/限流下的瞬时失败不该直接变成永久 publish blocked
     # （fail-closed 语义保留：两次都失败仍返回 None）。注入 fn 的测试不受影响。
-    attempts = 2 if llm_json_fn is None else 1
+    # Each parallel node already has transport/shape retries. Re-running the
+    # complete DAG here would repeat every successful section and defeat the
+    # section-level repair path in the caller.
+    attempts = 1 if use_parallel else (2 if llm_json_fn is None else 1)
     last_detail = ""
-    for attempt in range(attempts):
-        try:
-            model = fn(goal)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[v5_llm_generate] attempt {attempt + 1}/{attempts} raised: {str(exc)[:200]}")
-            last_detail = f"{type(exc).__name__}: {str(exc)[:180]}"
-            model = None
-        if isinstance(model, dict) and all(section in model for section in _REQUIRED_SECTIONS):
-            last_generate_diagnostic = {"outcome": "ok"}
-            return model
-        if model is not None:
-            print(f"[v5_llm_generate] attempt {attempt + 1}/{attempts} returned incomplete model (missing sections)")
-            last_detail = "LLM 返回的模型缺少必需的五系统段"
-        else:
-            print(f"[v5_llm_generate] attempt {attempt + 1}/{attempts} returned no model")
-            last_detail = _last_call_error or last_detail or "LLM 未返回模型"
-        if attempt + 1 < attempts:
-            import time as _time
+    # 埋点范围是**整个重试循环**，不是单次 fn(goal)（2026-08-05）。
+    #
+    # 对着屏幕等的人要知道的是"建模这件事进行到哪了"，不是"这是第几次调用"。
+    # 一次失败重试在 SSE 上应该表现为同一个阶段耗时更长，而不是同一条步骤
+    # 闪两遍——后者看着像出错了。真正的失败次数走日志与下面的 used 字段。
+    #
+    # ⚠ `attempts` 打的是**上面那行算出来的预算**，不是这一趟试了几次：不管
+    # 成功失败它恒等于 1 或 2。实际次数是成功分支里写的 `_st["used"]`。
+    # 2026-08-11 有人把日志里的 `attempts=2` 读成"每趟都重试了一次"，据此推断
+    # "每次生成白花一倍时间"并去查根因，而同一行的 `used=1` 一直写着答案
+    # （七趟全是 1，都是一次成功）。两个字段挨着打、名字又都像次数，很容易读反
+    # ——enrich_timing.py 的模块头为此专门加了一段。
+    stage_name = "model.regenerate" if gate_feedback else "model.generate"
+    with _enrich_stage(stage_name, attempts=attempts, current=1, total=1) as _st:
+        for attempt in range(attempts):
+            try:
+                model = fn(goal)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[v5_llm_generate] attempt {attempt + 1}/{attempts} raised: {str(exc)[:200]}")
+                last_detail = f"{type(exc).__name__}: {str(exc)[:180]}"
+                model = None
+            # ★ 精修模式下，LLM 交回的是**补丁**，在这里合并回基线（RFC 7386）。
+            #   放在完整性校验之前：补丁只含一两段，直接过校验必然判"缺段"。
+            #   合并之后拿到的是完整模型，后面的闸一条都不用改。
+            model = _apply_refine_patch(model)
+            if isinstance(model, dict) and all(section in model for section in _REQUIRED_SECTIONS):
+                _diagnostic_var.set({"outcome": "ok"})
+                _st["used"] = attempt + 1
+                return model
+            if model is not None:
+                print(f"[v5_llm_generate] attempt {attempt + 1}/{attempts} returned incomplete model (missing sections)")
+                last_detail = "LLM 返回的模型缺少必需的五系统段"
+            else:
+                print(f"[v5_llm_generate] attempt {attempt + 1}/{attempts} returned no model")
+                last_detail = _read_call_error() or last_detail or "LLM 未返回模型"
+            if attempt + 1 < attempts:
+                import time as _time
 
-            _time.sleep(2.0)
-    last_generate_diagnostic = {"outcome": "failed", "detail": last_detail}
+                _time.sleep(2.0)
+        _st["used"] = attempts
+    _diagnostic_var.set({"outcome": "failed", "detail": last_detail})
     return None
 
 

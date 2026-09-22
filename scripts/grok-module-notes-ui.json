@@ -1,0 +1,832 @@
+{
+  "schema_version": 1,
+  "generated_for": "grok-build UI and session-control detailed module documentation",
+  "source_root": "C:/Users/wangchunji/Documents/grok-build",
+  "evidence_rule": "All source paths are relative to the grok-build crate root. Symbols named in flows exist in the cited file. Descriptions come from source comments, exported modules, Cargo metadata, and call sites read on 2026-09-11.",
+  "crates": [
+    {
+      "crate": "xai-grok-pager",
+      "purpose": "Grok Build 的全屏终端 UI。它持有欢迎页、多个会话、每会话的滚动历史和交互卡片，并把终端输入和 ACP 通知变成同步状态更新与异步 Effect。README 明确描述为 scrollback、prompt、session management 和 modal dialogs 的交互界面。",
+      "boundaries": {
+        "owns": [
+          "TUI 状态和键鼠输入路由",
+          "视图状态、渲染组合、终端启动/退出",
+          "Action 到 Effect 的纯同步分发",
+          "ACP 客户端状态与通知显示"
+        ],
+        "does_not_own": [
+          "agent 运行、LLM 采样和会话持久化语义（xai-grok-shell）",
+          "工具定义和执行实现（xai-grok-tools）",
+          "共享绘制原语和终端能力探测（xai-grok-pager-render）"
+        ]
+      },
+      "subsystems": [
+        {
+          "path": "src/app/mod.rs",
+          "responsibility": "应用入口和 terminal lifecycle；文件头给出 app、agent_view、app_view、dispatch、effects、acp_handler、event_loop 的责任边界。",
+          "symbols": [
+            "run"
+          ]
+        },
+        {
+          "path": "src/app/event_loop.rs",
+          "responsibility": "薄 IO 循环；注释明确只处理 terminal event、ACP channel、task result、animation tick、热加载配置，把输入和状态交给 AppView。",
+          "symbols": [
+            "run"
+          ]
+        },
+        {
+          "path": "src/app/app_view.rs",
+          "responsibility": "根视图模型，保有 active view、agent map、dashboard 和欢迎页状态；统一输入路由与最后绘制。",
+          "symbols": [
+            "AppView",
+            "AppView::handle_input",
+            "AppView::draw"
+          ]
+        },
+        {
+          "path": "src/app/agent_view/",
+          "responsibility": "每个 agent/session 的视图模型：prompt、scrollback、工具面板、交互卡、modal 和页面内输入。",
+          "symbols": [
+            "AgentView"
+          ]
+        },
+        {
+          "path": "src/app/dispatch/mod.rs",
+          "responsibility": "纯同步 Action -> 状态变更 + Vec<Effect>；文件注释明示不能触碰 terminal、network 或 filesystem，因此可脱离 tokio/终端测试。",
+          "symbols": [
+            "dispatch"
+          ]
+        },
+        {
+          "path": "src/app/actions.rs",
+          "responsibility": "定义 Action、Effect 和 TaskResult；effects 子系统执行这些 Effect 并把完成结果送回 event loop。",
+          "symbols": [
+            "Effect"
+          ]
+        },
+        {
+          "path": "src/app/acp_handler/",
+          "responsibility": "ACP notification 到本地 UI 状态的路由，包含 permissions、interactions、MCP、subagent lifecycle、settings 和 workflow ingest。",
+          "symbols": [
+            "AcpClientMessage"
+          ]
+        },
+        {
+          "path": "src/scrollback/",
+          "responsibility": "会话消息、工具输出和历史记录的渲染与缓存。",
+          "symbols": [
+            "ScrollbackState"
+          ]
+        },
+        {
+          "path": "src/slash/registry.rs",
+          "responsibility": "slash command registry 与内置命令。",
+          "symbols": [
+            "CommandRegistry"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "全屏交互主链",
+          "steps": [
+            {
+              "path": "src/app/mod.rs",
+              "symbol": "run",
+              "detail": "初始化终端、应用状态和 ACP/任务通道。"
+            },
+            {
+              "path": "src/app/event_loop.rs",
+              "symbol": "run",
+              "detail": "biased tokio select 接收终端、ACP、任务和 tick；本身只做 IO 编排。"
+            },
+            {
+              "path": "src/app/app_view.rs",
+              "symbol": "AppView::handle_input",
+              "detail": "按当前欢迎页、dashboard、agent 或 overlay 把键鼠事件交给拥有状态的视图。"
+            },
+            {
+              "path": "src/app/dispatch/mod.rs",
+              "symbol": "dispatch",
+              "detail": "同步变更状态，返回 Effect；不直接执行外部副作用。"
+            },
+            {
+              "path": "src/app/app_view.rs",
+              "symbol": "AppView::draw",
+              "detail": "最终由根视图按 active view 组合 welcome、dashboard、agent 和 overlay。"
+            }
+          ]
+        },
+        {
+          "name": "模型发起的问答：请求、状态和回复",
+          "steps": [
+            {
+              "path": "src/app/acp_handler/interactions.rs",
+              "symbol": "handle_ask_user_question",
+              "detail": "解析 AskUserQuestionExtRequest，找到对应 AgentView，替换旧问题时回复取消，并保存新的响应通道。Hook 阻塞提示走 turn_completion 的另一条本地卡路径。"
+            },
+            {
+              "path": "src/views/question_view.rs",
+              "symbol": "QuestionViewState::with_response_tx",
+              "detail": "保存问题、选择和 oneshot 响应通道，让 UI 交互与待回复工具调用关联。"
+            },
+            {
+              "path": "src/views/question_view.rs",
+              "symbol": "QuestionViewState::build_accepted_response",
+              "detail": "将选项、自由文本与用户补充组装成 Accepted 响应。"
+            },
+            {
+              "path": "src/views/question_view.rs",
+              "symbol": "QuestionViewState::send_ext_response",
+              "detail": "通过保存的响应通道交回结构化答案；恢复工具调用由 ACP/shell 消费端完成。"
+            }
+          ]
+        },
+        {
+          "name": "计划批准：保持独立响应合同",
+          "steps": [
+            {
+              "path": "src/app/acp_handler/interactions.rs",
+              "symbol": "handle_exit_plan_mode",
+              "detail": "接收计划审阅请求，处理遮挡与冲突，把计划卡安装到对应会话。"
+            },
+            {
+              "path": "src/views/plan_approval_view.rs",
+              "symbol": "PlanApprovalViewState::with_source",
+              "detail": "保存计划来源、会话草稿和回复通道。"
+            },
+            {
+              "path": "src/views/plan_approval_view.rs",
+              "symbol": "PlanApprovalViewState::send_approved",
+              "detail": "批准时生成 Approved；其他出口为 send_abandoned 和带反馈的 send_cancelled，不能都变成同一种错误。"
+            },
+            {
+              "path": "src/views/plan_approval_view.rs",
+              "symbol": "send_exit_plan_response",
+              "detail": "序列化结构化回复交给 ACP；这条协议与问卷答案协议分别维护。"
+            }
+          ]
+        }
+      ],
+      "views_registry": {
+        "registration_path": "src/views/mod.rs",
+        "runtime_owners": [
+          "src/app/app_view.rs: AppView 保存 welcome/dashboard/session picker 等根状态并在 draw 中选择视图",
+          "src/app/agent_view/: AgentView 保存每 session 的 prompt、scrollback、question、plan approval、permission 等状态",
+          "src/app/dispatch/: 将 Action 作用于上述状态；src/app/event_loop.rs 再调度 Effect"
+        ],
+        "split_basis": [
+          {
+            "group": "会话主表面",
+            "entries": [
+              "agent",
+              "prompt_widget",
+              "dashboard",
+              "scrollback"
+            ],
+            "reason": "AppView/AgentView 的长期状态拥有者；不应当被拆成只会画 UI 的无状态组件。"
+          },
+          {
+            "group": "模型交互卡",
+            "entries": [
+              "question_view",
+              "plan_approval_view",
+              "permission_view",
+              "elicitation_view"
+            ],
+            "reason": "都需要阻止或恢复 turn，必须带着 state、输入处理和结果协议一起拆；不能只搬 render 函数。"
+          },
+          {
+            "group": "管理/设置类 modal",
+            "entries": [
+              "agents_modal",
+              "extensions_modal",
+              "mcps_modal",
+              "memory_modal",
+              "settings_modal",
+              "usage_modal",
+              "feedback_modal",
+              "import_claude_modal"
+            ],
+            "reason": "适合按业务域拆；每个模块通常包含 State、render、键鼠 handler 与 dispatch Action。"
+          },
+          {
+            "group": "导航和选择",
+            "entries": [
+              "picker",
+              "session_picker",
+              "session_picker_surface",
+              "file_search",
+              "history_search",
+              "slash_dropdown",
+              "jump",
+              "rewind"
+            ],
+            "reason": "共享筛选、焦点、按键语义，拆分时应保留选择器状态与命令来源。"
+          },
+          {
+            "group": "附属面板/状态",
+            "entries": [
+              "tasks_pane",
+              "todo_pane",
+              "queue_pane",
+              "subagent_catalog_pane",
+              "timeline",
+              "goal_detail",
+              "workflows",
+              "status_line"
+            ],
+            "reason": "由主会话状态投影；应以只读 selector + 呈现层接入，而不是各自改写会话状态。"
+          },
+          {
+            "group": "呈现 chrome",
+            "entries": [
+              "announcements",
+              "context_bar",
+              "credit_bar",
+              "progress_bar",
+              "shortcuts_bar",
+              "status_bar",
+              "turn_status",
+              "privacy_banner",
+              "fps_hud",
+              "scroll_debug_hud"
+            ],
+            "reason": "通常没有完整业务生命周期，可作为可复用显示组件，但仍要保留应用层输入/开关来源。"
+          }
+        ]
+      },
+      "reuse": {
+        "whybuddy_paths": [
+          "client/src/pages/sliderule/QuestionnaireCard.tsx",
+          "client/src/pages/sliderule/__tests__/questionnaire-session.test.tsx",
+          "slide-rule-python/services/rehearsal_control.py",
+          "slide-rule-python/services/v5_session_driver.py",
+          "slide-rule-python/tests/test_control_plan_approval.py",
+          "client/src/lib/__tests__/plan-approval-stream.test.ts"
+        ],
+        "can_borrow": [
+          "用 Action/Effect 分界把 UI 状态变化和网络/SSE 副作用分开。",
+          "把问卷、计划批准、权限选择都当成会话暂停状态，而不是普通浮层。",
+          "建立面板注册表、状态拥有者和输入路由三张表；五十多个面板才能追踪到运行时入口。"
+        ],
+        "migration_constraints": [
+          "Grok pager 是 Ratatui TUI，WhyBuddy 是 React + SSE；可借状态机、协议和测试边界，不能复制终端渲染代码。",
+          "页面卡片必须接到 Python 控制面真实 park/resume 链路，而不能只加入前端组件。"
+        ]
+      },
+      "pitfalls": [
+        "views/mod.rs 的导出不等于独立页面；一个视图还必须在 AppView 或 AgentView 中有状态、输入路由和 draw 调用。",
+        "dispatch 的纯函数边界是 pager 可测的核心，直接把网络调用塞进卡片 handler 会破坏它。",
+        "Question、plan approval、feedback modal 有抢占关系；只移植问卷 UI 会漏掉 turn 被阻塞和恢复的语义。"
+      ]
+    },
+    {
+      "crate": "xai-grok-pager-render",
+      "purpose": "从 pager 抽出的终端呈现原语层：theme/appearance、键鼠正规化、terminal capability、clipboard、图片/视频 overlay、滚动条、文本折行和 frame writer。它不是业务面板库。",
+      "boundaries": {
+        "owns": [
+          "终端能力探测与输入正规化",
+          "theme 与 appearance 配置",
+          "绘制原语、文本/媒体 overlay、clipboard 路由"
+        ],
+        "does_not_own": [
+          "会话状态、Action/Effect、模型问答/权限决策",
+          "具体业务 modal 的生命周期"
+        ]
+      },
+      "subsystems": [
+        {
+          "path": "src/appearance/",
+          "responsibility": "AppearanceConfig、原始配置解析、缓存、watcher、滚动/选择/mermaid 开关。",
+          "symbols": [
+            "AppearanceConfig",
+            "ConfigWatcher"
+          ]
+        },
+        {
+          "path": "src/input/",
+          "responsibility": "键盘 modifier 探测和归一化、行编辑、鼠标滚动。",
+          "symbols": [
+            "KeyboardNormalizer",
+            "LineEditor"
+          ]
+        },
+        {
+          "path": "src/terminal/",
+          "responsibility": "terminal/multiplexer 识别、keyboard/image/hyperlink capability 与 overlay escape 序列。",
+          "symbols": [
+            "TerminalContext",
+            "render_kitty_image",
+            "render_iterm2_image"
+          ]
+        },
+        {
+          "path": "src/render/",
+          "responsibility": "draw frame、折行、ANSI 终端输出、图片/视频/preview overlay、scrollbar。",
+          "symbols": [
+            "draw_frame",
+            "render_scrollbar",
+            "render_preview_overlay"
+          ]
+        },
+        {
+          "path": "src/theme/",
+          "responsibility": "主题定义、系统明暗外观、颜色能力和缓存。",
+          "symbols": [
+            "Theme"
+          ]
+        },
+        {
+          "path": "src/clipboard/",
+          "responsibility": "本地/OSC52 clipboard 探测、信任和复制路由。",
+          "symbols": [
+            "ClipboardRoute",
+            "SystemClipboard"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "终端一帧呈现",
+          "steps": [
+            {
+              "path": "src/appearance/cache.rs",
+              "symbol": "load",
+              "detail": "读取运行时 UI 配置缓存。"
+            },
+            {
+              "path": "src/theme/tokyonight.rs",
+              "symbol": "Theme",
+              "detail": "把已解析外观提供给视图层。"
+            },
+            {
+              "path": "src/render/draw.rs",
+              "symbol": "draw_frame",
+              "detail": "把 Ratatui buffer 写到终端。"
+            }
+          ]
+        },
+        {
+          "name": "终端输入到可用事件",
+          "steps": [
+            {
+              "path": "src/terminal/mod.rs",
+              "symbol": "TerminalContext",
+              "detail": "描述终端及 multiplexer 环境。"
+            },
+            {
+              "path": "src/input/keyboard_normalizer.rs",
+              "symbol": "KeyboardNormalizer",
+              "detail": "根据探测到的 modifier 行为标准化按键。"
+            },
+            {
+              "path": "src/input/mouse.rs",
+              "symbol": "MouseScrollState",
+              "detail": "维护滚动事件的状态和调试摘要。"
+            }
+          ]
+        }
+      ],
+      "reuse": {
+        "whybuddy_paths": [
+          "client/src/runtime/browser-runtime.ts",
+          "client/src/components/sandbox/TerminalPreview.tsx",
+          "client/src/components/sandbox/ScreenshotPreview.tsx"
+        ],
+        "can_borrow": [
+          "把浏览器/终端能力探测、主题配置、输入正规化放到共享 runtime 层。",
+          "将媒体预览、滚动和可访问性原语与业务卡片解耦。"
+        ],
+        "migration_constraints": [
+          "Ratatui Buffer/escape sequence 不可直接用于 Web；WhyBuddy 应把这层翻译成 browser capability、DOM/CSS 和 iframe 生命周期，而非移植 Rust renderer。"
+        ]
+      },
+      "pitfalls": [
+        "pager-render 依赖 pager/workspace/tools 的类型，名字叫 render 但不是一个完全无依赖的 design system。",
+        "不要把它误当作浏览器 sandbox；它解决的是 TUI terminal 的兼容性。"
+      ]
+    },
+    {
+      "crate": "xai-grok-pager-pty-harness",
+      "purpose": "pager 的真实 PTY E2E、性能和复现场景库。它启动真实 pager binary，在伪终端注入键鼠/调整尺寸，用终端模拟器读取用户实际看到的屏幕，并以 mock inference 驱动完整流。",
+      "boundaries": {
+        "owns": [
+          "PTY spawn、键鼠注入、屏幕追踪、帧耗时",
+          "mock inference、脚本场景、baseline 对比和视觉产物"
+        ],
+        "does_not_own": [
+          "生产 pager 功能",
+          "浏览器应用的 sandbox/Playwright 运行时"
+        ]
+      },
+      "subsystems": [
+        {
+          "path": "src/lib.rs",
+          "responsibility": "统一 facade；文档明确服务 regression scenario、benchmark 和本地问题复现三类消费者。",
+          "symbols": [
+            "PtyHarness",
+            "PtyHarness::spawn_with_content",
+            "PtyHarness::update",
+            "PtyHarness::wait_for_text"
+          ]
+        },
+        {
+          "path": "src/pty.rs",
+          "responsibility": "真实进程 PTY 控制、输入、resize 和退出等待。",
+          "symbols": [
+            "PtyController"
+          ]
+        },
+        {
+          "path": "src/screen.rs",
+          "responsibility": "通过 alacritty_terminal 维护用户可见的虚拟终端屏幕。",
+          "symbols": [
+            "ScreenTracker"
+          ]
+        },
+        {
+          "path": "src/content.rs",
+          "responsibility": "mock inference endpoint 与按请求匹配的 scripted SSE 响应。",
+          "symbols": [
+            "ContentController"
+          ]
+        },
+        {
+          "path": "src/scripted.rs",
+          "responsibility": "YAML/结构化 scenario 的步骤、错误和视觉产物。",
+          "symbols": [
+            "ScriptedScenarioRunner",
+            "ScriptedScenarioRunner::run"
+          ]
+        },
+        {
+          "path": "src/scenarios/",
+          "responsibility": "streaming render、mixed interaction、resize storm、scroll stress、plan approval resume 等命名 workload。",
+          "symbols": [
+            "Scenario"
+          ]
+        },
+        {
+          "path": "src/scroll_matrix/",
+          "responsibility": "接收 GROK_SCROLL_LOG JSONL，组合输入矩阵并生成滚动验证报告。",
+          "symbols": [
+            "run_cell"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "真实 TUI 场景验证",
+          "steps": [
+            {
+              "path": "src/lib.rs",
+              "symbol": "PtyHarness::spawn_with_content",
+              "detail": "从测试环境启动 pager 并挂接 mock inference。"
+            },
+            {
+              "path": "src/pty.rs",
+              "symbol": "PtyController",
+              "detail": "向真实子进程写入键鼠和 resize。"
+            },
+            {
+              "path": "src/lib.rs",
+              "symbol": "PtyHarness::update",
+              "detail": "持续消费 PTY 字节，更新屏幕和 frame timing。"
+            },
+            {
+              "path": "src/screen.rs",
+              "symbol": "ScreenTracker",
+              "detail": "断言的是终端模拟后的真实可见屏幕，而不是内部字符串。"
+            },
+            {
+              "path": "src/scripted.rs",
+              "symbol": "ScriptedScenarioRunner::run",
+              "detail": "把 scenario 汇总为可审阅 report/visual artifact。"
+            }
+          ]
+        }
+      ],
+      "reuse": {
+        "whybuddy_paths": [
+          "scripts/generated-app-browser-smoke.mjs",
+          "scripts/agent-sandbox-executor-browser-smoke.mjs",
+          "scripts/sliderule-browser-smoke.mjs",
+          "slide-rule-python/services/app_screenshot.py",
+          "client/src/components/sandbox/ScreenshotPreview.tsx"
+        ],
+        "can_borrow": [
+          "把端到端验证写成可复现的场景库，而不是单张截图 smoke。",
+          "每个场景要同时记录输入、等待条件、屏幕/DOM 证据、console/network 错误和性能数据。",
+          "计划批准、问卷、流式输出和中断恢复都应有真实运行时场景。"
+        ],
+        "migration_constraints": [
+          "WhyBuddy 的被测物应是每会话 sandbox 中真实启动的浏览器应用，驱动器应为 Playwright/CDP；不能用 PTY harness 替代浏览器验证。"
+        ]
+      },
+      "pitfalls": [
+        "该 crate 的 LOC 很大主要来自 scenario、test 和 benchmark，不是可搬进产品的业务实现。",
+        "只测生成 HTML 字节或截图存在不等于验证点击、导航、网络和状态改变。"
+      ]
+    },
+    {
+      "crate": "xai-grok-shell",
+      "purpose": "Grok 的会话宿主和运行时编排层。README 定义其为 terminal AI coding assistant/agentic harness，并支持 TUI、headless 和 ACP；源代码承担会话 actor、采样、工具桥接、持久化、MCP、插件、配置、leader 和上传。",
+      "boundaries": {
+        "owns": [
+          "会话生命周期、turn、模型采样和工具调用编排",
+          "TUI/headless/ACP host entry points",
+          "会话持久化、compaction、subagent、MCP/plugin/config integration"
+        ],
+        "does_not_own": [
+          "TUI 各面板绘制（xai-grok-pager）",
+          "AgentDefinition 到 Agent 的通用构建实现（xai-grok-agent）",
+          "低级工具实现（xai-grok-tools）"
+        ]
+      },
+      "subsystems": [
+        {
+          "path": "src/agent/app.rs",
+          "responsibility": "三类 host 入口：stdio ACP、headless、leader。",
+          "symbols": [
+            "run_stdio_agent",
+            "run_headless",
+            "run_leader"
+          ]
+        },
+        {
+          "path": "src/session/acp_session.rs",
+          "responsibility": "SessionActor 的会话状态、prompt/context 持久化和流所有权。",
+          "symbols": [
+            "SessionActor",
+            "StreamOwnership"
+          ]
+        },
+        {
+          "path": "src/session/acp_session_impl/spawn.rs",
+          "responsibility": "为 session actor 建运行时和线程，启动/重启会话。",
+          "symbols": [
+            "build_session_runtime",
+            "spawn_session_actor",
+            "spawn_session_on_thread",
+            "SessionThread"
+          ]
+        },
+        {
+          "path": "src/session/agent_rebuild.rs",
+          "responsibility": "文件注释明确是 shell 内唯一调用 AgentBuilder::new 的位置，集中保存/重建每项 builder 输入。",
+          "symbols": [
+            "AgentRebuildSpec",
+            "AgentRebuildSpec::build_agent"
+          ]
+        },
+        {
+          "path": "src/session/",
+          "responsibility": "chat persistence、compaction、goal evaluator、tool bridge、signals、反馈、fork、session list/search。",
+          "symbols": [
+            "SessionHandle"
+          ]
+        },
+        {
+          "path": "src/util/config/",
+          "responsibility": "加载、watch 和持久化用户/托管配置。",
+          "symbols": [
+            "ConfigWriteGuard"
+          ]
+        },
+        {
+          "path": "src/extensions/",
+          "responsibility": "MCP、hooks、plugins、worktree 等扩展装配。",
+          "symbols": [
+            "ClientHookGroup"
+          ]
+        },
+        {
+          "path": "src/leader/",
+          "responsibility": "多进程/多客户端 leader transport、server、client 和 lock。",
+          "symbols": [
+            "LeaderClient"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "一个 host 启动并创建会话",
+          "steps": [
+            {
+              "path": "src/agent/app.rs",
+              "symbol": "run_stdio_agent",
+              "detail": "ACP host 入口；headless/leader 分别由同文件另外两个入口承接。"
+            },
+            {
+              "path": "src/session/acp_session_impl/spawn.rs",
+              "symbol": "spawn_session_actor",
+              "detail": "构造 session actor 并挂接通信与运行时。"
+            },
+            {
+              "path": "src/session/acp_session.rs",
+              "symbol": "SessionActor",
+              "detail": "拥有当前会话的 turn、stream ownership、conversation 和工具交互状态。"
+            },
+            {
+              "path": "src/session/agent_rebuild.rs",
+              "symbol": "AgentRebuildSpec::build_agent",
+              "detail": "集中创建或重建 Agent，保证初次创建和模式切换使用同一条 builder 链。"
+            }
+          ]
+        },
+        {
+          "name": "中断后保持运行时语义",
+          "steps": [
+            {
+              "path": "src/session/acp_session.rs",
+              "symbol": "StreamOwnership",
+              "detail": "把流的生命周期归属表示为 session 状态，而不是交给 UI 自行猜测。"
+            },
+            {
+              "path": "src/session/signals.rs",
+              "symbol": "SessionSignalsActor",
+              "detail": "消费和广播会话信号。"
+            },
+            {
+              "path": "src/session/storage/mod.rs",
+              "symbol": "SessionFileSet",
+              "detail": "管理会话落盘文件集合，支持恢复与检索。"
+            }
+          ]
+        }
+      ],
+      "reuse": {
+        "whybuddy_paths": [
+          "slide-rule-python/services/rehearsal_control.py",
+          "slide-rule-python/services/v5_session_driver.py",
+          "slide-rule-python/services/a2a_session_stream_runtime_slice.py",
+          "slide-rule-python/services/slide_rule_session.py",
+          "slide-rule-python/tests/test_control_stream_lifecycle.py",
+          "slide-rule-python/tests/test_a2a_session_stream_runtime_slice_103.py"
+        ],
+        "can_borrow": [
+          "把 session actor/driver 作为唯一 owner，UI 只消费事件与发送明确 command。",
+          "把初始化和重建 agent 的输入集中到一个 rebuild spec，防止首启和恢复两个实现逐步漂移。",
+          "保存 stream ownership、暂停原因、恢复 token 和 turn phase，给 SSE 断开/重连一条可判定的真实链路。"
+        ],
+        "migration_constraints": [
+          "Shell 的 crate 很大，WhyBuddy 不应搬 Rust host；应逐段对齐会话边界、持久化合同和控制事件协议。",
+          "必须先确认 Python 的 v5_session_driver 主链，而不是在历史/旁路 driver 上套 grok 的 actor 结构。"
+        ]
+      },
+      "pitfalls": [
+        "shell 不是单一 CLI main；TUI、headless、ACP 和 leader 有不同入口。",
+        "AgentBuilder 只在 agent_rebuild.rs 调用是刻意不变量；在任意 session handler 再造一个 builder 会导致 mode、skill、permission、memory 配置分叉。",
+        "UI 的暂停状态必须被 shell/session 层承认，单靠前端 overlay 无法保证工具不会继续执行。"
+      ]
+    },
+    {
+      "crate": "xai-grok-agent",
+      "purpose": "可移植的 Agent 构建层。README 和 lib.rs 都明确：它把 tools、system prompt、system-reminder、compaction policy 与 model configuration 组装成任何 host 能消费的 Agent。",
+      "boundaries": {
+        "owns": [
+          "AgentDefinition 解析、发现和 builder",
+          "system prompt/context、AGENTS.md、skills/persona 注入",
+          "tool set、permission、memory、compaction、reminder 等构建策略"
+        ],
+        "does_not_own": [
+          "turn loop 与流式采样",
+          "工具执行",
+          "TUI 或浏览器视图"
+        ]
+      },
+      "subsystems": [
+        {
+          "path": "src/config.rs",
+          "responsibility": "AgentDefinition、preset/toolset 和前置配置。",
+          "symbols": [
+            "AgentDefinition",
+            "workspace_grok_build_toolset"
+          ]
+        },
+        {
+          "path": "src/discovery.rs",
+          "responsibility": "发现 project/user agent definition。",
+          "symbols": [
+            "discover"
+          ]
+        },
+        {
+          "path": "src/builder.rs",
+          "responsibility": "按 definition 和 session backend 链式构建 Agent；plan mode 时确保 enter/exit/ask tools 进入工具集。",
+          "symbols": [
+            "AgentBuilder",
+            "AgentBuilder::new",
+            "AgentBuilder::from_definition",
+            "AgentBuilder::build"
+          ]
+        },
+        {
+          "path": "src/agent.rs",
+          "responsibility": "近乎不可变的已构建 Agent，暴露 prompt、ToolBridge、策略和 hosted tools。",
+          "symbols": [
+            "Agent",
+            "Agent::new",
+            "Agent::tool_definitions"
+          ]
+        },
+        {
+          "path": "src/prompt/",
+          "responsibility": "模板、AGENTS.md、skills、browser verification、subagent/workspace user context。",
+          "symbols": [
+            "PromptContext"
+          ]
+        },
+        {
+          "path": "src/plugins/",
+          "responsibility": "plugin discovery、trust、marketplace、安装和 hooks adapter。",
+          "symbols": [
+            "PluginRegistry"
+          ]
+        },
+        {
+          "path": "src/compaction.rs",
+          "responsibility": "Agent 所携带的压缩策略。",
+          "symbols": [
+            "CompactionPolicy"
+          ]
+        },
+        {
+          "path": "src/system_reminder.rs",
+          "responsibility": "会话系统提醒策略。",
+          "symbols": [
+            "ReminderPolicy"
+          ]
+        }
+      ],
+      "flows": [
+        {
+          "name": "从定义文件到可运行 Agent",
+          "steps": [
+            {
+              "path": "src/config.rs",
+              "symbol": "AgentDefinition",
+              "detail": "承载 frontmatter/预设/工具等定义值。"
+            },
+            {
+              "path": "src/builder.rs",
+              "symbol": "AgentBuilder::from_definition",
+              "detail": "吸收定义并保留 host 注入的 terminal/fs/notification/session context。"
+            },
+            {
+              "path": "src/builder.rs",
+              "symbol": "AgentBuilder::build",
+              "detail": "构造 ToolBridge、PromptContext、渲染 system prompt 和 session policies。"
+            },
+            {
+              "path": "src/agent.rs",
+              "symbol": "Agent::tool_definitions",
+              "detail": "向采样 host 提供最终工具定义。"
+            }
+          ]
+        },
+        {
+          "name": "计划模式工具合同",
+          "steps": [
+            {
+              "path": "src/builder.rs",
+              "symbol": "ensure_plan_mode_tools",
+              "detail": "检查工具集并补上 enter_plan_mode、exit_plan_mode、ask_user_question。"
+            },
+            {
+              "path": "src/agent.rs",
+              "symbol": "Agent::tool_bridge",
+              "detail": "将最终 registry 暴露给会话运行时。"
+            }
+          ]
+        }
+      ],
+      "reuse": {
+        "whybuddy_paths": [
+          "slide-rule-python/sliderule_llm/control_client.py",
+          "slide-rule-python/services/rehearsal_control.py",
+          "slide-rule-python/services/v5_session_driver.py",
+          "client/src/pages/sliderule/QuestionnaireCard.tsx",
+          "slide-rule-python/tests/test_control_ask_user_parks.py",
+          "slide-rule-python/tests/test_control_plan_approval.py"
+        ],
+        "can_borrow": [
+          "定义一个明确的 AgentBuildSpec/CapabilityPlan，集中 goal、可用工具、prompt、memory、permission、plan mode 和 browser verification 规则。",
+          "把 ask-user 和 exit-plan 作为控制面能力合同的一部分，后端注册、模型提示和 UI 消费共享同一个 schema。",
+          "browser_verification 提示词应与真实 browser runtime/证据采集能力一起上线。"
+        ],
+        "migration_constraints": [
+          "WhyBuddy 当前 Python/TS 双端不能直接采用 Rust ToolBridge；可采用 JSON schema + Python capability registry + TS event types 的同一合同。",
+          "工具可用性必须由运行时能力决定，不能只在 prompt 里说有某工具。"
+        ]
+      },
+      "pitfalls": [
+        "Agent 不是模型调用循环；把 session lifecycle 塞到这里会重复 shell 的职责。",
+        "builder 的 with_* 参数很多，文档必须记录每项输入从哪里来、何时重建、谁可修改，否则恢复后会悄悄丢配置。",
+        "prompt 中要求 browser verification 不能替代真实 sandbox、浏览器、console/network 证据。"
+      ]
+    }
+  ]
+}

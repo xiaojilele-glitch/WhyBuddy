@@ -34,6 +34,8 @@
  * 角色映射按**我们自己的 12 个字段**在下面做。
  */
 
+import themePresets from "@identity-themes";
+
 import { Hct } from "./mcu/hct/hct";
 import { TonalPalette } from "./mcu/palettes/tonal_palette";
 
@@ -77,10 +79,24 @@ const TONE = {
   accentFg: 32,
   /** 内容区底色：中性色系接近白 */
   contentBg: 97,
-  /** 深色侧栏 */
-  sidebarBg: 22,
-  /** 侧栏文字 */
-  sidebarText: 92,
+  /**
+   * 侧栏底色：**白**（2026-08-03，用户裁决，参照 Ant Design Pro）。
+   *
+   * 原来是 tone 22 的深色侧栏。改白之后菜单/Header 跟内容区连成一片，
+   * 主色只出现在选中态、按钮、图表这些"该被看见"的地方——这也是
+   * Ant Design Pro / 现代后台的通行做法。
+   *
+   * tone 100 出的是纯 #ffffff（中性色系在 tone 100 与色相无关）。
+   */
+  sidebarBg: 100,
+  /**
+   * 侧栏文字：深色。
+   *
+   * 不能跟着改成"底色的反色"由算法自动决定——`foregroundFor` 只在纯黑纯白
+   * 之间二选一，那样菜单文字会是硬邦邦的 #1f1f1f。tone 30 的中性色带一点
+   * 主色色相，跟 Header/内容区是同一家人。
+   */
+  sidebarText: 30,
 } as const;
 
 /**
@@ -125,6 +141,111 @@ const CHART_TONE = 58;
 const CHART_CHROMA_FLOOR = 22;
 const CHART_CHROMA_CEIL = 48;
 
+/**
+ * 已验证的图表色序（账本 chartThemes.variants，前后端同读一份）。
+ *
+ * 这些不是"配"出来的，是**验**出来的：8 个旋转逐个跑过 dataviz 的
+ * validate_palette.js（白底），0 个 FAIL。顺序本身就是安全机制——相邻对的
+ * 区分度按这个顺序验，重排等于作废。
+ */
+const CHART_VARIANTS: readonly (readonly string[])[] =
+  (themePresets as { chartThemes?: { variants?: string[][] } }).chartThemes?.variants ?? [];
+
+/**
+ * 常人视力硬底线（OKLab 欧氏距离 ×100），与 dataviz 校验器、Python 侧
+ * `services/sheet_palette.py` 同一个数。
+ */
+const NORMAL_VISION_FLOOR = 15;
+const HEX6 = /^#[0-9a-fA-F]{6}$/;
+
+/** sRGB hex → OKLab。Björn Ottosson 的原始矩阵，只为算距离，不做反向变换。 */
+function oklab(hexColor: string): [number, number, number] | null {
+  if (!HEX6.test(hexColor)) return null;
+  const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const r = lin(parseInt(hexColor.slice(1, 3), 16) / 255);
+  const g = lin(parseInt(hexColor.slice(3, 5), 16) / 255);
+  const b = lin(parseInt(hexColor.slice(5, 7), 16) / 255);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+function deltaE(a: string, b: string): number {
+  const x = oklab(a);
+  const y = oklab(b);
+  if (!x || !y) return 0;
+  return 100 * Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
+}
+
+/**
+ * 参照图取来的图表色——**在这里再验一遍**（2026-08-04）。
+ *
+ * 写入侧（Python `sheet_palette`）已经把过一次关，为什么还要验：这个值会
+ * 经由**存量快照**和库里的老应用记录到达前端，那些数据没走过这一版的门禁；
+ * 跟 freeformContent / generatedTheme 是同一条"渲染器内部再校验"的纪律。
+ *
+ * 验的是同两条：全是合法 hex、**相邻两色拉得开**。后一条不能省——一组读者
+ * 分不开的颜色画到图表上，比朴素但能读的配色更糟；不合格就整套不要，回落
+ * 账本里那 8 套验过的。
+ */
+function validExtractedCharts(colors: unknown): string[] | null {
+  if (!Array.isArray(colors) || colors.length < 4) return null;
+  const list = colors.filter((c): c is string => typeof c === "string" && HEX6.test(c));
+  if (list.length !== colors.length || new Set(list).size !== list.length) return null;
+  for (let i = 0; i < list.length - 1; i += 1) {
+    if (deltaE(list[i], list[i + 1]) < NORMAL_VISION_FLOOR) return null;
+  }
+  return list.map(c => c.toLowerCase());
+}
+
+/** 稳定散列（FNV-1a 32 位）：同一个 key 永远落到同一套，刷新不换色。 */
+function variantIndex(key: string, count: number): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i += 1) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h % count;
+}
+
+/**
+ * 这个应用的 6 个图表色。
+ *
+ * 没给 key（或账本里没有色序）时退回**旧的色相旋转**算法——那套区分度不合格，
+ * 但它是老行为，不能因为这次改动让没传 key 的调用点悄悄变色；要换的是那些
+ * 明确传了 key 的地方。
+ */
+function chartsFor(
+  key: string | undefined,
+  argb: number,
+  src: Hct,
+  extracted?: unknown
+): string[] {
+  // ① 这个应用自己参照图上的颜色最优先（2026-08-04）。
+  //    整条链路上只有它是**为这个应用画的**——账本那 8 套再验得过，也是同一条
+  //    ramp 的 8 个旋转，不同应用摆在一起仍然像同一套色。
+  const fromSheet = validExtractedCharts(extracted);
+  if (fromSheet) return fromSheet;
+  if (key && CHART_VARIANTS.length > 0) {
+    return [...CHART_VARIANTS[variantIndex(key, CHART_VARIANTS.length)]];
+  }
+  return CHART_HUE_SHIFTS.map(shift =>
+    shift === 0
+      ? hex(argb) // 第一条必须是主色本身（见 CHART_HUE_SHIFTS 的说明）
+      : hex(
+          TonalPalette.fromHueAndChroma(
+            (src.hue + shift) % 360,
+            Math.min(Math.max(src.chroma, CHART_CHROMA_FLOOR), CHART_CHROMA_CEIL)
+          ).tone(CHART_TONE)
+        )
+  );
+}
+
 const hex = (argb: number): string =>
   `#${(argb & 0x00ffffff).toString(16).padStart(6, "0")}`;
 
@@ -142,6 +263,28 @@ export interface DeriveOptions {
   id?: string;
   /** 人看的标签（透传） */
   label?: string;
+  /**
+   * 图表配色的挑选键（2026-08-04）——**给什么值不重要，稳定就行**。
+   *
+   * 传了就从账本里那 8 套已验证色序中按稳定散列挑一套，同一个应用永远拿到
+   * 同一套；不传就退回第 0 套（老行为，调用点不用改）。
+   *
+   * 选它当"每个应用不一样"的开关而不是重新算色相：色相旋转出来的那套过不了
+   * 区分度校验（见 CHART_HUE_SHIFTS 上方说明），所以变化必须来自**换一套
+   * 验过的**，不能来自"再转一点"。
+   */
+  chartVariantKey?: string;
+  /**
+   * 这个应用参照图上读出来的图表色（2026-08-04，`appIdentity.chartColors`）。
+   *
+   * 给了且验得过就**直接用它**，chartVariantKey 那套账本色序退为兜底。
+   * 这是整条链路上唯一"为这个应用画的"颜色——参照图每个应用都真的生成了，
+   * 此前它的配色画完就丢了（只学版式），这个字段把那一段接回来。
+   *
+   * 收 unknown 而不是 string[]：它经由存量快照/老应用记录到达，形状不可信，
+   * 校验在 validExtractedCharts 里做（渲染器内部再校验的纪律）。
+   */
+  extractedCharts?: unknown;
 }
 
 /**
@@ -183,16 +326,7 @@ export function deriveIdentityPalette(
     contentBg: hex(neutralP.tone(TONE.contentBg)),
     accentBg: hex(accentP.tone(TONE.accentBg)),
     accentFg: hex(accentP.tone(TONE.accentFg)),
-    charts: CHART_HUE_SHIFTS.map(shift =>
-      shift === 0
-        ? hex(argb) // 第一条必须是主色本身（见 CHART_HUE_SHIFTS 的说明）
-        : hex(
-            TonalPalette.fromHueAndChroma(
-              (src.hue + shift) % 360,
-              Math.min(Math.max(src.chroma, CHART_CHROMA_FLOOR), CHART_CHROMA_CEIL)
-            ).tone(CHART_TONE)
-          )
-    ),
+    charts: chartsFor(opts.chartVariantKey, argb, src, opts.extractedCharts),
     sidebarBg: hex(neutralP.tone(TONE.sidebarBg)),
     sidebarText: hex(neutralP.tone(TONE.sidebarText)),
   };

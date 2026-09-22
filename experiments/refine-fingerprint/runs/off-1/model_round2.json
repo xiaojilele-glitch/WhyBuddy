@@ -1,0 +1,333 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "gender_age",
+      "name": "性别 / 年龄",
+      "type": "string"
+     },
+     {
+      "id": "bed",
+      "name": "所属楼栋 / 床位",
+      "type": "string"
+     },
+     {
+      "id": "care_level",
+      "name": "护理等级",
+      "type": "enum"
+     },
+     {
+      "id": "health_tags",
+      "name": "健康标签",
+      "type": "string"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "service_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "order_type",
+      "name": "工单类型",
+      "type": "enum"
+     },
+     {
+      "id": "elder_ref",
+      "name": "关联老人",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "create_time",
+      "name": "发起时间",
+      "type": "date"
+     },
+     {
+      "id": "urgency",
+      "name": "紧急程度",
+      "type": "enum"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "enum"
+     },
+     {
+      "id": "assignee",
+      "name": "指派处理人",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "health_monitor",
+    "name": "实时体征指标",
+    "fields": [
+     {
+      "id": "elder_name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "bed",
+      "name": "当前床位",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "体征状态",
+      "type": "enum"
+     },
+     {
+      "id": "heart_rate",
+      "name": "最新心率",
+      "type": "string"
+     },
+     {
+      "id": "blood_oxygen",
+      "name": "血氧饱和度",
+      "type": "string"
+     },
+     {
+      "id": "update_time",
+      "name": "数据更新时间",
+      "type": "date"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_advisor",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "role_family",
+    "name": "家属"
+   }
+  ],
+  "permissions": [
+   "elder:read",
+   "elder:create",
+   "elder:update",
+   "service_order:create",
+   "service_order:read",
+   "service_order:update",
+   "service_order:assign",
+   "health_monitor:read"
+  ],
+  "menus": [
+   {
+    "id": "menu_elder",
+    "label": "老人档案管理",
+    "roleRefs": [
+     "role_advisor"
+    ],
+    "permissionRefs": [
+     "elder:read"
+    ]
+   },
+   {
+    "id": "menu_health",
+    "label": "家属健康监控",
+    "roleRefs": [
+     "role_family"
+    ],
+    "permissionRefs": [
+     "health_monitor:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_created",
+    "name": "已创建",
+    "assigneeRole": "role_family",
+    "phase": "init"
+   },
+   {
+    "id": "node_assigned",
+    "name": "已指派",
+    "assigneeRole": "role_advisor",
+    "phase": "processing"
+   },
+   {
+    "id": "node_completed",
+    "name": "已完成",
+    "assigneeRole": "role_advisor",
+    "phase": "completed"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_created",
+    "to": "node_assigned",
+    "condition": "家属提交服务预约后由顾问进行指派"
+   },
+   {
+    "from": "node_assigned",
+    "to": "node_completed",
+    "condition": "顾问完成服务跟进"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1_page",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.gender_age",
+     "elder.bed",
+     "elder.care_level",
+     "elder.health_tags",
+     "elder.emergency_contact"
+    ],
+    "actionPermissions": [
+     "elder:read",
+     "elder:create",
+     "elder:update"
+    ]
+   },
+   {
+    "id": "p2_page",
+    "name": "服务工单大厅",
+    "kind": "workbench",
+    "fieldBindings": [
+     "service_order.order_no",
+     "service_order.order_type",
+     "service_order.elder_ref",
+     "service_order.create_time",
+     "service_order.urgency",
+     "service_order.status",
+     "service_order.assignee"
+    ],
+    "actionPermissions": [
+     "service_order:read",
+     "service_order:create",
+     "service_order:update",
+     "service_order:assign"
+    ]
+   },
+   {
+    "id": "p3_page",
+    "name": "家属健康监控页",
+    "kind": "monitor",
+    "fieldBindings": [
+     "health_monitor.elder_name",
+     "health_monitor.bed",
+     "health_monitor.status",
+     "health_monitor.heart_rate",
+     "health_monitor.blood_oxygen",
+     "health_monitor.update_time"
+    ],
+    "actionPermissions": [
+     "health_monitor:read"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "cap_health_analysis",
+    "name": "健康指标智能分析",
+    "inputFields": [
+     "health_monitor.heart_rate",
+     "health_monitor.blood_oxygen"
+    ],
+    "outputField": "health_monitor.status",
+    "roleRefs": [
+     "role_advisor"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p1_page",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p2_page",
+    "workflowRef": "node_created"
+   },
+   {
+    "pageRef": "p3_page",
+    "workflowRef": "node_completed"
+   }
+  ],
+  "landingPageRef": "p1_page",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_advisor",
+   "role_family"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "service_order",
+   "health_monitor"
+  ],
+  "appIdentity": {
+   "appName": "颐养云"
+  },
+  "invariants": [
+   {
+    "id": "inv_order_elder",
+    "statement": "服务工单必须关联有效的老人档案",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "service_order",
+     "elder",
+     "node_created"
+    ]
+   },
+   {
+    "id": "inv_order_status",
+    "statement": "服务工单状态需与工作流节点保持同步",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "service_order.status",
+     "node_created",
+     "node_assigned",
+     "node_completed"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

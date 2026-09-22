@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安养通 - 老人档案管理页</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#20806F',
+                        'primary-dark': '#176658',
+                        accent: '#FA8C16',
+                        'accent-dark': '#D47210',
+                    }
+                }
+            }
+        }
+    </script>
+<style>[aria-current="page"]{background-color:color-mix(in srgb, currentColor 12%, transparent);font-weight:600}</style></head>
+<body class="bg-slate-100 text-slate-800 font-sans antialiased h-screen overflow-hidden flex">
+
+    <!-- 左侧主导航 -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col flex-shrink-0 border-r border-slate-800">
+    <div class="h-16 flex items-center px-6 gap-3 border-b border-slate-800">
+      <div class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-lg shadow-md">安养通</div>
+      <div class="flex flex-col">
+        <span class="text-white font-bold text-base tracking-wide">安养通养通</span>
+        <span class="text-xs text-slate-400">社区养老服务管理</span>
+      </div>
+    </div>
+    
+    <nav class="flex-1 px-4 py-6 space-y-1.5 text-sm font-medium overflow-y-auto">
+<a aria-current="page" data-page-id="p1" href="#" class="bg-primary flex gap-3 items-center px-4 py-3 rounded-lg shadow-sm text-white"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg><span>老人档案管理页</span></a>
+<a data-page-id="p2" href="#" class="flex gap-3 items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg><span>服务工单调度页</span></a>
+<a data-page-id="p3" href="#" class="flex gap-3 items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg><span>服务人员移动端工作台</span></a>
+<a data-page-id="p4" href="#" class="flex gap-3 items-center px-4 py-3 rounded-lg"><svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg><span>运营数据看板页</span></a>
+</nav>
+
+    <div class="p-4 border-t border-slate-800">
+      <div class="flex items-center gap-3 px-2 py-1">
+        <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white font-medium text-sm">主</div>
+        <div class="flex flex-col overflow-hidden">
+          <span class="text-xs font-medium text-white truncate">社区养老顾问</span>
+          <span class="text-[11px] text-slate-400 truncate">zhang.mgr@anyang.com</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+    <!-- 右侧主体内容容器 -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+        
+        <!-- 顶部 Header -->
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0 shadow-sm">
+      <nav aria-label="Breadcrumb" class="text-sm">
+        <ol class="flex items-center space-x-2 text-slate-500">
+          <li><a href="#" class="hover:text-primary transition-colors">运营中心</a></li>
+          <li class="text-slate-300">/</li>
+          <li><a href="#" class="text-slate-800 font-medium" aria-current="page">老人档案管理页</a></li>
+        </ol>
+      </nav>
+
+      <div class="flex items-center gap-4">
+        <div class="flex items-center bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg text-amber-800 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-accent animate-pulse mr-2"></span>
+          <span>紧急呼叫 1 起待处理</span>
+        </div>
+        <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg font-medium">
+          今天是 2026-06-08 星期一
+        </div>
+      </div>
+    </header>
+
+        <!-- 正文区域：左侧主数据区 + 右侧详情抽屉 -->
+        <main class="flex-1 flex overflow-hidden">
+            
+            <!-- 主数据区 (占用约 60%~65% 宽度，含筛选、统计、表格) -->
+            <div class="flex-1 flex flex-col overflow-y-auto p-8 gap-6 bg-slate-50">
+                
+                <!-- 1. 全局筛选与搜索面板 (15% 高度空间感) -->
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                    <div class="flex items-center gap-3 flex-wrap flex-1">
+                        <!-- 搜索框 -->
+                        <div class="relative min-w-[240px]">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            </span>
+                            <input type="text" placeholder="搜索老人姓名 / 身份证号 / 房号" class="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-primary focus:bg-white transition-colors">
+                        </div>
+                        <!-- 健康风险等级筛选 -->
+                        <select class="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-primary">
+                            <option value="">全部健康风险等级</option>
+                            <option value="high">高风险 (红标)</option>
+                            <option value="mid">中风险 (黄标)</option>
+                            <option value="low">低风险 (绿标)</option>
+                        </select>
+                        <!-- 居住状态筛选 -->
+                        <select class="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-primary">
+                            <option value="">全部居住状态</option>
+                            <option value="alone">独居老人</option>
+                            <option value="couple">仅与配偶居住</option>
+                            <option value="family">与子女同住</option>
+                        </select>
+                    </div>
+                    <!-- 新增健康档案按钮 -->
+                    <button data-action="createRecord" data-entity="elder" class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-colors shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        新增健康档案
+                    </button>
+                </div>
+
+                <!-- 2. 核心统计卡片区 (20% 高度空间感，3张卡片) -->
+                <div class="grid grid-cols-3 gap-5 shrink-0">
+                    <!-- 卡片 1 -->
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">总建档人数</p>
+                            <p class="text-2xl font-bold text-slate-900 mt-1"><span data-value="elder" data-aggregate="count">1,280</span> <span class="text-xs font-normal text-slate-400">人</span></p>
+                            <p class="text-xs text-primary mt-2 flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                                本月新增建档 +32 人
+                            </p>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                        </div>
+                    </div>
+
+                    <!-- 卡片 2 -->
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between border-l-4 border-l-accent">
+                        <div>
+                            <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">高风险老人</p>
+                            <p class="text-2xl font-bold text-slate-900 mt-1">45 <span class="text-xs font-normal text-slate-400">人</span></p>
+                            <p class="text-xs text-accent mt-2 flex items-center gap-1 font-medium">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                                需重点巡视与健康干预
+                            </p>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-accent/10 text-accent flex items-center justify-center">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        </div>
+                    </div>
+
+                    <!-- 卡片 3 -->
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">今日需关怀数</p>
+                            <p class="text-2xl font-bold text-slate-900 mt-1">12 <span class="text-xs font-normal text-slate-400">人次</span></p>
+                            <p class="text-xs text-slate-500 mt-2">已完成 8 人次，进行中 4 人次</p>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. 主数据表格面板 (65% 剩余高度) -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm flex-1 flex flex-col overflow-hidden">
+                    <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                        <h2 class="font-bold text-slate-800 text-sm">社区老人健康档案台账</h2>
+                        <span class="text-xs text-slate-500">共检索到 1,280 条档案记录</span>
+                    </div>
+                    
+                    <div class="overflow-x-auto flex-1">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    <th class="py-3.5 px-6">老人姓名 / 头像</th>
+                                    <th class="py-3.5 px-6">年龄 / 性别</th>
+                                    <th class="py-3.5 px-6">社区房号</th>
+                                    <th class="py-3.5 px-6">健康风险等级</th>
+                                    <th class="py-3.5 px-6">护理等级</th>
+                                    <th class="py-3.5 px-6 text-right">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 text-sm text-slate-700" data-rows="elder" data-sort="archive_no" data-order="desc" data-limit="8">
+                                <!-- 行 1 (选中态展示，对应右侧抽屉) -->
+                                <tr class="hover:bg-slate-50/80 transition-colors bg-primary/5 cursor-pointer">
+                                    <td class="py-3.5 px-6 flex items-center gap-3">
+                                        <div class="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600 text-xs shrink-0">
+                                            张
+                                        </div>
+                                        <div>
+                                            <p class="font-semibold text-slate-900" data-field="name">张建国</p>
+                                            <p class="text-xs text-slate-400">档案编号：<span data-field="archive_no">APT-2026-0301</span></p>
+                                        </div>
+                                    </td>
+                                    <td class="py-3.5 px-6">78岁 / 男</td>
+                                    <td class="py-3.5 px-6 font-mono text-xs" data-field="room">和平里小区 3栋 2单元 602</td>
+                                    <td class="py-3.5 px-6">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200" data-field="risk_level">
+                                            高风险 (红标)
+                                        </span>
+                                    </td>
+                                    <td class="py-3.5 px-6">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700" data-field="nursing_level">
+                                            一级护理
+                                        </span>
+                                    </td>
+                                    <td class="py-3.5 px-6 text-right space-x-3">
+                                        <button data-action="editRecord" data-entity="elder" class="text-primary hover:text-primary-dark font-medium text-xs">编辑</button>
+                                        <button data-action="openRecord" data-entity="elder" class="text-slate-500 hover:text-slate-800 font-medium text-xs">详情</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 表格底部分页 -->
+                    <div class="px-6 py-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50">
+                        <span>显示第 1 至 4 条，共 1,280 条记录</span>
+                        <div class="flex items-center gap-1">
+                            <button class="px-3 py-1 bg-white border border-slate-200 rounded text-slate-400 cursor-not-allowed">上一页</button>
+                            <button class="px-3 py-1 bg-primary text-white rounded font-medium">1</button>
+                            <button class="px-3 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-700">2</button>
+                            <button class="px-3 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-700">3</button>
+                            <button class="px-3 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-700">下一页</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 右侧详情抽屉 (40% 宽度，深度查阅既往病史、紧急联系人及健康档案完整记录) -->
+            <aside class="w-[40%] bg-white border-l border-slate-200 flex flex-col shadow-2xl z-20 shrink-0" data-record="elder">
+                <!-- 抽屉头部 -->
+                <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-primary"></span>
+                        <h3 class="font-bold text-slate-900 text-sm">老人健康档案详情</h3>
+                    </div>
+                    <button class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-200/50 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                <!-- 抽屉内容：可滚动 -->
+                <div class="flex-1 overflow-y-auto p-6 space-y-6 text-sm">
+                    
+                    <!-- 档案概览头部 -->
+                    <div class="bg-primary/5 p-4 rounded-xl border border-primary/10 flex items-start gap-4">
+                        <div class="w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center text-lg font-bold shrink-0 shadow-sm">
+                            张
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between">
+                                <h4 class="font-bold text-slate-900 text-base"><span data-field="name">张建国</span> <span class="text-xs font-normal text-slate-500 ml-1">男 / 78岁</span></h4>
+                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200" data-field="risk_level">高风险</span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">唯一健康档案编号：<span class="font-mono font-medium text-slate-700" data-field="archive_no">APT-2026-0301</span></p>
+                            <p class="text-xs text-slate-500 mt-0.5">身份证号：<span data-field="id_card">37010219480521XXXX</span></p>
+                        </div>
+                    </div>
+
+                    <!-- 第一部分：基本信息 -->
+                    <div>
+                        <h5 class="font-bold text-slate-800 text-xs uppercase tracking-wider mb-3 text-slate-400 flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                            基本居住与生活信息
+                        </h5>
+                        <div class="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs">
+                            <div>
+                                <span class="text-slate-400">居住状态：</span>
+                                <span class="font-medium text-slate-700 ml-1">独居老人</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400">社区房号：</span>
+                                <span class="font-medium text-slate-700 ml-1" data-field="room">和平里3栋2单元602</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400">建档日期：</span>
+                                <span class="font-medium text-slate-700 ml-1">2026-01-15</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400">养老顾问：</span>
+                                <span class="font-medium text-slate-700 ml-1">张师傅</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 第二部分：健康病史 -->
+                    <div>
+                        <h5 class="font-bold text-slate-800 text-xs uppercase tracking-wider mb-3 text-slate-400 flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-accent"></span>
+                            既往病史与体征记录
+                        </h5>
+                        <div class="space-y-3">
+                            <div class="p-3.5 bg-amber-50/50 rounded-xl border border-amber-100 text-xs space-y-1">
+                                <div class="flex items-center justify-between font-medium text-amber-900">
+                                    <span>慢性病史：高血压（III级极高危）、2型糖尿病</span>
+                                    <span class="text-accent text-[10px] bg-accent/10 px-1.5 py-0.5 rounded">重点监控</span>
+                                </div>
+                                <p class="text-slate-600">服药禁忌：对青霉素过敏；日常需监测空腹血糖及血压波动情况。</p>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 text-center">
+                                <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                    <p class="text-[10px] text-slate-400">近期血压</p>
+                                    <p class="text-sm font-bold text-slate-800 mt-0.5">145/90</p>
+                                    <p class="text-[10px] text-accent">偏高</p>
+                                </div>
+                                <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                    <p class="text-[10px] text-slate-400">近期血糖</p>
+                                    <p class="text-sm font-bold text-slate-800 mt-0.5">7.2 mmol/L</p>
+                                    <p class="text-[10px] text-slate-500">平稳</p>
+                                </div>
+                                <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                    <p class="text-[10px] text-slate-400">护理等级</p>
+                                    <p class="text-sm font-bold text-slate-800 mt-0.5" data-field="nursing_level">一级护理</p>
+                                    <p class="text-[10px] text-primary">每周巡视3次</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 第三部分：紧急联系人 -->
+                    <div>
+                        <h5 class="font-bold text-slate-800 text-xs uppercase tracking-wider mb-3 text-slate-400 flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                            紧急联系人与家属信息
+                        </h5>
+                        <div class="space-y-2.5">
+                            <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between text-xs">
+                                <div>
+                                    <p class="font-semibold text-slate-900">张小明 <span class="text-slate-400 font-normal ml-1">(长子)</span></p>
+                                    <p class="text-slate-500 mt-0.5 font-mono">电话：138-XXXX-8888</p>
+                                </div>
+                                <span class="px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-medium">第一联系人</span>
+                            </div>
+                            <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between text-xs">
+                                <div>
+                                    <p class="font-semibold text-slate-900">王梅 <span class="text-slate-400 font-normal ml-1">(社区医生)</span></p>
+                                    <p class="text-slate-500 mt-0.5 font-mono">电话：010-XXXXXXXX</p>
+                                </div>
+                                <span class="px-2 py-1 bg-slate-200 text-slate-600 rounded-lg text-[10px] font-medium">签约医生</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 底部操作按钮 -->
+                    <div class="pt-4 border-t border-slate-200 flex gap-3">
+                        <button data-action="editRecord" data-entity="elder" class="flex-1 bg-primary hover:bg-primary-dark text-white py-2.5 rounded-xl font-medium text-xs transition-colors shadow-sm">
+                            编辑健康档案
+                        </button>
+                        <button class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium text-xs transition-colors">
+                            打印档案
+                        </button>
+                    </div>
+
+                </div>
+            </aside>
+
+        </main>
+    </div>
+
+</body>
+</html>

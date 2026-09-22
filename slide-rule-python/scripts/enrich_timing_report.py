@@ -28,7 +28,7 @@ _PREFIX = "[enrich-timing]"
 # 可并行的阶段（审查文档「八、7」）：改造前后主要看这几行的总耗时变化。
 _PARALLELIZABLE = {
     "monitor.sheet": "① 参照板生图（每页一张，彼此独立）",
-    "monitor.design": "③ 桌面/手机双档设计（同页两次，共用同一张参照板）",
+    "monitor.design": "③ 权威设备单档设计（desktop 或 phone）",
     "freeform.block": "② 区块生成（当前灰度下不触发）",
     "block.screenshot": "E2B 截图自检（此前只能夹逼估算 29~69s）",
 }

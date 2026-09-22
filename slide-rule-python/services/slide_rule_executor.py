@@ -187,11 +187,28 @@ def _write_capability_telemetry(state: V5SessionState, capability_id: str, role_
     # Per-run id (ts-based run_id) dedup only: allows multiple real runs of same (capabilityId, turnId).
     # Delegate nesting double (mapped<->cap) is prevented by skip-write checks at call sites (see execute_mapped and execute_cap wrapper).
     # This ensures *every* capability run writes its timing + cost telemetry (addresses finding 1 major).
-    if not any(getattr(c, "id", None) == cost_rec.id for c in existing_costs):
+    #
+    # ⚠ 2026-08-20：drive 绑定了 LLM 实调用钩子时，同一趟会再按 content//4
+    # 估一笔——用量页把一趟算两次。钩子在场就只让 call_llm 记。
+    from sliderule_llm.client import llm_result_hook_active
+
+    if not llm_result_hook_active() and not any(
+        getattr(c, "id", None) == cost_rec.id for c in existing_costs
+    ):
         existing_costs.append(cost_rec)
         state.costLedger = existing_costs
     # write/ensure CapabilityRun with timing (idempotent)
-    cap_run = CapabilityRun(
+    cap_run = CapabilityRun.server_record(
+        # 走到这一行说明能力返回了结果（失败那条走
+        # engine_scheduling.record_capability_run_error）。
+        status="success",
+        # timing 是这条路径唯一真正量过墙钟的地方，顶层跟它对齐。
+        durationMs=(
+            int(timing["durationMs"])
+            if isinstance((timing or {}).get("durationMs"), (int, float))
+            else None
+        ),
+        provenance="executor.run",
         id=run_id,
         capabilityId=capability_id,
         turnId=turn_key,
@@ -403,89 +420,30 @@ def execute_capability(
             )
 
         if capability_id == "structure.decompose":
-            # PYTHON_AUTHORITY for structure.decompose (CapabilityParity): dedicated structured SPEC tree schema output.
-            # Emits tree with root/requirements/risks/deliverables/evidenceRef verifiable nodes + kind + gateResults (G_SCHEMA/G_INV pass/fail).
-            # Mirrors maps path; direct execute_capability gets schema+invariant semantics. No generic fallback.
-            evidence = retrieve_evidence(goal, top_k=6)
-            base_content = generate_with_rag(f"structure.decompose for {goal}", evidence)
-            ev_block = "\n".join([f"- evidenceRef:{e.get('id','e')} {e.get('content','')} (source:{e.get('source','')})" for e in evidence[:3]])
-            req_text = f"Implement scoped permission checks for {goal}"
-            risk_text = f"Privilege escalation via inheritance in {goal}"
-            deliv_text = f"SPEC tree + traceability for {goal} MVP"
-            structured_content = (
-                base_content + "\n\n# SPEC Tree\n"
-                f"Root: {goal}\n\n"
-                "## Requirements\n"
-                f"- id:r1 text:{req_text} (evidenceRef:e1)\n\n"
-                "## Risks\n"
-                f"- id:rsk1 text:{risk_text} (evidenceRef:e2)\n\n"
-                "## Deliverables\n"
-                f"- id:d1 text:{deliv_text} (evidenceRef:e3)\n\n"
-                "## Evidence references\n" + ev_block + "\n"
-            )
-            # structure schema + gate results for invariant gates (address review: verifiable fields + gate semantics)
-            tree_schema = {
-                "root": {"id": "root-1", "text": goal, "type": "goal"},
-                "requirements": [{"id": "r1", "text": req_text, "evidenceRef": "e1"}],
-                "risks": [{"id": "rsk1", "text": risk_text, "evidenceRef": "e2"}],
-                "deliverables": [{"id": "d1", "text": deliv_text, "evidenceRef": "e3"}],
-                "evidenceRefs": [e.get("id", "e") for e in evidence[:3]],
-                "nodes": [
-                    {"id": "root-1", "type": "goal", "text": goal},
-                    {"id": "r1", "type": "requirement", "text": req_text, "evidenceRef": "e1"},
-                    {"id": "rsk1", "type": "risk", "text": risk_text, "evidenceRef": "e2"},
-                    {"id": "d1", "type": "deliverable", "text": deliv_text, "evidenceRef": "e3"},
-                ],
-            }
-            # Harden + carry: compute real G_SCHEMA/G_INV from tree/evidence (not static); attach to result so direct path
-            # (and internal callers) expose kind/tree/gateResults. Addresses review finding 1 for direct execute_capability.
-            ev_ids = {str(e.get("id", "")) for e in evidence if e.get("id")}
-            evrefs = tree_schema.get("evidenceRefs", [])
-            reqs = tree_schema.get("requirements", [])
-            risks = tree_schema.get("risks", [])
-            delivs = tree_schema.get("deliverables", [])
-            nodes = tree_schema.get("nodes", [])
-            root = tree_schema.get("root", {})
-            has_core = bool(root.get("id")) and len(reqs) > 0 and len(risks) > 0 and len(delivs) > 0 and len(nodes) > 0
-            nodes_have_ids = all(bool(n.get("id")) for n in nodes) if nodes else False
-            schema_pass = has_core and nodes_have_ids
-            all_refs_grounded = True
-            for item in reqs + risks + delivs:
-                eref = item.get("evidenceRef")
-                if eref and eref not in ev_ids and eref not in evrefs:
-                    all_refs_grounded = False
-            node_id_set = {n.get("id") for n in nodes if n.get("id")}
-            structure_ids = {root.get("id")} if root.get("id") else set()
-            for sec in (reqs, risks, delivs):
-                structure_ids.update(i.get("id") for i in sec if i.get("id"))
-            no_orphans = bool(node_id_set) and node_id_set.issubset(structure_ids | set(evrefs)) if node_id_set else True
-            gate_results = {
-                "G_SCHEMA": {
-                    "status": "passed" if schema_pass else "failed",
-                    "reason": "tree has root + requirements + risks + deliverables + evidenceRef nodes" if schema_pass else "tree schema incomplete or missing required sections/nodes",
-                },
-                "G_INV": {
-                    "status": "passed" if (all_refs_grounded and no_orphans) else "failed",
-                    "checks": [
-                        "requirements grounded in evidence" if all_refs_grounded else "some requirements lack consistent evidenceRef",
-                        "no orphan nodes" if no_orphans else "orphan nodes without parent/trace",
-                        "deliverables traceable",
-                        "risks have mitigations path",
-                    ],
-                },
-            }
+            # 2026-08-13：这条分支原本是 capability_maps.execute_structure 的**第二份
+            # 拷贝**——同一段 f-string 占位（恒定 1 需求 1 风险 1 交付物）写了两遍，
+            # 连 G_SCHEMA/G_INV 那套"校验自己刚拼出来的形状"的逻辑都各抄了一份。
+            #
+            # 换成真 spec 的时候只改一处，另一处就会继续端出假树，而且**没有任何
+            # 一处会发现两边不一致**——这个仓踩过三次同型的坑（合法域账本记在四处、
+            # 手写 uses 声明与实际渲染不符 316 个、pageKinds 从没集中评审）。
+            # 所以这里改成委托，不再各写一份。
+            from .capability_maps import execute_structure
+
+            out = execute_structure(state, capability_id, role_id, turn_id, input_artifact_ids)
             res = ExecuteCapabilityResult(
-                title="SPEC Tree (Python RAG)",
-                summary="检索了外部证据并生成结构化 SPEC tree schema",
-                content=structured_content,
-                provenance="python-rag",
-                sources=evidence,
+                title=out["title"],
+                summary=out["summary"],
+                content=out["content"],
+                provenance=out["provenance"],
+                sources=out["sources"],
             )
-            # dynamic attach via __dict__ bypass (avoids pydantic __setattr__ ValueError for undeclared; model edit out of scope)
-            # makes direct execute_capability result carry kind/tree/gateResults for API/contract exposure (review fix 1)
-            res.__dict__["kind"] = "spec_tree"
-            res.__dict__["tree"] = tree_schema
-            res.__dict__["gateResults"] = gate_results
+            # 动态挂载绕开 pydantic 的 __setattr__（未声明字段会 ValueError）；
+            # 让直连路径也带上 kind/tree/gateResults，跟 mapped 路径口径一致。
+            res.__dict__["kind"] = out["kind"]
+            if "tree" in out:
+                res.__dict__["tree"] = out["tree"]
+            res.__dict__["gateResults"] = out["gateResults"]
             return res
 
             if capability_id in ("dialogue", "intent.clarify", "gap.ask", "question.expand"):

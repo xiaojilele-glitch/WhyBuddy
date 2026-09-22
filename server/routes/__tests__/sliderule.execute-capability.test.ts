@@ -20,8 +20,25 @@ import { withStubbedLlmKey } from './helpers/with-stubbed-llm-key.js';
 // routes/sliderule.js (which does `import { callPythonSlideRule } from '../sliderule/python-delegation.js'`).
 // We then use dynamic import *after* the mock so the route module receives the mocked version.
 // This fixes the "mock not taking effect / real Python hit" issue reported in audit.
+// ⚠ 2026-09-13：mock 少一个导出，整份套件 20 条全红，报的却是
+//   「python V5 delegation failed」——看起来像委派坏了，其实是 vi.mock 没
+//   跟上产线新增的 `viewerHeadersFrom`（身份透传，见 python-delegation.ts:70）。
+//   vi.mock 的工厂是**全量替换**：漏一个导出，调用点拿到的就是 undefined。
+//   这份套件正是 CI 的 server 段，它一直红着，而 CI 第一步挂在 typecheck 上，
+//   于是没人分辨得出这是 mock 过期还是真委派故障。
+//
+//   行为跟真实实现保持一致（只透传 cookie / authorization，没有就不带），
+//   不是返回空对象了事——否则「身份透传」这条路的判据就成了摆设。
 vi.mock('../../sliderule/python-delegation.js', () => ({
   callPythonSlideRule: vi.fn(),
+  viewerHeadersFrom: vi.fn((req: { headers?: Record<string, unknown> }) => {
+    const out: Record<string, string> = {};
+    const cookie = req?.headers?.['cookie'];
+    if (typeof cookie === 'string' && cookie) out.cookie = cookie;
+    const auth = req?.headers?.['authorization'];
+    if (typeof auth === 'string' && auth) out.authorization = auth;
+    return out;
+  }),
   resolvePythonSlideRuleRuntimeConfig: vi.fn(() => ({
     baseUrl: 'http://localhost:9700',
     internalKey: 'test-internal-key',

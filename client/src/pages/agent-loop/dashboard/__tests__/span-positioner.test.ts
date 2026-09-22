@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { createSpanPositioner, bestSpanStart } from "../span-positioner";
+import { copyPlacements, createSpanPositioner, bestSpanStart } from "../span-positioner";
 
 const W = 100;
 const G = 10;
@@ -204,20 +204,289 @@ describe("bestSpanStart", () => {
     expect(bestSpanStart([50, 0, 0, 80], 2)).toBe(1);
   });
 
-  it("跨列卡不会全部堆在最左边（反馈环回归）", () => {
-    // 纯空白规则下，跨列卡把两列设成完全相等 → "最平窗口"永远是这一对 →
-    // 后续每张跨列卡都落回 left=0。实测 10 张全在第 0 列。这里钉住不再复发。
+  it("跨列卡不会全部堆在最左边（用实测高度，不是等高模拟）", () => {
+    // **这条用例 2026-08-08 改过——原来是假绿的。**
+    //
+    // 原版模拟每张卡都是 234px。等高时各列自然就散开了，所以它一直是绿的，
+    // 而线上真实高度从 102 到 846，正反馈才咬合：一张跨列卡把两列设成完全
+    // 相等 → 那对窗口空白恒为 0 → 下一张还挑它 → 又设成相等。
+    //
+    // 下面的高度是从组件库区块墙上量下来的原样（5 列、宽卡 span=2）。
+    // 修之前跑这段：10 张宽卡全部 start=0，第 0/1 列摞到 4153px。
     const CC = 5;
+    const wide = [242, 102, 102, 188, 360, 521, 126, 263, 846, 200, 306, 105];
+    const narrow = [120, 80, 120, 170, 280, 120, 236, 32, 102, 70, 102, 120];
     const heights = new Array(CC).fill(0);
     const starts: number[] = [];
-    for (let i = 0; i < 24; i++) {
-      const span = i % 3 === 0 ? 2 : 1;
+    // 宽窄交错，跟 interleaveWide 铺出来的次序一致
+    for (let i = 0; i < wide.length + narrow.length; i++) {
+      const isWide = i % 2 === 0;
+      const span = isWide ? 2 : 1;
+      const h = isWide ? wide[i >> 1] : narrow[i >> 1];
       const s = bestSpanStart(heights, span);
-      if (span === 2) starts.push(s);
+      if (isWide) starts.push(s);
       let top = heights[s];
       for (let j = s + 1; j < s + span; j++) if (heights[j] > top) top = heights[j];
-      for (let j = s; j < s + span; j++) heights[j] = top + 234 + 16;
+      for (let j = s; j < s + span; j++) heights[j] = top + h + 16;
     }
-    expect(new Set(starts).size).toBeGreaterThan(1);
+    // ① 跨列卡得真的分散：5 列里 span=2 有 4 个可能的起点，至少用上 3 个
+    expect(
+      new Set(starts).size,
+      `跨列卡的起始列：${starts.join(", ")}`
+    ).toBeGreaterThanOrEqual(3);
+    // ② 最终各列高度不能悬殊。修之前是 4153 : 500 ≈ 8.3 倍
+    const mx = Math.max(...heights);
+    const mn = Math.min(...heights);
+    expect(mx / mn, `各列高度：${heights.join(", ")}`).toBeLessThan(1.6);
+  });
+
+  it("等高的两列不再永远赢过更矮但不齐的两列", () => {
+    // 这就是正反馈的那一步，单独钉住：
+    // [4000,4000] 空白 0，[400,300] 空白 100 —— 纯空白规则会选前者。
+    expect(bestSpanStart([4000, 4000, 500, 400, 300], 2)).toBe(3);
+  });
+});
+
+/**
+ * update 的稳定性 —— 2026-08-09 补。
+ *
+ * 用户报「区块的布局算法不是很稳定」，Playwright 逐屏滚动实测：视口 1600 下
+ * 19 帧里卡片位移 80 次、最大 501px，而且是 `1203→634→1203` 这样**来回**跳。
+ * 根因是当时的 `update()` 走全量重排，连"落进哪一列"都重算一遍——任何一张卡
+ * 改高（图表画完、滚出去又滚回来重新量）都会把整面墙重新洗牌。
+ *
+ * masonic / gestalt / react-photo-album 三家的共同做法是**测量结果可以变，
+ * 落位决策不能变**。下面这组把这条钉死。
+ */
+describe("update 的稳定性", () => {
+  /** 建一面墙：3 列，交错的跨列卡。 */
+  function wall() {
+    const spans = [2, 1, 1, 2, 1, 1, 2, 1, 1, 1];
+    const p = make(3, i => spans[i] ?? 1);
+    const h = [200, 120, 300, 150, 260, 90, 400, 110, 180, 220];
+    h.forEach((v, i) => p.set(i, v));
+    return { p, spans, h };
+  }
+
+  it("改高不改列 —— 每一格的 column/span 与改高前逐个相同", () => {
+    const { p } = wall();
+    const before = p.all().map(it => ({ column: it.column, span: it.span }));
+    // 挑一张跨列卡大幅改高：这是最容易引发重新洗牌的情形
+    p.update([0, 640]);
+    p.all().forEach((it, i) => {
+      expect({ i, column: it.column, span: it.span }).toEqual({ i, ...before[i] });
+    });
+  });
+
+  it("改高之后仍然不重叠", () => {
+    const { p } = wall();
+    p.update([0, 640, 3, 40, 6, 80]);
+    assertNoOverlap(p.all());
+    // 反方向再来一次：收缩
+    p.update([0, 60, 6, 700]);
+    assertNoOverlap(p.all());
+  });
+
+  it("改高只影响它下面的，上面的一动不动", () => {
+    const { p } = wall();
+    const before = p.all().map(it => it.top);
+    const target = 6; // 一张靠后的跨列卡
+    const bottom = p.get(target)!.top + p.get(target)!.height;
+    p.update([target, 700]);
+    p.all().forEach((it, i) => {
+      if (i === target) return;
+      // 完全在它上方（底边不低于它的顶边）的格子不该动
+      if (before[i] + it.height <= p.get(target)!.top) {
+        expect(it.top, `#${i} 在改高的格子上方却动了`).toBe(before[i]);
+      }
+    });
+    expect(bottom).toBeGreaterThan(0);
+  });
+
+  it("整像素相同的高度是死区，不引发任何位移", () => {
+    const { p, h } = wall();
+    const before = p.all().map(it => ({ ...it }));
+    // gestalt `recalcHeights` 用 Math.floor 比较：亚像素抖动不该动整面墙
+    p.update([2, h[2] + 0.4, 5, h[5] + 0.9]);
+    expect(p.all()).toEqual(before);
+  });
+
+  it("同一个下标被 set 两次不会把它放两遍", () => {
+    // 放两遍的症状正是"偶发重叠"：第二遍落在自己下面，两张同 key 的卡叠在一起。
+    const { p } = wall();
+    const n = p.size();
+    p.set(4, 999);
+    expect(p.size(), "重复 set 之后格子数变了").toBe(n);
+    expect(p.get(4)!.height).toBe(999);
+    assertNoOverlap(p.all());
+  });
+
+  it("size() 是格子数，不随区间树的实现细节漂移", () => {
+    const { p } = wall();
+    expect(p.size()).toBe(10);
+    p.update([0, 640]); // 重排会重建区间树
+    expect(p.size()).toBe(10);
+  });
+});
+
+/**
+ * 「哪些格子该进下一批测量」——2026-08-09 补。
+ *
+ * 渲染层原来问的是 `size()`（落了几格），把它当成"下一个该量的下标"。这只在
+ * 落位下标恰好是 [0, size()) 连续前缀时才成立。当天亲手破坏过一次这个前提：
+ * ref 回调里给落位加了个 `h > 0` 的条件，量到 0 的那格被跳过，于是
+ *
+ *     items 里有 8..29，order.length = 22
+ *       → 渲染层从 22 开始画"隐藏待量"批次
+ *       → 22..29 明明已经定位好了，又被画了一遍
+ *       → 同一个 key 渲染两次，React 留下孤儿节点
+ *
+ * 浏览器实测：1600 视口 19 帧**全部**出现重叠，一张卡同时出现在两三个位置。
+ * 现在渲染层改问 `firstUnplaced()`，问题从"靠纪律维持"变成"问不出错的问题"。
+ */
+describe("firstUnplaced", () => {
+  it("连续落位时等于 size()", () => {
+    const p = make(3, () => 1);
+    expect(p.firstUnplaced()).toBe(0);
+    [100, 120, 90, 140].forEach((h, i) => p.set(i, h));
+    expect(p.firstUnplaced()).toBe(4);
+    expect(p.firstUnplaced()).toBe(p.size());
+  });
+
+  it("中间留洞时指向洞，而不是跟着 size() 漂到已定位的格子上", () => {
+    const p = make(3, () => 1);
+    p.set(0, 100);
+    p.set(1, 120);
+    // 第 2 格被跳过（真实成因：量到 0 被一个前置条件挡下了）
+    p.set(3, 140);
+    p.set(4, 110);
+    expect(p.size(), "落位格子数").toBe(4);
+    expect(p.firstUnplaced(), "size() 会说 4 —— 而 4 已经定位好了").toBe(2);
+  });
+
+  it("高度量成 0 也必须算落位过，否则洞就是这么来的", () => {
+    const p = make(3, () => 1);
+    p.set(0, 0);
+    expect(p.get(0), "量到 0 不等于没落位").toBeDefined();
+    expect(p.firstUnplaced()).toBe(1);
+  });
+});
+
+/**
+ * 沉降重排 —— 2026-08-09 补，为的是一条实测出来的**永久性**错位。
+ *
+ * 组件库区块墙 1920 视口下 5 列 30 张卡，浏览器实测各列末端
+ * `[4246,4246,3418,3418,1792]`，填充率 75.0%；把同一批 `(span, 最终高度)`
+ * 离线喂给**同一条** `bestSpanStart`，得到 `[3695,3695,2141,3668,3668]`、
+ * 填充率 86.2%。规则没错，错的是决策时读到的高度——`seed()` 会照喂过期列宽下
+ * 量的高度（它有意为之），而 `update()` 只 `reflow()`、按定义不重选列，
+ * 于是开场那一次的错误列**永远留下**。
+ *
+ * 同一成因还让版面不确定：三次加载总高 4246 / 4388 / 4388。
+ */
+describe("resettle", () => {
+  it("用真高度重选列——错高度冻出来的列会被纠正", () => {
+    const p = make(3, i => (i === 0 ? 2 : 1));
+    // 开场：第 0 格（跨 2 列）被量成很矮
+    p.set(0, 10);
+    p.set(1, 100);
+    p.set(2, 100);
+    expect(p.get(1)!.column, "此时第 2 列还空着").toBe(2);
+
+    // 真高度到货：第 0 格其实很高。reflow 只改几何，列不动。
+    p.update([0, 500]);
+    expect(p.get(1)!.column, "reflow 按定义不重选列").toBe(2);
+
+    expect(p.resettle()).toBe(true);
+    // 用真高度重来：第 0 格跨 0/1 列到 510，第 1 格该落到还空着的第 2 列
+    expect(p.get(1)!.column).toBe(2);
+    expect(p.get(2)!.column, "第 3 格不该再摞在 510 上").toBe(2);
+    assertNoOverlap(p.all());
+  });
+
+  it("只放行一次——之后永久回到 reflow-only", () => {
+    const p = make(3, () => 1);
+    [100, 120, 90].forEach((h, i) => p.set(i, h));
+    expect(p.resettle()).toBe(true);
+    expect(p.resettle(), "第二次必须被闸挡下").toBe(false);
+    expect(p.resettle()).toBe(false);
+  });
+
+  it("一格都没落位时不动，也不消耗那一次机会", () => {
+    const p = make(3, () => 1);
+    expect(p.resettle()).toBe(false);
+    p.set(0, 100);
+    expect(p.resettle(), "机会还在").toBe(true);
+  });
+
+  it("重排之后 items 仍是从 0 开始的连续前缀", () => {
+    // 破坏这条不变式的后果是满屏摞卡，见 firstUnplaced 的文档。
+    const p = make(4, i => (i % 3 === 0 ? 2 : 1));
+    [120, 90, 300, 60, 210, 45, 180, 75].forEach((h, i) => p.set(i, h));
+    p.resettle();
+    expect(p.size()).toBe(8);
+    expect(p.firstUnplaced()).toBe(8);
+    expect(p.all().filter(Boolean).length).toBe(8);
+    assertNoOverlap(p.all());
+  });
+
+  it("中间有洞时只排到洞前，不跳过去接着排", () => {
+    const p = make(3, () => 1);
+    p.set(0, 100);
+    p.set(1, 120);
+    p.set(3, 140); // 第 2 格没落位
+    p.resettle();
+    expect(p.firstUnplaced(), "洞的位置不变").toBe(2);
+    expect(p.size(), "只重排了连续前缀那两格").toBe(2);
+  });
+
+  it("revision 只跟高度走，位置变化不算", () => {
+    // 渲染层拿它给沉降计时续期：位置也算的话 resettle 会把自己的计时器续起来。
+    const p = make(3, () => 1);
+    const r0 = p.revision();
+    [100, 120, 90].forEach((h, i) => p.set(i, h));
+    expect(p.revision()).toBeGreaterThan(r0);
+
+    const r1 = p.revision();
+    p.update([0, 100]); // 高度没变 —— 死区拦下
+    expect(p.revision(), "没变的高度不该推高 revision").toBe(r1);
+
+    p.update([0, 400]);
+    expect(p.revision()).toBeGreaterThan(r1);
+
+    const r2 = p.revision();
+    p.resettle();
+    expect(p.revision(), "resettle 自己不能推高 revision，否则会自激").toBe(r2);
+  });
+});
+
+describe("copyPlacements", () => {
+  it("列宽变了也沿用原来的列，不该有：place() 重选之后换列", () => {
+    const wide = createSpanPositioner({
+      columnCount: 4,
+      columnWidth: 300,
+      columnGutter: G,
+      rowGutter: G,
+      getSpan: i => (i === 2 ? 2 : 1),
+    });
+    [180, 180, 360, 180, 180, 180].forEach((h, i) => wide.set(i, h));
+    const cols = [0, 1, 2, 3, 4, 5].map(i => wide.get(i)!.column);
+
+    const narrow = createSpanPositioner({
+      columnCount: 4,
+      columnWidth: 285,
+      columnGutter: G,
+      rowGutter: G,
+      // 故意换一套 getSpan：走 set() 就会按新规则重选列
+      getSpan: () => 1,
+    });
+    expect(copyPlacements(wide, narrow)).toBe(6);
+    for (let i = 0; i < 6; i++) {
+      expect(narrow.get(i)!.column, `#${i} 必须还在原列`).toBe(cols[i]);
+      expect(narrow.get(i)!.span).toBe(wide.get(i)!.span);
+    }
+    expect(narrow.get(0)!.width).toBe(285);
+    expect(narrow.get(2)!.width).toBe(285 * 2 + G);
+    assertNoOverlap(narrow.all());
   });
 });

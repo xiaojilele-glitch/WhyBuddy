@@ -20,7 +20,10 @@ export const Response = memo(
   ({ children, className, parseIncompleteMarkdown = true }: ResponseProps) => (
     <Streamdown
       className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+        // ⚠ 2026-08-19 妇幼站收口：官方壳写满高，父级按一行行高算高度，
+        // 总结第二行（「- 营养…」）被裁掉半截，「重新推演」还在下面完整。
+        // 按内容撑开，最后一块也不许收掉边距——那是最后一行的呼吸空间。
+        "h-auto w-full overflow-visible [&>*:first-child]:mt-0",
         className
       )}
       parseIncompleteMarkdown={parseIncompleteMarkdown}

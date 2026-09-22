@@ -1,15 +1,22 @@
 import React from "react";
-import { Check, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, MessageCircleQuestion } from "lucide-react";
 
 /**
- * G_READY 澄清问题卡片（多步分页）。弹在输入框上方。
+ * G_READY 澄清问题卡片（多步分页）。
+ * ⚠ 2026-08-20：必须 absolute 叠在输入框上方。进 flex 流（mb-2 占位）
+ * 会把输入框顶走——空态 justify-center 时整块重新居中，跳得更明显。
  * 词汇对齐 V4 `BlueprintClarificationQuestion`（type/options:string[]/defaultAnswer/context）。
  * 数据源：sessionState.coverageGaps 的 open open_question gaps（由 SlideRule.tsx 派生传入）。
+ *
+ * 2026-09-15 卡面抄 Cursor 文件卡（跟计划审批同一套）：12px 圆角、`#e5e7eb`
+ * 边、近黑下一步，不要蓝徽章 / 桃红阴影那张问卷。出口没变。
  */
 export type ClarificationItem = {
   id: string;
   prompt: string;
   kind?: string;  // V4 alignment (e.g. "audience", blueprint question id)
+  /** 事件自带的人话。有它就不查 KIND_LABELS。 */
+  kindLabel?: string;
   type?: "free_text" | "single_choice" | "multi_choice";
   options?: string[];
   defaultAnswer?: string;
@@ -18,7 +25,97 @@ export type ClarificationItem = {
 
 export type ClarificationAnswer = { gapId: string; answer: string };
 
+/**
+ * 澄清卡数据源。从 coverageGaps 滤出「现在该画」的题。
+ *
+ * ⚠ 2026-09-01 真机：股票分析器三道题都选完了，「「…」答：…」已经进了
+ * 会话，卡又从「待回答问题 1/3 / 已答 0/3」弹一遍。成因不是模型又问了
+ * 一轮——是提交后新一轮 `isRunning=true`，`awaitReason` 还停在
+ * `control_clarify`，磁盘里的缺口还是 open；`pendingClarifications` 的
+ * useMemo 因 isRunning 换了数组身份，卡片 useEffect 把 picks 清零。
+ *
+ * 停泊那一发（还没提交）isRunning 也要画卡；提交过的这一发不许再画。
+ */
+export type ClarificationGapLike = {
+  id: string;
+  kind?: string;
+  status?: string;
+  label: string;
+  clarifyKind?: string;
+  kindLabel?: string;
+  clarifyType?: ClarificationItem["type"];
+  options?: string[];
+  defaultAnswer?: string;
+  context?: string;
+};
+
+export function pendingClarificationItems(opts: {
+  gaps: ClarificationGapLike[] | undefined;
+  awaitReason: string | undefined | null;
+  isRunning: boolean;
+  submittedGapIds?: Iterable<string>;
+}): ClarificationItem[] {
+  const parkedClarify = opts.awaitReason === "control_clarify";
+  // 只在停泊澄清时画卡。open 缺口留下但 awaitReason 已空 = 用户已经
+  // 另说一句，不许把「谁用」问卷粘在后面每一轮上（2026-09-08 真机：
+  // hello 出卡后打「你好」卡还在）。
+  if (!parkedClarify) return [];
+  const submitted = new Set(
+    Array.from(opts.submittedGapIds || []).map(id => String(id))
+  );
+  // 答完提交后的这一发：哪怕 awaitReason 还停在 control_clarify、缺口
+  // 还是 open，也不许把同一张卡再画一遍。
+  if (opts.isRunning && submitted.size > 0) return [];
+  return (opts.gaps || [])
+    .filter(g => g.status === "open" && g.kind === "open_question")
+    .map(g => ({
+      id: g.id,
+      prompt: g.label,
+      kind: g.clarifyKind,
+      kindLabel: g.kindLabel,
+      type: g.clarifyType,
+      options: g.options,
+      defaultAnswer: g.defaultAnswer,
+      context: g.context,
+    }));
+}
+
+export function clarificationQuestionKey(
+  questions: Array<{ id: string }>
+): string {
+  return questions.map(q => q.id).join("|");
+}
+
 const OTHER = "__other__";
+
+/**
+ * 维度键 → 人话标签。
+ *
+ * ⚠ 2026-08-27 真机截图逮到的：卡片把 `kind` **原样**印在问题旁边，用户看到的
+ *   是一个孤零零的 `users`，底下按钮还写着「批量 users」。这是内部词表，
+ *   不是给人看的。认不出的键**不显示**——宁可少一个标签，也不要在用户脸上
+ *   糊一串英文。
+ */
+const KIND_LABELS: Record<string, string> = {
+  users: "谁用",
+  audience: "谁用",
+  platform: "在哪用",
+  scenario: "核心流程",
+  "success-criteria": "核心流程",
+  scope: "本期边界",
+  rules: "规则",
+};
+
+export function kindLabel(kind?: string, explicit?: string): string {
+  if (explicit && explicit.trim()) return explicit.trim();
+  if (!kind) return "";
+  const key = kind.trim().toLowerCase();
+  if (KIND_LABELS[key]) return KIND_LABELS[key];
+  for (const [k, label] of Object.entries(KIND_LABELS)) {
+    if (key.includes(k)) return label;
+  }
+  return "";
+}
 
 export function ClarificationCard({
   questions,
@@ -35,9 +132,12 @@ export function ClarificationCard({
   const [picked, setPicked] = React.useState<Record<string, string>>({});
   const [multi, setMulti] = React.useState<Record<string, Set<string>>>({});
   const [otherText, setOtherText] = React.useState<Record<string, string>>({});
+  const questionKey = clarificationQuestionKey(questions);
 
   React.useEffect(() => {
     // 预选 defaultAnswer（若匹配某个选项）
+    // ⚠ 钉 questionKey 不钉 questions 数组身份：提交后 isRunning 翻转会
+    // 换一个同 id 的新数组，useEffect([questions]) 把 picks 清成已答 0/3。
     const seedPick: Record<string, string> = {};
     for (const q of questions) {
       if (q.type !== "multi_choice" && q.defaultAnswer && (q.options || []).includes(q.defaultAnswer)) {
@@ -48,7 +148,8 @@ export function ClarificationCard({
     setMulti({});
     setOtherText({});
     setStep(0);
-  }, [questions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 身份变、id 不变时不许把已答清零
+  }, [questionKey]);
 
   if (total === 0) return null;
   const q = questions[Math.min(step, total - 1)];
@@ -96,177 +197,203 @@ export function ClarificationCard({
     });
   };
 
+  const currentKind = kindLabel(q.kind, q.kindLabel);
+  const markClass = (selected: boolean) =>
+    `flex size-4 shrink-0 items-center justify-center border ${
+      isMulti ? "rounded-[3px]" : "rounded-full"
+    } ${
+      selected
+        ? "border-[#171717] bg-[#171717] text-white"
+        : "border-[#d4d4d4] text-transparent"
+    }`;
+
   return (
     <div
-      className="pointer-events-auto mb-2 w-full max-w-2xl rounded-lg border border-[#EBCEC0]/70 bg-white/95 shadow-[0_12px_40px_rgb(217_119_87/0.12)] backdrop-blur-xl"
+      className="pointer-events-auto absolute bottom-full left-0 right-0 z-[30] mb-2 w-full origin-bottom sr-composer-pop overflow-hidden rounded-[12px] border border-[#e5e7eb] bg-white text-[#171717] shadow-[0_2px_8px_rgba(31,35,40,0.06)]"
       data-testid="sliderule-clarification-card"
+      data-clarification-surface="cursor"
     >
-      <div className="flex items-center justify-between border-b border-[#e8eaee] px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-[#e6f4ff] px-2 py-0.5 text-[11px] font-semibold text-[#1677ff]">
-            待回答问题
-          </span>
-          <span className="text-[11px] tabular-nums text-stone-400" data-testid="sliderule-clarification-pager">
-            {step + 1} / {total}
-          </span>
-        </div>
+      <header className="flex h-9 shrink-0 items-center gap-2 border-b border-[#e5e7eb] px-3">
+        <MessageCircleQuestion
+          className="size-3.5 shrink-0 text-[#8b8b8b]"
+          aria-hidden
+        />
+        <h2 className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#333]">
+          问题
+        </h2>
+        <span
+          className="shrink-0 text-[12px] tabular-nums text-[#9a9a9a]"
+          data-testid="sliderule-clarification-pager"
+        >
+          {step + 1} / {total}
+        </span>
         <button
+          type="button"
           onClick={onClose}
-          className="rounded p-1 text-stone-400 transition hover:bg-[#e9edf2] hover:text-stone-700"
-          title="关闭（也可直接在下方输入框补充）"
+          className="shrink-0 text-[12px] text-[#8b8b8b] outline-none hover:text-[#333] focus-visible:ring-2 focus-visible:ring-[#171717]/20"
+          title="跳过（也可直接在下方输入框补充）"
           data-testid="sliderule-clarification-close"
         >
-          <X className="h-4 w-4" />
+          跳过
         </button>
-      </div>
+      </header>
 
-      <div className="px-4 py-3">
+      <div className="px-3.5 py-3">
         <div className="flex items-baseline gap-2">
-          <p className="text-sm font-semibold text-stone-800">{q.prompt}</p>
-          {q.kind && (
-            <span className={`rounded px-1 py-0 text-[9px] font-mono ${
-              q.kind.includes("audience") || q.kind.includes("users") ? "bg-blue-100 text-blue-700" :
-              q.kind.includes("platform") ? "bg-green-100 text-green-700" :
-              q.kind.includes("scope") ? "bg-amber-100 text-amber-700" :
-              q.kind.includes("success") || q.kind.includes("scenario") ? "bg-purple-100 text-purple-700" :
-              "bg-[#F3DCD0] text-[#1677ff]"
-            }`}>{q.kind}</span>
-          )}
+          <p className="text-[13.5px] font-medium leading-[1.55] text-[#171717]">
+            {q.prompt}
+          </p>
+          {currentKind ? (
+            <span
+              data-testid="sliderule-clarification-kind"
+              className="shrink-0 text-[11px] text-[#8b8b8b]"
+            >
+              {currentKind}
+            </span>
+          ) : null}
         </div>
-        {q.context && <p className="mt-1 text-[11px] leading-relaxed text-stone-400">{q.context}</p>}
+        {q.context ? (
+          <p className="mt-1 text-[12px] leading-relaxed text-[#8b8b8b]">
+            {q.context}
+          </p>
+        ) : null}
 
-        <div className="mt-3 space-y-1.5">
+        <div className="mt-2.5 space-y-0.5">
           {isChoice &&
-            (q.options || []).map((opt) => {
+            (q.options || []).map(opt => {
               const isRecommended = q.defaultAnswer === opt;
-              const selected = isMulti ? (multi[q.id]?.has(opt) ?? false) : picked[q.id] === opt;
+              const selected = isMulti
+                ? (multi[q.id]?.has(opt) ?? false)
+                : picked[q.id] === opt;
               return (
                 <button
                   key={opt}
                   type="button"
                   onClick={() =>
-                    isMulti ? toggleMulti(opt) : setPicked((p) => ({ ...p, [q.id]: opt }))
+                    isMulti
+                      ? toggleMulti(opt)
+                      : setPicked(p => ({ ...p, [q.id]: opt }))
                   }
-                  className={`flex w-full items-center gap-2 rounded border px-3 py-2 text-left text-[13px] transition ${
+                  className={`flex w-full items-start gap-2.5 rounded-[8px] px-2.5 py-2 text-left text-[13px] leading-5 transition ${
                     selected
-                      ? "border-[#1677ff] bg-[#e6f4ff]/70 text-stone-800"
-                      : "border-[#e5e7eb] bg-white text-stone-600 hover:border-[#d3d8e0]"
+                      ? "bg-[#f3f4f6] text-[#171717]"
+                      : "text-[#444] hover:bg-[#f7f7f7]"
                   }`}
                 >
-                  <span
-                    className={`flex h-4 w-4 shrink-0 items-center justify-center border ${
-                      isMulti ? "rounded-[2px]" : "rounded-full"
-                    } ${selected ? "border-[#1677ff] bg-[#1677ff] text-white" : "border-[#d3d8e0]"}`}
-                  >
-                    {selected && <Check className="h-3 w-3" />}
+                  <span className={`mt-0.5 ${markClass(selected)}`}>
+                    {selected ? <Check className="size-3" strokeWidth={2.6} /> : null}
                   </span>
-                  <span className="min-w-0 flex-1">{opt}</span>
-                  {isRecommended && (
-                    <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                  <span className="min-w-0 flex-1 break-words">{opt}</span>
+                  {isRecommended ? (
+                    <span className="mt-0.5 shrink-0 text-[11px] text-[#8b8b8b]">
                       推荐
                     </span>
-                  )}
+                  ) : null}
                 </button>
               );
             })}
 
-          {/* 其他 / 自由文本 */}
           {isChoice ? (
-            <div className="flex items-center gap-2">
+            <div
+              className={`flex items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 ${
+                (isMulti ? multi[q.id]?.has(OTHER) : picked[q.id] === OTHER)
+                  ? "bg-[#f3f4f6]"
+                  : ""
+              }`}
+            >
               <button
                 type="button"
                 onClick={() =>
-                  isMulti ? toggleMulti(OTHER) : setPicked((p) => ({ ...p, [q.id]: OTHER }))
+                  isMulti
+                    ? toggleMulti(OTHER)
+                    : setPicked(p => ({ ...p, [q.id]: OTHER }))
                 }
-                className={`flex h-4 w-4 shrink-0 items-center justify-center border ${
-                  isMulti ? "rounded-[2px]" : "rounded-full"
-                } ${
-                  (isMulti ? multi[q.id]?.has(OTHER) : picked[q.id] === OTHER)
-                    ? "border-[#1677ff] bg-[#1677ff] text-white"
-                    : "border-[#d3d8e0]"
-                }`}
+                className={markClass(
+                  Boolean(isMulti ? multi[q.id]?.has(OTHER) : picked[q.id] === OTHER)
+                )}
               >
-                {(isMulti ? multi[q.id]?.has(OTHER) : picked[q.id] === OTHER) && <Check className="h-3 w-3" />}
+                {(isMulti ? multi[q.id]?.has(OTHER) : picked[q.id] === OTHER) ? (
+                  <Check className="size-3" strokeWidth={2.6} />
+                ) : null}
               </button>
               <input
                 type="text"
                 value={otherText[q.id] || ""}
-                onChange={(e) => {
-                  setOtherText((o) => ({ ...o, [q.id]: e.target.value }));
-                  if (!isMulti && e.target.value) setPicked((p) => ({ ...p, [q.id]: OTHER }));
+                onChange={e => {
+                  setOtherText(o => ({ ...o, [q.id]: e.target.value }));
+                  if (!isMulti && e.target.value)
+                    setPicked(p => ({ ...p, [q.id]: OTHER }));
                 }}
-                placeholder="其他（自定义回答）"
-                className="flex-1 rounded border border-[#e5e7eb] bg-white px-2.5 py-1.5 text-[13px] text-stone-800 outline-none transition focus:border-[#1677ff] focus:ring-2 focus:ring-[#F3DCD0]"
+                placeholder="其他（自己写）"
+                className="min-w-0 flex-1 bg-transparent py-1 text-[13px] text-[#171717] outline-none placeholder:text-[#b0b0b0]"
                 data-testid="sliderule-clarification-other"
               />
             </div>
           ) : (
             <textarea
               value={otherText[q.id] || ""}
-              onChange={(e) => setOtherText((o) => ({ ...o, [q.id]: e.target.value }))}
+              onChange={e => setOtherText(o => ({ ...o, [q.id]: e.target.value }))}
               placeholder="输入你的回答…"
               rows={2}
-              className="w-full resize-none rounded border border-[#e5e7eb] bg-white px-3 py-2 text-[13px] text-stone-800 outline-none transition focus:border-[#1677ff] focus:ring-2 focus:ring-[#F3DCD0]"
+              className="w-full resize-none rounded-[8px] border border-[#e5e7eb] bg-white px-3 py-2 text-[13px] text-[#171717] outline-none focus:border-[#171717]"
               data-testid="sliderule-clarification-text"
             />
           )}
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-[#e8eaee] px-4 py-2.5">
-        <span className="text-[11px] text-stone-400">已答 {answeredCount} / {total}</span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onClose}
-            className="rounded px-3 py-1.5 text-[12px] font-medium text-stone-500 transition hover:text-stone-700"
-          >
-            取消
-          </button>
-          {step > 0 && (
+      <footer className="flex items-center justify-between gap-2 border-t border-[#e5e7eb] px-3 py-2.5">
+        <span className="text-[12px] tabular-nums text-[#9a9a9a]">
+          已答 {answeredCount} / {total}
+        </span>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {currentKind && total > 1 ? (
             <button
-              onClick={() => setStep((s) => Math.max(0, s - 1))}
-              className="flex items-center gap-1 rounded border border-[#e5e7eb] bg-white px-3 py-1.5 text-[12px] font-medium text-stone-600 transition hover:bg-[#eef0f4]"
+              type="button"
+              onClick={() => {
+                const sameKind = questions.filter(item => item.kind === q.kind);
+                const answers: ClarificationAnswer[] = sameKind
+                  .map(item => ({ gapId: item.id, answer: answerFor(item) }))
+                  .filter(a => a.answer.length > 0);
+                if (answers.length > 0) onSubmit(answers);
+              }}
+              className="rounded-[8px] px-2 text-[12px] text-[#8b8b8b] hover:text-[#333]"
+              title={`把这一类问题一起提交（${currentKind}）`}
             >
-              <ChevronLeft className="h-3.5 w-3.5" /> 上一步
+              提交同类
             </button>
-          )}
+          ) : null}
+          {step > 0 ? (
+            <button
+              type="button"
+              onClick={() => setStep(s => Math.max(0, s - 1))}
+              className="inline-flex h-8 items-center gap-1 rounded-[8px] bg-[#f3f4f6] px-3 text-[13px] text-[#333]"
+            >
+              <ChevronLeft className="size-3.5" /> 上一步
+            </button>
+          ) : null}
           {step < total - 1 ? (
             <button
-              onClick={() => setStep((s) => Math.min(total - 1, s + 1))}
-              className="flex items-center gap-1 rounded bg-[#1677ff] px-3.5 py-1.5 text-[12px] font-semibold text-white transition hover:bg-[#0958d9]"
+              type="button"
+              onClick={() => setStep(s => Math.min(total - 1, s + 1))}
+              className="inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-[#171717] px-3 text-[13px] text-white"
               data-testid="sliderule-clarification-next"
             >
-              下一步 <ChevronRight className="h-3.5 w-3.5" />
+              下一步 <ChevronRight className="size-3.5" />
             </button>
           ) : (
             <button
+              type="button"
               onClick={submit}
               disabled={answeredCount === 0}
-              className="rounded bg-[#1677ff] px-4 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#0958d9] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-8 items-center rounded-[8px] bg-[#171717] px-3 text-[13px] text-white disabled:opacity-40"
               data-testid="sliderule-clarification-submit"
             >
-              提交补充
-            </button>
-          )}
-          {/* UI 增强: 按 kind 批量提交基础 (如果当前题有 kind, 提供批量选项) */}
-          {q.kind && total > 1 && (
-            <button
-              onClick={() => {
-                // 简单批量: 提交所有同 kind 的已答 (基础实现, 可扩展)
-                const sameKind = questions.filter(item => item.kind === q.kind);
-                const answers: ClarificationAnswer[] = sameKind
-                  .map((item) => ({ gapId: item.id, answer: answerFor(item) }))
-                  .filter((a) => a.answer.length > 0);
-                if (answers.length > 0) onSubmit(answers);
-              }}
-              className="rounded border border-[#e5e7eb] bg-white px-2 py-1 text-[11px] text-stone-600 hover:bg-[#eef0f4]"
-              title={`批量提交同 kind (${q.kind})`}
-            >
-              批量 {q.kind}
+              继续
             </button>
           )}
         </div>
-      </div>
+      </footer>
     </div>
   );
 }

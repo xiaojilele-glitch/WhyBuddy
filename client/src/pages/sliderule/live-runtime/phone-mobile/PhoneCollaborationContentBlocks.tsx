@@ -1,0 +1,38 @@
+import React from "react";
+import { Avatar, Badge, Button, Card, Checkbox, Dialog, ErrorBlock, List, Segmented, Selector, Space, Steps, Tag, TextArea } from "antd-mobile";
+import type { ExperienceBlockRendererProps } from "../block-registry";
+import { COLLABORATION_CONTENT_LABELS } from "../collaboration-content-blocks";
+
+const text = (value: unknown, fallback = "") => String(value ?? "").trim() || fallback;
+const ref = (props: ExperienceBlockRendererProps, key: string) => text(props.block.binding?.[key]);
+const targets = (props: ExperienceBlockRendererProps) => Array.isArray(props.block.binding?.targets) ? props.block.binding.targets.map(String) : [];
+const truthy = (value: unknown) => value === true || /^(true|yes|online|watching|resolved|active|1|是|在线|已解决)$/i.test(text(value));
+
+export function renderCollaborationContentPhoneBlock(props: ExperienceBlockRendererProps): React.ReactNode | undefined {
+  const label = COLLABORATION_CONTENT_LABELS[props.block.type];
+  if (!label) return undefined;
+  const entityRef = ref(props, "entityRef"), rows = entityRef ? props.entityRows?.[entityRef] : undefined;
+  const titleRef = ref(props, "titleFieldRef"), statusRef = ref(props, "statusFieldRef"), messageRef = ref(props, "messageFieldRef"), memberRef = ref(props, "memberFieldRef"), parentRef = ref(props, "parentFieldRef"), countRef = ref(props, "countFieldRef"), timeRef = ref(props, "timeFieldRef");
+  const [draft, setDraft] = React.useState(""), [selected, setSelected] = React.useState<string[]>([]), [mode, setMode] = React.useState<string | number>("pending");
+  const shell = (children: React.ReactNode) => props.block.props?.surface === "plain" ? <section data-testid={`phone-${props.block.type}`}>{children}</section> : <Card title={text(props.block.props?.title, label)} data-testid={`phone-${props.block.type}`}>{children}</Card>;
+  if (!entityRef || !rows) return shell(<ErrorBlock status="empty" title={`${label}尚未绑定实体`} />);
+  const submit = (operation: string, payload: Record<string, unknown> = {}) => props.onAction?.("submitRequest", { entityRef, operation, targets: targets(props), ...payload });
+  const choose = (rowId: string) => props.onAction?.("itemSelect", { entityRef, rowId });
+  let body: React.ReactNode;
+  switch (props.block.type) {
+    case "MentionComposer": body = <Space direction="vertical" block><TextArea value={draft} onChange={setDraft} placeholder="输入内容，使用 @ 提及协作者" autoSize={{ minRows: 3, maxRows: 6 }} /><Selector multiple columns={2} options={rows.map(row => ({ value: row.id, label: text(row.values?.[titleRef], row.id) }))} value={selected} onChange={setSelected} /><small>候选人与正文草稿保持分离。</small><Button block color="primary" disabled={!draft.trim()} onClick={() => { submit("publishMention", { body: draft, mentionedIds: selected }); setDraft(""); setSelected([]); }}>发布</Button></Space>; break;
+    case "ReactionSummary": body = <Space wrap>{rows.map(row => <Button key={row.id} size="small" onClick={() => submit("toggleReaction", { rowId: row.id })}>{text(row.values?.[titleRef], "回应")} <Badge content={Number(row.values?.[countRef] ?? 0)} /></Button>)}</Space>; break;
+    case "ThreadResolutionBar": { const row = rows[0], resolved = row ? truthy(row.values?.[statusRef]) : false; body = row ? <Button block color={resolved ? "default" : "primary"} onClick={async () => { if (await Dialog.confirm({ content: resolved ? "确认重新打开讨论？" : "确认解决讨论？" })) submit(resolved ? "reopenThread" : "resolveThread", { rowId: row.id }); }}>{resolved ? "重新打开讨论" : "标记讨论已解决"}</Button> : <ErrorBlock status="empty" title="暂无讨论" />; break; }
+    case "DocumentOutlinePanel": { const roots = rows.filter(row => !text(row.values?.[parentRef])); body = <List>{roots.map(root => <List.Item key={root.id} clickable onClick={() => choose(root.id)} description={`${rows.filter(row => text(row.values?.[parentRef]) === root.id).length} 个子章节`}>{text(root.values?.[titleRef], "未命名章节")}</List.Item>)}</List>; break; }
+    case "VersionComparePanel": body = <Space direction="vertical" block><Selector multiple columns={1} options={rows.map(row => ({ value: row.id, label: `${text(row.values?.[titleRef], row.id)} ${text(row.values?.[timeRef])}` }))} value={selected} onChange={values => setSelected(values.slice(-2))} /><small>{selected.length === 2 ? "版本对比为只读" : "请选择恰好两个版本"}</small><Button block disabled={selected.length !== 2} onClick={() => props.onAction?.("itemSelect", { entityRef, rowIds: selected, operation: "compareVersions" })}>查看差异</Button></Space>; break;
+    case "ApprovalCommentPanel": { const row = rows[0]; body = row ? <Space direction="vertical" block><div>{text(row.values?.[messageRef], "暂无审批说明")}</div><TextArea value={draft} onChange={setDraft} placeholder="填写审批评论" /><Button block disabled={!draft.trim()} onClick={() => submit("saveApprovalComment", { rowId: row.id, comment: draft })}>保存评论</Button><Button block color="primary" onClick={() => submit("submitApprovalDecision", { rowId: row.id, decision: "approve", comment: draft })}>通过</Button></Space> : <ErrorBlock status="empty" title="暂无待审批内容" />; break; }
+    case "KnowledgeBacklinkPanel": body = <List>{rows.map(row => <List.Item key={row.id} clickable onClick={() => choose(row.id)} description={text(row.values?.[messageRef])} extra={<Tag>{text(row.values?.[statusRef], "引用")}</Tag>}>{text(row.values?.[titleRef], "未命名文档")}</List.Item>)}</List>; break;
+    case "PresenceRosterPanel": body = <Space wrap>{rows.map(row => <Badge key={row.id} content={truthy(row.values?.[statusRef]) ? "在线" : "离线"}><Avatar src="" fallback={text(row.values?.[memberRef || titleRef], "?").slice(0, 1)} /></Badge>)}</Space>; break;
+    case "AssignmentQueuePanel": { const filtered = rows.filter(row => mode === "all" || text(row.values?.[statusRef]).toLowerCase() === mode); body = <><Segmented block value={mode} onChange={setMode} options={[{ label: "待分配", value: "pending" }, { label: "处理中", value: "active" }, { label: "全部", value: "all" }]} /><List>{filtered.map(row => <List.Item key={row.id} description={text(row.values?.[memberRef], "未分配")} extra={<Button size="mini" onClick={() => submit("assignItem", { rowId: row.id })}>分配</Button>}>{text(row.values?.[titleRef], row.id)}</List.Item>)}</List></>; break; }
+    case "EscalationPolicyPanel": body = <Steps direction="vertical">{[...rows].sort((a, b) => Number(a.values?.[countRef] ?? 0) - Number(b.values?.[countRef] ?? 0)).map(row => <Steps.Step key={row.id} title={text(row.values?.[titleRef], row.id)} description={`${text(row.values?.[countRef], "0")} 分钟`} />)}</Steps>; break;
+    case "OwnershipTransferPanel": { const row = rows[0]; body = row ? <Space direction="vertical" block><div>当前所有者：{text(row.values?.[memberRef], "未指定")}</div><Selector columns={1} options={rows.map(item => ({ value: item.id, label: text(item.values?.[memberRef || titleRef], item.id) }))} value={selected} onChange={setSelected} /><Button block color="danger" disabled={!selected[0]} onClick={async () => { if (await Dialog.confirm({ content: "确认转移所有权？此操作会改变后续管理责任。" })) submit("transferOwnership", { rowId: row.id, newOwnerId: selected[0] }); }}>确认转移</Button></Space> : <ErrorBlock status="empty" title="暂无可转移对象" />; break; }
+    case "WatcherManagerPanel": body = <List>{rows.map(row => { const watching = truthy(row.values?.[statusRef]); return <List.Item key={row.id} description="关注不改变访问权限" prefix={<Avatar src="" fallback={text(row.values?.[memberRef || titleRef], "?").slice(0, 1)} />} extra={<Button size="mini" onClick={() => submit(watching ? "removeWatcher" : "addWatcher", { rowId: row.id })}>{watching ? "取消" : "关注"}</Button>}>{text(row.values?.[memberRef || titleRef], row.id)}</List.Item>; })}</List>; break;
+    default: return undefined;
+  }
+  return shell(body);
+}

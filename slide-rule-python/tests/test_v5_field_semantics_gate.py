@@ -228,6 +228,65 @@ def test_page_kind_absent_is_legacy_safe() -> None:
     assert passed is True, findings
 
 
+def _model_with_ref(**field_extra):
+    """在客户档案上挂一个指向 `owner`（销售员）的 ref 字段。"""
+    m = _base_model()
+    m["datamodel"]["entities"].append(
+        {"id": "owner", "name": "负责人", "fields": [{"id": "name", "type": "string"}]}
+    )
+    m["datamodel"]["entities"][0]["fields"].append(
+        {"id": "assigned_owner", "name": "负责人", "type": "ref", **field_extra}
+    )
+    return m
+
+
+def test_ref_entity_valid_target_passes() -> None:
+    """refEntity 指向真实实体 → 放行。"""
+    passed, findings = _findings_of(_model_with_ref(refEntity="owner"))
+    assert passed is True, findings
+
+
+def test_ref_entity_absent_is_legacy_safe() -> None:
+    """缺省不罚：契约加这个键之前生成的 ref 字段照常通过。
+
+    反向兜底——这条要是没了，存量模型会成批被闸掉，而它们本来能跑
+    （运行时保留了按字段名猜目标的兜底）。
+    """
+    passed, findings = _findings_of(_model_with_ref())
+    assert passed is True, findings
+
+
+def test_ref_entity_dangling_target_blocked() -> None:
+    """悬空目标即拒——声明了却指向不存在的实体，前端拿不到候选行，
+    关系字段会静默退化成纯文本输入框。"""
+    passed, findings = _findings_of(_model_with_ref(refEntity="ghost_entity"))
+    assert passed is False
+    assert any(
+        f["code"] == DANGLING and f["ref"] == "ghost_entity"
+        and f["path"].endswith(".refEntity")
+        for f in findings
+    ), findings
+
+
+def test_ref_entity_on_non_ref_field_blocked() -> None:
+    """越位即拒：只有 type=ref 该带目标声明（跟 options 只许长在 enum 上同一口径）。"""
+    m = _base_model()
+    m["datamodel"]["entities"][0]["fields"][0]["refEntity"] = "customer"
+    passed, findings = _findings_of(m)
+    assert passed is False
+    assert any("non-ref field" in f["message"] for f in findings), findings
+
+
+def test_ref_entity_empty_blocked() -> None:
+    """空串不算声明——写了键却没内容，比不写更容易被当成"已经声明过了"。"""
+    passed, findings = _findings_of(_model_with_ref(refEntity="   "))
+    assert passed is False
+    assert any(
+        f["code"] == EMPTY_SECTION and f["path"].endswith(".refEntity")
+        for f in findings
+    ), findings
+
+
 def test_stats_avg_metric_valid() -> None:
     """avg 是 stats 独有指标（charts 只有 count/sum）——合法 avg 不误拦。"""
     m = _base_model()

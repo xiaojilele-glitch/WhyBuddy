@@ -1,0 +1,358 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人姓名",
+      "type": "string"
+     },
+     {
+      "id": "age_gender",
+      "name": "年龄/性别",
+      "type": "string"
+     },
+     {
+      "id": "room_bed",
+      "name": "房号床位",
+      "type": "string"
+     },
+     {
+      "id": "health_level",
+      "name": "健康等级",
+      "type": "enum"
+     },
+     {
+      "id": "care_level",
+      "name": "照护等级",
+      "type": "enum"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     },
+     {
+      "id": "update_time",
+      "name": "档案更新时间",
+      "type": "date"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "老人姓名",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "urgency",
+      "name": "紧急程度",
+      "type": "enum"
+     },
+     {
+      "id": "assignee",
+      "name": "指派护理员",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "enum"
+     },
+     {
+      "id": "create_time",
+      "name": "创建时间",
+      "type": "date"
+     }
+    ]
+   },
+   {
+    "id": "appointment",
+    "name": "家属服务预约",
+    "fields": [
+     {
+      "id": "appointment_no",
+      "name": "预约单号",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "关联老人",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "family_name",
+      "name": "家属姓名",
+      "type": "string"
+     },
+     {
+      "id": "appointment_time",
+      "name": "服务/探访时间",
+      "type": "date"
+     },
+     {
+      "id": "appointment_type",
+      "name": "预约类型",
+      "type": "enum"
+     },
+     {
+      "id": "audit_status",
+      "name": "审核状态",
+      "type": "enum"
+     },
+     {
+      "id": "submit_time",
+      "name": "提交时间",
+      "type": "date"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_specialist",
+    "name": "社区养老服务专员"
+   },
+   {
+    "id": "role_family",
+    "name": "家属"
+   }
+  ],
+  "permissions": [
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "appointment:create",
+   "appointment:read",
+   "appointment:approve",
+   "appointment:reject"
+  ],
+  "menus": [
+   {
+    "id": "menu_elder",
+    "label": "老人档案",
+    "roleRefs": [
+     "role_specialist"
+    ],
+    "permissionRefs": [
+     "elder:read"
+    ]
+   },
+   {
+    "id": "menu_work_order",
+    "label": "工单调度",
+    "roleRefs": [
+     "role_specialist"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "menu_appointment",
+    "label": "服务预约",
+    "roleRefs": [
+     "role_family"
+    ],
+    "permissionRefs": [
+     "appointment:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_create",
+    "name": "新建工单",
+    "assigneeRole": "role_specialist",
+    "phase": "创建"
+   },
+   {
+    "id": "node_process",
+    "name": "处理中",
+    "assigneeRole": "role_specialist",
+    "phase": "执行"
+   },
+   {
+    "id": "node_done",
+    "name": "已完成",
+    "assigneeRole": "role_specialist",
+    "phase": "归档"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_create",
+    "to": "node_process",
+    "condition": "专员接单并开始处理"
+   },
+   {
+    "from": "node_process",
+    "to": "node_done",
+    "condition": "服务完成并确认"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "老人档案管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.age_gender",
+     "elder.room_bed",
+     "elder.health_level",
+     "elder.care_level",
+     "elder.emergency_contact",
+     "elder.update_time"
+    ],
+    "actionPermissions": [
+     "elder:create",
+     "elder:read",
+     "elder:update"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "服务工单调度中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_ref",
+     "work_order.service_type",
+     "work_order.urgency",
+     "work_order.assignee",
+     "work_order.status",
+     "work_order.create_time"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:read",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "家属服务预约端",
+    "kind": "workbench",
+    "fieldBindings": [
+     "appointment.appointment_no",
+     "appointment.elder_ref",
+     "appointment.family_name",
+     "appointment.appointment_time",
+     "appointment.appointment_type",
+     "appointment.audit_status",
+     "appointment.submit_time"
+    ],
+    "actionPermissions": [
+     "appointment:create",
+     "appointment:read",
+     "appointment:approve",
+     "appointment:reject"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_health_summary",
+    "name": "健康状况总结",
+    "inputFields": [
+     "elder.health_level",
+     "elder.care_level"
+    ],
+    "outputField": "elder.update_time",
+    "roleRefs": [
+     "role_specialist"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p1",
+    "workflowRef": "node_create"
+   },
+   {
+    "pageRef": "p2",
+    "workflowRef": "node_process"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "node_done"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_specialist",
+   "role_family"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "work_order",
+   "appointment"
+  ],
+  "appIdentity": {
+   "appName": "颐养云"
+  },
+  "invariants": [
+   {
+    "id": "inv_1",
+    "statement": "服务工单必须关联有效的老人档案",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.elder_ref"
+    ]
+   },
+   {
+    "id": "inv_2",
+    "statement": "工单处理必须由养老服务专员进行状态推进",
+    "systems": [
+     "workflow"
+    ],
+    "refs": [
+     "role_specialist",
+     "node_process"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

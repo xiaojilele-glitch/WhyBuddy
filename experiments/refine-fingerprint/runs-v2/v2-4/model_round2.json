@@ -1,0 +1,309 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder",
+    "name": "老人档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "老人姓名与房号",
+      "type": "string"
+     },
+     {
+      "id": "age_gender",
+      "name": "年龄性别",
+      "type": "string"
+     },
+     {
+      "id": "bed_no",
+      "name": "房号床位",
+      "type": "string"
+     },
+     {
+      "id": "care_level",
+      "name": "护理等级标签",
+      "type": "string"
+     },
+     {
+      "id": "health_status",
+      "name": "健康状态",
+      "type": "string"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "elder_ref",
+      "name": "服务老人",
+      "type": "ref",
+      "refEntity": "elder"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前流转状态",
+      "type": "string"
+     },
+     {
+      "id": "feedback",
+      "name": "差评反馈内容",
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "r_consultant",
+    "name": "社区养老顾问"
+   },
+   {
+    "id": "r_caregiver",
+    "name": "护理员"
+   },
+   {
+    "id": "r_supervisor",
+    "name": "运营主管"
+   }
+  ],
+  "permissions": [
+   "elder:create",
+   "elder:read",
+   "elder:update",
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "work_order:export",
+   "work_order:manage"
+  ],
+  "menus": [
+   {
+    "id": "m_elder",
+    "label": "老人档案中心",
+    "roleRefs": [
+     "r_consultant",
+     "r_supervisor"
+    ],
+    "permissionRefs": [
+     "elder:read"
+    ]
+   },
+   {
+    "id": "m_dispatch",
+    "label": "工单调度台",
+    "roleRefs": [
+     "r_supervisor"
+    ],
+    "permissionRefs": [
+     "work_order:assign"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "wn_start",
+    "name": "待派单",
+    "assigneeRole": "r_consultant",
+    "phase": "创建阶段"
+   },
+   {
+    "id": "wn_exec",
+    "name": "执行中",
+    "assigneeRole": "r_caregiver",
+    "phase": "执行阶段"
+   },
+   {
+    "id": "wn_visit",
+    "name": "回访中",
+    "assigneeRole": "r_consultant",
+    "phase": "回访阶段"
+   },
+   {
+    "id": "wn_end",
+    "name": "已办结",
+    "assigneeRole": "r_supervisor",
+    "phase": "结案阶段"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "wn_start",
+    "to": "wn_exec",
+    "condition": "顾问完成派单并推送给护理员"
+   },
+   {
+    "from": "wn_exec",
+    "to": "wn_visit",
+    "condition": "护理员提交服务完成记录"
+   },
+   {
+    "from": "wn_visit",
+    "to": "wn_end",
+    "condition": "顾问完成回访与满意度评分"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "p1",
+    "name": "老人档案中心",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder.name",
+     "elder.age_gender",
+     "elder.bed_no",
+     "elder.care_level",
+     "elder.health_status",
+     "elder.emergency_contact"
+    ],
+    "actionPermissions": [
+     "elder:create",
+     "elder:read",
+     "elder:update"
+    ]
+   },
+   {
+    "id": "p2",
+    "name": "服务工单调度台",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_ref",
+     "work_order.service_type",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:read",
+     "work_order:update",
+     "work_order:assign",
+     "work_order:manage"
+    ]
+   },
+   {
+    "id": "p3",
+    "name": "护理员移动端工作台",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.elder_ref",
+     "work_order.service_type",
+     "work_order.status",
+     "work_order.feedback"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:update"
+    ]
+   },
+   {
+    "id": "p4",
+    "name": "质量监控与回访大盘",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "work_order.status",
+     "work_order.feedback"
+    ],
+    "actionPermissions": [
+     "work_order:read",
+     "work_order:manage"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "ai_health_assess",
+    "name": "健康状况智能评估",
+    "inputFields": [
+     "elder.health_status"
+    ],
+    "outputField": "elder.care_level",
+    "roleRefs": [
+     "r_supervisor"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "p2",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "p3",
+    "workflowRef": "wn_exec"
+   }
+  ],
+  "landingPageRef": "p1",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "r_supervisor",
+   "r_consultant",
+   "r_caregiver"
+  ],
+  "dataModelRefs": [
+   "elder",
+   "work_order"
+  ],
+  "appIdentity": {
+   "appName": "安康里养老云"
+  },
+  "invariants": [
+   {
+    "id": "inv_elder_ref",
+    "statement": "服务工单必须关联有效的老人档案",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.elder_ref",
+     "elder"
+    ]
+   },
+   {
+    "id": "inv_order_status",
+    "statement": "服务工单的状态必须与工作流节点保持一致",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.status",
+     "wn_start"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

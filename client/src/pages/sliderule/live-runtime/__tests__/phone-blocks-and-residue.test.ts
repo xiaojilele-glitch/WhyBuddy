@@ -28,10 +28,10 @@ const fieldValueSrc = await import("../FieldValue.tsx?raw").then(
 
 describe("手机档体验区块", () => {
   it("槽位来源由参数决定，不再读那个恒为 false 的 isPhone", () => {
-    expect(screenSrc).toContain(
-      "const renderExperienceBlockScaffold = (forPhone: boolean)"
+    expect(screenSrc).toMatch(
+      /const renderExperienceBlockScaffold = \(\s*forPhone: boolean/
     );
-    expect(screenSrc).toContain("forPhone && page.layout.mobile");
+    expect(screenSrc).toContain("forPhone && page.layout?.mobile");
     // 旧写法：内联在桌面壳里读 isPhone —— 恢复它就等于把 layout.mobile 重新写死
     expect(screenSrc).not.toContain("isPhone && page.layout.mobile");
   });

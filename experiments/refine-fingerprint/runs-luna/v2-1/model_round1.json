@@ -1,0 +1,1101 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "elder_profile",
+    "name": "老人服务档案",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "gender",
+      "name": "性别",
+      "type": "enum"
+     },
+     {
+      "id": "age",
+      "name": "年龄",
+      "type": "number"
+     },
+     {
+      "id": "archive_no",
+      "name": "档案编号",
+      "type": "string"
+     },
+     {
+      "id": "community",
+      "name": "所属社区",
+      "type": "ref",
+      "refEntity": "community"
+     },
+     {
+      "id": "care_level",
+      "name": "照护等级",
+      "type": "enum"
+     },
+     {
+      "id": "phone",
+      "name": "联系方式",
+      "type": "string"
+     },
+     {
+      "id": "address",
+      "name": "居住地址",
+      "type": "string"
+     },
+     {
+      "id": "emergency_contact",
+      "name": "紧急联系人",
+      "type": "string"
+     },
+     {
+      "id": "current_need",
+      "name": "当前需求",
+      "type": "ref",
+      "refEntity": "service_request"
+     },
+     {
+      "id": "risk_note",
+      "name": "风险提示",
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "id": "community",
+    "name": "社区",
+    "fields": [
+     {
+      "id": "name",
+      "name": "社区名称",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "service_type",
+    "name": "服务类型",
+    "fields": [
+     {
+      "id": "name",
+      "name": "服务类型名称",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "service_request",
+    "name": "养老服务需求",
+    "fields": [
+     {
+      "id": "request_no",
+      "name": "需求编号",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "ref",
+      "refEntity": "service_type"
+     },
+     {
+      "id": "service_object",
+      "name": "服务对象",
+      "type": "ref",
+      "refEntity": "elder_profile"
+     },
+     {
+      "id": "expected_time",
+      "name": "期望时间",
+      "type": "date"
+     },
+     {
+      "id": "service_address",
+      "name": "服务地址",
+      "type": "string"
+     },
+     {
+      "id": "special_note",
+      "name": "特殊说明",
+      "type": "text"
+     },
+     {
+      "id": "submitted_at",
+      "name": "提交时间",
+      "type": "date"
+     },
+     {
+      "id": "current_status",
+      "name": "当前进度",
+      "type": "enum"
+     }
+    ]
+   },
+   {
+    "id": "service_task",
+    "name": "服务任务",
+    "fields": [
+     {
+      "id": "task_no",
+      "name": "服务编号",
+      "type": "string"
+     },
+     {
+      "id": "elder",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elder_profile"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "ref",
+      "refEntity": "service_type"
+     },
+     {
+      "id": "service_person",
+      "name": "服务人员",
+      "type": "ref",
+      "refEntity": "service_personnel"
+     },
+     {
+      "id": "service_time",
+      "name": "计划时间",
+      "type": "date"
+     },
+     {
+      "id": "address",
+      "name": "地址",
+      "type": "string"
+     },
+     {
+      "id": "priority",
+      "name": "优先级",
+      "type": "enum"
+     },
+     {
+      "id": "task_status",
+      "name": "任务状态",
+      "type": "enum"
+     }
+    ]
+   },
+   {
+    "id": "service_personnel",
+    "name": "服务人员",
+    "fields": [
+     {
+      "id": "name",
+      "name": "姓名",
+      "type": "string"
+     },
+     {
+      "id": "role",
+      "name": "服务人员类型",
+      "type": "string"
+     },
+     {
+      "id": "service_capability",
+      "name": "服务能力",
+      "type": "text"
+     },
+     {
+      "id": "available_period",
+      "name": "可用时段",
+      "type": "string"
+     },
+     {
+      "id": "distance",
+      "name": "距离",
+      "type": "number"
+     }
+    ]
+   },
+   {
+    "id": "service_record",
+    "name": "服务记录",
+    "fields": [
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "ref",
+      "refEntity": "service_type"
+     },
+     {
+      "id": "elder",
+      "name": "老人",
+      "type": "ref",
+      "refEntity": "elder_profile"
+     },
+     {
+      "id": "service_person",
+      "name": "服务人员",
+      "type": "ref",
+      "refEntity": "service_personnel"
+     },
+     {
+      "id": "check_in_out",
+      "name": "签到 / 签退",
+      "type": "date"
+     },
+     {
+      "id": "service_result",
+      "name": "服务结果",
+      "type": "text"
+     },
+     {
+      "id": "service_fee",
+      "name": "服务费用",
+      "type": "number"
+     },
+     {
+      "id": "subsidy_amount",
+      "name": "补贴金额",
+      "type": "number"
+     },
+     {
+      "id": "satisfaction",
+      "name": "平均满意度",
+      "type": "number"
+     }
+    ]
+   },
+   {
+    "id": "feedback_issue",
+    "name": "反馈与风险事项",
+    "fields": [
+     {
+      "id": "issue_no",
+      "name": "编号",
+      "type": "string"
+     },
+     {
+      "id": "issue_type",
+      "name": "事项类型",
+      "type": "enum"
+     },
+     {
+      "id": "subject_or_source",
+      "name": "对象或来源",
+      "type": "string"
+     },
+     {
+      "id": "occurred_at",
+      "name": "发生时间",
+      "type": "date"
+     },
+     {
+      "id": "severity",
+      "name": "严重等级",
+      "type": "enum"
+     },
+     {
+      "id": "assignee",
+      "name": "责任人",
+      "type": "ref",
+      "refEntity": "service_personnel"
+     },
+     {
+      "id": "current_status",
+      "name": "当前状态",
+      "type": "enum"
+     },
+     {
+      "id": "deadline",
+      "name": "截止时间",
+      "type": "date"
+     },
+     {
+      "id": "handling_conclusion",
+      "name": "处理结论",
+      "type": "text"
+     },
+     {
+      "id": "follow_up_result",
+      "name": "回访结果",
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "id": "operation_report",
+    "name": "运营报表",
+    "fields": [
+     {
+      "id": "statistical_period",
+      "name": "统计周期",
+      "type": "date"
+     },
+     {
+      "id": "community",
+      "name": "社区",
+      "type": "ref",
+      "refEntity": "community"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "ref",
+      "refEntity": "service_type"
+     },
+     {
+      "id": "settlement_status",
+      "name": "结算状态",
+      "type": "enum"
+     },
+     {
+      "id": "service_volume",
+      "name": "服务量",
+      "type": "number"
+     },
+     {
+      "id": "completion_rate",
+      "name": "完成率",
+      "type": "number"
+     },
+     {
+      "id": "service_fee",
+      "name": "服务费用",
+      "type": "number"
+     },
+     {
+      "id": "subsidy_amount",
+      "name": "补贴金额",
+      "type": "number"
+     },
+     {
+      "id": "average_satisfaction",
+      "name": "平均满意度",
+      "type": "number"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "role_operations_lead",
+    "name": "运营主管"
+   },
+   {
+    "id": "role_service_coordinator",
+    "name": "服务协调员"
+   },
+   {
+    "id": "role_care_worker",
+    "name": "养老服务人员"
+   },
+   {
+    "id": "role_elder_family",
+    "name": "老人及家属"
+   }
+  ],
+  "permissions": [
+   "elder_profile:create",
+   "elder_profile:read",
+   "elder_profile:update",
+   "elder_profile:delete",
+   "community:create",
+   "community:read",
+   "community:update",
+   "community:delete",
+   "service_type:create",
+   "service_type:read",
+   "service_type:update",
+   "service_type:delete",
+   "service_request:create",
+   "service_request:read",
+   "service_request:update",
+   "service_request:delete",
+   "service_request:assign",
+   "service_request:approve",
+   "service_request:reject",
+   "service_task:create",
+   "service_task:read",
+   "service_task:update",
+   "service_task:delete",
+   "service_task:assign",
+   "service_task:approve",
+   "service_task:reject",
+   "service_personnel:create",
+   "service_personnel:read",
+   "service_personnel:update",
+   "service_personnel:delete",
+   "service_record:create",
+   "service_record:read",
+   "service_record:update",
+   "service_record:approve",
+   "feedback_issue:create",
+   "feedback_issue:read",
+   "feedback_issue:update",
+   "feedback_issue:delete",
+   "feedback_issue:assign",
+   "feedback_issue:approve",
+   "feedback_issue:reject",
+   "operation_report:create",
+   "operation_report:read",
+   "operation_report:update",
+   "operation_report:delete",
+   "operation_report:approve",
+   "operation_report:export",
+   "operation_report:manage"
+  ],
+  "menus": [
+   {
+    "id": "运营总览",
+    "label": "运营总览",
+    "roleRefs": [
+     "role_operations_lead",
+     "role_service_coordinator"
+    ],
+    "permissionRefs": [
+     "operation_report:read",
+     "service_task:read",
+     "feedback_issue:read"
+    ]
+   },
+   {
+    "id": "老人服务档案",
+    "label": "老人服务档案",
+    "roleRefs": [
+     "role_operations_lead",
+     "role_service_coordinator",
+     "role_care_worker",
+     "role_elder_family"
+    ],
+    "permissionRefs": [
+     "elder_profile:read",
+     "service_request:read",
+     "service_record:read"
+    ]
+   },
+   {
+    "id": "排班调度",
+    "label": "排班调度",
+    "roleRefs": [
+     "role_operations_lead",
+     "role_service_coordinator"
+    ],
+    "permissionRefs": [
+     "service_request:assign",
+     "service_task:assign",
+     "service_personnel:read"
+    ]
+   },
+   {
+    "id": "我的服务",
+    "label": "我的服务",
+    "roleRefs": [
+     "role_care_worker"
+    ],
+    "permissionRefs": [
+     "service_task:read",
+     "service_record:create",
+     "service_record:update"
+    ]
+   },
+   {
+    "id": "家属服务查询",
+    "label": "家属服务查询",
+    "roleRefs": [
+     "role_elder_family"
+    ],
+    "permissionRefs": [
+     "elder_profile:read",
+     "service_request:read",
+     "service_task:read",
+     "service_record:read"
+    ]
+   },
+   {
+    "id": "运营报表",
+    "label": "运营报表",
+    "roleRefs": [
+     "role_operations_lead",
+     "role_service_coordinator"
+    ],
+    "permissionRefs": [
+     "operation_report:read",
+     "operation_report:export",
+     "operation_report:manage"
+    ]
+   },
+   {
+    "id": "反馈与风险处理",
+    "label": "反馈与风险处理",
+    "roleRefs": [
+     "role_operations_lead",
+     "role_service_coordinator"
+    ],
+    "permissionRefs": [
+     "feedback_issue:read",
+     "feedback_issue:assign",
+     "feedback_issue:approve",
+     "feedback_issue:reject"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "wf_intake",
+    "name": "统一入口待受理",
+    "assigneeRole": "role_service_coordinator",
+    "phase": "受理"
+   },
+   {
+    "id": "wf_request_processing",
+    "name": "服务需求处理中",
+    "assigneeRole": "role_service_coordinator",
+    "phase": "需求处理"
+   },
+   {
+    "id": "wf_dispatching",
+    "name": "任务调度中",
+    "assigneeRole": "role_service_coordinator",
+    "phase": "调度"
+   },
+   {
+    "id": "wf_waiting_acceptance",
+    "name": "等待服务人员接单",
+    "assigneeRole": "role_care_worker",
+    "phase": "调度"
+   },
+   {
+    "id": "wf_scheduled",
+    "name": "已排班待服务",
+    "assigneeRole": "role_care_worker",
+    "phase": "执行"
+   },
+   {
+    "id": "wf_in_service",
+    "name": "服务执行中",
+    "assigneeRole": "role_care_worker",
+    "phase": "执行"
+   },
+   {
+    "id": "wf_result_confirmation",
+    "name": "服务结果待确认",
+    "assigneeRole": "role_elder_family",
+    "phase": "验收"
+   },
+   {
+    "id": "wf_service_completed",
+    "name": "服务已完成",
+    "assigneeRole": "role_operations_lead",
+    "phase": "归档"
+   },
+   {
+    "id": "wf_issue_handling",
+    "name": "反馈与风险处理中",
+    "assigneeRole": "role_service_coordinator",
+    "phase": "异常处理"
+   },
+   {
+    "id": "wf_issue_closed",
+    "name": "反馈与风险已闭环",
+    "assigneeRole": "role_operations_lead",
+    "phase": "归档"
+   },
+   {
+    "id": "wf_request_cancelled",
+    "name": "需求已取消",
+    "assigneeRole": "role_service_coordinator",
+    "phase": "结束"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "wf_intake",
+    "to": "wf_request_processing",
+    "condition": "已建立或匹配老人档案并生成带处理状态的服务需求记录"
+   },
+   {
+    "from": "wf_request_processing",
+    "to": "wf_dispatching",
+    "condition": "服务类型、服务对象、期望时间和服务地址已确认"
+   },
+   {
+    "from": "wf_request_processing",
+    "to": "wf_request_cancelled",
+    "condition": "需求被老人及家属撤回或确认无法受理"
+   },
+   {
+    "from": "wf_dispatching",
+    "to": "wf_waiting_acceptance",
+    "condition": "已根据服务时间、地点和能力匹配服务人员并发送任务"
+   },
+   {
+    "from": "wf_waiting_acceptance",
+    "to": "wf_scheduled",
+    "condition": "服务人员接受任务"
+   },
+   {
+    "from": "wf_waiting_acceptance",
+    "to": "wf_dispatching",
+    "condition": "服务人员拒绝任务或在规定时间内未接单，需要重新调度"
+   },
+   {
+    "from": "wf_scheduled",
+    "to": "wf_in_service",
+    "condition": "服务人员到达服务地址并完成签到"
+   },
+   {
+    "from": "wf_in_service",
+    "to": "wf_result_confirmation",
+    "condition": "服务人员完成服务并记录签退及服务结果"
+   },
+   {
+    "from": "wf_result_confirmation",
+    "to": "wf_service_completed",
+    "condition": "老人及家属确认服务结果或确认窗口期结束且无异议"
+   },
+   {
+    "from": "wf_result_confirmation",
+    "to": "wf_issue_handling",
+    "condition": "老人及家属提交投诉、建议或安全问题"
+   },
+   {
+    "from": "wf_service_completed",
+    "to": "wf_issue_handling",
+    "condition": "后续收到与已完成服务相关的反馈、投诉或安全异常"
+   },
+   {
+    "from": "wf_issue_handling",
+    "to": "wf_issue_closed",
+    "condition": "已分派责任人并在两个工作日内记录处理结论和跟进结果"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "运营总览",
+    "name": "运营总览",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "operation_report.statistical_period",
+     "operation_report.community",
+     "operation_report.service_volume",
+     "operation_report.completion_rate",
+     "operation_report.average_satisfaction",
+     "service_task.task_status",
+     "feedback_issue.severity",
+     "feedback_issue.current_status"
+    ],
+    "actionPermissions": [
+     "operation_report:read",
+     "elder_profile:read",
+     "service_request:read",
+     "service_task:read",
+     "feedback_issue:read"
+    ]
+   },
+   {
+    "id": "老人服务档案",
+    "name": "老人服务档案",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder_profile.name",
+     "elder_profile.gender",
+     "elder_profile.age",
+     "elder_profile.archive_no",
+     "elder_profile.community",
+     "elder_profile.care_level",
+     "elder_profile.phone",
+     "elder_profile.address",
+     "elder_profile.emergency_contact",
+     "elder_profile.current_need",
+     "elder_profile.risk_note",
+     "service_request.request_no",
+     "service_request.service_type",
+     "service_request.service_object",
+     "service_request.expected_time",
+     "service_request.service_address",
+     "service_request.special_note",
+     "service_request.submitted_at",
+     "service_request.current_status",
+     "service_record.service_type",
+     "service_record.elder",
+     "service_record.service_person",
+     "service_record.check_in_out",
+     "service_record.service_result",
+     "service_record.satisfaction"
+    ],
+    "actionPermissions": [
+     "elder_profile:create",
+     "elder_profile:read",
+     "elder_profile:update",
+     "service_request:create",
+     "service_request:read",
+     "service_request:update",
+     "service_record:read"
+    ]
+   },
+   {
+    "id": "排班调度",
+    "name": "排班调度",
+    "kind": "workbench",
+    "fieldBindings": [
+     "service_request.request_no",
+     "service_request.service_type",
+     "service_request.service_object",
+     "service_request.expected_time",
+     "service_request.service_address",
+     "service_request.current_status",
+     "service_task.task_no",
+     "service_task.elder",
+     "service_task.service_type",
+     "service_task.service_person",
+     "service_task.service_time",
+     "service_task.address",
+     "service_task.priority",
+     "service_task.task_status",
+     "service_personnel.name",
+     "service_personnel.role",
+     "service_personnel.service_capability",
+     "service_personnel.available_period",
+     "service_personnel.distance"
+    ],
+    "actionPermissions": [
+     "service_request:read",
+     "service_request:update",
+     "service_request:assign",
+     "service_request:approve",
+     "service_request:reject",
+     "service_task:create",
+     "service_task:read",
+     "service_task:update",
+     "service_task:assign",
+     "service_task:approve",
+     "service_task:reject",
+     "service_personnel:read"
+    ]
+   },
+   {
+    "id": "我的服务",
+    "name": "我的服务",
+    "kind": "workbench",
+    "fieldBindings": [
+     "service_task.task_no",
+     "service_task.elder",
+     "service_task.service_type",
+     "service_task.service_person",
+     "service_task.service_time",
+     "service_task.address",
+     "service_task.priority",
+     "service_task.task_status",
+     "service_record.service_type",
+     "service_record.elder",
+     "service_record.service_person",
+     "service_record.check_in_out",
+     "service_record.service_result",
+     "service_record.service_fee",
+     "service_record.subsidy_amount",
+     "service_record.satisfaction"
+    ],
+    "actionPermissions": [
+     "service_task:read",
+     "service_task:update",
+     "service_record:create",
+     "service_record:read",
+     "service_record:update"
+    ]
+   },
+   {
+    "id": "家属服务查询",
+    "name": "家属服务查询",
+    "kind": "workbench",
+    "fieldBindings": [
+     "elder_profile.name",
+     "elder_profile.archive_no",
+     "elder_profile.care_level",
+     "elder_profile.current_need",
+     "service_request.request_no",
+     "service_request.service_type",
+     "service_request.expected_time",
+     "service_request.current_status",
+     "service_task.service_type",
+     "service_task.service_time",
+     "service_task.task_status",
+     "service_record.service_type",
+     "service_record.check_in_out",
+     "service_record.service_result",
+     "service_record.satisfaction"
+    ],
+    "actionPermissions": [
+     "elder_profile:read",
+     "service_request:read",
+     "service_task:read",
+     "service_record:read"
+    ]
+   },
+   {
+    "id": "运营报表",
+    "name": "运营报表",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "operation_report.statistical_period",
+     "operation_report.community",
+     "operation_report.service_type",
+     "operation_report.settlement_status",
+     "operation_report.service_volume",
+     "operation_report.completion_rate",
+     "operation_report.service_fee",
+     "operation_report.subsidy_amount",
+     "operation_report.average_satisfaction"
+    ],
+    "actionPermissions": [
+     "operation_report:create",
+     "operation_report:read",
+     "operation_report:update",
+     "operation_report:approve",
+     "operation_report:export",
+     "operation_report:manage"
+    ]
+   },
+   {
+    "id": "反馈与风险处理",
+    "name": "反馈与风险处理",
+    "kind": "workbench",
+    "fieldBindings": [
+     "feedback_issue.issue_no",
+     "feedback_issue.issue_type",
+     "feedback_issue.subject_or_source",
+     "feedback_issue.occurred_at",
+     "feedback_issue.severity",
+     "feedback_issue.assignee",
+     "feedback_issue.current_status",
+     "feedback_issue.deadline",
+     "feedback_issue.handling_conclusion",
+     "feedback_issue.follow_up_result",
+     "elder_profile.name",
+     "elder_profile.risk_note"
+    ],
+    "actionPermissions": [
+     "feedback_issue:create",
+     "feedback_issue:read",
+     "feedback_issue:update",
+     "feedback_issue:delete",
+     "feedback_issue:assign",
+     "feedback_issue:approve",
+     "feedback_issue:reject",
+     "elder_profile:read",
+     "elder_profile:update"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "feedback_issue.severity",
+    "name": "老人风险等级研判",
+    "inputFields": [
+     "elder_profile.care_level",
+     "elder_profile.current_need",
+     "elder_profile.risk_note",
+     "feedback_issue.issue_type",
+     "feedback_issue.subject_or_source"
+    ],
+    "outputField": "feedback_issue.severity",
+    "roleRefs": [
+     "role_operations_lead",
+     "role_service_coordinator"
+    ]
+   },
+   {
+    "id": "service_task.priority",
+    "name": "服务任务优先级建议",
+    "inputFields": [
+     "service_request.service_type",
+     "service_request.service_object",
+     "service_request.expected_time",
+     "elder_profile.care_level",
+     "elder_profile.current_need"
+    ],
+    "outputField": "service_task.priority",
+    "roleRefs": [
+     "role_operations_lead",
+     "role_service_coordinator"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "运营总览",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "老人服务档案",
+    "workflowRef": "wf_intake"
+   },
+   {
+    "pageRef": "排班调度",
+    "workflowRef": "wf_dispatching"
+   },
+   {
+    "pageRef": "我的服务",
+    "workflowRef": "wf_in_service"
+   },
+   {
+    "pageRef": "家属服务查询",
+    "workflowRef": "wf_result_confirmation"
+   },
+   {
+    "pageRef": "运营报表",
+    "workflowRef": "main_flow"
+   },
+   {
+    "pageRef": "反馈与风险处理",
+    "workflowRef": "wf_issue_handling"
+   }
+  ],
+  "landingPageRef": "运营总览",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "role_operations_lead",
+   "role_service_coordinator",
+   "role_care_worker",
+   "role_elder_family"
+  ],
+  "dataModelRefs": [
+   "elder_profile",
+   "community",
+   "service_type",
+   "service_request",
+   "service_task",
+   "service_personnel",
+   "service_record",
+   "feedback_issue",
+   "operation_report"
+  ],
+  "appIdentity": {
+   "appName": "邻里颐养"
+  },
+  "invariants": [
+   {
+    "id": "inv_request_identity",
+    "statement": "每条服务需求必须有唯一需求编号，并关联一个真实老人档案和一个服务类型。",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "service_request.request_no",
+     "service_request.service_object",
+     "service_request.service_type",
+     "elder_profile.archive_no",
+     "wf_request_processing"
+    ]
+   },
+   {
+    "id": "inv_task_traceability",
+    "statement": "每个服务任务必须可追溯到老人、服务类型和被指派的服务人员。",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "service_task.elder",
+     "service_task.service_type",
+     "service_task.service_person",
+     "wf_dispatching",
+     "wf_waiting_acceptance"
+    ]
+   },
+   {
+    "id": "inv_task_acceptance",
+    "statement": "服务任务只有在服务人员接受后才能进入已排班待服务状态，拒绝或超时必须回到调度状态。",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "service_task.task_status",
+     "wf_waiting_acceptance",
+     "wf_scheduled",
+     "wf_dispatching"
+    ]
+   },
+   {
+    "id": "inv_service_execution_record",
+    "statement": "服务任务进入服务执行中后必须记录对应服务人员的签到、签退和服务结果，才能进入结果待确认。",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "service_task.task_status",
+     "service_record.service_person",
+     "service_record.check_in_out",
+     "service_record.service_result",
+     "wf_in_service",
+     "wf_result_confirmation"
+    ]
+   },
+   {
+    "id": "inv_result_traceability",
+    "statement": "服务记录中的老人和服务人员必须分别与对应服务任务的老人和被指派服务人员一致。",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "service_task.elder",
+     "service_task.service_person",
+     "service_record.elder",
+     "service_record.service_person",
+     "wf_result_confirmation"
+    ]
+   },
+   {
+    "id": "inv_report_traceability",
+    "statement": "运营报表的服务量、完成率、费用、补贴和满意度汇总必须可追溯到对应统计周期内的服务记录。",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "operation_report.statistical_period",
+     "operation_report.service_volume",
+     "operation_report.completion_rate",
+     "operation_report.service_fee",
+     "operation_report.subsidy_amount",
+     "operation_report.average_satisfaction",
+     "service_record.service_fee",
+     "service_record.subsidy_amount",
+     "service_record.satisfaction",
+     "wf_service_completed"
+    ]
+   },
+   {
+    "id": "inv_issue_assignment",
+    "statement": "每条反馈与风险事项必须有当前状态、截止时间和责任人，关闭前必须记录处理结论及回访结果。",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "feedback_issue.assignee",
+     "feedback_issue.current_status",
+     "feedback_issue.deadline",
+     "feedback_issue.handling_conclusion",
+     "feedback_issue.follow_up_result",
+     "wf_issue_handling",
+     "wf_issue_closed"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

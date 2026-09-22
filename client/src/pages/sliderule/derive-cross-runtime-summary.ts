@@ -28,6 +28,10 @@ export type PublishClosureSummary = {
   /** 真 LLM 收口总结（方案 B，python v5_closure_summary 生成；失败缺失，
    *  客户端回落零 LLM 模板 A）。纯展示载荷，不参与 trust/closure 判定。 */
   chatSummary?: string;
+  /** 精修没画上：保住上一版时 Python 写下的那一句。空则不当作失败信号。 */
+  refinePaintNote?: string;
+  /** 精修沿用收口句。有则左栏用它，不用「M 阶段 · N 步」。 */
+  refineReuseNote?: string;
   closureId?: string;
   closureHash?: string;
   generatedAt?: string;
@@ -156,6 +160,8 @@ export function derivePublishClosureSummary(
   };
 
   const chatSummary = (report as { chatSummary?: unknown }).chatSummary;
+  const refinePaintNote = (report as { refinePaintNote?: unknown }).refinePaintNote;
+  const refineReuseNote = (report as { refineReuseNote?: unknown }).refineReuseNote;
   return {
     blocked: report.blocked,
     blockerCount: report.blockers.length,
@@ -163,6 +169,12 @@ export function derivePublishClosureSummary(
     skillCount: report.runtimeClosure.skillsChecked.length,
     versionPinsChecked: report.runtimeClosure.versionPinsChecked,
     chatSummary: typeof chatSummary === "string" && chatSummary.trim() ? chatSummary : undefined,
+    ...(typeof refinePaintNote === "string" && refinePaintNote.trim()
+      ? { refinePaintNote: refinePaintNote.trim() }
+      : {}),
+    ...(typeof refineReuseNote === "string" && refineReuseNote.trim()
+      ? { refineReuseNote: refineReuseNote.trim() }
+      : {}),
     closureId: report.closureId,
     closureHash: report.closureHash,
     generatedAt: report.generatedAt,

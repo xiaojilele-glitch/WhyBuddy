@@ -2,15 +2,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { authState, locationState, projectState } = vi.hoisted(() => ({
+  // 身份来自新的账号体系（2026-08-03）：只有 isSuperuser 一个布尔，
+  // 没有旧体系的 role/status/avatarUrl 三件套。
   authState: {
     currentUser: null as {
       id: string;
       email: string;
       displayName: string | null;
-      avatarUrl: string | null;
-      role: "user" | "admin" | "super_admin";
-      status: "active" | "disabled";
-      emailVerified: boolean;
+      isSuperuser: boolean;
+      isVerified: boolean;
       createdAt: string;
     } | null,
   },
@@ -23,8 +23,6 @@ const { authState, locationState, projectState } = vi.hoisted(() => ({
   },
 }));
 
-import { useAuthStore } from "@/lib/auth-store";
-
 import { AppSidebar } from "../AppSidebar";
 
 vi.mock("wouter", () => ({
@@ -36,27 +34,25 @@ vi.mock("@/lib/project-store", () => ({
     selector(projectState),
 }));
 
-vi.mock("@/lib/auth-store", () => {
-  const useAuthStore = ((selector: (state: typeof authState) => unknown) =>
-    selector(authState)) as typeof import("@/lib/auth-store").useAuthStore;
-
-  useAuthStore.getState = () =>
-    ({
-      ...authState,
-      resetForTest: () => {
-        authState.currentUser = null;
+vi.mock("@/lib/use-auth", () => ({
+  useAuth: () => ({
+    user: authState.currentUser,
+    ready: true,
+    capabilities: {
+      loggedIn: Boolean(authState.currentUser),
+      isSuperuser: Boolean(authState.currentUser?.isSuperuser),
+      can: {
+        browse: true,
+        viewApp: true,
+        fork: Boolean(authState.currentUser),
+        drive: Boolean(authState.currentUser),
+        manageOwn: Boolean(authState.currentUser),
       },
-    }) as ReturnType<typeof useAuthStore.getState>;
-
-  useAuthStore.setState = partial => {
-    Object.assign(
-      authState,
-      typeof partial === "function" ? partial(authState as never) : partial
-    );
-  };
-
-  return { useAuthStore };
-});
+    },
+    refresh: async () => {},
+    signOut: async () => {},
+  }),
+}));
 
 vi.mock("@/i18n", () => ({
   useI18n: () => ({
@@ -98,7 +94,7 @@ vi.mock("../ui/tooltip", () => ({
 
 describe("AppSidebar overlay embedding", () => {
   beforeEach(() => {
-    useAuthStore.getState().resetForTest();
+    authState.currentUser = null;
     locationState.current = "/projects";
     locationState.setLocation.mockClear();
     projectState.currentProjectId = "project-1";
@@ -171,25 +167,21 @@ describe("AppSidebar overlay embedding", () => {
     expect(aside).toContain("background:linear-gradient");
     expect(aside).toContain("rgba(255, 255, 255, 0.98)");
     expect(aside).toContain("rgba(244, 251, 255, 0.94)");
-    expect(markup).toContain('/brand/transLogo.png');
+    expect(markup).toContain('/brand/miantuan-mark.png');
     expect(markup).toContain("SlideRule");
     expect(markup).toContain('aria-current="page"');
     expect(markup).toContain('aria-expanded="true"');
   });
 
   it("shows the signed-in user in the lower sidebar instead of placeholder task counts", () => {
-    useAuthStore.setState({
-      currentUser: {
-        id: "user-1",
-        email: "operator@example.com",
-        displayName: "Operator One",
-        avatarUrl: null,
-        role: "admin",
-        status: "active",
-        emailVerified: true,
-        createdAt: "2026-04-30T00:00:00.000Z",
-      },
-    });
+    authState.currentUser = {
+      id: "user-1",
+      email: "operator@example.com",
+      displayName: "Operator One",
+      isSuperuser: true,
+      isVerified: true,
+      createdAt: "2026-04-30T00:00:00.000Z",
+    };
 
     const markup = renderToStaticMarkup(
       <AppSidebar collapsed={false} onToggleCollapse={() => {}} embedded />
@@ -198,7 +190,8 @@ describe("AppSidebar overlay embedding", () => {
     expect(markup).toContain('data-sidebar-user-card="glass"');
     expect(markup).toContain("Operator One");
     expect(markup).toContain("operator@example.com");
-    expect(markup).toContain("Admin");
+    // 新体系只有两档角色：超管 / 普通用户
+    expect(markup).toContain("Super Admin");
     expect(markup).toContain("Signed in");
     expect(markup).not.toContain("OK 0");
     expect(markup).not.toContain("Run 0");
@@ -219,18 +212,14 @@ describe("AppSidebar overlay embedding", () => {
   });
 
   it("keeps the project-space sidebar focused on the single project entry", () => {
-    useAuthStore.setState({
-      currentUser: {
-        id: "user-1",
-        email: "user@example.com",
-        displayName: "User",
-        avatarUrl: null,
-        role: "user",
-        status: "active",
-        emailVerified: true,
-        createdAt: "2026-04-30T00:00:00.000Z",
-      },
-    });
+    authState.currentUser = {
+      id: "user-1",
+      email: "user@example.com",
+      displayName: "User",
+      isSuperuser: false,
+      isVerified: true,
+      createdAt: "2026-04-30T00:00:00.000Z",
+    };
 
     const markup = renderToStaticMarkup(
       <AppSidebar collapsed={false} onToggleCollapse={() => {}} />
@@ -247,18 +236,14 @@ describe("AppSidebar overlay embedding", () => {
   it("switches to project-internal workbench navigation after entering a project", () => {
     locationState.current = "/autopilot";
 
-    useAuthStore.setState({
-      currentUser: {
-        id: "user-1",
-        email: "user@example.com",
-        displayName: "User",
-        avatarUrl: null,
-        role: "user",
-        status: "active",
-        emailVerified: true,
-        createdAt: "2026-04-30T00:00:00.000Z",
-      },
-    });
+    authState.currentUser = {
+      id: "user-1",
+      email: "user@example.com",
+      displayName: "User",
+      isSuperuser: false,
+      isVerified: true,
+      createdAt: "2026-04-30T00:00:00.000Z",
+    };
 
     const markup = renderToStaticMarkup(
       <AppSidebar collapsed={false} onToggleCollapse={() => {}} />

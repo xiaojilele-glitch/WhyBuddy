@@ -2,7 +2,9 @@
  * SlideRule - Server Entry Point
  * Express + Socket.IO + REST API + Multi-Agent Orchestration
  */
+import { existsSync } from "node:fs";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { applyInternalKeyAlias } from "./config/internal-key-alias.js";
 import express, { type Request, type Response } from "express";
 import { createServer } from "http";
 import dotenv from "dotenv";
@@ -32,6 +34,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
+// 紧跟在 dotenv 之后、任何读这个变量的模块之前：Node 与 Python 守的是同一把
+// 钥匙却读两个变量名，只配一个会让每次 Node→Python 调用 403（见该模块说明）。
+applyInternalKeyAlias();
 logSlideRuleProxyStartupDiag();
 const STARTUP_TRACE_ENABLED = process.env.STARTUP_TRACE === "1";
 
@@ -954,48 +959,28 @@ async function startServer() {
   app.use("/api/feishu", createFeishuRouter());
   const { readPersistenceConfig } = await import("./persistence/config.js");
   const { createMysqlQueryExecutor } = await import("./persistence/mysql.js");
-  const {
-    createEmailLoginTokensRepository,
-    createProjectResourcesRepository,
-    createProjectsRepository,
-    createSessionsRepository,
-    createUsersRepository,
-  } = await import("./persistence/repositories.js");
-  const { createEmailCodeService } = await import(
-    "./auth/email-code-service.js"
+  const { createProjectResourcesRepository, createProjectsRepository } =
+    await import("./persistence/repositories.js");
+  // 身份体系（2026-08-03）：只剩一套，在 Python 那边（Neon `sliderule_user`）。
+  // Node 这层不再有账号表、会话表、密码哈希和验证码——原来的
+  // `auth/{session-service,password,email-code-service,email-mailer,middleware}.ts`
+  // 与 `/api/auth` 整体删除，中间件改成向 Python 问一次当前用户。
+  const { createSlideRuleAuthMiddleware } = await import(
+    "./auth/sliderule-identity.js"
   );
-  const { createEmailCodeMailer, readEmailMailerConfig } = await import(
-    "./auth/email-mailer.js"
+  const { createSlideRuleAdminUsersReader } = await import(
+    "./auth/sliderule-admin-users.js"
   );
-  const { createAuthMiddleware } = await import("./auth/middleware.js");
-  const { createSessionService } = await import("./auth/session-service.js");
   const { createAdminRouter } = await import("./routes/admin.js");
-  const { createAuthRouter } = await import("./routes/auth.js");
   const { createProjectsRouter } = await import("./routes/projects.js");
   const persistenceConfig = readPersistenceConfig();
   traceStartup("persistence config read");
+  // MySQL 现在只剩项目/资源两张表在用。账号相关的都搬到 Neon 了。
   const authDb = createMysqlQueryExecutor(persistenceConfig.database.mysql);
   const projectsRepository = createProjectsRepository(authDb);
   const projectResourcesRepository = createProjectResourcesRepository(authDb);
-  const usersRepository = createUsersRepository(authDb);
-  const sessionsRepository = createSessionsRepository(authDb);
-  const emailLoginTokensRepository = createEmailLoginTokensRepository(authDb);
-  const emailCodeMailer = createEmailCodeMailer(readEmailMailerConfig());
-  const emailCodeService = createEmailCodeService({
-    mailer: emailCodeMailer,
-    ttlSeconds: parsePositiveInteger(process.env.EMAIL_CODE_TTL_SECONDS, 600),
-    pepper: process.env.EMAIL_CODE_PEPPER,
-  });
-  const sessionService = createSessionService({
-    repositories: {
-      users: usersRepository,
-      sessions: sessionsRepository,
-    },
-    cookieName: persistenceConfig.session.cookieName,
-    ttlDays: persistenceConfig.session.ttlDays,
-    secureCookie: process.env.NODE_ENV === "production",
-  });
-  const authMiddleware = createAuthMiddleware(sessionService);
+  const usersRepository = createSlideRuleAdminUsersReader();
+  const authMiddleware = createSlideRuleAuthMiddleware();
   traceStartup("auth services initialized");
 
   app.use(
@@ -1004,16 +989,6 @@ async function startServer() {
       requireAuth: authMiddleware.requireAuth,
       projects: projectsRepository,
       projectResources: projectResourcesRepository,
-    })
-  );
-  app.use(
-    "/api/auth",
-    createAuthRouter({
-      users: usersRepository,
-      sessions: sessionsRepository,
-      sessionService,
-      emailLoginTokens: emailLoginTokensRepository,
-      emailCodeService,
     })
   );
   app.use(
@@ -2484,7 +2459,14 @@ print(json.dumps(getattr(res, "model_dump", lambda: res)() if hasattr(res, "mode
   app.use(express.static(staticPath));
 
   app.get("*", (_req, res) => {
-    res.sendFile(path.join(staticPath, "index.html"));
+    const indexFile = path.join(staticPath, "index.html");
+    // Vite 在 :3000 管 SPA。dev 下 Node 去找 dist/public/index.html
+    // 会 ENOENT 刷屏，把图判/孤岛真告警淹掉（2026-09-02 执行单 P3-2）。
+    if (process.env.NODE_ENV !== "production" && !existsSync(indexFile)) {
+      res.status(404).end();
+      return;
+    }
+    res.sendFile(indexFile);
   });
 
   const port = process.env.PORT || 3000;

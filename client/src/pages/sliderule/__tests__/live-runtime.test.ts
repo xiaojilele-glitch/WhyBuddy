@@ -9,6 +9,7 @@ import {
   outgoingTransitions,
   startInstance,
   advanceInstance,
+  applyHtmlWorkflowAction,
 } from "../live-runtime/live-runtime";
 import type { FiveSystemModel } from "../system-screens/five-system-model";
 
@@ -119,5 +120,98 @@ describe("live-runtime · 审批状态机（语义对齐引擎 moveToNextNode）
     expect(state.instances[0].currentNodeId).toBe("rework");
     ({ state } = advanceInstance(state, MODEL, instance!.id, "approve", NOW)); // rework→mgr（单出边）
     expect(state.instances[0].currentNodeId).toBe("mgr");
+  });
+});
+
+describe("live-runtime · HTML 页转移动作（2026-08-14 晚：工作流那只手）", () => {
+  /**
+   * 钉住的都是断掉会**静默**失效的行为：
+   *   ① 提交挂在具体那条记录上（entityRef）；同一行重复提交被如实拒绝
+   *   ② 角色把关 fail-closed：当前节点声明了 assigneeRole，别的角色批不了，
+   *      拒绝话术把"该谁处理"说清楚
+   *   ③ 分支不猜走向，如实指去工作流试运行面
+   *   ④ ok=false 时 state 原样返回——拒绝不能顺手改了状态
+   */
+  const seeded = () => {
+    const { state } = addRow(initRuntimeState(MODEL), "expense_claim",
+      { title: "打车费", amount: 42 }, NOW);
+    return state;
+  };
+  const rowIdOf = (s: ReturnType<typeof seeded>) => s.entities.expense_claim[0].id;
+
+  it("submitWorkflow：起实例挂当前行；同一行重复提交被拒", () => {
+    const s0 = seeded();
+    const ev = { kind: "submitWorkflow", entityId: "expense_claim", rowId: rowIdOf(s0) };
+    const r1 = applyHtmlWorkflowAction(s0, MODEL, ev, "employee", NOW);
+    expect(r1.ok).toBe(true);
+    expect(r1.state.instances).toHaveLength(1);
+    expect(r1.state.instances[0].entityRef).toEqual({
+      entityId: "expense_claim",
+      rowId: rowIdOf(s0),
+    });
+    expect(r1.message).toContain("打车费"); // 标题取行首列值，不是行 id
+
+    const r2 = applyHtmlWorkflowAction(r1.state, MODEL, ev, "employee", NOW);
+    expect(r2.ok).toBe(false);
+    expect(r2.message).toContain("重复提交");
+    expect(r2.state).toBe(r1.state); // 拒绝不改状态
+  });
+
+  it("approveWorkflow：角色对得上才推得动；对不上如实说该谁处理", () => {
+    const s0 = seeded();
+    const ev = { kind: "submitWorkflow", entityId: "expense_claim", rowId: rowIdOf(s0) };
+    const { state: s1 } = applyHtmlWorkflowAction(s0, MODEL, ev, "employee", NOW);
+
+    // 起点节点 submit 的 assigneeRole 是 employee——manager 批不了
+    const wrong = applyHtmlWorkflowAction(
+      s1, MODEL,
+      { kind: "approveWorkflow", entityId: "expense_claim", rowId: rowIdOf(s0) },
+      "manager", NOW
+    );
+    expect(wrong.ok).toBe(false);
+    expect(wrong.message).toContain("employee");
+
+    const right = applyHtmlWorkflowAction(
+      s1, MODEL,
+      { kind: "approveWorkflow", entityId: "expense_claim", rowId: rowIdOf(s0) },
+      "employee", NOW
+    );
+    expect(right.ok).toBe(true);
+    expect(right.state.instances[0].currentNodeId).toBe("mgr");
+  });
+
+  it("分支节点不猜走向，如实指去工作流试运行面", () => {
+    const s0 = seeded();
+    const rid = rowIdOf(s0);
+    let { state } = applyHtmlWorkflowAction(
+      s0, MODEL, { kind: "submitWorkflow", entityId: "expense_claim", rowId: rid },
+      "employee", NOW);
+    ({ state } = applyHtmlWorkflowAction(
+      state, MODEL, { kind: "approveWorkflow", entityId: "expense_claim", rowId: rid },
+      "employee", NOW)); // submit→mgr（单出边）
+    const branch = applyHtmlWorkflowAction(
+      state, MODEL, { kind: "approveWorkflow", entityId: "expense_claim", rowId: rid },
+      "manager", NOW); // mgr 有两条出边
+    expect(branch.ok).toBe(false);
+    expect(branch.message).toContain("试运行");
+  });
+
+  it("rejectWorkflow 即终态；没有进行中的流程时如实说", () => {
+    const s0 = seeded();
+    const rid = rowIdOf(s0);
+    const noInst = applyHtmlWorkflowAction(
+      s0, MODEL, { kind: "rejectWorkflow", entityId: "expense_claim", rowId: rid },
+      "employee", NOW);
+    expect(noInst.ok).toBe(false);
+    expect(noInst.message).toContain("先提交审批");
+
+    const { state: s1 } = applyHtmlWorkflowAction(
+      s0, MODEL, { kind: "submitWorkflow", entityId: "expense_claim", rowId: rid },
+      "employee", NOW);
+    const r = applyHtmlWorkflowAction(
+      s1, MODEL, { kind: "rejectWorkflow", entityId: "expense_claim", rowId: rid },
+      "employee", NOW);
+    expect(r.ok).toBe(true);
+    expect(r.state.instances[0].status).toBe("rejected");
   });
 });

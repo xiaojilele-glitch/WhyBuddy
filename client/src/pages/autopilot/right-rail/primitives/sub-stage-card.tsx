@@ -32,7 +32,7 @@ import type { FC, ReactNode } from "react";
 import type { AppLocale } from "@/lib/locale";
 import { cn } from "@/lib/utils";
 
-import type { SubStageStatus } from "./index";
+import type { SubStageStatus } from "./sub-stage-status";
 import { StatusCapsule } from "./status-capsule";
 
 export interface SubStageCardProps {

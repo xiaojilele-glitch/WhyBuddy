@@ -37,7 +37,10 @@ def driver(monkeypatch, tmp_path):
     monkeypatch.delenv("SLIDERULE_LLM_ROUND_CAPS", raising=False)
     import services.v5_full_driver as driver_mod
 
-    monkeypatch.setattr(driver_mod, "persist_state", lambda s: s)
+    # ⚠ 2026-08-27：PR-8(M14) 起 persist_state 必须返回 {"ok": True} 的 dict，
+    #   否则能力结束落 pendingRuns 判为写失败并 fail-closed 中止本轮。
+    #   `lambda s: s` 会让驱动器跑完第一个能力就退出。
+    monkeypatch.setattr(driver_mod, "persist_state", lambda s: {"ok": True})
     return driver_mod
 
 
@@ -122,8 +125,15 @@ def test_stream_emits_labeled_llm_delta_during_rounds(driver, monkeypatch, paral
     # 每个 llm_delta 都带 label（前端靠它分缓冲、起标题）
     assert all(l for l in delta_labels)
     # 增量在该能力的结果事件之前到达（真·实时，不是事后补发）
+    #
+    # 2026-08-04：排掉 planning 那一对（新加的选材可见性事件）。它在能力开跑
+    # **之前**就结束了，本来就该排在所有增量前面。这条要钉的是"某个能力的增量
+    # 早于**那个能力**的结果"，不是"早于流里任何一个结果"。
     first_delta = next(i for i, e in enumerate(events) if e["type"] == "llm_delta")
-    first_result = next(i for i, e in enumerate(events) if e["type"] == "reasoning_step_result")
+    first_result = next(
+        i for i, e in enumerate(events)
+        if e["type"] == "reasoning_step_result" and e.get("label") != "planning"
+    )
     assert first_delta < first_result
     # 流结束后模块级 sink 已注销
-    assert caps._delta_sink is None
+    assert caps._delta_sink_var.get() is None

@@ -1,0 +1,301 @@
+{
+ "datamodel": {
+  "entities": [
+   {
+    "id": "work_order",
+    "name": "服务工单",
+    "fields": [
+     {
+      "id": "order_no",
+      "name": "工单编号",
+      "type": "string"
+     },
+     {
+      "id": "service_object",
+      "name": "服务对象",
+      "type": "string"
+     },
+     {
+      "id": "service_type",
+      "name": "服务类型",
+      "type": "string"
+     },
+     {
+      "id": "urgency",
+      "name": "紧急程度",
+      "type": "enum"
+     },
+     {
+      "id": "dispatch_time",
+      "name": "派单时间",
+      "type": "date"
+     },
+     {
+      "id": "assigned_person",
+      "name": "已指派人员",
+      "type": "string"
+     },
+     {
+      "id": "status",
+      "name": "当前状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "health_alert",
+    "name": "健康告警记录",
+    "fields": [
+     {
+      "id": "alert_time",
+      "name": "告警时间",
+      "type": "date"
+     },
+     {
+      "id": "alert_type",
+      "name": "告警类型",
+      "type": "string"
+     },
+     {
+      "id": "body_value",
+      "name": "体征数值",
+      "type": "string"
+     },
+     {
+      "id": "handle_status",
+      "name": "处理状态",
+      "type": "string"
+     }
+    ]
+   },
+   {
+    "id": "service_ledger",
+    "name": "服务台账数据明细",
+    "fields": [
+     {
+      "id": "statistic_period",
+      "name": "统计周期",
+      "type": "string"
+     },
+     {
+      "id": "service_item",
+      "name": "服务项目",
+      "type": "string"
+     },
+     {
+      "id": "service_count",
+      "name": "服务人次",
+      "type": "number"
+     },
+     {
+      "id": "cumulative_duration",
+      "name": "累计时长",
+      "type": "string"
+     },
+     {
+      "id": "data_status",
+      "name": "数据状态",
+      "type": "string"
+     }
+    ]
+   }
+  ]
+ },
+ "rbac": {
+  "roles": [
+   {
+    "id": "community_staff",
+    "name": "社区养老专员"
+   },
+   {
+    "id": "family_member",
+    "name": "家属"
+   }
+  ],
+  "permissions": [
+   "work_order:create",
+   "work_order:read",
+   "work_order:update",
+   "work_order:assign",
+   "health_alert:read",
+   "health_alert:update",
+   "service_ledger:read",
+   "service_ledger:export"
+  ],
+  "menus": [
+   {
+    "id": "menu_workbench",
+    "label": "工作台菜单",
+    "roleRefs": [
+     "community_staff"
+    ],
+    "permissionRefs": [
+     "work_order:read"
+    ]
+   }
+  ]
+ },
+ "workflow": {
+  "id": "main_flow",
+  "name": "主流程",
+  "nodes": [
+   {
+    "id": "node_submitted",
+    "name": "服务请求发起",
+    "assigneeRole": "family_member",
+    "phase": "submitted"
+   },
+   {
+    "id": "node_dispatched",
+    "name": "智能派单处理",
+    "assigneeRole": "community_staff",
+    "phase": "processing"
+   },
+   {
+    "id": "node_completed",
+    "name": "服务完成归档",
+    "assigneeRole": "community_staff",
+    "phase": "completed"
+   }
+  ],
+  "transitions": [
+   {
+    "from": "node_submitted",
+    "to": "node_dispatched",
+    "condition": "系统根据服务类型和地理位置自动派单"
+   },
+   {
+    "from": "node_dispatched",
+    "to": "node_completed",
+    "condition": "专员完成上门服务并更新工单"
+   }
+  ]
+ },
+ "page": {
+  "pages": [
+   {
+    "id": "workbench_home",
+    "name": "工作台首页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:read"
+    ]
+   },
+   {
+    "id": "work_order_manage",
+    "name": "工单管理页",
+    "kind": "workbench",
+    "fieldBindings": [
+     "work_order.order_no",
+     "work_order.service_object",
+     "work_order.service_type",
+     "work_order.urgency",
+     "work_order.status"
+    ],
+    "actionPermissions": [
+     "work_order:create",
+     "work_order:update",
+     "work_order:assign"
+    ]
+   },
+   {
+    "id": "elder_health_monitor",
+    "name": "长辈健康监控页",
+    "kind": "monitor",
+    "fieldBindings": [
+     "health_alert.alert_time",
+     "health_alert.alert_type",
+     "health_alert.body_value",
+     "health_alert.handle_status"
+    ],
+    "actionPermissions": [
+     "health_alert:read",
+     "health_alert:update"
+    ]
+   },
+   {
+    "id": "service_ledger_report",
+    "name": "服务台账报表页",
+    "kind": "dashboard",
+    "fieldBindings": [
+     "service_ledger.statistic_period",
+     "service_ledger.service_item",
+     "service_ledger.service_count",
+     "service_ledger.cumulative_duration"
+    ],
+    "actionPermissions": [
+     "service_ledger:read",
+     "service_ledger:export"
+    ]
+   }
+  ]
+ },
+ "aigc": {
+  "capabilities": [
+   {
+    "id": "cap_health_analysis",
+    "name": "健康指标智能评估",
+    "inputFields": [
+     "health_alert.body_value"
+    ],
+    "outputField": "health_alert.handle_status",
+    "roleRefs": [
+     "community_staff"
+    ]
+   }
+  ]
+ },
+ "appbundle": {
+  "pageBindings": [
+   {
+    "pageRef": "work_order_manage",
+    "workflowRef": "node_submitted"
+   }
+  ],
+  "landingPageRef": "workbench_home",
+  "preferredDevice": "desktop",
+  "roleRefs": [
+   "community_staff",
+   "family_member"
+  ],
+  "dataModelRefs": [
+   "work_order",
+   "health_alert",
+   "service_ledger"
+  ],
+  "appIdentity": {
+   "appName": "安养通"
+  },
+  "invariants": [
+   {
+    "id": "inv_dispatch_time",
+    "statement": "工单进入派单阶段时必须记录派单时间",
+    "systems": [
+     "datamodel",
+     "workflow"
+    ],
+    "refs": [
+     "work_order",
+     "work_order.dispatch_time",
+     "node_dispatched"
+    ]
+   },
+   {
+    "id": "inv_health_alert",
+    "statement": "当健康告警触发时必须关联对应体征数值",
+    "systems": [
+     "datamodel"
+    ],
+    "refs": [
+     "health_alert",
+     "health_alert.body_value"
+    ]
+   }
+  ],
+  "deviceAuthority": "single-v1"
+ }
+}

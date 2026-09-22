@@ -10,7 +10,7 @@
  */
 
 import React from "react";
-import { Popup } from "antd-mobile";
+import { Button, NavBar, Popup } from "antd-mobile";
 
 export interface PhoneDetailPopupProps {
   open: boolean;
@@ -45,42 +45,16 @@ export default function PhoneDetailPopup({
       data-testid="phone-detail-popup"
     >
       {/* 拖拽条：移动端「这层能往下拖掉」的通用暗示 */}
-      <div style={{ padding: "8px 0 4px", textAlign: "center", flexShrink: 0 }}>
-        <span
-          style={{
-            display: "inline-block",
-            width: 36,
-            height: 4,
-            borderRadius: 2,
-            background: "#e5e5e5",
-          }}
-        />
-      </div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          padding: "4px 16px 12px",
-          borderBottom: "1px solid #eee",
-          flexShrink: 0,
-        }}
+      <NavBar
+        back={null}
+        right={
+          <Button fill="none" size="small" onClick={onClose} data-testid="phone-detail-close">
+            关闭
+          </Button>
+        }
       >
-        <span
-          style={{
-            flex: 1,
-            fontWeight: 600,
-            fontSize: 16,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {title}
-        </span>
-        <a onClick={onClose} style={{ color: "#999", fontSize: 14 }} data-testid="phone-detail-close">
-          关闭
-        </a>
-      </div>
+        {title}
+      </NavBar>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 20px" }}>
         {children}
       </div>

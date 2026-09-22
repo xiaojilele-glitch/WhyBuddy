@@ -27,36 +27,35 @@ const regularUser: CurrentUser = {
   role: "user",
 };
 
+// 用户来自新身份体系（Python 的 `User.public()`）——那一层根本不返回密码哈希，
+// 所以这里的 fixture 也没有可泄漏的字段。下面仍然断言"响应里不出现 passwordHash"，
+// 因为它防的是"以后有人把整行记录透传出去"这类回归，不是防当下这份 fixture。
 const users: UserFixture[] = [
   {
     id: "user-1",
     email: "user@example.com",
-    emailNormalized: "user@example.com",
-    passwordHash: "hash-should-not-leak",
     displayName: "User One",
-    avatarUrl: null,
-    role: "user",
-    status: "active",
-    emailVerifiedAt: now,
+    isSuperuser: false,
+    isVerified: true,
+    isActive: true,
+    createdAt: now.toISOString(),
     lastLoginAt: null,
-    lastLoginIp: null,
-    createdAt: now,
-    updatedAt: now,
+    sessions: 0,
+    estimatedTokens: 0,
+    estimatedCostUsd: 0,
   },
   {
     id: "admin-1",
     email: "admin@example.com",
-    emailNormalized: "admin@example.com",
-    passwordHash: "admin-hash-should-not-leak",
     displayName: "Admin One",
-    avatarUrl: null,
-    role: "admin",
-    status: "active",
-    emailVerifiedAt: now,
-    lastLoginAt: now,
-    lastLoginIp: "127.0.0.1",
-    createdAt: now,
-    updatedAt: now,
+    isSuperuser: true,
+    isVerified: true,
+    isActive: true,
+    createdAt: now.toISOString(),
+    lastLoginAt: null,
+    sessions: 0,
+    estimatedTokens: 0,
+    estimatedCostUsd: 0,
   },
 ];
 
@@ -106,7 +105,14 @@ function createDeps(currentUser: CurrentUser): AdminRouterDeps {
     requireAdmin,
     users: {
       list: vi.fn(async () => users),
-      findById: vi.fn(async userId => users.find(user => user.id === userId) ?? null),
+      findById: vi.fn(
+        async (userId: string) => users.find(user => user.id === userId) ?? null,
+      ),
+      setActive: vi.fn(async (userId: string, isActive: boolean) => {
+        const user = users.find(entry => entry.id === userId);
+        if (!user) return null;
+        return { ...user, isActive };
+      }),
     },
     projects: {
       list: vi.fn(async () => projects),
@@ -188,7 +194,7 @@ describe("admin routes", () => {
 
       expect(listResponse.status).toBe(200);
       expect(JSON.stringify(listBody)).not.toContain("passwordHash");
-      expect(JSON.stringify(listBody)).not.toContain("hash-should-not-leak");
+      expect(JSON.stringify(listBody)).not.toContain("password");
       expect(listBody.items).toHaveLength(2);
 
       const detailResponse = await fetch(`${baseUrl}/api/admin/users/user-1`);
@@ -196,7 +202,7 @@ describe("admin routes", () => {
 
       expect(detailResponse.status).toBe(200);
       expect(JSON.stringify(detailBody)).not.toContain("passwordHash");
-      expect(JSON.stringify(detailBody)).not.toContain("hash-should-not-leak");
+      expect(JSON.stringify(detailBody)).not.toContain("password");
       expect(detailBody.user.id).toBe("user-1");
     });
   });
@@ -217,23 +223,34 @@ describe("admin routes", () => {
     });
   });
 
-  it("returns sanitized error contract when an admin reader fails", async () => {
+  it("forwards search q to the users reader", async () => {
     const deps = createDeps(adminUser);
-    deps.users.list = vi.fn(async () => {
-      throw new Error("database passwordHash query failed");
-    });
 
     await withServer(deps, async baseUrl => {
-      const response = await fetch(`${baseUrl}/api/admin/users`);
+      const response = await fetch(`${baseUrl}/api/admin/users?q=alice`);
+      expect(response.status).toBe(200);
+      expect(deps.users.list).toHaveBeenCalledWith(expect.anything(), "alice");
+    });
+  });
+
+  it("patches isActive through the users reader", async () => {
+    const deps = createDeps(adminUser);
+
+    await withServer(deps, async baseUrl => {
+      const response = await fetch(`${baseUrl}/api/admin/users/user-1`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ isActive: false }),
+      });
       const body = await response.json();
 
-      expect(response.status).toBe(500);
-      expect(body).toEqual({
-        success: false,
-        error: "Admin route failed",
-      });
-      expect(JSON.stringify(body)).not.toContain("passwordHash");
-      expect(JSON.stringify(body)).not.toContain("database");
+      expect(response.status).toBe(200);
+      expect(deps.users.setActive).toHaveBeenCalledWith(
+        "user-1",
+        false,
+        expect.anything(),
+      );
+      expect(body.user.isActive).toBe(false);
     });
   });
 });

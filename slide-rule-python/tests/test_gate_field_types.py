@@ -127,7 +127,10 @@ def test_layout_prompt_forbids_the_slots_wrapper():
     step7 = [ln for ln in prompt.splitlines() if "Step 7 — Page layout" in ln]
     assert len(step7) == 1, "Step 7 那行找不到（或重复了）"
     line = step7[0]
-    assert '"summary": ["kpi_grid"]' in line, "缺少摊平写法的字面例子"
+    # 2026-08-08：例子跟着区域词汇换（旧的是 "summary": ["kpi_grid"]）。
+    # 这条防的东西没变——**长得像键名的词会被当成键名**，所以既要给摊平写法的
+    # 字面例子，也要明说 slots 包装是错的。
+    assert '"headerExtra": ["kpi_grid"]' in line, "缺少摊平写法的字面例子"
     assert '{"slots": {...}} is WRONG' in line, "没点名 slots 包装是错的"
 
 

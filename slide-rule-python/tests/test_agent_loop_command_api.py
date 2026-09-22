@@ -4,6 +4,8 @@ SlideRule AgentLoop 108: command API.
 Exposes Python-owned endpoints over the Node bridge for queue, task, rerun, cancel.
 """
 
+from plan_approval_support import approved_execution_payload
+
 import os
 import sys
 
@@ -210,12 +212,12 @@ def test_agentloop_dashboard_python_endpoints_health_overview_settings_105(monke
     monkeypatch.setattr(sr, "execute_evidence_runtime", lambda _q: None)
     r502 = client.post(
         "/api/sliderule/execute-capability",
-        json={
+        json=approved_execution_payload({
             "capabilityId": "evidence.search",
             "state": {"sessionId": "s105", "goal": {}, "turns": []},
             "turnId": "t105",
             "inputArtifactIds": [],
-        },
+        }),
         headers={"x-internal-key": "dev-slide-rule-internal"},
     )
     assert r502.status_code == 502

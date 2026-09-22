@@ -28,6 +28,21 @@ def test_upstream_502_html_page_becomes_human_readable() -> None:
 def test_gateway_timeout_524_and_http_503_matched() -> None:
     assert humanize_llm_error("gateway timeout (524): snippet").startswith("LLM 服务商网关 524")
     assert humanize_llm_error("HTTP 503: overloaded").startswith("LLM 服务商网关 503")
+    assert humanize_llm_error("gateway timeout (522):").startswith("LLM 服务商网关 522")
+
+
+LIVE_524_EXHAUSTED = (
+    'gateway timeout (524): {"error":{"message":"All available accounts exhausted"'
+    ',"type":"server_error"}}'
+)
+
+
+def test_accounts_exhausted_524_is_not_called_transient() -> None:
+    """真机句子。账号池空不许说成瞬时故障。"""
+    out = humanize_llm_error(LIVE_524_EXHAUSTED)
+    assert "账号池" in out
+    assert "冷却" in out
+    assert "瞬时故障" not in out
 
 
 def test_non_5xx_passthrough_cleaned() -> None:

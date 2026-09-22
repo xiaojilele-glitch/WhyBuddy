@@ -3,16 +3,26 @@
  * cool-gray page (#f7f8fa base, #eef0f4 wells), cool ink text (#1f2329),
  * single blue accent (#1677ff, hover #0958d9, tint #e6f4ff),
  * neutral borders (#e5e7eb). Success/danger stay green/red.
- * 暖色降级为点缀：只保留品牌 logo（用户气泡已随后续反馈改冷调 #e6f4ff）
+ * 暖色降级为点缀：只保留品牌 logo（用户块 2026-08-18 改成 Cursor 灰底 #f3f4f6）
  * ——暖米色铺满全屏
  * 是 Claude 聊天产品的强联想；冷调更像独立的推演引擎，也与运行应用画布
  * （antd 蓝系）、技能库页面统一。
  */
 export const autopilotTheme = {
   /** Full-screen canvas host — graph under floating HUD layers. */
-  /* 纯平 #f7f8fa：与左右面板同底，底部指令条区域不再出现渐变异色带（用户反馈） */
+  /* 纯平底色：与左右面板同底，底部指令条区域不再出现渐变异色带（用户反馈）。
+   *
+   * 2026-08-07：由写死的 #f7f8fa 改成读外壳 token --sr-shell-bg。
+   * 缘由——2026-08-03 应用中心的底色被裁决改成白（dashboard.css 的
+   * .native-agent-shell），而会话页这条留在冷灰 #f7f8fa 上没跟着动，
+   * 于是两页切换看得出色差（用户反馈："背景颜色不一致，会话页面背景
+   * 不是白色的"）。现在两边同一个 token，改一处即整壳生效。
+   *
+   * 回落值给 #ffffff 而不是 #f7f8fa：这个 class 只被
+   * SlideRule.tsx:1151 一处用，而那处必然渲染在外壳内（token 有定义）；
+   * 回落只在极端情况下生效，届时与应用中心一致比与旧值一致更重要。 */
   immersionPage:
-    "relative h-screen w-screen overflow-hidden bg-[#f7f8fa] text-[#1f2329]",
+    "relative h-screen w-screen overflow-hidden bg-[var(--sr-shell-bg,#f4f4f6)] text-[#1f2329]",
   immersionCanvas: "absolute inset-0 z-0",
   immersionOverlayTop:
     "pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-2 px-2 pt-2 sm:gap-2.5 sm:px-3 sm:pt-2",
@@ -26,7 +36,7 @@ export const autopilotTheme = {
   overlayBar:
     "flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-0 py-1 text-[11px] text-stone-700",
   immersionOverlayBottom:
-    "pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center px-5 pb-[max(28px,env(safe-area-inset-bottom))] pt-1 sm:px-6 sm:pb-[max(34px,env(safe-area-inset-bottom))]",
+    "pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-1 sm:px-5 sm:pb-[max(20px,env(safe-area-inset-bottom))]",
   glassPanel:
     "pointer-events-auto max-h-[min(70vh,520px)] w-[min(100%,340px)] overflow-hidden rounded-lg border border-[#e8eaee]/80 bg-[#ffffff]/80 px-3 py-3 shadow-[0_8px_32px_rgb(15_23_42/0.10)] backdrop-blur-xl sm:px-4 sm:py-3.5",
   glassPanelWide:

@@ -19,6 +19,8 @@ Run (smallest):
 Requires: pip install -r slide-rule-python/requirements.txt (or .venv)
 """
 
+from plan_approval_support import approved_execution_payload
+
 import sys
 from pathlib import Path
 import pytest
@@ -149,7 +151,7 @@ def test_sliderule_contract_surfaces_provenance(monkeypatch):
     # execute using mapped (structure.decompose / report.write use mapped per route + is_native false)
     ex = client.post(
         "/api/sliderule/execute-capability",
-        json={"capabilityId": "structure.decompose", "state": {"sessionId": "cons-1", "goal": {"text": "x"}}, "inputArtifactIds": [], "turnId": "c1"},
+        json=approved_execution_payload({"capabilityId": "structure.decompose", "state": {"sessionId": "cons-1", "goal": {"text": "x"}}, "inputArtifactIds": [], "turnId": "c1"}),
         headers={"X-Internal-Key": INTERNAL_KEY},
     )
     assert ex.status_code == 200
